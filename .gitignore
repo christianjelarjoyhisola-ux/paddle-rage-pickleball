@@ -20,7 +20,7 @@ Thumbs.db
 
 .vercel
 .cf-pages-deploy/
-.cf-pages-release-*/
+.cf-pages-release-*
 .wrangler/
 .wrangler-login*.txt
 test-results/
