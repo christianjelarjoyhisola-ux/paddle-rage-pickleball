@@ -3,10 +3,10 @@
 // Replace these with your actual project credentials.
 // Find them at: Supabase Dashboard → Project Settings → API
 // =============================================
-// This clean copy is intentionally disconnected from the source court.
-// Replace both placeholders only after creating a dedicated Paddle Rage project.
-const SUPABASE_URL = 'https://YOUR_PROJECT_REF.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// Dedicated Paddle Rage project. The anon key is safe for browser use because
+// database access is enforced by the project's Row Level Security policies.
+const SUPABASE_URL = 'https://qhvrowoqeyeypmefwkha.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFodnJvd29xZXlleXBtZWZ3a2hhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzNzk3ODUsImV4cCI6MjA5OTk1NTc4NX0.hXwxcD6O4tebgJXHf0uxnjcr8-hkEnGCNOeC3dl39Mo';
 
 const PB_REQUEST_TIMEOUT_MS = 45000;
 const PB_RECEIPT_TIMEOUT_MS = 90000;

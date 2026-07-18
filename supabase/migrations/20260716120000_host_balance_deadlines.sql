@@ -248,8 +248,8 @@ begin
     'process-host-balance-deadlines',
     '*/15 * * * *',
     $job$select net.http_post(
-      -- Replace YOUR_PROJECT_REF with the dedicated Paddle Rage Supabase ref.
-      url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/process-host-balance-deadlines',
+      -- Dedicated Paddle Rage Supabase project.
+      url := 'https://qhvrowoqeyeypmefwkha.supabase.co/functions/v1/process-host-balance-deadlines',
       headers := '{"Content-Type":"application/json"}'::jsonb,
       body := '{"source":"database-cron"}'::jsonb
     );$job$
