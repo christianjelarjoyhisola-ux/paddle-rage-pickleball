@@ -1,0 +1,27 @@
+# Secret / API key files
+*.txt
+resendAPIKEY.txt
+.env
+.env.local
+.env*.local
+
+# Supabase local temp files
+supabase/.temp/
+
+# Dependencies
+node_modules/
+
+# Claude workspace
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+.vercel
+.cf-pages-deploy/
+.cf-pages-release-*/
+.wrangler/
+.wrangler-login*.txt
+test-results/
+tmp/imagegen/
