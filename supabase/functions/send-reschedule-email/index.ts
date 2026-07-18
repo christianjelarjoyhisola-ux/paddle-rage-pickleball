@@ -1,175 +1,173 @@
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  emailCorsHeaders,
+  isAllowedEmailOrigin,
+  jsonResponse,
+  requireAdminEmailRequest,
+} from "../_shared/email-request.ts";
+import { isEmailAddress, sendMailerooEmail } from "../_shared/maileroo.ts";
+import {
+  renderRescheduleEmail,
+  type ReschedulePayload,
+} from "../_shared/paddle-rage-email.ts";
+
+type BookingRow = {
+  ref: string;
+  booking_group_ref: string | null;
+  full_name: string;
+  email: string | null;
+  court_name: string | null;
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
+  duration: number | null;
+  status: string;
 };
 
-const LOGO_URL = Deno.env.get("PUBLIC_LOGO_URL") ||
-  "https://paddle-rage-pickleball.pages.dev/paddleragelogo.jpg";
-
-type Payload = {
-  bookingRef: string;
-  email: string;
-  fullName: string;
-  courtName: string;
-  oldDate: string;
-  oldStartTime: string;
-  oldEndTime: string;
-  newDate: string;
-  newStartTime: string;
-  newEndTime: string;
-  newDuration: number;
-  note?: string;
-};
-
-function escapeHtml(value: unknown): string {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+function requiredText(value: unknown, field: string, maxLength = 200): string {
+  const text = String(value || "").trim();
+  if (!text || text.length > maxLength) throw new Error(`${field} is invalid`);
+  return text;
 }
 
-function fmtDate(d: string): string {
-  const dt = new Date(d + "T00:00:00");
-  return dt.toLocaleDateString("en-PH", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+function validBookingRef(value: unknown): string {
+  const ref = requiredText(value, "bookingRef", 80);
+  if (!/^[A-Za-z0-9_-]{3,80}$/.test(ref)) {
+    throw new Error("bookingRef is invalid");
+  }
+  return ref;
 }
 
-function buildHtml(p: Payload): string {
-  const fullName = escapeHtml(p.fullName);
-  const bookingRef = escapeHtml(p.bookingRef);
-  const courtName = escapeHtml(p.courtName);
-  const oldStartTime = escapeHtml(p.oldStartTime);
-  const oldEndTime = escapeHtml(p.oldEndTime);
-  const newStartTime = escapeHtml(p.newStartTime);
-  const newEndTime = escapeHtml(p.newEndTime);
-  const note = p.note?.trim()
-    ? `<div style="background:#281c12;background-image:linear-gradient(#281c12,#281c12);border:1.5px solid #a85f1f;border-radius:10px;padding:14px 18px;margin-bottom:20px;">
-        <div style="font-size:.82rem;color:#f2d6b3;line-height:1.6;">
-          <strong>Message from PADDLE RAGE PICKLEBALL:</strong><br/>${escapeHtml(p.note)}
-        </div>
-       </div>`
-    : "";
+function validDate(value: unknown, field: string): string {
+  const date = requiredText(value, field, 10);
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    Number.isNaN(new Date(`${date}T00:00:00+08:00`).getTime())
+  ) {
+    throw new Error(`${field} is invalid`);
+  }
+  return date;
+}
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<meta name="color-scheme" content="dark"/>
-<meta name="supported-color-schemes" content="dark"/>
-<title>Booking Rescheduled - PADDLE RAGE PICKLEBALL</title>
-</head>
-<body style="margin:0;padding:0;background:#15171b;background-image:linear-gradient(#15171b,#15171b);font-family:'Segoe UI',Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#15171b;background-image:linear-gradient(#15171b,#15171b);padding:32px 0;">
-  <tr><td align="center">
-    <table width="560" cellpadding="0" cellspacing="0" style="background:#202428;background-image:linear-gradient(#202428,#202428);border:1px solid #323840;border-radius:14px;overflow:hidden;box-shadow:0 12px 34px rgba(0,0,0,.42);max-width:560px;width:100%;">
-
-      <tr><td style="background:#050706;background-image:linear-gradient(#050706,#050706);padding:34px 36px 30px;text-align:center;border-top:6px solid #b6f000;border-bottom:1px solid #29362c;">
-        <img src="${LOGO_URL}" width="96" height="96" alt="Paddle Rage Pickleball logo" style="display:block;width:96px;height:96px;margin:0 auto 14px;border-radius:14px;background:#fff;padding:2px;border:3px solid #b6f000;"/>
-        <div style="font-family:'Bebas Neue',Georgia,serif;font-size:1.6rem;letter-spacing:3px;color:#b6f000;line-height:1.1;font-weight:900;">PADDLE RAGE PICKLEBALL</div>
-        <div style="font-size:.75rem;color:#a8b2a6;letter-spacing:2px;text-transform:uppercase;margin-top:4px;font-weight:700;">Iponan, Cagayan de Oro</div>
-      </td></tr>
-
-      <tr><td style="background:#b6f000;background-image:linear-gradient(#b6f000,#b6f000);padding:14px 36px;text-align:center;">
-        <div style="color:#050706;font-size:1rem;font-weight:900;letter-spacing:1px;">BOOKING RESCHEDULED</div>
-      </td></tr>
-
-      <tr><td style="padding:32px 36px;background:#202428;background-image:linear-gradient(#202428,#202428);">
-        <p style="margin:0 0 20px;font-size:1rem;color:#f7fafc;">Hi <strong>${fullName}</strong>,</p>
-        <p style="margin:0 0 24px;font-size:.95rem;color:#d7dee8;line-height:1.6;">
-          Your booking has been <strong style="color:#b6f000;">rescheduled</strong> to a new date and time.
-          All other details remain the same &mdash; your slot is secure.
-        </p>
-
-        ${note}
-
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-radius:10px;overflow:hidden;margin-bottom:24px;">
-          <tr><td style="background:#241313;background-image:linear-gradient(#241313,#241313);border:1.5px solid #7a3732;border-bottom:none;border-radius:10px 10px 0 0;padding:14px 20px;">
-            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:#f28b82;margin-bottom:6px;font-weight:700;">Old Schedule</div>
-            <div style="font-size:.92rem;color:#f1b2ae;text-decoration:line-through;">${fmtDate(p.oldDate)}</div>
-            <div style="font-size:.88rem;color:#f1b2ae;text-decoration:line-through;">${oldStartTime} &ndash; ${oldEndTime}</div>
-          </td></tr>
-          <tr><td style="background:#1d241e;background-image:linear-gradient(#1d241e,#1d241e);border:1.5px solid #8b4b20;border-top:none;border-radius:0 0 10px 10px;padding:14px 20px;">
-            <div style="font-size:.68rem;text-transform:uppercase;letter-spacing:1px;color:#b6f000;margin-bottom:6px;font-weight:700;">New Schedule</div>
-            <div style="font-size:1rem;font-weight:800;color:#f7fafc;">${fmtDate(p.newDate)}</div>
-            <div style="font-size:.92rem;font-weight:600;color:#d7dee8;">${newStartTime} &ndash; ${newEndTime} &middot; ${p.newDuration} hr${p.newDuration !== 1 ? "s" : ""}</div>
-          </td></tr>
-        </table>
-
-        <table width="100%" cellpadding="0" cellspacing="0" style="background:#1d241e;background-image:linear-gradient(#1d241e,#1d241e);border:1.5px solid #8b4b20;border-radius:10px;margin-bottom:24px;">
-          <tr><td style="padding:14px 22px;">
-            <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:#aab6c5;margin-bottom:3px;">Court &middot; Booking Reference</div>
-            <div style="font-size:.95rem;font-weight:700;color:#f7fafc;">${courtName} &nbsp;&middot;&nbsp; <span style="font-family:monospace;color:#b6f000;">${bookingRef}</span></div>
-          </td></tr>
-        </table>
-
-        <p style="margin:0;font-size:.88rem;color:#aab6c5;line-height:1.6;">
-          We apologize for the change and appreciate your understanding. See you on the new date!
-        </p>
-      </td></tr>
-
-      <tr><td style="background:#1b2025;background-image:linear-gradient(#1b2025,#1b2025);padding:18px 36px;text-align:center;border-top:1px solid #30363d;">
-        <div style="font-size:.75rem;color:#b6f000;letter-spacing:1px;">PADDLE RAGE PICKLEBALL</div>
-        <div style="font-size:.72rem;color:#7f8ea3;margin-top:4px;">This is an automated notification email.</div>
-      </td></tr>
-
-    </table>
-  </td></tr>
-</table>
-</body>
-</html>`;
+function normalizeTime(value: unknown): string {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return isAllowedEmailOrigin(req)
+      ? new Response(null, { status: 204, headers: emailCorsHeaders(req) })
+      : new Response("Origin not allowed", { status: 403 });
+  }
+  if (req.method !== "POST") {
+    return jsonResponse(req, { ok: false, error: "Method not allowed" }, 405);
+  }
+  if (!isAllowedEmailOrigin(req)) {
+    return jsonResponse(req, { ok: false, error: "Origin not allowed" }, 403);
+  }
 
   try {
-    const resendKey = Deno.env.get("RESEND_API_KEY") || "";
-    if (!resendKey) throw new Error("RESEND_API_KEY is not configured");
+    const supabaseUrl = (Deno.env.get("SUPABASE_URL") || "").trim();
+    const serviceRoleKey = (Deno.env.get("SERVICE_ROLE_KEY") ||
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "").trim();
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error("Email service database access is not configured");
+    }
+    const db = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false },
+    });
+    await requireAdminEmailRequest(req, db);
 
-    const body = (await req.json()) as Payload;
-    if (!body.email || !body.bookingRef) {
-      return new Response(JSON.stringify({ error: "Missing email or bookingRef" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const body = await req.json().catch(() => null) as
+      | Partial<ReschedulePayload>
+      | null;
+    const bookingRef = validBookingRef(body?.bookingRef);
+    const email = String(body?.email || "").trim().toLowerCase();
+    if (!isEmailAddress(email)) throw new Error("email is invalid");
+
+    const payload: ReschedulePayload = {
+      bookingRef,
+      email,
+      fullName: requiredText(body?.fullName, "fullName", 160),
+      courtName: requiredText(body?.courtName, "courtName", 160),
+      oldDate: validDate(body?.oldDate, "oldDate"),
+      oldStartTime: requiredText(body?.oldStartTime, "oldStartTime", 40),
+      oldEndTime: requiredText(body?.oldEndTime, "oldEndTime", 40),
+      newDate: validDate(body?.newDate, "newDate"),
+      newStartTime: requiredText(body?.newStartTime, "newStartTime", 40),
+      newEndTime: requiredText(body?.newEndTime, "newEndTime", 40),
+      newDuration: Number(body?.newDuration || 0),
+      note: String(body?.note || "").trim().slice(0, 1200),
+    };
+    if (
+      !Number.isFinite(payload.newDuration) || payload.newDuration <= 0 ||
+      payload.newDuration > 24
+    ) {
+      throw new Error("newDuration is invalid");
     }
 
-    const fromAddress = Deno.env.get("EMAIL_FROM") || "PADDLE RAGE PICKLEBALL <onboarding@resend.dev>";
+    const { data, error } = await db.from("bookings")
+      .select(
+        "ref,booking_group_ref,full_name,email,court_name,date,start_time,end_time,duration,status",
+      )
+      .eq("ref", bookingRef)
+      .maybeSingle();
+    if (error) throw error;
+    const booking = data as BookingRow | null;
+    if (!booking || ["cancelled", "forfeited"].includes(booking.status)) {
+      return jsonResponse(req, {
+        ok: false,
+        error: "Booking could not be verified",
+      }, 404);
+    }
+    if (String(booking.email || "").trim().toLowerCase() !== payload.email) {
+      return jsonResponse(req, {
+        ok: false,
+        error: "Booking could not be verified",
+      }, 404);
+    }
+    // The administrative flow saves the replacement schedule before sending.
+    // Confirm it matches the database so an intercepted/stale request cannot
+    // send plausible-looking but incorrect booking information.
+    if (
+      booking.date !== payload.newDate ||
+      normalizeTime(booking.start_time) !==
+        normalizeTime(payload.newStartTime) ||
+      normalizeTime(booking.end_time) !== normalizeTime(payload.newEndTime)
+    ) {
+      return jsonResponse(req, {
+        ok: false,
+        error: "New schedule does not match the saved booking",
+      }, 409);
+    }
 
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
+    payload.fullName = booking.full_name || payload.fullName;
+    payload.courtName = booking.court_name || payload.courtName;
+    payload.newDuration = Number(booking.duration || payload.newDuration);
+
+    const content = renderRescheduleEmail(payload);
+    const sent = await sendMailerooEmail({
+      to: payload.email,
+      toName: payload.fullName,
+      subject:
+        `Booking rescheduled: ${payload.bookingRef} | Paddle Rage Pickleball`,
+      html: content.html,
+      plain: content.plain,
+      tags: {
+        message_type: "booking-reschedule",
+        booking_reference: payload.bookingRef,
       },
-      body: JSON.stringify({
-        from: fromAddress,
-        to: [body.email],
-        subject: `Booking Rescheduled - ${body.bookingRef} | PADDLE RAGE PICKLEBALL`,
-        html: buildHtml(body),
-      }),
     });
-
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(`Resend error ${res.status}: ${JSON.stringify(json)}`);
-
-    return new Response(JSON.stringify({ ok: true, id: json.id }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return new Response(JSON.stringify({ ok: false, error: msg }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse(req, { ok: true, id: sent.id });
+  } catch (error) {
+    const message = error instanceof Error
+      ? error.message
+      : "Unable to send reschedule email";
+    const status = message === "Admin access required"
+      ? 403
+      : / is invalid$/.test(message)
+      ? 400
+      : 500;
+    return jsonResponse(req, { ok: false, error: message }, status);
   }
 });

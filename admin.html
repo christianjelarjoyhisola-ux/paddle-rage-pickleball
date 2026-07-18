@@ -3808,16 +3808,16 @@ function bookingGroupTimeLabel(items = []) {
 }
 function bookingGroupScheduleLabel(items = []) {
   const dates = [...new Set(items.map(b => b.date).filter(Boolean))].sort();
-  if (dates.length <= 1) return `${bookingGroupDateLabel(items)} Â· ${bookingGroupTimeLabel(items)}`;
+  if (dates.length <= 1) return `${bookingGroupDateLabel(items)} · ${bookingGroupTimeLabel(items)}`;
   return sortBookingsChronologically(items)
-    .map(b => `${fmtD(b.date)} Â· ${b.startTime || '--'}-${b.endTime || '--'}`)
+    .map(b => `${fmtD(b.date)} · ${b.startTime || '--'}-${b.endTime || '--'}`)
     .filter((v, i, arr) => arr.indexOf(v) === i)
     .join(' | ');
 }
 function bookingGroupBreakdownHtml(items = []) {
   return sortBookingsChronologically(items).map(b => `
     <div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid var(--border)">
-      <span>${esc(b.courtName)} Â· ${esc(b.startTime || '--')}â€“${esc(b.endTime || '--')}</span>
+      <span>${esc(b.courtName)} · ${esc(b.startTime || '--')}–${esc(b.endTime || '--')}</span>
       <strong style="color:var(--text)">${fmt(b.total || 0)}</strong>
     </div>`).join('');
 }
@@ -7347,13 +7347,13 @@ async function renderIntegrationStatus() {
 async function renderPaymentSettings() {
   if (!Auth.can('payments', sess.role)) { toast('You do not have access to this section.', 'err'); return; }
   const settings = await DB.getSettings();
-  const cashOn = settings.payment_method_cash !== '0';
-  const gcashOn = settings.payment_method_gcash !== '0';
-  const bdopayOn = settings.payment_method_bdopay !== '0';
-  const mayaOn = settings.payment_method_maya !== '0';
-  const bpiOn = settings.payment_method_bpi !== '0';
-  const gotymeOn = settings.payment_method_gotyme !== '0';
-  const pnbOn = settings.payment_method_pnb !== '0';
+  const cashOn = settings.payment_method_cash === '1';
+  const gcashOn = settings.payment_method_gcash === '1';
+  const bdopayOn = settings.payment_method_bdopay === '1';
+  const mayaOn = settings.payment_method_maya === '1';
+  const bpiOn = settings.payment_method_bpi === '1';
+  const gotymeOn = settings.payment_method_gotyme === '1';
+  const pnbOn = settings.payment_method_pnb === '1';
   const paymentAcceptanceMode = settings.payment_acceptance_mode || 'both';
 
   if ($('paymentAcceptanceModeSelect')) $('paymentAcceptanceModeSelect').value = paymentAcceptanceMode;
@@ -8426,9 +8426,30 @@ async function savePaymentSettings() {
   const bpiOn = $('payMethodBpiOn')?.checked || false;
   const gotymeOn = $('payMethodGotymeOn').checked;
   const pnbOn = $('payMethodPnbOn').checked;
+  const gcashNum = $('gcashNumInput')?.value.trim() || '';
+  const gcashName = $('gcashNameInput')?.value.trim() || '';
+  const gotymeNum = $('gotymeNumInput')?.value.trim() || '';
+  const gotymeName = $('gotymeNameInput')?.value.trim() || '';
+  const pnbNum = $('pnbNumInput')?.value.trim() || '';
+  const pnbName = $('pnbNameInput')?.value.trim() || '';
+  const gcashQrSrc = $('gcashQrPreview')?.src || '';
+  const gotymeQrSrc = $('gotymeQrPreview')?.src || '';
+  const pnbQrSrc = $('pnbQrPreview')?.src || '';
 
   if (!cashOn && !gcashOn && !bdopayOn && !mayaOn && !bpiOn && !gotymeOn && !pnbOn) {
     toast('Enable at least one payment method.', 'err');
+    return;
+  }
+  if ((gcashOn || bdopayOn || mayaOn || bpiOn) && (!gcashName || (!gcashNum && !gcashQrSrc))) {
+    toast('Add the shared recipient name and a GCash number or QR before enabling GCash, BDO Pay, Maya, or BPI.', 'err');
+    return;
+  }
+  if (gotymeOn && (!gotymeName || (!gotymeNum && !gotymeQrSrc))) {
+    toast('Add the GoTyme recipient name and account number or QR before enabling GoTyme.', 'err');
+    return;
+  }
+  if (pnbOn && (!pnbName || (!pnbNum && !pnbQrSrc))) {
+    toast('Add the PNB recipient name and account number or QR before enabling PNB.', 'err');
     return;
   }
 
@@ -8444,14 +8465,9 @@ async function savePaymentSettings() {
     await DB.saveSetting('payment_method_pnb', pnbOn ? '1' : '0');
     await DB.saveSetting('payment_acceptance_mode', paymentAcceptanceMode);
 
-    const gcashNum = $('gcashNumInput')?.value.trim() || '';
-    const gcashName = $('gcashNameInput')?.value.trim() || '';
-    const gotymeNum = $('gotymeNumInput')?.value.trim() || '';
-    const gotymeName = $('gotymeNameInput')?.value.trim() || '';
-    const pnbNum = $('pnbNumInput')?.value.trim() || '';
-    const pnbName = $('pnbNameInput')?.value.trim() || '';
     await DB.saveSetting('gcash_merchant_number', gcashNum);
     await DB.saveSetting('gcash_merchant_name', gcashName);
+    await DB.saveSetting('payment_merchant_name', gcashName);
     await DB.saveSetting('gotyme_merchant_number', gotymeNum);
     await DB.saveSetting('gotyme_merchant_name', gotymeName);
     await DB.saveSetting('pnb_merchant_number', pnbNum);
@@ -8459,9 +8475,6 @@ async function savePaymentSettings() {
 
     // Save QR images (base64 data URLs) — save empty string if removed
     const platformQrSrc = $('platformGcashQrPreview')?.src || '';
-    const gcashQrSrc = $('gcashQrPreview')?.src || '';
-    const gotymeQrSrc = $('gotymeQrPreview')?.src || '';
-    const pnbQrSrc = $('pnbQrPreview')?.src || '';
     if (platformQrSrc.startsWith('data:')) await DB.saveSetting('platform_gcash_qr', platformQrSrc);
     if (gcashQrSrc.startsWith('data:')) await DB.saveSetting('gcash_qr_image', gcashQrSrc);
     if (gotymeQrSrc.startsWith('data:')) await DB.saveSetting('gotyme_qr_image', gotymeQrSrc);
@@ -9676,7 +9689,10 @@ async function confirmOpPayment() {
     await renderOpRegistrations();
     if (_curSection === 'payreview') await renderPaymentReview();
   } catch(e) {
-    toast('Failed to confirm payment.', 'err');
+    const reason = String(e?.message || '');
+    toast(/reference has already been used|reference (?:must|is invalid)|confirmation number is invalid/i.test(reason)
+      ? reason
+      : 'Failed to confirm payment.', 'err');
   }
 }
 
@@ -11047,6 +11063,6 @@ async function checkAgreementGate(session) {
 </script>
 
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20260714-owner-void-v1"></script>
+<script src="supabase-config.js?v=20260719-integrations-v2"></script>
 </body>
 </html>

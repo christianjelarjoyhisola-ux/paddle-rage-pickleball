@@ -1,0 +1,42 @@
+project_id = "paddle-rage-pickleball"
+
+[auth]
+site_url = "https://paddleragecdo.ph"
+additional_redirect_urls = ["https://paddleragecdo.ph/login.html", "https://paddle-rage-pickleball.pages.dev/login.html", "https://paddleragecdo.ph/host.html?email_verified=1"]
+enable_signup = false
+
+[functions.create-payment-session]
+verify_jwt = true
+
+[functions.payment-webhook]
+verify_jwt = false
+
+[functions.verify-gcash-receipt]
+verify_jwt = true
+
+[functions.host-application]
+verify_jwt = true
+
+[functions.manage-account]
+verify_jwt = true
+
+[functions.send-confirmation-email]
+verify_jwt = true
+
+[functions.process-host-balance-deadlines]
+verify_jwt = false
+
+[functions.send-reschedule-email]
+verify_jwt = true
+
+[functions.send-telegram-notification]
+verify_jwt = true
+
+[functions.submit-public-registration]
+verify_jwt = true
+
+[functions.submit-public-booking]
+verify_jwt = true
+
+[functions.integration-status]
+verify_jwt = true

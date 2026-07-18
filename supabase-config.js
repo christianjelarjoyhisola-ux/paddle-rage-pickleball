@@ -10,6 +10,215 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const PB_REQUEST_TIMEOUT_MS = 45000;
 const PB_RECEIPT_TIMEOUT_MS = 90000;
+const PB_TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+const PB_TURNSTILE_ACTION = 'receipt_ocr';
+const PB_REGISTRATION_TURNSTILE_ACTION = 'public_registration';
+const PB_HOST_APPLICATION_TURNSTILE_ACTION = 'host_application';
+const PB_TURNSTILE_WIDGET_TIMEOUT_MS = 60000;
+let _pbTurnstileScriptPromise = null;
+
+function _pbTurnstileError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function _pbTurnstileSiteKey() {
+  const value = String(
+    window.PB_TURNSTILE_SITE_KEY ||
+    window.PB_PUBLIC_CONFIG?.turnstileSiteKey ||
+    '',
+  ).trim();
+  if (!value || /^YOUR_|TURNSTILE_SITE_KEY/i.test(value)) return '';
+  return value;
+}
+
+function _pbLoadTurnstile() {
+  if (window.turnstile?.render && window.turnstile?.execute) {
+    return Promise.resolve(window.turnstile);
+  }
+  if (_pbTurnstileScriptPromise) return _pbTurnstileScriptPromise;
+
+  _pbTurnstileScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      script.onload = null;
+      script.onerror = null;
+      callback(value);
+    };
+    const timer = setTimeout(() => {
+      finish(reject, _pbTurnstileError(
+        'Secure human verification took too long to load. Check your connection or content blocker, then try again.',
+        'TURNSTILE_SCRIPT_TIMEOUT',
+      ));
+    }, 15000);
+
+    script.src = PB_TURNSTILE_SCRIPT_URL;
+    script.async = true;
+    script.defer = true;
+    script.dataset.pbTurnstile = 'true';
+    script.onload = () => {
+      if (window.turnstile?.render && window.turnstile?.execute) {
+        finish(resolve, window.turnstile);
+      } else {
+        finish(reject, _pbTurnstileError(
+          'Secure human verification loaded incorrectly. Please refresh the page and try again.',
+          'TURNSTILE_API_MISSING',
+        ));
+      }
+    };
+    script.onerror = () => finish(reject, _pbTurnstileError(
+      'Secure human verification could not load. Check your connection or content blocker, then try again.',
+      'TURNSTILE_SCRIPT_FAILED',
+    ));
+    document.head.appendChild(script);
+  }).catch(error => {
+    _pbTurnstileScriptPromise = null;
+    document.querySelector('script[data-pb-turnstile="true"]')?.remove();
+    throw error;
+  });
+
+  return _pbTurnstileScriptPromise;
+}
+
+async function _pbAcquireTurnstile(action = PB_TURNSTILE_ACTION, contextLabel = 'receipt upload') {
+  const sitekey = _pbTurnstileSiteKey();
+  if (!sitekey) {
+    throw _pbTurnstileError(
+      `Secure ${contextLabel} verification is not configured yet. Please contact Paddle Rage.`,
+      'TURNSTILE_SITE_KEY_MISSING',
+    );
+  }
+  if (!document.body) {
+    throw _pbTurnstileError(
+      'Secure human verification is unavailable on this page. Please refresh and try again.',
+      'TURNSTILE_PAGE_UNAVAILABLE',
+    );
+  }
+
+  const turnstile = await _pbLoadTurnstile();
+  const shell = document.createElement('div');
+  const container = document.createElement('div');
+  shell.setAttribute('role', 'status');
+  shell.setAttribute('aria-live', 'polite');
+  shell.style.cssText = [
+    'position:fixed',
+    'right:12px',
+    'bottom:12px',
+    'z-index:2147483000',
+    'width:min(320px,calc(100vw - 24px))',
+    'min-height:58px',
+    'padding:10px',
+    'box-sizing:border-box',
+    'border:1px solid rgba(182,240,0,.45)',
+    'border-radius:12px',
+    'background:#0b0f0c',
+    'box-shadow:0 12px 34px rgba(0,0,0,.45)',
+    'color:#f4f7f2',
+    'font:600 12px/1.4 system-ui,sans-serif',
+  ].join(';');
+  const label = document.createElement('div');
+  label.textContent = `Checking browser security before ${contextLabel}...`;
+  label.style.cssText = 'margin:0 0 6px;color:#d7ff3f';
+  shell.append(label, container);
+  document.body.appendChild(shell);
+
+  let widgetId = null;
+  const dispose = () => {
+    if (widgetId !== null) {
+      try { turnstile.reset(widgetId); } catch (_) {}
+      try { turnstile.remove(widgetId); } catch (_) {}
+      widgetId = null;
+    }
+    shell.remove();
+  };
+
+  try {
+    const token = await new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        callback(value);
+      };
+      const fail = (message, code) => finish(
+        reject,
+        _pbTurnstileError(message, code),
+      );
+      const timer = setTimeout(() => fail(
+        'Secure human verification timed out. Please try the receipt upload again.',
+        'TURNSTILE_WIDGET_TIMEOUT',
+      ), PB_TURNSTILE_WIDGET_TIMEOUT_MS);
+
+      try {
+        widgetId = turnstile.render(container, {
+          sitekey,
+          action: action === PB_TURNSTILE_ACTION ? PB_TURNSTILE_ACTION : action,
+          execution: 'execute',
+          appearance: 'interaction-only',
+          theme: 'dark',
+          size: 'flexible',
+          language: 'en',
+          'response-field': false,
+          'refresh-expired': 'never',
+          'refresh-timeout': 'never',
+          callback: value => {
+            const freshToken = String(value || '').trim();
+            if (!freshToken) {
+              fail('Human verification returned no token. Please try again.', 'TURNSTILE_EMPTY_TOKEN');
+              return;
+            }
+            finish(resolve, freshToken);
+          },
+          'error-callback': () => {
+            fail('Human verification could not be completed. Please try again.', 'TURNSTILE_WIDGET_ERROR');
+            return true;
+          },
+          'expired-callback': () => fail(
+            'Human verification expired. Please try the receipt upload again.',
+            'TURNSTILE_WIDGET_EXPIRED',
+          ),
+          'timeout-callback': () => fail(
+            'Human verification timed out. Please try the receipt upload again.',
+            'TURNSTILE_WIDGET_TIMEOUT',
+          ),
+          'unsupported-callback': () => fail(
+            'This browser cannot run secure human verification. Please update it or use another browser.',
+            'TURNSTILE_BROWSER_UNSUPPORTED',
+          ),
+        });
+        if (widgetId === undefined || widgetId === null) {
+          fail('Human verification could not start. Please refresh and try again.', 'TURNSTILE_RENDER_FAILED');
+          return;
+        }
+        turnstile.execute(widgetId);
+      } catch (_) {
+        fail('Human verification could not start. Please refresh and try again.', 'TURNSTILE_RENDER_FAILED');
+      }
+    });
+    return { token, reset: dispose };
+  } catch (error) {
+    dispose();
+    throw error;
+  }
+}
+
+function _pbAcquireReceiptTurnstile() {
+  return _pbAcquireTurnstile(PB_TURNSTILE_ACTION, 'receipt upload');
+}
+
+function _pbAcquirePublicRegistrationTurnstile() {
+  return _pbAcquireTurnstile(PB_REGISTRATION_TURNSTILE_ACTION, 'registration');
+}
+
+function _pbAcquireHostApplicationTurnstile() {
+  return _pbAcquireTurnstile(PB_HOST_APPLICATION_TURNSTILE_ACTION, 'host application');
+}
 
 async function _pbFetchWithTimeout(input, init = {}, timeoutMs = PB_REQUEST_TIMEOUT_MS) {
   const supportsAbort = typeof AbortController === 'function';
@@ -69,7 +278,10 @@ const PB_FAST_CACHE_MS = {
   bookings: 3500,
   openPlay: 3500,
 };
+const PB_BOOKING_ACCESS_TOKENS_KEY = 'pb_booking_access_tokens_v1';
+const PB_BOOKING_ACCESS_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const _pbFastCache = new Map();
+let _pbAccountRoleCache = null;
 
 function _pbClone(value) {
   if (value == null) return value;
@@ -115,6 +327,99 @@ function _pbClearFastCache(scopes = []) {
   for (const key of [..._pbFastCache.keys()]) {
     if (list.some(scope => key === scope || key.startsWith(`${scope}:`))) _pbFastCache.delete(key);
   }
+}
+
+async function _pbCurrentAccountRole() {
+  const { data: sessionData, error: sessionError } = await _sb.auth.getSession();
+  if (sessionError) throw sessionError;
+  const userId = sessionData?.session?.user?.id || '';
+  if (!userId) return '';
+
+  const now = Date.now();
+  if (_pbAccountRoleCache?.userId === userId && now - _pbAccountRoleCache.at < 30000) {
+    return _pbAccountRoleCache.role;
+  }
+
+  const { data, error } = await _sb
+    .from('accounts')
+    .select('role,status')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  const role = data?.status === 'active' ? String(data.role || '') : '';
+  _pbAccountRoleCache = { userId, role, at: now };
+  return role;
+}
+
+async function _pbHasActiveAccount() {
+  return !!(await _pbCurrentAccountRole());
+}
+
+function _pbLoadBookingAccessTokens() {
+  let stored = {};
+  try {
+    stored = JSON.parse(localStorage.getItem(PB_BOOKING_ACCESS_TOKENS_KEY) || '{}');
+  } catch (_) {
+    stored = {};
+  }
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {};
+
+  const cutoff = Date.now() - PB_BOOKING_ACCESS_TOKEN_MAX_AGE_MS;
+  return Object.fromEntries(
+    Object.entries(stored)
+      .filter(([, entry]) => entry && typeof entry.token === 'string' && Number(entry.createdAt || 0) >= cutoff)
+      .sort(([, a], [, b]) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+      .slice(0, 100)
+  );
+}
+
+function _pbSaveBookingAccessTokens(tokens) {
+  try {
+    localStorage.setItem(PB_BOOKING_ACCESS_TOKENS_KEY, JSON.stringify(tokens || {}));
+  } catch (_) {}
+}
+
+function _pbBookingAccessToken(ref, create = false) {
+  const key = String(ref || '').trim();
+  if (!key) return '';
+  const tokens = _pbLoadBookingAccessTokens();
+  if (tokens[key]?.token) return tokens[key].token;
+  if (!create) return '';
+  if (!globalThis.crypto?.getRandomValues) {
+    throw new Error('This browser cannot securely create a booking access token.');
+  }
+  const bytes = new Uint8Array(32);
+  globalThis.crypto.getRandomValues(bytes);
+  const token = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+  tokens[key] = { token, createdAt: Date.now() };
+  _pbSaveBookingAccessTokens(tokens);
+  return token;
+}
+
+function _pbRememberBookingAccessToken(ref, token) {
+  const key = String(ref || '').trim();
+  if (!key || !token) return;
+  const tokens = _pbLoadBookingAccessTokens();
+  tokens[key] = { token: String(token), createdAt: Date.now() };
+  _pbSaveBookingAccessTokens(tokens);
+}
+
+function _pbForgetBookingAccessToken(ref) {
+  const key = String(ref || '').trim();
+  if (!key) return;
+  const tokens = _pbLoadBookingAccessTokens();
+  if (!Object.prototype.hasOwnProperty.call(tokens, key)) return;
+  delete tokens[key];
+  _pbSaveBookingAccessTokens(tokens);
+}
+
+async function _pbSha256Hex(value) {
+  if (!globalThis.crypto?.subtle || typeof TextEncoder !== 'function') {
+    throw new Error('This browser cannot securely protect the booking access token.');
+  }
+  const input = new TextEncoder().encode(String(value || ''));
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', input);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function _safeJsonParse(v) {
@@ -180,7 +485,7 @@ async function _pbPrepareReceiptImage(file) {
   }
 }
 
-async function _pbVerifyReceiptBase64Fallback(fnUrl, payload, imageFile) {
+async function _pbVerifyReceiptBase64Fallback(fnUrl, payload, imageFile, authHeader = '') {
   const imageBase64 = await _pbFileToDataUrl(imageFile);
   const fallbackPayload = {
     action: 'verify',
@@ -189,13 +494,15 @@ async function _pbVerifyReceiptBase64Fallback(fnUrl, payload, imageFile) {
     contentType: imageFile?.type || payload?.contentType || 'image/jpeg',
     imageBase64,
     ...(payload?.bookingData ? { bookingData: payload.bookingData } : {}),
+    ...(payload?.bookingAccessToken ? { bookingAccessToken: payload.bookingAccessToken } : {}),
+    ...(payload?.turnstileToken ? { turnstileToken: payload.turnstileToken } : {}),
   };
   const res = await _pbFetchWithTimeout(fnUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Authorization': authHeader || `Bearer ${SUPABASE_ANON_KEY}`,
     },
     body: JSON.stringify(fallbackPayload),
   }, PB_RECEIPT_TIMEOUT_MS);
@@ -253,7 +560,11 @@ async function _invokePaymentSessionFallback(payload) {
   return json;
 }
 
-async function _invokeEdgeFunction(name, payload = {}, { allowFailure = false, preferDirect = false } = {}) {
+async function _invokeEdgeFunction(name, payload = {}, {
+  allowFailure = false,
+  preferDirect = false,
+  retryDirect = true,
+} = {}) {
   let data = null;
   let error = null;
   if (!preferDirect) {
@@ -263,6 +574,13 @@ async function _invokeEdgeFunction(name, payload = {}, { allowFailure = false, p
       error = invokeErr;
     }
     if (!error && data) return data;
+    if (!retryDirect) {
+      const reason = error
+        ? _extractFnError(error, 'Function invoke failed')
+        : 'Function returned an empty response';
+      if (allowFailure) return { ok: false, error: reason };
+      throw new Error(reason);
+    }
   }
 
   const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/${name}`;
@@ -309,7 +627,9 @@ function _bookingEmailPayload(b) {
       ? b.groupItems
       : [];
   return {
-    bookingRef: b.displayRef || b.ref,
+    // Always send a real row reference to the Edge Function. Group display
+    // labels can omit the internal "-G" suffix and are not database keys.
+    bookingRef: b.primaryRef || b.ref || b.displayRef,
     email: b.email,
     fullName: b.fullName,
     courtName: b.courtName,
@@ -332,26 +652,6 @@ function _bookingEmailPayload(b) {
       total: item.total,
       downpayment: item.downpayment,
     })),
-  };
-}
-
-function _telegramBookingPayload(b, extras = {}) {
-  return {
-    bookingRef: b.ref,
-    fullName: b.fullName,
-    contactNumber: b.contactNumber,
-    courtName: b.courtName,
-    date: b.date,
-    startTime: b.startTime,
-    endTime: b.endTime,
-    duration: b.duration,
-    total: b.total,
-    downpayment: b.downpayment || Math.round((b.total || 0) * 0.5),
-    paymentMethod: b.paymentMethod,
-    paymentStatus: b.paymentStatus,
-    bookingStatus: b.status,
-    gcashRef: b.gcashRef || null,
-    ...extras,
   };
 }
 
@@ -789,6 +1089,22 @@ window.DB = {
   async getBookings(filters = {}) {
     const opts = filters || {};
     return _pbCached('bookings', opts, PB_FAST_CACHE_MS.bookings, async () => {
+      const accountRole = await _pbCurrentAccountRole();
+      const canReadFullRows = ['owner', 'court_owner', 'staff'].includes(accountRole)
+        || (accountRole === 'host' && !!opts.hostUserId);
+
+      if (!canReadFullRows) {
+        const { data, error } = await _sb.rpc('get_public_booking_availability', {
+          p_date: opts.date || null,
+          p_court_id: opts.courtId ? String(opts.courtId) : null,
+        });
+        if (error) {
+          console.error('getBookings:', error);
+          return [];
+        }
+        return (data || []).map(rowToBooking);
+      }
+
       let query = _sb.from('bookings').select('*').order('created_at', { ascending: false });
       if (opts.date) query = query.eq('date', opts.date);
       if (opts.courtId) query = query.eq('court_id', String(opts.courtId));
@@ -806,32 +1122,91 @@ window.DB = {
     });
   },
 
+  async addBookings(bookings) {
+    const batch = Array.isArray(bookings) ? bookings.filter(Boolean) : [];
+    if (batch.length < 1 || batch.length > 8) {
+      throw new Error('Choose between one and eight booking items.');
+    }
+    const authenticated = await _pbHasActiveAccount();
+
+    // Fast client feedback only. The database serializes and re-checks every
+    // court/date conflict, including all rows in an atomic group.
+    for (const booking of batch) {
+      const existing = await this.getBookings({
+        courtId: booking.courtId,
+        date: booking.date,
+        activeOnly: true,
+      });
+      if (hasSlotConflict(existing, booking)) {
+        throw new Error('One or more time slots are no longer available. Please refresh and choose a different time.');
+      }
+    }
+
+    if (authenticated) {
+      for (const booking of batch) {
+        const row = bookingToRow(booking);
+        let { error } = await _sb.from('bookings').insert(row);
+        if (error && isMissingOptionalBookingColumnError(error) && !booking.hostBooking) {
+          ({ error } = await _sb.from('bookings').insert(withoutOptionalBookingColumns(row)));
+        }
+        if (error) {
+          console.error('addBookings:', error);
+          throw error;
+        }
+      }
+      _pbClearFastCache(['bookings']);
+      return batch.map(booking => booking.ref);
+    }
+
+    const tokenKey = batch[0].groupRef || batch[0].ref;
+    const publicAccessToken = _pbBookingAccessToken(tokenKey, true);
+    batch.forEach(booking => _pbRememberBookingAccessToken(booking.ref, publicAccessToken));
+
+    let turnstileChallenge = null;
+    try {
+      turnstileChallenge = await _pbAcquirePublicRegistrationTurnstile();
+      const response = await _invokeEdgeFunction('submit-public-booking', {
+        bookings: batch.map(bookingToRow),
+        accessToken: publicAccessToken,
+        turnstileToken: turnstileChallenge.token,
+      }, { retryDirect: false });
+      const refs = Array.isArray(response?.refs) ? response.refs.map(String) : [];
+      if (refs.length !== batch.length) {
+        throw new Error(response?.error || 'Booking holds were not created.');
+      }
+      _pbClearFastCache(['bookings']);
+      return refs;
+    } catch (error) {
+      _pbForgetBookingAccessToken(tokenKey);
+      batch.forEach(booking => _pbForgetBookingAccessToken(booking.ref));
+      console.error('addBookings:', error);
+      throw error;
+    } finally {
+      turnstileChallenge?.reset();
+    }
+  },
+
   async addBooking(booking) {
-    // Check for slot conflicts before inserting
-    const { data: existing } = await _sb
-      .from('bookings')
-      .select('ref, status, slots, created_at')
-      .eq('court_id', booking.courtId)
-      .eq('date', booking.date)
-      .neq('status', 'cancelled')
-      .neq('status', 'forfeited');
-
-    if (hasSlotConflict(existing, booking)) {
-      throw new Error('One or more time slots are no longer available. Please refresh and choose a different time.');
-    }
-
-    const row = bookingToRow(booking);
-    let { error } = await _sb.from('bookings').insert(row);
-    if (error && isMissingOptionalBookingColumnError(error) && !booking.hostBooking) {
-      ({ error } = await _sb.from('bookings').insert(withoutOptionalBookingColumns(row)));
-    }
-    if (error) { console.error('addBooking:', error); throw error; }
-    _pbClearFastCache(['bookings']);
+    return this.addBookings([booking]);
   },
 
   async getBookingByRef(ref) {
-    const { data, error } = await _sb.from('bookings').select('*').eq('ref', ref).single();
+    const authenticated = await _pbHasActiveAccount();
+    let data;
+    let error;
+    if (authenticated) {
+      ({ data, error } = await _sb.from('bookings').select('*').eq('ref', ref).single());
+    } else {
+      const accessToken = _pbBookingAccessToken(ref, false);
+      if (!accessToken) return null;
+      ({ data, error } = await _sb.rpc('get_public_booking_by_ref', {
+        p_ref: String(ref),
+        p_access_token: accessToken,
+      }));
+      data = Array.isArray(data) ? data[0] || null : data;
+    }
     if (error) { console.error('getBookingByRef:', error); return null; }
+    if (!data) return null;
     return rowToBooking(data);
   },
 
@@ -877,9 +1252,42 @@ window.DB = {
     if (updates.confirmationEmailId !== undefined) row.confirmation_email_id = updates.confirmationEmailId;
     if (updates.confirmationEmailSentAt !== undefined) row.confirmation_email_sent_at = updates.confirmationEmailSentAt;
     if (updates.confirmationEmailLastEvent !== undefined) row.confirmation_email_last_event = updates.confirmationEmailLastEvent;
-    let { data, error } = await _sb.from('bookings').update(row).eq('ref', ref).select('ref');
-    if (error && isMissingOptionalBookingColumnError(error) && !updates.hostBooking && updates.createdVia !== 'host') {
-      ({ data, error } = await _sb.from('bookings').update(withoutOptionalBookingColumns(row)).eq('ref', ref).select('ref'));
+    const authenticated = await _pbHasActiveAccount();
+    let data;
+    let error;
+    if (!authenticated) {
+      const accessToken = _pbBookingAccessToken(ref, false);
+      if (!accessToken) {
+        const denied = new Error(`Booking ${ref} cannot be updated from this browser because its secure access token is missing.`);
+        denied.code = 'BOOKING_ACCESS_TOKEN_MISSING';
+        throw denied;
+      }
+      const allowedPublicFields = new Set([
+        'full_name',
+        'contact_number',
+        'email',
+        'payment_method',
+        'payment_flow',
+        'gcash_ref',
+        'downpayment',
+        'payment_status',
+        'status',
+      ]);
+      const publicUpdates = Object.fromEntries(
+        Object.entries(row).filter(([key]) => allowedPublicFields.has(key))
+      );
+      const rpcResult = await _sb.rpc('update_public_booking_hold', {
+        p_ref: String(ref),
+        p_access_token: accessToken,
+        p_updates: publicUpdates,
+      });
+      data = rpcResult.data ? [{ ref: rpcResult.data }] : [];
+      error = rpcResult.error;
+    } else {
+      ({ data, error } = await _sb.from('bookings').update(row).eq('ref', ref).select('ref'));
+      if (error && isMissingOptionalBookingColumnError(error) && !updates.hostBooking && updates.createdVia !== 'host') {
+        ({ data, error } = await _sb.from('bookings').update(withoutOptionalBookingColumns(row)).eq('ref', ref).select('ref'));
+      }
     }
     if (error) { console.error('updateBooking:', error); throw error; }
     if (!Array.isArray(data) || data.length === 0) {
@@ -888,6 +1296,7 @@ window.DB = {
       console.error('updateBooking:', denied);
       throw denied;
     }
+    if (!authenticated && updates.status === 'cancelled') _pbForgetBookingAccessToken(ref);
     _pbClearFastCache(['bookings']);
   },
 
@@ -903,6 +1312,10 @@ window.DB = {
   },
 
   async deleteBooking(ref) {
+    if (!(await _pbHasActiveAccount())) {
+      await this.updateBooking(ref, { status: 'cancelled', paymentStatus: 'rejected' });
+      return;
+    }
     const { error } = await _sb.from('bookings').delete().eq('ref', ref);
     if (error) { console.error('deleteBooking:', error); throw error; }
     _pbClearFastCache(['bookings']);
@@ -942,6 +1355,7 @@ window.DB = {
   // ---- OPEN PLAY REGISTRATIONS ----
   async getOpenPlayRegistrations() {
     return _pbCached('openPlayRegistrations', {}, PB_FAST_CACHE_MS.openPlay, async () => {
+      if (!(await _pbHasActiveAccount())) return [];
       const { data, error } = await _sb.from('open_play_registrations').select('*').order('created_at', { ascending: false });
       if (error) { console.error('getOpenPlayRegistrations:', error); return []; }
       return data;
@@ -949,30 +1363,46 @@ window.DB = {
   },
 
   async addOpenPlayRegistration(reg) {
-    const { error } = await _sb.from('open_play_registrations').insert({
-      full_name: reg.fullName,
-      court_id: String(reg.courtId),
-      court_name: reg.courtName,
-      date: reg.date,
-      hour: reg.hour,
-      time_label: reg.timeLabel,
-      payment_type: reg.paymentType,
-      payment_method: reg.paymentMethod || 'cash',
-      gcash_ref: reg.gcashRef || null,
-      payment_status: reg.paymentStatus || 'pending',
-      amount: reg.amount,
-      receipt_image_url: reg.receiptImageUrl || null,
-      receipt_image_hash: reg.receiptImageHash || null,
-      receipt_phash: reg.receiptPhash || null,
-      receipt_status: reg.receiptStatus || 'none',
-      receipt_flags: reg.receiptFlags || [],
-      receipt_extracted: reg.receiptExtracted || null,
-      receipt_confidence: reg.receiptConfidence ?? null,
-      receipt_verified_at: reg.receiptVerifiedAt || null,
-      created_at: new Date().toISOString(),
-    });
-    if (error) { console.error('addOpenPlayRegistration:', error); throw error; }
-    _pbClearFastCache(['openPlayRegistrations', 'openPlayCount', 'openPlayCounts']);
+    const paymentMethod = String(reg.paymentMethod || 'cash').toLowerCase();
+    let turnstileChallenge = null;
+    try {
+      turnstileChallenge = await _pbAcquirePublicRegistrationTurnstile();
+      const response = await _invokeEdgeFunction('submit-public-registration', {
+        action: 'open_play',
+        fullName: reg.fullName,
+        courtId: String(reg.courtId),
+        date: reg.date,
+        hour: reg.hour,
+        paymentType: reg.paymentType,
+        paymentMethod,
+        gcashRef: reg.gcashRef || null,
+        receiptImageUrl: reg.receiptImageUrl || null,
+        receiptStatus: reg.receiptStatus || 'none',
+        turnstileToken: turnstileChallenge?.token || null,
+      }, { retryDirect: false });
+      const saved = response?.registration;
+      if (!saved?.id) throw new Error(response?.error || 'Open Play registration was not saved.');
+      _pbClearFastCache(['openPlayRegistrations', 'openPlayCount', 'openPlayCounts']);
+      return {
+        id: saved.id,
+        courtId: saved.court_id,
+        courtName: saved.court_name,
+        date: saved.date,
+        hour: Number(saved.hour),
+        timeLabel: saved.time_label,
+        paymentType: saved.payment_type,
+        paymentMethod: saved.payment_method,
+        paymentStatus: saved.payment_status || 'pending',
+        amount: Number(saved.amount || 0),
+        receiptStatus: saved.receipt_status || 'none',
+        createdAt: saved.created_at,
+      };
+    } catch (error) {
+      console.error('addOpenPlayRegistration:', error);
+      throw error;
+    } finally {
+      turnstileChallenge?.reset();
+    }
   },
 
   async updateOpenPlayRegistration(id, updates) {
@@ -994,27 +1424,25 @@ window.DB = {
 
   async getOpenPlayCountForDate(date, courtId = null) {
     return _pbCached('openPlayCount', { date, courtId: courtId || '' }, PB_FAST_CACHE_MS.openPlay, async () => {
-      let query = _sb.from('open_play_registrations')
-        .select('*', { count: 'exact', head: true })
-        .eq('date', date)
-        .or('payment_status.is.null,payment_status.neq.rejected');
-      if (courtId) query = query.eq('court_id', String(courtId));
-      const { count, error } = await query;
+      const { data, error } = await _sb.rpc('get_public_open_play_counts', {
+        p_date: date,
+        p_court_id: courtId ? String(courtId) : null,
+      });
       if (error) { console.error('getOpenPlayCountForDate:', error); return 0; }
-      return count || 0;
+      return (data || []).reduce((sum, row) => sum + Number(row.registration_count || 0), 0);
     });
   },
 
   async getOpenPlayCountsForDate(date) {
     return _pbCached('openPlayCounts', { date }, PB_FAST_CACHE_MS.openPlay, async () => {
-      const { data, error } = await _sb.from('open_play_registrations')
-        .select('court_id')
-        .eq('date', date)
-        .or('payment_status.is.null,payment_status.neq.rejected');
+      const { data, error } = await _sb.rpc('get_public_open_play_counts', {
+        p_date: date,
+        p_court_id: null,
+      });
       if (error) { console.error('getOpenPlayCountsForDate:', error); return {}; }
       return (data || []).reduce((counts, row) => {
         const key = String(row.court_id || '');
-        counts[key] = (counts[key] || 0) + 1;
+        counts[key] = Number(row.registration_count || 0);
         return counts;
       }, {});
     });
@@ -1034,46 +1462,49 @@ window.DB = {
   },
 
   async addOpenPlayHostApplication(app) {
-    if (app.password || app.validIdBase64) {
-      return this.submitOpenPlayHostSignup(app);
-    }
-    const row = {
-      ...hostApplicationToRow(app),
-      status: 'pending',
-      created_at: new Date().toISOString(),
-    };
-    let { error } = await _sb.from('open_play_host_applications').insert(row);
-    if (error && /gcash_number|valid_id_|host_user_id/i.test(error.message || '')) {
-      const fallback = {
-        full_name: row.full_name,
-        contact_number: row.contact_number,
-        email: row.email,
-        preferred_schedule: row.preferred_schedule,
-        notes: row.notes,
-        status: row.status,
-        created_at: row.created_at,
-      };
-      ({ error } = await _sb.from('open_play_host_applications').insert(fallback));
-    }
-    if (error) { console.error('addOpenPlayHostApplication:', error); throw error; }
+    return this.submitOpenPlayHostSignup(app);
   },
 
   async submitOpenPlayHostSignup(app) {
-    const data = await _invokeEdgeFunction('host-application', {
-      action: 'signup',
-      fullName: app.fullName,
-      contactNumber: app.contactNumber,
-      email: app.email,
-      password: app.password,
-      gcashNumber: app.gcashNumber,
-      validIdBase64: app.validIdBase64,
-      validIdFileName: app.validIdFileName,
-      validIdFileType: app.validIdFileType,
-      validIdFileSize: app.validIdFileSize,
-      notes: app.notes || '',
-    }, { preferDirect: true });
-    if (data?.error) throw new Error(data.error);
-    return data;
+    let turnstileChallenge = null;
+    try {
+      turnstileChallenge = await _pbAcquireHostApplicationTurnstile();
+      const data = await _invokeEdgeFunction('host-application', {
+        action: 'signup',
+        turnstileToken: turnstileChallenge.token,
+        fullName: app.fullName,
+        contactNumber: app.contactNumber,
+        email: app.email,
+        password: app.password,
+        gcashNumber: app.gcashNumber,
+        validIdBase64: app.validIdBase64,
+        validIdFileName: app.validIdFileName,
+        validIdFileType: app.validIdFileType,
+        validIdFileSize: app.validIdFileSize,
+        preferredSchedule: app.preferredSchedule || '',
+        notes: app.notes || '',
+      }, { preferDirect: true });
+      if (data?.error) throw new Error(data.error);
+      return data;
+    } finally {
+      turnstileChallenge?.reset();
+    }
+  },
+
+  async resendOpenPlayHostVerification(email) {
+    let turnstileChallenge = null;
+    try {
+      turnstileChallenge = await _pbAcquireHostApplicationTurnstile();
+      const data = await _invokeEdgeFunction('host-application', {
+        action: 'resend-verification',
+        email,
+        turnstileToken: turnstileChallenge.token,
+      }, { preferDirect: true });
+      if (data?.error) throw new Error(data.error);
+      return data;
+    } finally {
+      turnstileChallenge?.reset();
+    }
   },
 
   async getOpenPlayHostIdSignedUrl(applicationId) {
@@ -1110,7 +1541,18 @@ window.DB = {
     return data;
   },
 
-  async getOpenPlayHostSessions() {
+  async getOpenPlayHostSessions(options = {}) {
+    const opts = options || {};
+    const accountRole = opts.publicOnly ? '' : await _pbCurrentAccountRole();
+    const canReadPrivateRows = !opts.publicOnly && ['owner', 'court_owner', 'host'].includes(accountRole);
+    if (opts.publicOnly || !canReadPrivateRows) {
+      const { data, error } = await _sb.rpc('get_public_open_play_host_sessions', {
+        p_session_id: opts.id || null,
+      });
+      if (error) { console.error('getOpenPlayHostSessions:', error); return []; }
+      return (data || []).map(rowToOpenPlayHostSession);
+    }
+
     const { data, error } = await _sb.from('open_play_host_sessions').select('*').order('date', { ascending: true }).order('start_hour', { ascending: true });
     if (error) { console.error('getOpenPlayHostSessions:', error); return []; }
     return (data || []).map(rowToOpenPlayHostSession);
@@ -1155,25 +1597,33 @@ window.DB = {
   },
 
   async addOpenPlayHostSessionRegistration(reg) {
-    const { data, error } = await _sb.from('open_play_host_session_registrations').insert({
-      session_id: reg.sessionId,
-      full_name: reg.fullName,
-      contact_number: reg.contactNumber || null,
-      payment_method: reg.paymentMethod || 'gcash',
-      gcash_ref: reg.gcashRef || null,
-      payment_status: reg.paymentStatus || 'pending',
-      amount: reg.amount || 0,
-      receipt_image_url: reg.receiptImageUrl || null,
-      receipt_image_hash: reg.receiptImageHash || null,
-      receipt_phash: reg.receiptPhash || null,
-      receipt_status: reg.receiptStatus || 'none',
-      receipt_flags: reg.receiptFlags || [],
-      receipt_extracted: reg.receiptExtracted || null,
-      receipt_confidence: reg.receiptConfidence ?? null,
-      receipt_verified_at: reg.receiptVerifiedAt || null,
-    }).select('*').single();
-    if (error) { console.error('addOpenPlayHostSessionRegistration:', error); throw error; }
-    return rowToOpenPlayHostSessionRegistration(data);
+    const paymentMethod = String(reg.paymentMethod || 'cash').toLowerCase();
+    let turnstileChallenge = null;
+    try {
+      turnstileChallenge = await _pbAcquirePublicRegistrationTurnstile();
+      const response = await _invokeEdgeFunction('submit-public-registration', {
+        action: 'host_session',
+        sessionId: reg.sessionId,
+        fullName: reg.fullName,
+        contactNumber: reg.contactNumber || null,
+        paymentMethod,
+        gcashRef: reg.gcashRef || null,
+        receiptImageUrl: reg.receiptImageUrl || null,
+        receiptStatus: reg.receiptStatus || 'none',
+        turnstileToken: turnstileChallenge?.token || null,
+      }, { retryDirect: false });
+      const saved = response?.registration;
+      if (!saved?.id) throw new Error(response?.error || 'Host-session registration was not saved.');
+      return rowToOpenPlayHostSessionRegistration({
+        ...saved,
+        updated_at: saved.created_at,
+      });
+    } catch (error) {
+      console.error('addOpenPlayHostSessionRegistration:', error);
+      throw error;
+    } finally {
+      turnstileChallenge?.reset();
+    }
   },
 
   // ---- OPEN PLAY GAME MANAGER ----
@@ -1367,13 +1817,19 @@ window.DB = {
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error('Supabase configuration missing (SUPABASE_URL / SUPABASE_ANON_KEY).');
     }
-    const { data, error } = await _sb.functions.invoke('create-payment-session', { body: payload });
+    const bookingRef = String(payload?.bookingRef || '');
+    const bookingAccessToken = _pbBookingAccessToken(bookingRef, false);
+    const securedPayload = {
+      ...(payload || {}),
+      ...(bookingAccessToken ? { bookingAccessToken } : {}),
+    };
+    const { data, error } = await _sb.functions.invoke('create-payment-session', { body: securedPayload });
     if (!error && data) return data;
 
     // Fallback path: direct HTTP call to the function endpoint. This helps diagnose
     // invoke-wrapper issues and still allows checkout if endpoint is reachable.
     try {
-      return await _invokePaymentSessionFallback(payload);
+      return await _invokePaymentSessionFallback(securedPayload);
     } catch (fallbackErr) {
       const baseReason = _extractFnError(error, 'Failed to send a request to the Edge Function');
       const fbReason = _extractFnError(fallbackErr, 'Fallback call failed');
@@ -1387,6 +1843,7 @@ window.DB = {
     if (!booking?.email) return { ok: false, skipped: true, reason: 'No customer email' };
     return _invokeEdgeFunction('send-confirmation-email', _bookingEmailPayload(booking), {
       allowFailure: !!options.allowFailure,
+      retryDirect: false,
     });
   },
 
@@ -1394,23 +1851,37 @@ window.DB = {
     if (!payload?.email) return { ok: false, skipped: true, reason: 'No customer email' };
     return _invokeEdgeFunction('send-reschedule-email', payload, {
       allowFailure: !!options.allowFailure,
+      retryDirect: false,
     });
   },
 
   async sendTelegramNotification(payload, options = {}) {
     return _invokeEdgeFunction('send-telegram-notification', payload, {
       allowFailure: options.allowFailure !== false,
+      retryDirect: false,
     });
   },
 
   async notifyBookingSubmitted(booking) {
     if (window.PB_USE_LOCAL_DATA) return { ok: true, skipped: true, reason: 'Local data mode' };
-    return this.sendTelegramNotification(_telegramBookingPayload(booking, { event: 'new_booking' }), { allowFailure: true });
+    if (!(await _pbHasActiveAccount())) {
+      return { ok: true, skipped: true, reason: 'Protected booking service sends the canonical alert' };
+    }
+    return this.sendTelegramNotification({
+      bookingRef: booking?.ref,
+      event: 'new_booking',
+    }, { allowFailure: true });
   },
 
   async notifyBookingUpdate(booking, event, note = '') {
     if (window.PB_USE_LOCAL_DATA) return { ok: true, skipped: true, reason: 'Local data mode' };
-    return this.sendTelegramNotification(_telegramBookingPayload(booking, { type: 'booking_update', event, note }), { allowFailure: true });
+    if (!(await _pbHasActiveAccount())) {
+      return { ok: true, skipped: true, reason: 'Receipt and booking services send canonical alerts' };
+    }
+    return this.sendTelegramNotification({
+      bookingRef: booking?.ref,
+      event,
+    }, { allowFailure: true });
   },
 
   async getIntegrationStatus() {
@@ -1419,69 +1890,106 @@ window.DB = {
 
   // Verify an uploaded GCash/GoTyme/PNB receipt image via the Edge Function.
   // payload: { bookingRef, provider, imageFile, contentType }.
+  // For a saved public booking, its browser-only bearer token is attached here
+  // and verified by the Edge Function before any service-role write.
   // imageBase64 remains supported for older deployed clients.
   // Returns: { ok, status, flags, extracted, confidence, message }
   async verifyGcashReceipt(payload) {
-    // Do not use `instanceof Blob` here. Facebook/Messenger WebViews can hand
-    // us a File from a different JavaScript realm, where that check is false.
-    if (payload?.imageFile) {
-      const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/verify-gcash-receipt`;
-      const imageFile = await _pbPrepareReceiptImage(payload.imageFile);
-      const form = new FormData();
-      form.append('action', 'verify');
-      form.append('bookingRef', String(payload.bookingRef || ''));
-      form.append('provider', String(payload.provider || 'gcash'));
-      form.append('contentType', imageFile.type || payload.contentType || 'image/jpeg');
-      if (payload.bookingData) form.append('bookingData', JSON.stringify(payload.bookingData));
-      try {
-        form.append('receipt', imageFile, imageFile.name || 'receipt.jpg');
-      } catch (_) {
-        // Older embedded WebViews may expose a file-like object that FormData
-        // refuses. Base64 is a compatibility fallback, not the normal path.
-        return _pbVerifyReceiptBase64Fallback(fnUrl, payload, imageFile);
+    const bookingRef = String(payload?.bookingRef || '');
+    const storedBookingToken = _pbBookingAccessToken(bookingRef, false);
+    const authenticatedHostFlow = payload?.authenticatedHostFlow === true;
+    const requestPayload = {
+      ...(payload || {}),
+      ...(storedBookingToken ? { bookingAccessToken: storedBookingToken } : {}),
+    };
+    // This hint controls only whether this browser renders a widget. The Edge
+    // Function ignores it and independently proves the signed-in host owns the
+    // exact booking/session before granting a bypass.
+    delete requestPayload.authenticatedHostFlow;
+    const sessionResult = await _sb.auth.getSession();
+    const userAccessToken = sessionResult?.data?.session?.access_token || '';
+    const authHeader = `Bearer ${userAccessToken || SUPABASE_ANON_KEY}`;
+    let accountRole = '';
+    try { accountRole = await _pbCurrentAccountRole(); } catch (_) {}
+    const browserMayBypass = ['owner', 'court_owner', 'staff'].includes(accountRole) ||
+      (accountRole === 'host' && authenticatedHostFlow);
+    let turnstileChallenge = null;
+
+    if (!browserMayBypass) {
+      turnstileChallenge = await _pbAcquireReceiptTurnstile();
+      requestPayload.turnstileToken = turnstileChallenge.token;
+    }
+
+    try {
+      // Do not use `instanceof Blob` here. Facebook/Messenger WebViews can hand
+      // us a File from a different JavaScript realm, where that check is false.
+      if (requestPayload.imageFile) {
+        const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/verify-gcash-receipt`;
+        const imageFile = await _pbPrepareReceiptImage(requestPayload.imageFile);
+        const form = new FormData();
+        form.append('action', 'verify');
+        form.append('bookingRef', bookingRef);
+        form.append('provider', String(requestPayload.provider || 'gcash'));
+        form.append('contentType', imageFile.type || requestPayload.contentType || 'image/jpeg');
+        if (requestPayload.bookingData) form.append('bookingData', JSON.stringify(requestPayload.bookingData));
+        if (requestPayload.bookingAccessToken) form.append('bookingAccessToken', requestPayload.bookingAccessToken);
+        if (requestPayload.turnstileToken) form.append('turnstileToken', requestPayload.turnstileToken);
+        try {
+          form.append('receipt', imageFile, imageFile.name || 'receipt.jpg');
+        } catch (_) {
+          // Older embedded WebViews may expose a file-like object that FormData
+          // refuses. Base64 is a compatibility fallback, not the normal path.
+          return _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader);
+        }
+
+        const res = await _pbFetchWithTimeout(fnUrl, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Authorization': authHeader,
+          },
+          body: form,
+        }, PB_RECEIPT_TIMEOUT_MS);
+        const txt = await res.text();
+        const json = _safeJsonParse(txt);
+        if (!res.ok) {
+          const reason = String(json?.error || txt || `HTTP ${res.status}`);
+          // A small set of WebViews sends multipart headers but drops the File
+          // part. This server response occurs before siteverify, so the same
+          // fresh token remains safe for the compatibility retry.
+          const missingMultipartImage = [400, 415, 422].includes(res.status) &&
+            /receipt file|multipart body|empty image/i.test(reason);
+          if (missingMultipartImage) {
+            return _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader);
+          }
+          throw _pbTurnstileError(reason, String(json?.code || `HTTP_${res.status}`));
+        }
+        if (!json) throw new Error('Receipt verification returned an invalid response.');
+        return json;
       }
 
+      // A Turnstile token is single use. Send old base64 clients directly once;
+      // an automatic wrapper retry could replay a consumed token or double-bill
+      // OCR after an uncertain network response.
+      const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/verify-gcash-receipt`;
       const res = await _pbFetchWithTimeout(fnUrl, {
         method: 'POST',
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: form,
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': authHeader },
+        body: JSON.stringify(requestPayload),
       }, PB_RECEIPT_TIMEOUT_MS);
       const txt = await res.text();
       const json = _safeJsonParse(txt);
-      if (!res.ok) {
-        const reason = String(json?.error || txt || `HTTP ${res.status}`);
-        // A small set of WebViews sends multipart headers but drops the File
-        // part. Retry only when the server explicitly says it got no image;
-        // never retry an uncertain timeout/network request.
-        const missingMultipartImage = [400, 415, 422].includes(res.status) &&
-          /receipt file|multipart body|empty image/i.test(reason);
-        if (missingMultipartImage) return _pbVerifyReceiptBase64Fallback(fnUrl, payload, imageFile);
-        throw new Error(reason);
-      }
-      if (!json) throw new Error('Receipt verification returned an invalid response.');
+      if (!res.ok) throw _pbTurnstileError(
+        String(json?.error || txt || `HTTP ${res.status}`),
+        String(json?.code || `HTTP_${res.status}`),
+      );
       return json;
+    } finally {
+      // Siteverify tokens expire quickly and cannot be reused. Reset/remove the
+      // explicit widget after every request outcome so a retry always executes
+      // a new challenge and receives a new token.
+      turnstileChallenge?.reset();
     }
-
-    const { data, error } = await _sb.functions.invoke('verify-gcash-receipt', { body: payload });
-    if (!error && data) return data;
-
-    // Fallback: direct HTTP call (mirrors createPaymentSession fallback).
-    const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/verify-gcash-receipt`;
-    const sess = await _sb.auth.getSession();
-    const accessToken = sess?.data?.session?.access_token || '';
-    const authHeader = accessToken ? `Bearer ${accessToken}` : `Bearer ${SUPABASE_ANON_KEY}`;
-    const res = await _pbFetchWithTimeout(fnUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': authHeader },
-      body: JSON.stringify(payload),
-    }, PB_RECEIPT_TIMEOUT_MS);
-    const txt = await res.text();
-    const json = _safeJsonParse(txt);
-    if (!res.ok) throw new Error(json?.error || `HTTP ${res.status}`);
-    return json;
   },
 
   // Request a short-lived signed URL to view a stored receipt (admin only).
@@ -1617,13 +2125,13 @@ window.DB = {
   async sendHostBalanceNotice(bookingRef, eventType = 'reminder_1d', options = {}) {
     return _invokeEdgeFunction('process-host-balance-deadlines', {
       action: 'manual', bookingRef, eventType,
-    }, { allowFailure: !!options.allowFailure });
+    }, { allowFailure: !!options.allowFailure, retryDirect: false });
   },
 
   async processHostBalanceDeadlines(options = {}) {
     return _invokeEdgeFunction('process-host-balance-deadlines', {
       action: 'process', source: 'admin',
-    }, { allowFailure: options.allowFailure !== false });
+    }, { allowFailure: options.allowFailure !== false, retryDirect: false });
   },
 
   async getBookingBalanceNotifications(bookingKey) {
@@ -2246,30 +2754,100 @@ window.DB = {
     },
     async addOpenPlayRegistration(reg) {
       const db = readDb();
-      db.openPlayRegistrations.push({
+      let config = null;
+      try { config = JSON.parse(db.settings.open_play_config || 'null'); } catch (_) {}
+      if (!config || config.enabled === false) throw new Error('Open Play is not currently accepting registrations.');
+
+      const sessionStart = Number(config.start);
+      const sessionEnd = Number(config.end);
+      const dateParts = String(reg.date || '').split('-').map(Number);
+      const requestedDay = dateParts.length === 3
+        ? new Date(dateParts[0], dateParts[1] - 1, dateParts[2]).getDay()
+        : -1;
+      const enabledDays = Array.isArray(config.days) ? config.days.map(Number) : [];
+      const specificDates = Array.isArray(config.specificDates) ? config.specificDates.map(String) : [];
+      const enabledCourts = Array.isArray(config.courtIds) ? config.courtIds.map(String).filter(Boolean) : [];
+      if (!Number.isInteger(sessionStart) || !Number.isInteger(sessionEnd) || sessionEnd <= sessionStart || Number(reg.hour) !== sessionStart) {
+        throw new Error('This is not an active Open Play session.');
+      }
+      if (!enabledDays.includes(requestedDay) && !specificDates.includes(String(reg.date))) {
+        throw new Error('Open Play is not enabled on this date.');
+      }
+      if (enabledCourts.length && !enabledCourts.includes(String(reg.courtId))) {
+        throw new Error('This court is not enabled for Open Play.');
+      }
+
+      const court = db.courts.find(c => String(c.id) === String(reg.courtId));
+      if (!court || court.blocked) throw new Error('This court is not currently available.');
+      const requestedReceiptStatus = String(reg.receiptStatus || 'none').toLowerCase();
+      const paymentMethod = String(reg.paymentMethod || 'cash').toLowerCase();
+      if (db.settings[`payment_method_${paymentMethod}`] === '0') {
+        throw new Error('This payment method is not currently enabled.');
+      }
+      const isRejected = requestedReceiptStatus === 'rejected';
+      const acceptanceMode = String(db.settings.payment_acceptance_mode || 'both').toLowerCase();
+      const paymentType = acceptanceMode === 'downpayment_only'
+        ? '50%'
+        : acceptanceMode === 'full_payment_only'
+          ? '100%'
+          : reg.paymentType;
+      if (!['50%', '100%'].includes(paymentType)) throw new Error('Open-play payment type is invalid.');
+
+      const openPlayFee = Number(config.fee ?? db.settings.open_play_fee ?? 100);
+      const serviceFee = Number(db.settings.maintenance_fee ?? db.settings.service_fee_rate ?? db.settings.booking_fee ?? 0);
+      const total = Math.round((openPlayFee + serviceFee) * 100) / 100;
+      const canonicalAmount = paymentType === '100%' ? total : Math.round((total / 2) * 100) / 100;
+      const maxPlayers = Math.max(1, Number(config.maxPlayers || 40));
+      const activeCount = db.openPlayRegistrations.filter(r =>
+        r.date === reg.date &&
+        String(r.court_id) === String(reg.courtId) &&
+        r.payment_status !== 'rejected'
+      ).length;
+      if (!isRejected && activeCount >= maxPlayers) throw new Error('This Open Play session is already full.');
+
+      const formatHour = value => {
+        const hour = ((Number(value) % 24) + 24) % 24;
+        return `${hour % 12 || 12}:00 ${hour < 12 ? 'AM' : 'PM'}`;
+      };
+      const row = {
         id: localRef('op'),
         full_name: reg.fullName,
         court_id: String(reg.courtId),
-        court_name: reg.courtName,
+        court_name: court.name,
         date: reg.date,
-        hour: reg.hour,
-        time_label: reg.timeLabel,
-        payment_type: reg.paymentType,
-        payment_method: reg.paymentMethod || 'cash',
+        hour: sessionStart,
+        time_label: `${formatHour(sessionStart)} - ${formatHour(sessionEnd)}`,
+        payment_type: paymentType,
+        payment_method: paymentMethod,
         gcash_ref: reg.gcashRef || null,
-        payment_status: reg.paymentStatus || 'pending',
-        amount: reg.amount,
+        payment_status: isRejected ? 'rejected' : 'pending',
+        amount: canonicalAmount,
         receipt_image_url: reg.receiptImageUrl || null,
-        receipt_image_hash: reg.receiptImageHash || null,
-        receipt_phash: reg.receiptPhash || null,
-        receipt_status: reg.receiptStatus || 'none',
-        receipt_flags: reg.receiptFlags || [],
-        receipt_extracted: reg.receiptExtracted || null,
-        receipt_confidence: reg.receiptConfidence ?? null,
-        receipt_verified_at: reg.receiptVerifiedAt || null,
+        receipt_image_hash: null,
+        receipt_phash: null,
+        receipt_status: isRejected ? 'rejected' : (paymentMethod === 'cash' ? 'none' : 'manual_review'),
+        receipt_flags: [],
+        receipt_extracted: null,
+        receipt_confidence: null,
+        receipt_verified_at: null,
         created_at: nowIso(),
-      });
+      };
+      db.openPlayRegistrations.push(row);
       writeDb(db);
+      return {
+        id: row.id,
+        courtId: row.court_id,
+        courtName: row.court_name,
+        date: row.date,
+        hour: row.hour,
+        timeLabel: row.time_label,
+        paymentType: row.payment_type,
+        paymentMethod: row.payment_method,
+        paymentStatus: row.payment_status,
+        amount: Number(row.amount || 0),
+        receiptStatus: row.receipt_status,
+        createdAt: row.created_at,
+      };
     },
     async updateOpenPlayRegistration(id, updates) {
       const db = readDb();
@@ -2409,8 +2987,17 @@ window.DB = {
         accountStatus: 'active',
       };
     },
-    async getOpenPlayHostSessions() {
-      return readDb().openPlayHostSessions.sort((a, b) =>
+    async getOpenPlayHostSessions(options = {}) {
+      const opts = options || {};
+      const sessions = readDb().openPlayHostSessions
+        .filter(session => !opts.id || String(session.id) === String(opts.id))
+        .filter(session => !opts.publicOnly || (session.status || 'published') === 'published')
+        .map(session => opts.publicOnly ? {
+          ...session,
+          hostUserId: null,
+          hostEmail: '',
+        } : session);
+      return sessions.sort((a, b) =>
         String(a.date || '').localeCompare(String(b.date || '')) ||
         Number(a.startHour || a.start_hour || 0) - Number(b.startHour || b.start_hour || 0)
       );
@@ -2709,10 +3296,10 @@ window.DB = {
         ok: true,
         local: true,
         services: [
-          { id: 'email', label: 'Email confirmations', configured: false, required: ['RESEND_API_KEY'], missing: ['RESEND_API_KEY'], note: 'Local data mode' },
+          { id: 'email', label: 'Email confirmations (Maileroo)', configured: false, required: ['MAILEROO_API_KEY', 'MAILEROO_FROM_ADDRESS'], missing: ['MAILEROO_API_KEY', 'MAILEROO_FROM_ADDRESS'], note: 'Local data mode' },
           { id: 'telegram', label: 'Telegram admin alerts', configured: false, required: ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'], missing: ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'], note: 'Local data mode' },
           { id: 'payments', label: 'PayMongo checkout', configured: false, required: ['PAYMONGO_SECRET_KEY', 'PAYMENT_SUCCESS_URL', 'PAYMENT_CANCEL_URL'], missing: ['PAYMONGO_SECRET_KEY', 'PAYMENT_SUCCESS_URL', 'PAYMENT_CANCEL_URL'], note: 'Local data mode' },
-          { id: 'ocr', label: 'Receipt OCR', configured: false, required: ['GOOGLE_VISION_API_KEY'], missing: ['GOOGLE_VISION_API_KEY'], note: 'Local data mode' },
+          { id: 'ocr', label: 'Receipt OCR', configured: false, required: ['GOOGLE_VISION_API_KEY', 'TURNSTILE_SECRET_KEY'], missing: ['GOOGLE_VISION_API_KEY', 'TURNSTILE_SECRET_KEY'], note: 'Local data mode' },
           { id: 'service_role', label: 'Server database access', configured: false, required: ['SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY'], missing: ['SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY'], note: 'Local data mode' },
         ],
       };

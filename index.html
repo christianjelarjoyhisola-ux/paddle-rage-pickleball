@@ -5,15 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <title>Paddle Rage Pickleball — Iponan, Cagayan de Oro</title>
 <meta name="description" content="Select a date, choose a court and time, then book at Paddle Rage Pickleball in Iponan, Cagayan de Oro." />
-<link rel="canonical" href="https://paddle-rage-pickleball.pages.dev/" />
+<link rel="canonical" href="https://paddleragecdo.ph/" />
 <meta property="og:locale" content="en_PH" />
 <meta property="og:type" content="website" />
 <meta property="og:site_name" content="Paddle Rage Pickleball" />
 <meta property="og:title" content="Paddle Rage Pickleball — Feel the Rage" />
 <meta property="og:description" content="Select a date, choose a court and time, then book at Paddle Rage Pickleball in Iponan, Cagayan de Oro." />
-<meta property="og:url" content="https://paddle-rage-pickleball.pages.dev/" />
-<meta property="og:image" content="https://paddle-rage-pickleball.pages.dev/linkimage.jpg?v=20260717" />
-<meta property="og:image:secure_url" content="https://paddle-rage-pickleball.pages.dev/linkimage.jpg?v=20260717" />
+<meta property="og:url" content="https://paddleragecdo.ph/" />
+<meta property="og:image" content="https://paddleragecdo.ph/linkimage.jpg?v=20260717" />
+<meta property="og:image:secure_url" content="https://paddleragecdo.ph/linkimage.jpg?v=20260717" />
 <meta property="og:image:type" content="image/jpeg" />
 <meta property="og:image:width" content="2048" />
 <meta property="og:image:height" content="1072" />
@@ -21,7 +21,7 @@
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Paddle Rage Pickleball — Feel the Rage" />
 <meta name="twitter:description" content="Select a date, choose a court and time, then book in Iponan, Cagayan de Oro." />
-<meta name="twitter:image" content="https://paddle-rage-pickleball.pages.dev/linkimage.jpg?v=20260717" />
+<meta name="twitter:image" content="https://paddleragecdo.ph/linkimage.jpg?v=20260717" />
 <meta name="twitter:image:alt" content="Paddle Rage Pickleball — Feel the Rage, Live the Game" />
 <link rel="icon" type="image/png" href="paddleragelogo.jpg">
 <script src="booking-balance.js?v=20260716-host-balance-v1"></script>
@@ -2662,7 +2662,7 @@ body.host-mode .courts { padding-bottom:140px; }
     <div class="host-invite-feature host-invite-more">And much more</div>
   </div>
   <div class="host-invite-actions">
-    <button type="button" class="btn btn-p btn-sm" onclick="window.location.href='host.html'">Apply as Host</button>
+    <button type="button" class="btn btn-p btn-sm" onclick="window.location.href='host.html?apply=1'">Apply as Host</button>
     <button type="button" class="btn btn-g btn-sm" onclick="dismissHostInvite(event)">Not now</button>
   </div>
 </div>
@@ -3247,7 +3247,7 @@ body.host-mode .courts { padding-bottom:140px; }
                 </div>
                 <div id="bReceiptStatus" style="display:none;margin-top:8px;font-size:.78rem;font-weight:700;border-radius:8px;padding:8px 10px;line-height:1.5"></div>
                 <div id="bReceiptRequired" class="bpay-help">
-                  We auto-check amount, reference, date/time, and receiver.
+                  Privacy: your receipt image and extracted text are securely processed by Google Cloud Vision for payment verification and fraud prevention. The private audit record is retained only as long as needed for disputes, fraud prevention, accounting, and legal requirements. Contact bookings@paddleragecdo.ph for privacy requests.
                 </div>
               </div>
             </div>
@@ -3255,7 +3255,7 @@ body.host-mode .courts { padding-bottom:140px; }
 
           <label class="booking-policy-check">
             <input type="checkbox" id="bookingPolicyAgree" />
-            <span id="bookingPolicyText"><strong>I agree</strong> that all booking payments are final and non-refundable, my payment details and receipt must be correct, and an invalid payment may release this reservation.</span>
+            <span id="bookingPolicyText"><strong>I agree</strong> that all booking payments are final and non-refundable, my payment details and receipt must be correct, and an invalid payment may release this reservation. If I upload a receipt, I consent to Google Cloud Vision processing it for payment verification and Paddle Rage retaining the private audit record only as long as needed for disputes, fraud prevention, accounting, and legal requirements.</span>
           </label>
 
           <!-- Cash note -->
@@ -3421,12 +3421,16 @@ body.host-mode .courts { padding-bottom:140px; }
       <button type="button" class="bk-modal-x" onclick="closeHostApplyModal()">×</button>
     </div>
     <div style="padding:18px 20px">
-      <div class="host-apply-note">Host access is reviewed by the court owner. Approved hosts get a dashboard login for publishing Open Play sessions and sharing links with players.</div>
+      <div class="host-apply-note">Host access is reviewed by the court owner. We will email a secure verification link before your application can be approved.</div>
       <div class="frow">
         <div class="fg" style="margin:0"><label class="fl" for="haName">Full Name</label><input type="text" class="fi" id="haName" placeholder="Your full name"/></div>
         <div class="fg" style="margin:0"><label class="fl" for="haPhone">Contact Number</label><input type="tel" class="fi" id="haPhone" placeholder="09XX XXX XXXX"/></div>
       </div>
       <div class="fg"><label class="fl" for="haEmail">Email Address</label><input type="email" class="fi" id="haEmail" placeholder="you@email.com"/></div>
+      <div class="frow">
+        <div class="fg" style="margin:0"><label class="fl" for="haPassword">Create Password</label><input type="password" class="fi" id="haPassword" placeholder="Minimum 8 characters" autocomplete="new-password" minlength="8"/></div>
+        <div class="fg" style="margin:0"><label class="fl" for="haGcash">GCash Number</label><input type="tel" class="fi" id="haGcash" placeholder="09XX XXX XXXX" autocomplete="tel"/></div>
+      </div>
       <div class="fg"><label class="fl" for="haSchedule">Preferred Schedule</label><input type="text" class="fi" id="haSchedule" placeholder="e.g. Fridays 6:00 PM - 10:00 PM"/></div>
       <div class="fg"><label class="fl" for="haNotes">Host Notes</label><textarea class="fi" id="haNotes" style="min-height:96px;resize:vertical" placeholder="Tell us about your Open Play group, expected players, and payment setup."></textarea></div>
     </div>
@@ -3719,19 +3723,34 @@ async function submitHostApplication() {
   const fullName = $('haName').value.trim();
   const contactNumber = $('haPhone').value.trim();
   const email = $('haEmail').value.trim();
+  const password = $('haPassword').value;
+  const gcashNumber = $('haGcash').value.trim();
   const preferredSchedule = $('haSchedule').value.trim();
   const notes = $('haNotes').value.trim();
   if (!fullName || fullName.length < 3) { toast('Enter your full name.', 'err'); return; }
   if (!/^(09|\+639)\d{9}$/.test(contactNumber.replace(/\s|-/g,''))) { toast('Enter a valid PH contact number.', 'err'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Enter a valid email address.', 'err'); return; }
+  if (password.length < 8) { toast('Create a password with at least 8 characters.', 'err'); return; }
+  if (!/^(09|\+639)\d{9}$/.test(gcashNumber.replace(/\s|-/g,''))) { toast('Enter a valid GCash number.', 'err'); return; }
   if (btn?.disabled) return;
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
   try {
-    await DB.addOpenPlayHostApplication({ fullName, contactNumber, email, preferredSchedule, notes });
+    const result = await DB.addOpenPlayHostApplication({
+      fullName,
+      contactNumber,
+      email,
+      password,
+      gcashNumber,
+      preferredSchedule,
+      notes,
+    });
     hostInviteDismissedThisView = true;
+    $('hostApplyModal')?.querySelectorAll('input, textarea').forEach(field => { field.value = ''; });
     closeHostApplyModal();
     maybeShowHostInvite();
-    toast('Host application submitted. The court owner will review it.');
+    toast(result?.emailVerificationSent
+      ? 'Application submitted. Check your email to verify your address before owner review.'
+      : 'Host application submitted for court owner review.');
   } catch (err) {
     toast(err?.message || 'Could not submit host application.', 'err');
   } finally {
@@ -3836,7 +3855,10 @@ function hostSessionPaymentHtml(session) {
         </div>
       </div>
     </div>
-    <div style="font-size:.72rem;color:var(--muted);line-height:1.5">We auto-check amount, reference, date/time, receiver, duplicate use, and OCR confidence before confirming your spot.</div>
+    <label class="booking-policy-check" style="margin-top:10px">
+      <input type="checkbox" id="hsOcrConsent" />
+      <span><strong>I consent</strong> to Google Cloud Vision securely processing this receipt for payment verification and fraud prevention, and to Paddle Rage privately retaining the audit record only as long as needed for disputes, fraud prevention, accounting, and legal requirements. Privacy requests: bookings@paddleragecdo.ph.</span>
+    </label>
   `;
 }
 
@@ -3895,12 +3917,15 @@ async function verifyHostSessionReceipt(ref, method, inlineData) {
     imageFile: _hostSessionReceiptFile,
     contentType: _hostSessionReceiptFile.type || 'image/jpeg',
     bookingData: inlineData,
+    authenticatedHostFlow: !!activeHostSession() &&
+      String(activeHostSession().id || '') === String(_hostSessionCurrent?.hostUserId || ''),
   });
-  const status = res?.status || 'manual_review';
+  // Vision extracts evidence but never authenticates payment. Only an explicit
+  // rejection stays terminal; every other OCR response requires owner review.
+  const status = res?.status === 'rejected' ? 'rejected' : 'manual_review';
   const msg = res?.publicReason || res?.message || 'Receipt received.';
   if (st) {
-    if (status === 'auto_approved') { st.style.background = 'rgba(var(--ac),.12)'; st.style.color = 'var(--accent)'; st.textContent = 'Payment verified. Your spot is confirmed.'; }
-    else if (status === 'rejected') { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = 'Receipt rejected: ' + msg; }
+    if (status === 'rejected') { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = 'Receipt rejected: ' + msg; }
     else { st.style.background = 'rgba(184,126,0,.12)'; st.style.color = '#b87e00'; st.textContent = 'Receipt needs review. Your spot is pending.'; }
   }
   return {
@@ -3935,6 +3960,7 @@ async function submitHostSessionJoin() {
     if (_hostSessionPayMethod === 'maya' && !isMayaRefValid(paymentRef)) { toast('Maya Reference ID must look like B6DC F633 F08C. Do not enter the InstaPay Ref. No.', 'err'); refInput?.focus(); return; }
     if (_hostSessionPayMethod === 'bpi' && !isBpiConfirmationValid(paymentRef)) { toast('Enter the BPI Confirmation No. from the receipt, not the Transaction Ref. No.', 'err'); refInput?.focus(); return; }
     if (!_hostSessionReceiptFile) { toast('Please upload your payment receipt screenshot.', 'err'); return; }
+    if (!$('hsOcrConsent')?.checked) { toast('Please consent to secure receipt processing before joining.', 'err'); $('hsOcrConsent')?.focus(); return; }
   }
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting...'; }
   try {
@@ -3951,16 +3977,17 @@ async function submitHostSessionJoin() {
         ref: joinRef,
         host_session_id: session.id,
         total: amount,
-        downpayment: amount,
-        gcash_ref: paymentRef,
-        date: session.date,
+         downpayment: amount,
+         gcash_ref: paymentRef,
+         payment_method: _hostSessionPayMethod,
+         date: session.date,
         full_name: name,
         created_at: _hostSessionStartedAt || new Date().toISOString(),
       });
       if (receiptResult.status === 'rejected') paymentStatus = 'rejected';
-      else paymentStatus = receiptResult.status === 'auto_approved' ? 'paid' : 'pending';
+      else paymentStatus = 'pending';
     }
-    await DB.addOpenPlayHostSessionRegistration({
+    const savedRegistration = await DB.addOpenPlayHostSessionRegistration({
       sessionId: session.id,
       fullName: name,
       contactNumber: phone,
@@ -3977,15 +4004,24 @@ async function submitHostSessionJoin() {
       receiptConfidence: receiptResult?.confidence ?? null,
       receiptVerifiedAt: receiptResult?.receiptVerifiedAt || null,
     });
+    paymentStatus = savedRegistration.paymentStatus;
+    const canonicalAmount = Number(savedRegistration.amount || 0);
+    const canonicalReceiptStatus = savedRegistration.receiptStatus || 'none';
     if (paymentStatus === 'rejected') {
       toast('Receipt rejected. Please try again with a valid receipt.', 'err');
       return;
     }
+    const isConfirmed = paymentStatus === 'paid';
+    const savedStatusMessage = isConfirmed
+      ? (canonicalAmount > 0 ? 'Your payment is confirmed.' : 'Your free spot is confirmed.')
+      : canonicalReceiptStatus === 'manual_review'
+        ? 'Your receipt was received and needs owner review.'
+        : 'Your registration was received and is awaiting owner review.';
     $('hsJoinBox').innerHTML = `
       <div style="text-align:center;padding:12px 4px">
         <div style="font-size:2rem;margin-bottom:8px">🏓</div>
-        <div style="font-weight:900;color:var(--text);margin-bottom:5px">${paymentStatus === 'paid' ? 'You are confirmed!' : 'You are pending review.'}</div>
-        <div style="font-size:.82rem;color:var(--muted);line-height:1.55">${paymentStatus === 'paid' ? 'Your payment was auto-verified.' : 'Your receipt was received and needs owner review.'}</div>
+        <div style="font-weight:900;color:var(--text);margin-bottom:5px">${isConfirmed ? 'You are confirmed!' : 'You are pending review.'}</div>
+        <div style="font-size:.82rem;color:var(--muted);line-height:1.55">${savedStatusMessage}</div>
       </div>`;
     if (btn) btn.style.display = 'none';
   } catch (err) {
@@ -4025,7 +4061,7 @@ async function maybeOpenHostSessionLink() {
   const id = new URLSearchParams(location.search).get('openPlayHostSession');
   if (!id) return;
   try {
-    const sessions = await DB.getOpenPlayHostSessions();
+    const sessions = await DB.getOpenPlayHostSessions({ publicOnly: true, id });
     const session = sessions.find(s => String(s.id) === String(id) && s.status !== 'cancelled');
     if (!session) { toast('Open Play session is not available.', 'err'); return; }
     renderPublicHostSession(session);
@@ -4790,35 +4826,36 @@ async function loadOperatingHours() {
 }
 
 function applyPaymentSettings(settings) {
+  const sharedMerchantName = settings.payment_merchant_name || settings.gcash_merchant_name || '';
   paymentReceiverSettings = {
     gcash: {
-      number: settings.gcash_merchant_number || '09XX XXX XXXX',
-      name: settings.gcash_merchant_name || 'Paddle Rage Pickleball',
+      number: settings.gcash_merchant_number || '',
+      name: settings.gcash_merchant_name || sharedMerchantName,
       qrImage: settings.gcash_qr_image || '',
     },
     bdopay: {
-      number: settings.gcash_merchant_number || '09XX XXX XXXX',
-      name: settings.gcash_merchant_name || 'Paddle Rage Pickleball',
-      qrImage: settings.gcash_qr_image || '',
+      number: settings.bdopay_merchant_number || settings.gcash_merchant_number || '',
+      name: settings.bdopay_merchant_name || sharedMerchantName,
+      qrImage: settings.bdopay_qr_image || settings.gcash_qr_image || '',
     },
     maya: {
-      number: settings.gcash_merchant_number || '09XX XXX XXXX',
-      name: settings.gcash_merchant_name || 'Paddle Rage Pickleball',
-      qrImage: settings.gcash_qr_image || '',
+      number: settings.maya_merchant_number || settings.gcash_merchant_number || '',
+      name: settings.maya_merchant_name || sharedMerchantName,
+      qrImage: settings.maya_qr_image || settings.gcash_qr_image || '',
     },
     bpi: {
-      number: settings.gcash_merchant_number || '09XX XXX XXXX',
-      name: settings.gcash_merchant_name || 'Paddle Rage Pickleball',
-      qrImage: settings.gcash_qr_image || '',
+      number: settings.bpi_merchant_number || settings.gcash_merchant_number || '',
+      name: settings.bpi_merchant_name || sharedMerchantName,
+      qrImage: settings.bpi_qr_image || settings.gcash_qr_image || '',
     },
     gotyme: {
       number: settings.gotyme_merchant_number || '',
-      name: settings.gotyme_merchant_name || 'Paddle Rage Pickleball',
+      name: settings.gotyme_merchant_name || '',
       qrImage: settings.gotyme_qr_image || '',
     },
     pnb: {
       number: settings.pnb_merchant_number || '',
-      name: settings.pnb_merchant_name || 'Paddle Rage Pickleball',
+      name: settings.pnb_merchant_name || '',
       qrImage: settings.pnb_qr_image || '',
     },
   };
@@ -4837,13 +4874,21 @@ function applyPaymentSettings(settings) {
     merchantName: gcashSettings.merchantName
   });
 
-  paymentMethods.cash = settings.payment_method_cash !== '0';
-  paymentMethods.gcash = settings.payment_method_gcash !== '0';
-  paymentMethods.bdopay = settings.payment_method_bdopay !== '0';
-  paymentMethods.maya = settings.payment_method_maya !== '0';
-  paymentMethods.bpi = settings.payment_method_bpi !== '0';
-  paymentMethods.gotyme = settings.payment_method_gotyme !== '0';
-  paymentMethods.pnb = settings.payment_method_pnb !== '0';
+  const receiverReady = method => {
+    if (method === 'cash') return true;
+    const receiver = paymentReceiverSettings[method] || {};
+    return !!String(receiver.name || '').trim() &&
+      (!!String(receiver.number || '').trim() || !!String(receiver.qrImage || '').trim());
+  };
+  // Payment methods are opt-in and require a real destination. Missing or
+  // partially-saved settings never expose placeholder payment instructions.
+  paymentMethods.cash = settings.payment_method_cash === '1';
+  paymentMethods.gcash = settings.payment_method_gcash === '1' && receiverReady('gcash');
+  paymentMethods.bdopay = settings.payment_method_bdopay === '1' && receiverReady('bdopay');
+  paymentMethods.maya = settings.payment_method_maya === '1' && receiverReady('maya');
+  paymentMethods.bpi = settings.payment_method_bpi === '1' && receiverReady('bpi');
+  paymentMethods.gotyme = settings.payment_method_gotyme === '1' && receiverReady('gotyme');
+  paymentMethods.pnb = settings.payment_method_pnb === '1' && receiverReady('pnb');
   paymentAcceptanceMode = settings.payment_acceptance_mode || 'both';
 
   if ($('gcMerchantNumber')) $('gcMerchantNumber').textContent = gcashSettings.merchantNumber;
@@ -5785,8 +5830,7 @@ async function proceedToBook(courtId = null) {
   const createdRefs = [];
 
   try {
-    for (const item of reserveItems) {
-      await DB.addBooking({
+    const reserveRows = reserveItems.map(item => ({
         ref:           item.ref,
         groupRef:      item.groupRef,
         fullName:      'Reserving...',
@@ -5810,9 +5854,9 @@ async function proceedToBook(courtId = null) {
         downpayment:   null,
         gcashRef:      null,
         ...reserveIdentity,
-      });
-      createdRefs.push(item.ref);
-    }
+    }));
+    await DB.addBookings(reserveRows);
+    createdRefs.push(...reserveItems.map(item => item.ref));
   } catch (err) {
     if (createdRefs.length) await cancelReservedBookings(createdRefs);
     const msg = err?.message || '';
@@ -6735,6 +6779,9 @@ function syncGcashSharedPanel(method) {
     $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-short').forEach((el, i) => { if (bpiGuide[i]) el.textContent = bpiGuide[i]; });
     if (receiptHelp) receiptHelp.innerHTML = 'BPI to GCash/G-Xchange only.<br>Enter the BPI Confirmation No., not the Transaction Ref. No.<br>Please choose the correct payment method before paying.';
   }
+  if (receiptHelp) {
+    receiptHelp.innerHTML += '<br><br><strong>Privacy:</strong> your receipt and extracted text are securely processed by Google Cloud Vision only for payment verification and fraud prevention. The private audit record is retained only as long as needed for disputes, fraud prevention, accounting, and legal requirements. Contact bookings@paddleragecdo.ph for privacy requests.';
+  }
 }
 
 function copyPaymentNumber(method = 'gcash') {
@@ -6906,11 +6953,12 @@ function updatePaymentAmountUI() {
   });
   const policy = $('bookingPolicyText');
   if (policy) {
-    policy.innerHTML = hostBooking
+    const visionConsent = ' If I upload a receipt, I consent to Google Cloud Vision processing it for payment verification and Paddle Rage retaining the private audit record only as long as needed for disputes, fraud prevention, accounting, and legal requirements.';
+    policy.innerHTML = (hostBooking
       ? hostDeposit
         ? '<strong>I agree</strong> that all payments are final and non-refundable. The remaining balance is due five full days before Open Play; missing the deadline forfeits the reservation and releases the slot.'
         : '<strong>I agree</strong> that full payment is required because this Open Play starts in five days or less, and all payments are final and non-refundable.'
-      : '<strong>I agree</strong> that all booking payments are final and non-refundable, my payment details and receipt must be correct, and an invalid payment may release this reservation.';
+      : '<strong>I agree</strong> that all booking payments are final and non-refundable, my payment details and receipt must be correct, and an invalid payment may release this reservation.') + visionConsent;
   }
   updatePrice();
 }
@@ -7075,16 +7123,21 @@ async function submitBookingLegacy(e) {
         if (submitBtn) submitBtn.textContent = 'Uploading receipt...';
         booking._receiptResult = await verifyUploadedReceipt(booking.ref, payMethod);
       } catch(err) {
+        const receiptError = extractErrMsg(err);
+        const humanVerificationFailed = String(err?.code || '').startsWith('TURNSTILE_') ||
+          /human verification|secure receipt verification/i.test(receiptError);
         // A client timeout does not prove the server failed; it may still be
         // storing or verifying the receipt. Never cancel a paid booking on an
         // uncertain network result. Keep the server row as verifying and give
         // the customer their reference for manual follow-up.
         booking.status = 'pending';
         booking.paymentStatus = 'for_verification';
-        DB.notifyBookingUpdate(booking, 'payment_review_needed', `Receipt request uncertain: ${extractErrMsg(err)}`).catch(() => {});
+        DB.notifyBookingUpdate(booking, 'payment_review_needed', `Receipt request uncertain: ${receiptError}`).catch(() => {});
         showInvoice(booking);
         resetForm();
-        toast(`Booking saved as ${booking.ref}. Receipt verification is still pending; please do not pay again.`, 'inf');
+        toast(humanVerificationFailed
+          ? `Booking saved as ${booking.ref}, but the receipt was not uploaded: ${receiptError} Please contact Paddle Rage and do not pay again.`
+          : `Booking saved as ${booking.ref}. Receipt verification is still pending; please do not pay again.`, humanVerificationFailed ? 'err' : 'inf');
         await renderCourts();
         onCardDate(booking.courtId, booking.date).catch(() => {});
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🎾 Confirm Booking'; }
@@ -7117,11 +7170,6 @@ async function submitBookingLegacy(e) {
         onCardDate(booking.courtId, booking.date).catch(() => {});
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🎾 Confirm Booking'; }
         return;
-      } else if (ocrStatus === 'auto_approved') {
-        booking.status = 'confirmed';
-        booking.paymentStatus = (booking.downpayment >= booking.total - 1) ? 'paid' : 'downpayment_paid';
-        DB.notifyBookingUpdate(booking, 'payment_verified', 'Receipt auto-verified.').catch(() => {});
-        sendCustomerConfirmationEmail(booking);
       } else {
         // manual_review or OCR error — downgrade from verifying to pending so
         // slot shows as taken (red) while admin reviews it, not yellow forever.
@@ -7300,6 +7348,7 @@ async function submitBooking(e) {
 
   let bookingSaved = false;
   try {
+    const missingRows = [];
     for (const row of itemBookings) {
       if (heldRefs.has(row.ref)) {
         await DB.updateBooking(row.ref, {
@@ -7324,9 +7373,10 @@ async function submitBooking(e) {
           createdAt:     row.createdAt,
         });
       } else {
-        await DB.addBooking(row);
+        missingRows.push(row);
       }
     }
+    if (missingRows.length) await DB.addBookings(missingRows);
     clearReservationState();
     bookingSaved = true;
 
@@ -7337,15 +7387,20 @@ async function submitBooking(e) {
         if (submitBtn) submitBtn.textContent = 'Uploading receipt...';
         booking._receiptResult = await verifyUploadedReceipt(booking.ref, payMethod);
       } catch(err) {
+        const receiptError = extractErrMsg(err);
+        const humanVerificationFailed = String(err?.code || '').startsWith('TURNSTILE_') ||
+          /human verification|secure receipt verification/i.test(receiptError);
         // Do not overwrite server state after a timeout/network error: the
         // Edge Function may finish successfully after the WebView disconnects.
         booking.status = 'pending';
         booking.paymentStatus = 'for_verification';
         itemBookings.forEach(row => { row.status = 'pending'; row.paymentStatus = 'for_verification'; });
-        DB.notifyBookingUpdate(booking, 'payment_review_needed', `Receipt request uncertain: ${extractErrMsg(err)}`).catch(() => {});
+        DB.notifyBookingUpdate(booking, 'payment_review_needed', `Receipt request uncertain: ${receiptError}`).catch(() => {});
         showInvoice(booking);
         resetForm();
-        toast(`Booking saved as ${booking.ref}. Receipt verification is still pending; please do not pay again.`, 'inf');
+        toast(humanVerificationFailed
+          ? `Booking saved as ${booking.ref}, but the receipt was not uploaded: ${receiptError} Please contact Paddle Rage and do not pay again.`
+          : `Booking saved as ${booking.ref}. Receipt verification is still pending; please do not pay again.`, humanVerificationFailed ? 'err' : 'inf');
         await refreshBookingItemViews(itemBookings);
         return;
       }
@@ -7371,25 +7426,14 @@ async function submitBooking(e) {
         await refreshBookingItemViews(itemBookings);
         return;
       }
-      if (ocrStatus === 'auto_approved') {
-        booking.status = 'confirmed';
-        booking.paymentStatus = (booking.downpayment >= booking.total - 1) ? 'paid' : 'downpayment_paid';
-        itemBookings.forEach(row => {
-          row.status = 'confirmed';
-          row.paymentStatus = (row.downpayment >= row.total - 1) ? 'paid' : 'downpayment_paid';
-        });
-        DB.notifyBookingUpdate(booking, 'payment_verified', 'Receipt auto-verified.').catch(() => {});
-        sendCustomerConfirmationEmail(booking);
-      } else {
-        booking.status = 'pending';
-        booking.paymentStatus = 'for_verification';
-        itemBookings.forEach(row => { row.status = 'pending'; row.paymentStatus = 'for_verification'; });
-        await Promise.allSettled(itemBookings.map(row =>
-          DB.updateBooking(row.ref, { status: 'pending', paymentStatus: 'for_verification' })
-        ));
-        DB.notifyBookingUpdate(booking, 'payment_review_needed', receiptReasonFromFlags(booking._receiptResult?.flags || []) || 'Receipt needs owner review.').catch(() => {});
-        await refreshBookingItemViews(itemBookings);
-      }
+      booking.status = 'pending';
+      booking.paymentStatus = 'for_verification';
+      itemBookings.forEach(row => { row.status = 'pending'; row.paymentStatus = 'for_verification'; });
+      await Promise.allSettled(itemBookings.map(row =>
+        DB.updateBooking(row.ref, { status: 'pending', paymentStatus: 'for_verification' })
+      ));
+      DB.notifyBookingUpdate(booking, 'payment_review_needed', receiptReasonFromFlags(booking._receiptResult?.flags || []) || 'Receipt needs owner review.').catch(() => {});
+      await refreshBookingItemViews(itemBookings);
     }
 
     showInvoice(booking);
@@ -7445,13 +7489,14 @@ async function verifyUploadedReceipt(bookingRef, method, inlineData = null) {
       provider: method,
       imageFile: _receiptFile,
       contentType: _receiptFile.type || 'image/jpeg',
+      authenticatedHostFlow: isVerifiedHostBooking(),
     };
     if (inlineData) payload.bookingData = inlineData;
     const res = await DB.verifyGcashReceipt(payload);
-    const status = res?.status || 'manual_review';
+    const status = res?.status === 'rejected' ? 'rejected' : 'manual_review';
     const msg = res?.publicReason || res?.message || 'Receipt received.';
     if (st) {
-      if (status === 'auto_approved') { st.style.background = 'rgba(var(--ac),.12)'; st.style.color = 'var(--accent)'; st.textContent = '✅ ' + msg; }
+      if (status === 'auto_approved') { st.style.background = 'rgba(var(--ac),.12)'; st.style.color = 'var(--accent)'; st.textContent = 'Receipt passed the initial check. Finalizing your registration...'; }
       else if (status === 'rejected') { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = '⚠️ ' + msg; }
       else { st.style.background = 'rgba(184,126,0,.12)'; st.style.color = '#b87e00'; st.textContent = '🕓 ' + msg; }
     }
@@ -7467,7 +7512,15 @@ async function verifyUploadedReceipt(bookingRef, method, inlineData = null) {
       receiptVerifiedAt: res?.receiptVerifiedAt || new Date().toISOString(),
     };
   } catch (err) {
-    if (st) { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = 'Receipt upload failed. Please attach the screenshot again and retry.'; }
+    const reason = extractErrMsg(err);
+    const verificationError = String(err?.code || '').startsWith('TURNSTILE_') || /human verification|secure receipt verification/i.test(reason);
+    if (st) {
+      st.style.background = 'rgba(229,57,53,.1)';
+      st.style.color = '#e53935';
+      st.textContent = verificationError
+        ? reason
+        : 'Receipt upload failed. Please attach the screenshot again and retry.';
+    }
     throw err;
   }
 }
@@ -8458,7 +8511,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
       </div>
       <label class="booking-policy-check op-policy-check">
         <input type="checkbox" id="opPolicyAgree" />
-        <span><strong>I agree</strong> that Open Play payments are non-refundable, my reference and receipt must be correct, and invalid or missing proof may reject this registration.</span>
+        <span><strong>I agree</strong> that Open Play payments are non-refundable, my reference and receipt must be correct, and invalid or missing proof may reject this registration. If I upload a receipt, I consent to Google Cloud Vision processing it for payment verification and Paddle Rage retaining the private audit record only as long as needed for disputes, fraud prevention, accounting, and legal requirements. Privacy requests: bookings@paddleragecdo.ph.</span>
       </label>
     </div>`;
   $('opModalFt').innerHTML = `
@@ -8703,7 +8756,7 @@ async function verifyOpReceipt(ref, method, inlineData) {
       contentType: _opReceiptFile.type || 'image/jpeg',
       bookingData: inlineData,
     });
-    const status = res?.status || 'manual_review';
+    const status = res?.status === 'rejected' ? 'rejected' : 'manual_review';
     const msg = res?.publicReason || res?.message || 'Receipt received.';
     if (st) {
       if (status === 'auto_approved') { st.style.background = 'rgba(var(--ac),.12)'; st.style.color = 'var(--accent)'; st.textContent = '✅ ' + msg; }
@@ -8814,9 +8867,10 @@ async function submitOpenPlay() {
       receiptResult = await verifyOpReceipt(opRef, payMethod, {
         ref: opRef,
         total: opTotal,
-        downpayment: amt,
-        gcash_ref: _opSignupData.gcashRef,
-        date: _opSignupData.date,
+         downpayment: amt,
+         gcash_ref: _opSignupData.gcashRef,
+         payment_method: payMethod,
+         date: _opSignupData.date,
         full_name: name,
         created_at: _opSignupData.startedAt,
       });
@@ -8847,10 +8901,10 @@ async function submitOpenPlay() {
         if (btn) { btn.disabled = false; btn.textContent = '🏓 Join Open Play'; }
         return;
       }
-      regPayStatus = receiptResult.status === 'auto_approved' ? 'paid' : 'pending';
+      regPayStatus = 'pending';
     }
     const timeLabel = _opSignupData.sessionLabel || `${fmtT(_opSignupData.hour)} – ${fmtT(_opSignupData.hour + 1)}`;
-    await DB.addOpenPlayRegistration({
+    const savedRegistration = await DB.addOpenPlayRegistration({
       fullName: name,
       courtId: _opSignupData.courtId,
       courtName: _opSignupData.courtName,
@@ -8871,17 +8925,14 @@ async function submitOpenPlay() {
       receiptConfidence: receiptResult?.confidence ?? null,
       receiptVerifiedAt: receiptResult?.receiptVerifiedAt || null,
     });
-
-    // Fire-and-forget Telegram notification.
-    DB.sendTelegramNotification({
-      type: 'open_play',
-      fullName: name,
-      courtName: _opSignupData.courtName,
-      date: _opSignupData.date,
-      timeLabel,
-      paymentType: payType,
-      amount: amt,
-    }, { allowFailure: true }).catch(() => {});
+    regPayStatus = savedRegistration.paymentStatus;
+    const canonicalAmount = Number(savedRegistration.amount || 0);
+    const canonicalReceiptStatus = savedRegistration.receiptStatus || 'none';
+    const canonicalPaymentMethod = savedRegistration.paymentMethod || _opSignupData.payMethod;
+    if (regPayStatus === 'rejected') {
+      toast('Receipt rejected. Please try again with a valid receipt.', 'err');
+      return;
+    }
 
     $('opModalBody').innerHTML = `
       <div style="text-align:center;padding:28px 0">
@@ -8889,11 +8940,13 @@ async function submitOpenPlay() {
         <div style="font-size:1.2rem;font-weight:700;margin-bottom:8px">You're in!</div>
         <div style="color:var(--muted);font-size:.88rem;line-height:1.65">
           Thanks, <strong>${name}</strong>!<br/>
-          ${_opSignupData.payMethod === 'cash'
-            ? `Pay <strong>${fmt(amt)}</strong> at the front desk upon arrival.`
+          ${canonicalPaymentMethod === 'cash'
+            ? `Pay <strong>${fmt(canonicalAmount)}</strong> at the front desk upon arrival.`
             : regPayStatus === 'paid'
-              ? `✅ Your <strong>${fmt(amt)}</strong> payment was verified. Your spot is confirmed — see you on the court!`
-              : `We received your <strong>${fmt(amt)}</strong> receipt. The owner will verify it shortly — just show your receipt at the front desk.`
+              ? `✅ Your <strong>${fmt(canonicalAmount)}</strong> payment is confirmed — see you on the court!`
+              : canonicalReceiptStatus === 'manual_review'
+                ? `We received your <strong>${fmt(canonicalAmount)}</strong> receipt. The owner will verify it shortly — just show your receipt at the front desk.`
+                : `Your <strong>${fmt(canonicalAmount)}</strong> registration is pending owner review.`
           }
         </div>
       </div>`;
@@ -8907,7 +8960,8 @@ async function submitOpenPlay() {
 }
 </script>
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20260714-owner-void-v1"></script>
+<script src="runtime-config.js"></script>
+<script src="supabase-config.js?v=20260719-integrations-v2"></script>
 
 <!-- MOBILE STICKY BOOK NOW BAR -->
 <div id="mobileBookBar" class="mobile-book-bar" style="display:none">

@@ -1,8 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { calculateCourtPayment, closeMoney, roundMoney } from "../_shared/booking-payment.ts";
+import {
+  calculateCourtPayment,
+  closeMoney,
+  roundMoney,
+} from "../_shared/booking-payment.ts";
 
 type CreatePayload = {
   bookingRef: string;
+  bookingAccessToken?: string;
   amountPhp?: number;
   customer?: {
     name?: string;
@@ -25,6 +30,9 @@ type BookingRow = {
   host_booking: boolean;
   status: string | null;
   payment_status: string | null;
+  customer_access_token_hash: string | null;
+  host_user_id: string | null;
+  created_by_user_id: string | null;
 };
 
 type CourtRow = {
@@ -34,7 +42,8 @@ type CourtRow = {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 function extractErrMsg(err: unknown) {
@@ -57,6 +66,45 @@ function settingMap(rows: Array<{ key: string; value: string }> | null) {
     out[row.key] = row.value;
   });
   return out;
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value.toLowerCase());
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function constantTimeEqual(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  let mismatch = 0;
+  for (let index = 0; index < left.length; index++) {
+    mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return mismatch === 0;
+}
+
+async function loadActiveCaller(req: Request, db: any): Promise<
+  {
+    userId: string;
+    role: string;
+  } | null
+> {
+  const token = (req.headers.get("Authorization") || "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+  if (!token) return null;
+  const { data, error } = await db.auth.getUser(token);
+  const userId = String(data?.user?.id || "").trim();
+  if (error || !userId) return null;
+  const { data: account, error: accountError } = await db
+    .from("accounts")
+    .select("role,status")
+    .eq("id", userId)
+    .maybeSingle();
+  if (accountError || account?.status !== "active") return null;
+  return { userId, role: String(account.role || "").toLowerCase() };
 }
 
 function expectedBookingAmounts(
@@ -86,7 +134,7 @@ async function loadBookingGroup(
   const { data, error } = await db
     .from("bookings")
     .select(
-      "ref,booking_group_ref,full_name,email,contact_number,court_id,slots,total,downpayment,host_booking,status,payment_status",
+      "ref,booking_group_ref,full_name,email,contact_number,court_id,slots,total,downpayment,host_booking,status,payment_status,customer_access_token_hash,host_user_id,created_by_user_id",
     )
     .eq("booking_group_ref", booking.booking_group_ref)
     .neq("status", "cancelled");
@@ -203,7 +251,7 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as CreatePayload;
     const bookingRef = String(body.bookingRef || "").trim();
-    if (!bookingRef) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9-]{2,99}$/.test(bookingRef)) {
       return new Response(JSON.stringify({ error: "Invalid payload" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -213,7 +261,7 @@ Deno.serve(async (req) => {
     const { data: booking, error: bookingErr } = await db
       .from("bookings")
       .select(
-        "ref,booking_group_ref,full_name,email,contact_number,court_id,slots,total,downpayment,host_booking,status,payment_status",
+        "ref,booking_group_ref,full_name,email,contact_number,court_id,slots,total,downpayment,host_booking,status,payment_status,customer_access_token_hash,host_user_id,created_by_user_id",
       )
       .eq("ref", bookingRef)
       .single();
@@ -223,9 +271,47 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const bookingGroup = await loadBookingGroup(db, booking as BookingRow);
+    const bookingAccessToken = String(body.bookingAccessToken || "");
+    const suppliedTokenHash = bookingAccessToken.length >= 32 &&
+        bookingAccessToken.length <= 256
+      ? await sha256Hex(bookingAccessToken)
+      : "";
+    const customerAuthorized = !!suppliedTokenHash &&
+      bookingGroup.every((row) =>
+        /^[0-9a-f]{64}$/.test(String(row.customer_access_token_hash || "")) &&
+        constantTimeEqual(
+          suppliedTokenHash,
+          String(row.customer_access_token_hash || ""),
+        )
+      );
+    const caller = customerAuthorized ? null : await loadActiveCaller(req, db);
+    const privileged = !!caller &&
+      ["owner", "court_owner", "staff"].includes(caller.role);
+    const owningHost = !!caller && caller.role === "host" &&
+      bookingGroup.every((row) =>
+        row.host_user_id === caller.userId ||
+        row.created_by_user_id === caller.userId
+      );
+    if (!customerAuthorized && !privileged && !owningHost) {
+      return new Response(
+        JSON.stringify({
+          error: "Checkout is not authorized for this booking",
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
     if (
-      booking.status === "cancelled" || booking.payment_status === "paid" ||
-      booking.payment_status === "downpayment_paid"
+      bookingGroup.some((row) =>
+        row.status === "cancelled" || row.status === "forfeited" ||
+        row.payment_status === "paid" ||
+        row.payment_status === "downpayment_paid" ||
+        row.payment_status === "deposit_retained"
+      )
     ) {
       return new Response(JSON.stringify({ error: "Booking is not payable" }), {
         status: 409,
@@ -239,7 +325,6 @@ Deno.serve(async (req) => {
     const settings = settingMap(
       settingRows as Array<{ key: string; value: string }>,
     );
-    const bookingGroup = await loadBookingGroup(db, booking as BookingRow);
     const amounts = await expectedBookingGroupAmounts(
       db,
       bookingGroup,
@@ -265,14 +350,15 @@ Deno.serve(async (req) => {
     const sessionId = crypto.randomUUID();
     const amountPhp = amounts.due;
     const customer = {
-      name: body.customer?.name || booking.full_name || "Customer",
-      email: body.customer?.email || booking.email || "",
-      phone: body.customer?.phone || booking.contact_number || "",
+      name: booking.full_name || "Customer",
+      email: booking.email || "",
+      phone: booking.contact_number || "",
     };
     const metadata = {
-      ...(body.metadata || {}),
       booking_ref: bookingRef,
-      ...(booking.booking_group_ref ? { booking_group_ref: booking.booking_group_ref } : {}),
+      ...(booking.booking_group_ref
+        ? { booking_group_ref: booking.booking_group_ref }
+        : {}),
     };
 
     let checkoutUrl = "";
@@ -313,7 +399,17 @@ Deno.serve(async (req) => {
       amount_php: amountPhp,
       status: "pending",
       checkout_url: checkoutUrl,
-      raw_request: body,
+      raw_request: {
+        booking_ref: bookingRef,
+        requested_amount_php: Number.isFinite(requestedAmount)
+          ? requestedAmount
+          : null,
+        authorization: customerAuthorized
+          ? "booking_access_token"
+          : privileged
+          ? "operator"
+          : "owning_host",
+      },
       created_at: nowIso,
       updated_at: nowIso,
     };
@@ -329,12 +425,11 @@ Deno.serve(async (req) => {
       payment_session_id: sessionId,
       payment_checkout_url: checkoutUrl,
     };
-    const { error: bErr } = booking.booking_group_ref
-      ? await db.from("bookings").update(bookingUpdate).eq(
-        "booking_group_ref",
-        booking.booking_group_ref,
-      ).neq("status", "cancelled")
-      : await db.from("bookings").update(bookingUpdate).eq("ref", bookingRef);
+    const bookingRefs = bookingGroup.map((row) => row.ref);
+    const { error: bErr } = await db.from("bookings").update(bookingUpdate)
+      .in("ref", bookingRefs)
+      .in("status", ["verifying", "pending"])
+      .not("payment_status", "in", "(paid,downpayment_paid,deposit_retained)");
     if (bErr) throw bErr;
 
     return new Response(

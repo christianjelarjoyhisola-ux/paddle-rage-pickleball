@@ -1,8 +1,8 @@
 # Paddle Rage Pickleball
 
-A standalone pickleball court booking and operations platform with public reservations, Open Play hosting, receipt verification, payments, admin reporting, and role-based access.
+A standalone pickleball court booking and operations platform with public reservations, Open Play hosting, receipt verification, payments, admin reporting, and role-based access. Production is served at `https://paddleragecdo.ph` and uses a dedicated Supabase project.
 
-The repository has been rebranded as an independent Paddle Rage system. It contains no source repository history or Git remote, and all copied live-service identifiers have been removed. The frontend is intentionally disconnected until a dedicated Supabase project is configured.
+Receipt OCR runs server-side through Google Cloud Vision behind Cloudflare Turnstile. Customer confirmation and reschedule messages use Maileroo from the verified `paddleragecdo.ph` sending domain; no provider secret is shipped to the browser.
 
 ## Brand system
 
@@ -13,17 +13,14 @@ The repository has been rebranded as an independent Paddle Rage system. It conta
 - Bright accent: `#D7FF3F`
 - Shared brand overrides: `brand-theme.css`
 
-## Safe first-time setup
+## Production deployment
 
-1. Create a brand-new Supabase project owned by Paddle Rage.
-2. Copy `.env.example` to `.env.local` and fill in only the new project values.
-3. Run `SETUP_NEW_SUPABASE.sql` in the new Supabase SQL editor.
-4. In `supabase-config.js`, replace `YOUR_PROJECT_REF` and `YOUR_SUPABASE_ANON_KEY` with the same new project's public values.
-5. In `supabase/migrations/20260716120000_host_balance_deadlines.sql`, replace `YOUR_PROJECT_REF` before applying that migration so the scheduled job targets the new project.
-6. Run `node create-accounts.js` to create fresh admin accounts. Never keep the example passwords.
-7. Configure and deploy the Edge Functions with `deploy-edge-functions.ps1`.
-8. Create a new Cloudflare Pages project and deploy with `deploy-cloudflare-pages.ps1`.
-9. Enter Paddle Rage's own court, merchant, QR, location, pricing, and contact information in the admin dashboard before launch.
+1. Copy `.env.example` to the ignored `.env.local` and fill in Paddle Rage's deployment credentials. Never commit this file.
+2. Review [GOOGLE_VISION_SETUP.md](GOOGLE_VISION_SETUP.md) and [TURNSTILE_SETUP.md](TURNSTILE_SETUP.md).
+3. Run `npm test` and `npm run check`.
+4. Run `deploy-edge-functions.ps1`; it applies migrations before publishing functions and fails closed when required remote integration secrets are missing.
+5. Authenticate with `wrangler login` (or set a scoped `CLOUDFLARE_API_TOKEN`), then run `deploy-cloudflare-pages.ps1` to publish the static site and public Turnstile site key.
+6. Verify the custom domain, Edge Function health, one receipt flow, and one delivered confirmation email after release.
 
 ## Local preview
 
@@ -46,7 +43,7 @@ npm run check
 
 - Use a new Supabase organization/project and fresh admin accounts.
 - Use a new Cloudflare Pages project, domain, analytics property, and AdSense account if ads are later enabled.
-- Use new Resend/SMTP sender verification, Telegram bot/chat, PayMongo keys, payment webhook secret, OCR key, and merchant QR images.
+- Verify Paddle Rage's sending domain in Maileroo and use a new sending key, Telegram bot/chat, PayMongo keys, payment webhook secret, OCR key, and merchant QR images.
 - Review all legal text, operating hours, prices, policies, location, payment instructions, and seeded demo content before production.
 - Have qualified Philippine counsel review the included platform agreement and privacy/consumer terms before accepting real bookings.
 - Do not copy `.env.local`, browser local storage, service-role keys, database exports, or deployment caches from another venue.

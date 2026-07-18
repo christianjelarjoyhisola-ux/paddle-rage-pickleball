@@ -22,12 +22,39 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
-import { calculateCourtPayment, chooseExpectedDue, closeMoney, roundMoney, toNumber } from "../_shared/booking-payment.ts";
+import {
+  calculateCourtPayment,
+  chooseExpectedDue,
+  closeMoney,
+  roundMoney,
+  toNumber,
+} from "../_shared/booking-payment.ts";
+import {
+  detectReceiptImageContentType,
+  googleVisionOcr,
+  type ReceiptImageContentType,
+  receiptImageSafeToDecode,
+} from "../_shared/google-vision.ts";
 import { extractReceiptAmount } from "../_shared/receipt-amount.ts";
+import {
+  activeReceiptRole,
+  bookingAccessTokenMatches,
+  canViewBookingReceipt,
+  canViewDashboardReceipt,
+  canViewHostSessionReceipt,
+  type ReceiptAccount,
+} from "../_shared/receipt-access.ts";
+import {
+  parseTurnstileHostnames,
+  RECEIPT_OCR_TURNSTILE_ACTION,
+  turnstileRemoteIp,
+  verifyTurnstileToken,
+} from "../_shared/turnstile.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 // Payment must happen within this many minutes after the booking/session join
@@ -44,8 +71,6 @@ const PESO_TOLERANCE = 5; // allow ±₱5 rounding; underpay beyond this is a ha
 // Hard flags force a rejection; soft flags force manual review.
 const HARD_FLAGS = new Set([
   "REF_FORMAT_INVALID",
-  "SUSPECTED_FAKE", // OCR ran and image has zero receipt-like content
-  "IMAGE_UNREADABLE", // OCR found NO text at all -> random/blank/non-receipt image
   "DUPLICATE_REF",
   "DUPLICATE_INVOICE",
   "DUPLICATE_INSTAPAY_REF",
@@ -70,6 +95,16 @@ type OcrResult = {
   fallbackProvider?: OcrProvider;
   fallbackReason?: string;
   error?: string;
+};
+
+type ReceiptCaller = {
+  userId: string;
+  account: ReceiptAccount;
+};
+
+type BookingMutationScope = {
+  customerAccessTokenHash?: string;
+  hostUserId?: string;
 };
 
 function publicReceiptMessage(
@@ -109,7 +144,12 @@ function publicReceiptMessage(
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+    },
   });
 }
 
@@ -129,10 +169,19 @@ function errMsg(err: unknown): string {
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
+function escapeTelegramHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function base64ToBytes(b64: string): Uint8Array {
   // Accept raw base64 or a data: URL.
   const comma = b64.indexOf(",");
-  const raw = b64.startsWith("data:") && comma !== -1 ? b64.slice(comma + 1) : b64;
+  const raw = b64.startsWith("data:") && comma !== -1
+    ? b64.slice(comma + 1)
+    : b64;
   const bin = atob(raw);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
@@ -163,7 +212,14 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 
 // Difference-hash (dHash): 64-bit perceptual hash robust to recompression and
 // light cropping/scaling. Returns 16-hex-char string, or null if undecodable.
-async function dHash(bytes: Uint8Array): Promise<string | null> {
+async function dHash(
+  bytes: Uint8Array,
+  contentType: ReceiptImageContentType,
+): Promise<string | null> {
+  // ImageScript expands pixels in Edge memory. Skip perceptual hashing when a
+  // compressed image declares unsafe dimensions; exact SHA-256 and OCR still
+  // provide the audit/detection signals without risking decompression OOM.
+  if (!receiptImageSafeToDecode(bytes, contentType)) return null;
   try {
     const img = await Image.decode(bytes);
     const small = img.resize(9, 8); // 9x8 -> 8 horizontal comparisons per row
@@ -244,14 +300,17 @@ function parseReceiptDateTime(
     .replace(/[|]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  const datePattern = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?[\s,.\-]+(\d{4})\b/i;
+  const datePattern =
+    /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?[\s,.\-]+(\d{4})\b/i;
   const dateOnly = normalized.match(datePattern);
   if (!dateOnly) return { date: null, shifted: null };
 
   const mon = MONTHS[dateOnly[1].toLowerCase().slice(0, 3)];
   const day = parseInt(dateOnly[2], 10);
   const year = parseInt(dateOnly[3], 10);
-  const dateStr = `${year}-${String(mon + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const dateStr = `${year}-${String(mon + 1).padStart(2, "0")}-${
+    String(day).padStart(2, "0")
+  }`;
 
   const afterDate = normalized.slice(
     (dateOnly.index || 0) + dateOnly[0].length,
@@ -261,7 +320,8 @@ function parseReceiptDateTime(
     Math.max(0, (dateOnly.index || 0) - 40),
     dateOnly.index || 0,
   );
-  const timePattern = /\b(\d{1,2})\s*[:;.]\s*(\d{2})(?:\s*[:;.]\s*\d{2})?\s*([ap](?:\s*\.?\s*m\.?)?|[ap])\b/i;
+  const timePattern =
+    /\b(\d{1,2})\s*[:;.]\s*(\d{2})(?:\s*[:;.]\s*\d{2})?\s*([ap](?:\s*\.?\s*m\.?)?|[ap])\b/i;
   const time = afterDate.match(timePattern) || beforeDate.match(timePattern);
   if (time) {
     let hour = parseInt(time[1], 10);
@@ -325,7 +385,8 @@ function extractGcashRef(text: string, typedRef = ""): string | null {
   }
 
   // Prefer numbers immediately following receipt reference labels.
-  const labelPattern = /\b(?:ref(?:erence)?(?:\s*(?:no|number|#))?\.?)\s*[:#]?\s*([0-9][0-9\s-]{11,30}[0-9])/gi;
+  const labelPattern =
+    /\b(?:ref(?:erence)?(?:\s*(?:no|number|#))?\.?)\s*[:#]?\s*([0-9][0-9\s-]{11,30}[0-9])/gi;
   let labelMatch: RegExpExecArray | null;
   while ((labelMatch = labelPattern.exec(text)) !== null) {
     const d = digitsOnly(labelMatch[1]);
@@ -471,10 +532,11 @@ function selectedMethodMismatch(
 
 function hasExpectedReceiverName(text: string, expectedName: string): boolean {
   const upper = text.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const expected = (expectedName || "Paddle Rage Pickleball").toUpperCase().replace(
-    /[^A-Z0-9]/g,
-    "",
-  );
+  const expected = (expectedName || "Paddle Rage Pickleball").toUpperCase()
+    .replace(
+      /[^A-Z0-9]/g,
+      "",
+    );
   if (expected.length >= 3 && upper.includes(expected)) return true;
   return upper.includes("PADDLERAGE");
 }
@@ -567,23 +629,26 @@ function expectedMerchantForProvider(
 ): { number: string; name: string } {
   if (provider === "bdopay") {
     return {
-      number: settings.bdopay_merchant_number || "",
+      number: settings.bdopay_merchant_number ||
+        settings.gcash_merchant_number || "",
       name: settings.bdopay_merchant_name || settings.payment_merchant_name ||
-        "Paddle Rage Pickleball",
+        settings.gcash_merchant_name || "",
     };
   }
   if (provider === "maya") {
     return {
-      number: settings.maya_merchant_number || "",
+      number: settings.maya_merchant_number || settings.gcash_merchant_number ||
+        "",
       name: settings.maya_merchant_name || settings.payment_merchant_name ||
-        "Paddle Rage Pickleball",
+        settings.gcash_merchant_name || "",
     };
   }
   if (provider === "bpi") {
     return {
-      number: settings.bpi_merchant_number || "",
+      number: settings.bpi_merchant_number || settings.gcash_merchant_number ||
+        "",
       name: settings.bpi_merchant_name || settings.payment_merchant_name ||
-        "Paddle Rage Pickleball",
+        settings.gcash_merchant_name || "",
     };
   }
   if (provider === "gotyme") {
@@ -610,7 +675,9 @@ function expectedOpenPlayAmounts(
 ): { total: number; due: number } {
   const cfg = (() => {
     try {
-      return settings.open_play_config ? JSON.parse(settings.open_play_config) : {};
+      return settings.open_play_config
+        ? JSON.parse(settings.open_play_config)
+        : {};
     } catch {
       return {};
     }
@@ -684,22 +751,34 @@ async function expectedBookingAmounts(
 async function loadBookingGroup(
   db: any,
   booking: Record<string, unknown>,
+  scope: BookingMutationScope,
 ): Promise<Array<Record<string, unknown>>> {
   const groupRef = String(booking.booking_group_ref || "");
   if (!groupRef) return [booking];
-  const { data, error } = await db
+  let query = db
     .from("bookings")
     .select(
       "ref, booking_group_ref, court_id, slots, total, downpayment, host_booking, gcash_ref, payment_method, date, payment_status, status, full_name, created_at",
     )
     .eq("booking_group_ref", groupRef)
     .neq("status", "cancelled");
+  if (scope.customerAccessTokenHash) {
+    query = query.eq(
+      "customer_access_token_hash",
+      scope.customerAccessTokenHash,
+    );
+  } else if (scope.hostUserId) {
+    query = query.eq("host_user_id", scope.hostUserId);
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return (data || []) as Array<Record<string, unknown>>;
 }
 
 function bookingLogicalKey(row: Record<string, unknown>): string {
-  const slots = Array.isArray(row.slots) ? row.slots.map(Number).filter(Number.isFinite).sort((a, b) => a - b) : [];
+  const slots = Array.isArray(row.slots)
+    ? row.slots.map(Number).filter(Number.isFinite).sort((a, b) => a - b)
+    : [];
   return [
     String(row.court_id || row.courtId || ""),
     String(row.date || ""),
@@ -738,10 +817,22 @@ function bookingUpdateQuery(
   db: any,
   booking: Record<string, unknown>,
   update: Record<string, unknown>,
+  scope: BookingMutationScope,
 ) {
   const groupRef = String(booking.booking_group_ref || "");
-  const query = db.from("bookings").update(update);
-  return groupRef ? query.eq("booking_group_ref", groupRef) : query.eq("ref", String(booking.ref || ""));
+  let query = db.from("bookings").update(update);
+  query = groupRef
+    ? query.eq("booking_group_ref", groupRef)
+    : query.eq("ref", String(booking.ref || ""));
+  if (scope.customerAccessTokenHash) {
+    query = query.eq(
+      "customer_access_token_hash",
+      scope.customerAccessTokenHash,
+    );
+  } else if (scope.hostUserId) {
+    query = query.eq("host_user_id", scope.hostUserId);
+  }
+  return query;
 }
 
 function checkReceiverNumber(text: string, expectedRaw: string): NumberCheck {
@@ -750,7 +841,8 @@ function checkReceiverNumber(text: string, expectedRaw: string): NumberCheck {
   const last4 = expected.slice(-4);
 
   // Full mobile numbers in the receipt (handles +63 / 0 / 9 forms).
-  const fullMatches = text.match(/(?:\+?63|0)?9\d{2}[\s\-•*x.]*\d{2,3}[\s\-•*x.]*\d{2,4}/gi) ||
+  const fullMatches =
+    text.match(/(?:\+?63|0)?9\d{2}[\s\-•*x.]*\d{2,3}[\s\-•*x.]*\d{2,4}/gi) ||
     [];
   let sawFull = false;
   for (const fm of fullMatches) {
@@ -824,80 +916,6 @@ function editedBySoftware(bytes: Uint8Array): boolean {
     .test(s);
 }
 
-function googleVisionConfidence(
-  annotation: Record<string, unknown> | null,
-  text: string,
-): number {
-  if (!annotation) return text.length > 40 ? 0.9 : text.length > 0 ? 0.5 : 0;
-  const pages = Array.isArray(annotation.pages) ? annotation.pages as Array<Record<string, unknown>> : [];
-  if (
-    pages.length && typeof pages[0].confidence === "number" &&
-    pages[0].confidence > 0
-  ) {
-    return pages[0].confidence;
-  }
-
-  let total = 0;
-  let count = 0;
-  const visit = (node: unknown) => {
-    if (!node || typeof node !== "object") return;
-    const item = node as Record<string, unknown>;
-    if (typeof item.confidence === "number" && item.confidence > 0) {
-      total += item.confidence;
-      count++;
-    }
-    for (const key of ["blocks", "paragraphs", "words", "symbols"]) {
-      const children = item[key];
-      if (Array.isArray(children)) children.forEach(visit);
-    }
-  };
-  pages.forEach(visit);
-  if (count > 0) return total / count;
-  return text.length > 40 ? 0.9 : text.length > 0 ? 0.5 : 0;
-}
-
-async function googleVisionOCR(
-  apiKey: string,
-  base64: string,
-): Promise<{ text: string; confidence: number }> {
-  const content = base64.startsWith("data:") ? base64.slice(base64.indexOf(",") + 1) : base64;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25000);
-  let res: Response;
-  try {
-    res = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requests: [{
-            image: { content },
-            features: [{ type: "DOCUMENT_TEXT_DETECTION", maxResults: 1 }],
-            imageContext: { languageHints: ["en"] },
-          }],
-        }),
-        signal: controller.signal,
-      },
-    );
-  } catch (err) {
-    if (controller.signal.aborted) throw new Error("Google Vision request timed out");
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Vision error ${res.status}: ${errMsg(data)}`);
-  const r = data?.responses?.[0];
-  if (r?.error) throw new Error(`Vision: ${errMsg(r.error)}`);
-  const text: string = r?.fullTextAnnotation?.text ||
-    r?.textAnnotations?.[0]?.description || "";
-  return {
-    text,
-    confidence: googleVisionConfidence(r?.fullTextAnnotation || null, text),
-  };
-}
-
 // Google Vision is the only OCR engine used for receipt verification.
 function ocrCriticalGaps(
   text: string,
@@ -926,7 +944,7 @@ async function runOCR(
 ): Promise<OcrResult> {
   if (visionKey) {
     try {
-      const v = await googleVisionOCR(visionKey, base64);
+      const v = await googleVisionOcr(visionKey, base64);
       const gaps = ocrCriticalGaps(v.text, provider, typedRef);
       if (v.text && gaps.length === 0) {
         return {
@@ -940,7 +958,9 @@ async function runOCR(
           ...v,
           provider: "google_vision",
           primaryProvider: "google_vision",
-          fallbackReason: gaps.length ? `google_missing_${gaps.join("_")}` : undefined,
+          fallbackReason: gaps.length
+            ? `google_missing_${gaps.join("_")}`
+            : undefined,
         };
       }
       console.error("Vision OCR returned no text:", gaps.join(","));
@@ -985,6 +1005,27 @@ async function sendTelegram(message: string) {
 
 // ── handler ─────────────────────────────────────────────────────────────────
 
+async function loadReceiptCaller(
+  req: Request,
+  db: any,
+): Promise<ReceiptCaller | null> {
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return null;
+
+  const { data: userData, error: userError } = await db.auth.getUser(token);
+  const userId = String(userData?.user?.id || "");
+  if (userError || !userId) return null;
+
+  const { data: account, error: accountError } = await db
+    .from("accounts")
+    .select("role,status")
+    .eq("id", userId)
+    .maybeSingle();
+  if (accountError) throw accountError;
+  return { userId, account: account || null };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1023,15 +1064,22 @@ Deno.serve(async (req) => {
       body = {
         action: String(form.get("action") || "verify"),
         bookingRef: String(form.get("bookingRef") || ""),
+        bookingAccessToken: String(form.get("bookingAccessToken") || ""),
+        turnstileToken: String(form.get("turnstileToken") || ""),
         provider: String(form.get("provider") || "gcash"),
-        contentType: uploadedImage?.type || String(form.get("contentType") || "image/jpeg"),
+        contentType: uploadedImage?.type ||
+          String(form.get("contentType") || "image/jpeg"),
         ...(bookingData ? { bookingData } : {}),
       };
     } else {
       body = await req.json();
     }
   } catch {
-    return json({ error: requestContentType.toLowerCase().includes("multipart/form-data") ? "Invalid multipart body" : "Invalid JSON body" }, 400);
+    return json({
+      error: requestContentType.toLowerCase().includes("multipart/form-data")
+        ? "Invalid multipart body"
+        : "Invalid JSON body",
+    }, 400);
   }
   const action = (body.action as string) || "verify";
 
@@ -1042,40 +1090,84 @@ Deno.serve(async (req) => {
     const hostSessionRegistrationId = String(
       body.hostSessionRegistrationId || "",
     );
-    if (!bookingRef && !openPlayRegistrationId && !hostSessionRegistrationId) {
+    const targetCount = [
+      bookingRef,
+      openPlayRegistrationId,
+      hostSessionRegistrationId,
+    ].filter(Boolean).length;
+    if (targetCount !== 1) {
       return json({
-        error: "bookingRef, openPlayRegistrationId, or hostSessionRegistrationId required",
+        error: "Exactly one receipt target is required",
       }, 400);
     }
 
-    // Require a real signed-in user (anon key alone is rejected).
-    const authHeader = req.headers.get("Authorization") || "";
-    const token = authHeader.replace(/^Bearer\s+/i, "");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
-    });
-    const { data: userData } = await userClient.auth.getUser();
-    if (!userData?.user) return json({ error: "Unauthorized" }, 401);
+    let caller: ReceiptCaller | null;
+    try {
+      caller = await loadReceiptCaller(req, db);
+    } catch (error) {
+      console.error("receipt caller lookup failed:", errMsg(error));
+      return json({ error: "Receipt authorization could not be checked" }, 500);
+    }
+    if (!caller) return json({ error: "Unauthorized" }, 401);
+    if (!activeReceiptRole(caller.account)) {
+      return json(
+        { error: "This account is not authorized to view receipts" },
+        403,
+      );
+    }
 
     let path: string | null = null;
     if (hostSessionRegistrationId) {
-      const { data: reg } = await db
+      const { data: reg, error: regError } = await db
         .from("open_play_host_session_registrations")
-        .select("receipt_image_url")
+        .select("receipt_image_url,session_id")
         .eq("id", hostSessionRegistrationId)
-        .single();
+        .maybeSingle();
+      if (regError) return json({ error: "Receipt could not be loaded" }, 500);
+      if (!reg) return json({ error: "No receipt on file" }, 404);
+      if (!canViewDashboardReceipt(caller.account)) {
+        const { data: session, error: sessionError } = await db
+          .from("open_play_host_sessions")
+          .select("host_user_id")
+          .eq("id", reg.session_id)
+          .maybeSingle();
+        if (sessionError) {
+          return json(
+            { error: "Receipt authorization could not be checked" },
+            500,
+          );
+        }
+        if (
+          !canViewHostSessionReceipt(caller.account, caller.userId, session)
+        ) {
+          return json({ error: "Forbidden" }, 403);
+        }
+      }
       path = reg?.receipt_image_url || null;
     } else if (openPlayRegistrationId) {
-      const { data: reg } = await db
+      if (!canViewDashboardReceipt(caller.account)) {
+        return json({ error: "Forbidden" }, 403);
+      }
+      const { data: reg, error: regError } = await db
         .from("open_play_registrations")
         .select("receipt_image_url")
         .eq("id", openPlayRegistrationId)
-        .single();
+        .maybeSingle();
+      if (regError) return json({ error: "Receipt could not be loaded" }, 500);
       path = reg?.receipt_image_url || null;
     } else {
-      const { data: bk } = await db.from("bookings").select("receipt_image_url")
-        .eq("ref", bookingRef).single();
+      const { data: bk, error: bookingError } = await db.from("bookings")
+        .select(
+          "receipt_image_url,host_booking,host_user_id,created_by_user_id",
+        )
+        .eq("ref", bookingRef).maybeSingle();
+      if (bookingError) {
+        return json({ error: "Receipt could not be loaded" }, 500);
+      }
+      if (!bk) return json({ error: "No receipt on file" }, 404);
+      if (!canViewBookingReceipt(caller.account, caller.userId, bk)) {
+        return json({ error: "Forbidden" }, 403);
+      }
       path = bk?.receipt_image_url || null;
     }
     if (!path) return json({ error: "No receipt on file" }, 404);
@@ -1086,27 +1178,51 @@ Deno.serve(async (req) => {
     }
     return json({ ok: true, url: signed.signedUrl });
   }
+  if (action !== "verify") return json({ error: "Unsupported action" }, 400);
+
+  let receiptLeaseKey = "";
+  let receiptLeaseToken = "";
 
   // ── verify a freshly-uploaded receipt ─────────────────────────────────────
   try {
     const bookingRef = String(body.bookingRef || "");
+    const bookingAccessToken = String(body.bookingAccessToken || "");
+    const turnstileToken = String(body.turnstileToken || "");
     let provider = normalizedProvider(String(body.provider || "gcash"));
     let imageBase64 = String(body.imageBase64 || "");
-    const rawContentType = String(uploadedImage?.type || body.contentType || "image/jpeg")
-      .toLowerCase().split(";", 1)[0].trim();
-    const contentType = rawContentType === "image/jpg" ? "image/jpeg" : rawContentType;
     // Optional inline data supports pre-save Open Play registration receipts.
     // A matching saved booking still takes precedence over every inline field.
-    const inlineBookingData = (body.bookingData && typeof body.bookingData === "object") ? body.bookingData as Record<string, unknown> : null;
+    const inlineBookingData =
+      (body.bookingData && typeof body.bookingData === "object")
+        ? body.bookingData as Record<string, unknown>
+        : null;
     if (!bookingRef) return json({ error: "bookingRef required" }, 400);
-    if (!imageBase64 && !uploadedImage) return json({ error: "receipt file or imageBase64 required" }, 400);
+    if (!/^[a-z0-9][a-z0-9-]{2,79}$/i.test(bookingRef)) {
+      return json({ error: "Invalid bookingRef" }, 400);
+    }
+    if (!imageBase64 && !uploadedImage) {
+      return json({ error: "receipt file or imageBase64 required" }, 400);
+    }
 
-    const bytes = uploadedImage
-      ? new Uint8Array(await uploadedImage.arrayBuffer())
-      : base64ToBytes(imageBase64);
+    let bytes: Uint8Array;
+    try {
+      bytes = uploadedImage
+        ? new Uint8Array(await uploadedImage.arrayBuffer())
+        : base64ToBytes(imageBase64);
+    } catch {
+      return json({ error: "Receipt image encoding is invalid" }, 400);
+    }
     if (bytes.length === 0) return json({ error: "Empty image" }, 400);
     if (bytes.length > MAX_BYTES) {
       return json({ error: "Image too large (max 5 MB)" }, 400);
+    }
+    // Never trust a browser-supplied MIME label. Detect the actual file type
+    // before storing the upload or sending it to the billable OCR API.
+    const contentType = detectReceiptImageContentType(bytes);
+    if (!contentType) {
+      return json({
+        error: "Receipt must be a valid JPG, PNG, or WebP image",
+      }, 415);
     }
     // A saved court booking is always authoritative. Inline data exists for
     // pre-save Open Play registrations; it must never override a persisted
@@ -1114,24 +1230,75 @@ Deno.serve(async (req) => {
     const { data: persistedRow, error: bookingErr } = await db
       .from("bookings")
       .select(
-        "ref, booking_group_ref, court_id, slots, total, downpayment, host_booking, gcash_ref, payment_method, date, payment_status, status, full_name, created_at, receipt_image_url, receipt_image_hash, receipt_phash, receipt_status, receipt_flags, receipt_extracted, receipt_confidence, receipt_verified_at",
+        "ref, booking_group_ref, court_id, slots, total, downpayment, host_booking, host_user_id, created_by_user_id, customer_access_token_hash, gcash_ref, payment_method, date, payment_status, status, full_name, created_at, receipt_image_url, receipt_image_hash, receipt_phash, receipt_status, receipt_flags, receipt_extracted, receipt_confidence, receipt_verified_at",
       )
       .eq("ref", bookingRef)
       .maybeSingle();
     if (bookingErr) return json({ error: "Booking could not be loaded" }, 500);
 
+    // Authentication is loaded once and is used only to decide whether this
+    // exact row/session qualifies for the narrow staff/host Turnstile bypass.
+    // An anonymous Supabase key is not a user session and produces no caller.
+    let caller: ReceiptCaller | null;
+    try {
+      caller = await loadReceiptCaller(req, db);
+    } catch (error) {
+      console.error("receipt caller lookup failed:", errMsg(error));
+      return json({ error: "Receipt authorization could not be checked" }, 500);
+    }
+
     let booking: Record<string, unknown>;
+    let bookingMutationScope: BookingMutationScope = {};
     let inlinePricingKind: "open_play" | "host_session" | null = null;
+    let authenticatedTurnstileBypass = false;
     const hasPersistedBooking = !!persistedRow;
     if (persistedRow) {
       booking = { ...(persistedRow as Record<string, unknown>) };
+      const storedAccessTokenHash = String(
+        booking.customer_access_token_hash || "",
+      );
+      const customerTokenAuthorized = await bookingAccessTokenMatches(
+        bookingAccessToken,
+        storedAccessTokenHash,
+      );
+      authenticatedTurnstileBypass = !!caller &&
+        canViewBookingReceipt(caller.account, caller.userId, booking);
+      if (customerTokenAuthorized) {
+        bookingMutationScope = {
+          customerAccessTokenHash: storedAccessTokenHash,
+        };
+      } else {
+        if (!authenticatedTurnstileBypass) {
+          return json({
+            error: "Receipt verification is not authorized for this booking",
+          }, 403);
+        }
+        // Even a trusted operator should update only the target reservation's
+        // ownership boundary when a group reference is present. This makes an
+        // accidental/colliding group id harmless.
+        if (/^[0-9a-f]{64}$/.test(storedAccessTokenHash)) {
+          bookingMutationScope = {
+            customerAccessTokenHash: storedAccessTokenHash,
+          };
+        } else if (booking.host_booking === true && booking.host_user_id) {
+          bookingMutationScope = {
+            hostUserId: String(booking.host_user_id),
+          };
+        }
+      }
+      delete booking.customer_access_token_hash;
       const persistedStatus = String(booking.status || "");
       const persistedPaymentStatus = String(booking.payment_status || "");
-      const terminal = ["confirmed", "cancelled", "completed"].includes(persistedStatus) ||
-        ["paid", "downpayment_paid", "rejected"].includes(persistedPaymentStatus);
+      const terminal =
+        ["confirmed", "cancelled", "completed"].includes(persistedStatus) ||
+        ["paid", "downpayment_paid", "rejected"].includes(
+          persistedPaymentStatus,
+        );
       if (terminal) {
         const storedReceiptStatus = String(booking.receipt_status || "");
-        const finalStatus = storedReceiptStatus === "rejected" || persistedStatus === "cancelled" || persistedPaymentStatus === "rejected"
+        const finalStatus = storedReceiptStatus === "rejected" ||
+            persistedStatus === "cancelled" ||
+            persistedPaymentStatus === "rejected"
           ? "rejected"
           : storedReceiptStatus === "manual_review"
           ? "manual_review"
@@ -1140,7 +1307,11 @@ Deno.serve(async (req) => {
           ok: true,
           status: finalStatus,
           flags: [],
-          publicReason: finalStatus === "rejected" ? "This booking was already rejected." : finalStatus === "manual_review" ? "This booking is already awaiting owner review." : "Payment was already verified.",
+          publicReason: finalStatus === "rejected"
+            ? "This booking was already rejected."
+            : finalStatus === "manual_review"
+            ? "This booking is already awaiting owner review."
+            : "Payment was already verified.",
           extracted: booking.receipt_extracted || null,
           confidence: booking.receipt_confidence ?? null,
           receiptImageUrl: booking.receipt_image_url || null,
@@ -1176,18 +1347,154 @@ Deno.serve(async (req) => {
         }, 400);
       }
       booking = inlineBookingData;
-      inlinePricingKind = booking.host_session_id ? "host_session" : "open_play";
+      inlinePricingKind = booking.host_session_id
+        ? "host_session"
+        : "open_play";
+      authenticatedTurnstileBypass = !!caller &&
+        canViewDashboardReceipt(caller.account);
+      if (
+        !authenticatedTurnstileBypass && caller &&
+        inlinePricingKind === "host_session"
+      ) {
+        const sessionId = String(booking.host_session_id || "").trim();
+        const { data: session, error: sessionError } = await db
+          .from("open_play_host_sessions")
+          .select("host_user_id")
+          .eq("id", sessionId)
+          .maybeSingle();
+        if (sessionError) {
+          return json({
+            error: "Host session authorization could not be checked",
+          }, 500);
+        }
+        authenticatedTurnstileBypass = canViewHostSessionReceipt(
+          caller.account,
+          caller.userId,
+          session,
+        );
+      }
     }
-    provider = paymentMethodProvider(booking.payment_method ?? booking.paymentMethod) ||
-      provider;
+    const authoritativeProvider = paymentMethodProvider(
+      booking.payment_method ?? booking.paymentMethod,
+    );
+    if (!authoritativeProvider) {
+      return json({
+        error:
+          "Receipt OCR is available only for a saved digital payment method.",
+        code: "DIGITAL_PAYMENT_METHOD_REQUIRED",
+      }, 400);
+    }
+    // The saved payment method is authoritative; a caller cannot relabel a
+    // cash/unknown booking or select weaker provider rules in the request.
+    provider = authoritativeProvider;
+
+    // A disabled or unconfigured payment method must fail before Turnstile is
+    // consumed, Storage is written, or a short-lived hold can be promoted to a
+    // permanent manual-review state by the service role.
+    const { data: methodReady, error: methodReadyError } = await db.rpc(
+      "public_payment_method_ready",
+      { p_method: provider },
+    );
+    if (methodReadyError) {
+      return json({
+        error: "Payment method availability could not be checked.",
+        code: "PAYMENT_METHOD_CHECK_UNAVAILABLE",
+      }, 503);
+    }
+    if (methodReady !== true) {
+      return json({
+        error: "This payment method is not currently enabled.",
+        code: "PAYMENT_METHOD_DISABLED",
+      }, 409);
+    }
+
+    // Cloudflare tokens expire after five minutes and are single use. The
+    // official siteverify call therefore rejects missing, expired, or replayed
+    // public tokens before any Storage write or billable Vision request.
+    if (!authenticatedTurnstileBypass) {
+      const turnstileResult = await verifyTurnstileToken({
+        token: turnstileToken,
+        secret: Deno.env.get("TURNSTILE_SECRET_KEY") || "",
+        remoteIp: turnstileRemoteIp(req),
+        expectedAction: RECEIPT_OCR_TURNSTILE_ACTION,
+        allowedHostnames: parseTurnstileHostnames(
+          Deno.env.get("TURNSTILE_EXPECTED_HOSTNAMES") || "",
+        ),
+      });
+      if (!turnstileResult.ok) {
+        console.warn("receipt Turnstile rejected", {
+          bookingRef,
+          reason: turnstileResult.reason,
+          codes: turnstileResult.errorCodes,
+        });
+        if (turnstileResult.reason === "server-misconfigured") {
+          return json({
+            error:
+              "Human verification is not configured. Please contact Paddle Rage support.",
+            code: "TURNSTILE_NOT_CONFIGURED",
+          }, 503);
+        }
+        if (turnstileResult.reason === "verification-unavailable") {
+          return json({
+            error:
+              "Human verification is temporarily unavailable. Please wait a moment and try again.",
+            code: "TURNSTILE_UNAVAILABLE",
+          }, 503);
+        }
+        if (turnstileResult.reason === "missing-token") {
+          return json({
+            error:
+              "Please complete the human verification before uploading your receipt.",
+            code: "TURNSTILE_REQUIRED",
+          }, 400);
+        }
+        const expiredOrReplayed = turnstileResult.errorCodes.includes(
+          "timeout-or-duplicate",
+        );
+        return json({
+          error: expiredOrReplayed
+            ? "Human verification expired or was already used. Please try again."
+            : "Human verification did not pass. Please try again.",
+          code: expiredOrReplayed ? "TURNSTILE_EXPIRED" : "TURNSTILE_INVALID",
+        }, 403);
+      }
+    }
+
+    if (hasPersistedBooking) {
+      receiptLeaseKey = String(booking.booking_group_ref || bookingRef).trim();
+      const { data: leaseRows, error: leaseError } = await db.rpc(
+        "claim_receipt_verification_lease",
+        { p_booking_key: receiptLeaseKey, p_lease_seconds: 600 },
+      );
+      const lease = Array.isArray(leaseRows) ? leaseRows[0] : leaseRows;
+      if (leaseError) {
+        console.error("receipt verification lease failed:", errMsg(leaseError));
+        return json({
+          error:
+            "Receipt verification could not start safely. Please try again shortly.",
+          code: "RECEIPT_LEASE_UNAVAILABLE",
+        }, 503);
+      }
+      if (!lease?.claimed || !lease?.claim_token) {
+        return json({
+          error:
+            "This receipt is already being verified. Please wait for the result and do not upload or pay again.",
+          code: "RECEIPT_VERIFICATION_IN_PROGRESS",
+          retryAfterSeconds: 15,
+        }, 409);
+      }
+      receiptLeaseToken = String(lease.claim_token);
+    }
 
     // Save the evidence before pricing, perceptual hashing, or OCR. Large
     // mobile screenshots can make those later steps slow or memory-heavy; a
     // disconnect there must never leave the owner without the paid receipt.
     const imageHash = await sha256Hex(bytes);
-    const ext = contentType.includes("png") ? "png" :
-      contentType.includes("webp") ? "webp" :
-      contentType.includes("heic") || contentType.includes("heif") ? "heic" : "jpg";
+    const ext = contentType === "image/png"
+      ? "png"
+      : contentType === "image/webp"
+      ? "webp"
+      : "jpg";
     const objectPath = `${bookingRef}/${imageHash}.${ext}`;
     console.log("receipt checkpoint: storing", {
       bookingRef,
@@ -1206,7 +1513,8 @@ Deno.serve(async (req) => {
     if (upErr) {
       console.error("receipt upload failed:", errMsg(upErr));
       return json({
-        error: "Receipt image could not be stored. Please upload the receipt again.",
+        error:
+          "Receipt image could not be stored. Please upload the receipt again.",
       }, 500);
     }
 
@@ -1222,14 +1530,18 @@ Deno.serve(async (req) => {
           receipt_status: "manual_review",
           receipt_flags: [],
         },
+        bookingMutationScope,
       ).in("status", ["verifying", "pending"]).select("ref");
       if (safeStateErr || !safeRows?.length) {
         console.error(
           "receipt safe-state update failed:",
-          safeStateErr ? errMsg(safeStateErr) : "no active booking rows updated",
+          safeStateErr
+            ? errMsg(safeStateErr)
+            : "no active booking rows updated",
         );
         return json({
-          error: "Receipt was stored but could not be attached to the booking. Please contact the owner with your booking reference.",
+          error:
+            "Receipt was stored but could not be attached to the booking. Please contact the owner with your booking reference.",
         }, 500);
       }
       booking = {
@@ -1248,6 +1560,7 @@ Deno.serve(async (req) => {
     }
 
     const settingsRows = await db.from("settings").select("key,value");
+    const settingsError = settingsRows.error ? errMsg(settingsRows.error) : "";
     const settings: Record<string, string> = {};
     (settingsRows.data || []).forEach((r: { key: string; value: string }) => {
       settings[r.key] = r.value;
@@ -1257,25 +1570,25 @@ Deno.serve(async (req) => {
     const expectedName = expectedMerchant.name;
     let pricingError = "";
     let expectedAmount = 0;
-    let expectedTotal = 0;
     let bookingGroup: Array<Record<string, unknown>> = [booking];
     try {
       if (inlinePricingKind === "host_session") {
         const amounts = await expectedHostSessionAmounts(db, booking);
-        expectedTotal = amounts.total;
         expectedAmount = amounts.due;
       } else if (inlinePricingKind === "open_play") {
         const amounts = expectedOpenPlayAmounts(booking, settings);
-        expectedTotal = amounts.total;
         expectedAmount = amounts.due;
       } else {
-        bookingGroup = await loadBookingGroup(db, booking);
+        bookingGroup = await loadBookingGroup(
+          db,
+          booking,
+          bookingMutationScope,
+        );
         const amounts = await expectedBookingGroupAmounts(
           db,
           bookingGroup,
           settings,
         );
-        expectedTotal = amounts.total;
         expectedAmount = amounts.due;
       }
     } catch (err) {
@@ -1284,15 +1597,48 @@ Deno.serve(async (req) => {
     const bookingGroupRefs = new Set(
       bookingGroup.map((row) => String(row.ref || "")).filter(Boolean),
     );
+    const bookingGroupRef = String(
+      booking.booking_group_ref ||
+        bookingGroup.find((row) => row.booking_group_ref)?.booking_group_ref ||
+        "",
+    ).trim();
+    const ledgerClaimScope = bookingGroupRef ? "booking_group" : "booking";
+    const ledgerClaimOwnerId = bookingGroupRef || bookingRef;
+    const ledgerClaimBelongsToBooking = (
+      row: Record<string, unknown> | null,
+    ): boolean => {
+      if (!row) return false;
+      const scope = String(row.claim_scope || "");
+      const ownerId = String(row.claim_owner_id || "");
+      if (scope && ownerId) {
+        return scope === ledgerClaimScope && ownerId === ledgerClaimOwnerId;
+      }
+      // Rolling-deploy compatibility for a ledger row written before the
+      // explicit ownership columns existed.
+      return bookingGroupRefs.has(String(row.booking_ref || ""));
+    };
 
     // Hashes are stored for audit only. GCash validity is based on receipt details.
-    const phash = await dHash(bytes);
+    const phash = await dHash(bytes, contentType);
 
     // Google Vision still expects base64. Delay this allocation until after
     // Storage and the manual-review checkpoint have safely completed.
     if (!imageBase64) imageBase64 = bytesToBase64(bytes);
 
     const flags: string[] = [];
+
+    if (settingsError) flags.push("SETTINGS_UNAVAILABLE");
+    if (!expectedNumber && !expectedName) {
+      // Missing merchant identity is configuration uncertainty, never grounds
+      // for approval or cancellation. Keep the receipt for an owner review.
+      flags.push("MERCHANT_CONFIG_MISSING");
+    }
+    if (provider === "gotyme" || provider === "pnb") {
+      // These providers currently have only generic OCR extraction. Until
+      // recipient/method/date/time rules are provider-specific, never
+      // auto-approve them from generic text alone.
+      flags.push("PROVIDER_REVIEW_REQUIRED");
+    }
 
     // Do not flag duplicate-looking images. GCash/BDO Pay/Maya receipt screens
     // share the same layout, so perceptual image matching creates false flags.
@@ -1331,17 +1677,23 @@ Deno.serve(async (req) => {
       // they are not evidence that the customer uploaded a fake receipt.
       flags.push("OCR_UNAVAILABLE");
     } else if (!ocrText) {
-      // Google Vision ran but found NO text.
-      // That means a random photo, a blank image, or a non-receipt upload —
-      // auto-reject. A real customer with a poor photo can simply re-upload.
-      flags.push("IMAGE_UNREADABLE"); // HARD — random/blank/non-receipt image
+      // Google Vision ran but found no text. A blank upload and a genuine but
+      // blurry receipt are indistinguishable here, so preserve the booking and
+      // send it to manual review rather than auto-cancelling a paid customer.
+      flags.push("IMAGE_UNREADABLE");
     }
 
     // ── field extraction ────────────────────────────────────────────────────
     const extractedRef = extractReference(ocrText, provider, typedRef);
-    const extractedInvoice = provider === "bdopay" ? extractBdoInvoiceNumber(ocrText) : null;
-    const extractedInstapayRefNo = provider === "maya" ? extractMayaInstapayRefNo(ocrText) : null;
-    const extractedBpiTransactionRefNo = provider === "bpi" ? extractBpiTransactionRefNo(ocrText) : null;
+    const extractedInvoice = provider === "bdopay"
+      ? extractBdoInvoiceNumber(ocrText)
+      : null;
+    const extractedInstapayRefNo = provider === "maya"
+      ? extractMayaInstapayRefNo(ocrText)
+      : null;
+    const extractedBpiTransactionRefNo = provider === "bpi"
+      ? extractBpiTransactionRefNo(ocrText)
+      : null;
     const amountExtraction = provider === "maya"
       ? extractReceiptAmount(ocrText, { provider })
       : null;
@@ -1350,12 +1702,17 @@ Deno.serve(async (req) => {
     const extractedAmount = amountExtraction
       ? (amountExtraction.reliable ? amountExtraction.amount : null)
       : extractAmount(ocrText);
-    const { date: receiptDate, shifted: receiptDateTime } = parseReceiptDateTime(ocrText);
+    const { date: receiptDate, shifted: receiptDateTime } =
+      parseReceiptDateTime(ocrText);
     const bookingStartedAt = toPhWallClockDate(
       booking.created_at || booking.createdAt,
     );
-    const bookingStartedDate = bookingStartedAt ? bookingStartedAt.toISOString().slice(0, 10) : null;
-    const receiptAgeMinutes = bookingStartedAt && receiptDateTime ? (receiptDateTime.getTime() - bookingStartedAt.getTime()) / 60000 : null;
+    const bookingStartedDate = bookingStartedAt
+      ? bookingStartedAt.toISOString().slice(0, 10)
+      : null;
+    const receiptAgeMinutes = bookingStartedAt && receiptDateTime
+      ? (receiptDateTime.getTime() - bookingStartedAt.getTime()) / 60000
+      : null;
     if (provider === "gcash" && typedRef.length !== 13) {
       flags.push("REF_FORMAT_INVALID");
     }
@@ -1380,22 +1737,24 @@ Deno.serve(async (req) => {
         // can miss the small right-aligned timestamp, so unreadable date/time is
         // not a failure for GCash. Parsed dates/times are still enforced.
         if (!extractedRef && !flags.includes("REF_FORMAT_INVALID")) {
-          flags.push("REF_FORMAT_INVALID");
+          flags.push("REF_UNREADABLE");
         } else if (typedRef && extractedRef && extractedRef !== typedRef) {
           flags.push("REF_MISMATCH");
         }
 
-        if (pricingError) flags.push("AMOUNT_MISMATCH");
+        if (pricingError) flags.push("PRICING_UNAVAILABLE");
         else if (extractedAmount == null) flags.push("AMOUNT_UNREADABLE");
         else if (extractedAmount < expectedAmount - PESO_TOLERANCE) {
           flags.push("AMOUNT_MISMATCH");
         }
 
-        if (
-          receiptDate && bookingStartedDate &&
-          receiptDate !== bookingStartedDate
-        ) flags.push("DATE_NOT_TODAY");
-        if (receiptDateTime && bookingStartedAt) {
+        if (!receiptDate) flags.push("DATE_UNREADABLE");
+        else if (bookingStartedDate && receiptDate !== bookingStartedDate) {
+          flags.push("DATE_NOT_TODAY");
+        }
+        if (!receiptDateTime || !bookingStartedAt) {
+          flags.push("TIME_UNREADABLE");
+        } else {
           if (
             (receiptAgeMinutes as number) < -PAYMENT_EARLY_TOLERANCE_MINUTES
           ) flags.push("TIME_FUTURE");
@@ -1416,6 +1775,9 @@ Deno.serve(async (req) => {
 
         const nameCheck = checkReceiverName(ocrText, expectedName);
         if (nameCheck === "mismatch") flags.push("RECEIVER_NAME_MISMATCH");
+        else if (nameCheck === "unreadable" && expectedName) {
+          flags.push("RECEIVER_NAME_UNREADABLE");
+        }
       } else if (provider === "bdopay") {
         // BDO Pay focused path: do not require GCash/GXI/Maya evidence here.
         if (!extractedRef) flags.push("REF_UNREADABLE");
@@ -1423,7 +1785,7 @@ Deno.serve(async (req) => {
           flags.push("REF_MISMATCH");
         }
 
-        if (pricingError) flags.push("AMOUNT_MISMATCH");
+        if (pricingError) flags.push("PRICING_UNAVAILABLE");
         else if (extractedAmount == null) flags.push("AMOUNT_UNREADABLE");
         else if (extractedAmount < expectedAmount - PESO_TOLERANCE) {
           flags.push("AMOUNT_MISMATCH");
@@ -1454,7 +1816,7 @@ Deno.serve(async (req) => {
           flags.push("REF_MISMATCH");
         }
 
-        if (pricingError) flags.push("AMOUNT_MISMATCH");
+        if (pricingError) flags.push("PRICING_UNAVAILABLE");
         else if (extractedAmount == null) flags.push("AMOUNT_UNREADABLE");
         else if (extractedAmount < expectedAmount - PESO_TOLERANCE) {
           // Maya's flattened OCR can still turn a damaged/split thousands
@@ -1492,7 +1854,7 @@ Deno.serve(async (req) => {
           flags.push("REF_MISMATCH");
         }
 
-        if (pricingError) flags.push("AMOUNT_MISMATCH");
+        if (pricingError) flags.push("PRICING_UNAVAILABLE");
         else if (extractedAmount == null) flags.push("AMOUNT_UNREADABLE");
         else if (extractedAmount < expectedAmount - PESO_TOLERANCE) {
           flags.push("AMOUNT_MISMATCH");
@@ -1527,14 +1889,15 @@ Deno.serve(async (req) => {
           flags.push("REF_MISMATCH");
         }
 
-        if (pricingError) flags.push("AMOUNT_MISMATCH");
+        if (pricingError) flags.push("PRICING_UNAVAILABLE");
         else if (extractedAmount == null) flags.push("AMOUNT_UNREADABLE");
         else if (extractedAmount < expectedAmount - PESO_TOLERANCE) {
           flags.push("AMOUNT_MISMATCH");
         }
       }
 
-      // Authenticity heuristics — HARD: a non-receipt image should be rejected outright.
+      // This heuristic is not proof of fraud. OCR can miss labels on a real
+      // screenshot, so flag it for an owner instead of auto-cancelling.
       if (!looksLikeGcashReceipt(ocrText)) flags.push("SUSPECTED_FAKE");
     }
     if (editedBySoftware(bytes)) flags.push("EDITED_METADATA");
@@ -1547,7 +1910,11 @@ Deno.serve(async (req) => {
     // GCash refs are stored as digits only; other providers are namespaced so
     // same-looking references from different banks do not collide.
     const rawRefForDedupe = extractedRef || typedRef || null;
-    const refForDedupe = rawRefForDedupe ? provider === "gcash" ? rawRefForDedupe : `${provider}:${rawRefForDedupe}` : null;
+    const refForDedupe = rawRefForDedupe
+      ? provider === "gcash"
+        ? rawRefForDedupe
+        : `${provider}:${rawRefForDedupe}`
+      : null;
     const dedupeKeys: Array<
       { key: string; providerKey: string; duplicateFlag: string }
     > = [];
@@ -1580,67 +1947,28 @@ Deno.serve(async (req) => {
       });
     }
 
-    const alreadyClaimedByThisBooking = new Set<string>();
     for (const item of dedupeKeys) {
       const { data: existingRef } = await db
         .from("used_gcash_refs")
-        .select("booking_ref")
+        .select("booking_ref,claim_scope,claim_owner_id")
         .eq("gcash_ref", item.key)
         .maybeSingle();
-      if (
-        existingRef &&
-        !bookingGroupRefs.has(String(existingRef.booking_ref || ""))
-      ) {
+      if (existingRef && !ledgerClaimBelongsToBooking(existingRef)) {
         flags.push(item.duplicateFlag);
-      } else if (
-        existingRef &&
-        bookingGroupRefs.has(String(existingRef.booking_ref || ""))
-      ) {
-        alreadyClaimedByThisBooking.add(item.key);
       }
     }
 
     // ── decision routing ────────────────────────────────────────────────────
     const hasHard = flags.some((f) => HARD_FLAGS.has(f));
-    const hasSoftOrUnreadable = flags.length > 0;
-    let result: "auto_approved" | "manual_review" | "rejected";
-    if (hasHard) result = "rejected";
-    else if (hasSoftOrUnreadable) result = "manual_review";
-    else result = "auto_approved";
+    // OCR is evidence extraction, not payment authentication. A synthetic
+    // image can contain every phrase, amount, timestamp, and reference that
+    // Vision expects, so even a clean parse must wait for an owner or a
+    // provider-signed webhook/API before money or a booking is settled.
+    const result: "manual_review" | "rejected" = hasHard
+      ? "rejected"
+      : "manual_review";
 
-    // Race-safe claim of payment ledger keys. The table's primary key on
-    // gcash_ref is the source of truth if another request claims the same key.
-    if (result === "auto_approved") {
-      for (const item of dedupeKeys) {
-        if (alreadyClaimedByThisBooking.has(item.key)) continue;
-        const { error: claimErr } = await db
-          .from("used_gcash_refs")
-          .insert({
-            gcash_ref: item.key,
-            booking_ref: bookingRef,
-            provider: item.providerKey,
-          });
-        if (claimErr) {
-          console.error("payment ledger claim failed:", errMsg(claimErr));
-          // A concurrent retry for the same booking can lose the primary-key
-          // insert race. Re-read ownership before treating it as payment reuse.
-          const { data: claimedRef } = await db
-            .from("used_gcash_refs")
-            .select("booking_ref")
-            .eq("gcash_ref", item.key)
-            .maybeSingle();
-          if (claimedRef && bookingGroupRefs.has(String(claimedRef.booking_ref || ""))) {
-            alreadyClaimedByThisBooking.add(item.key);
-            continue;
-          }
-          if (!flags.includes(item.duplicateFlag)) flags.push(item.duplicateFlag);
-          result = "rejected";
-          break;
-        }
-      }
-    }
-
-    const confidence = result === "auto_approved" ? Math.max(0.9, ocrConfidence) : result === "manual_review" ? 0.5 : 0.1;
+    const confidence = result === "manual_review" ? 0.5 : 0.1;
 
     const extracted = {
       ref: extractedRef,
@@ -1663,7 +1991,9 @@ Deno.serve(async (req) => {
       date: receiptDate,
       time: receiptDateTime ? receiptDateTime.toISOString() : null,
       timePh12: formatPhDateTime12(receiptDateTime),
-      bookingStartedAt: bookingStartedAt ? bookingStartedAt.toISOString() : null,
+      bookingStartedAt: bookingStartedAt
+        ? bookingStartedAt.toISOString()
+        : null,
       bookingStartedAtPh12: formatPhDateTime12(bookingStartedAt),
       bookingStartedDate,
       receiptAgeMinutes,
@@ -1677,19 +2007,16 @@ Deno.serve(async (req) => {
       ocrFallbackReason,
       ocrConfidence,
       ocrTextLength: ocrText.length,
-      expectedReceiverNumber: provider === "bdopay" || provider === "maya" || provider === "bpi" ? null : expectedNumber || null,
+      expectedReceiverNumber:
+        provider === "bdopay" || provider === "maya" || provider === "bpi"
+          ? null
+          : expectedNumber || null,
       expectedReceiverName: expectedName || null,
     };
 
     // ── persist outcome on the booking ──────────────────────────────────────
     const statusUpdate: Record<string, unknown> = {};
-    if (result === "auto_approved") {
-      const fullyPaid = expectedAmount >= expectedTotal - PESO_TOLERANCE;
-      statusUpdate.payment_status = fullyPaid ? "paid" : "downpayment_paid";
-      if (booking.status !== "completed" && booking.status !== "cancelled") {
-        statusUpdate.status = "confirmed";
-      }
-    } else if (result === "manual_review") {
+    if (result === "manual_review") {
       statusUpdate.payment_status = "for_verification";
       if (booking.status !== "completed" && booking.status !== "cancelled") {
         statusUpdate.status = "pending";
@@ -1723,6 +2050,7 @@ Deno.serve(async (req) => {
         db,
         booking,
         finalUpdate,
+        bookingMutationScope,
       )
         .in("status", ["verifying", "pending"])
         .select("ref, status, payment_status");
@@ -1733,14 +2061,46 @@ Deno.serve(async (req) => {
         // A zero-row CAS commonly means a concurrent request already finalized
         // the booking. Confirm that before reporting a persistence failure.
         const { data: currentRow } = await db.from("bookings")
-          .select("status, payment_status")
+          .select(
+            "status,payment_status,receipt_status,receipt_flags,receipt_extracted,receipt_confidence,receipt_image_url,receipt_image_hash,receipt_phash,receipt_verified_at",
+          )
           .eq("ref", bookingRef)
           .maybeSingle();
         const currentStatus = String(currentRow?.status || "");
         const currentPayment = String(currentRow?.payment_status || "");
-        const concurrentlyFinalized = ["confirmed", "cancelled", "completed"].includes(currentStatus) ||
+        const concurrentlyFinalized =
+          ["confirmed", "cancelled", "completed"].includes(currentStatus) ||
           ["paid", "downpayment_paid", "rejected"].includes(currentPayment);
-        if (!concurrentlyFinalized) {
+        if (concurrentlyFinalized) {
+          const persistedReceiptStatus = String(
+            currentRow?.receipt_status || "",
+          );
+          const persistedResult = persistedReceiptStatus === "rejected" ||
+              currentStatus === "cancelled" || currentPayment === "rejected"
+            ? "rejected"
+            : persistedReceiptStatus === "manual_review"
+            ? "manual_review"
+            : "auto_approved";
+          return json({
+            ok: true,
+            status: persistedResult,
+            flags: [],
+            publicReason: publicReceiptMessage(
+              persistedResult,
+              Array.isArray(currentRow?.receipt_flags)
+                ? currentRow.receipt_flags
+                : [],
+            ),
+            extracted: currentRow?.receipt_extracted || null,
+            confidence: currentRow?.receipt_confidence ?? null,
+            receiptImageUrl: currentRow?.receipt_image_url || null,
+            receiptImageHash: currentRow?.receipt_image_hash || null,
+            receiptPhash: currentRow?.receipt_phash || null,
+            receiptVerifiedAt: currentRow?.receipt_verified_at || null,
+            message:
+              "This booking was already processed by another verification request.",
+          });
+        } else {
           finalUpdateError = `No non-terminal row matched ref=${bookingRef}`;
           console.error(finalUpdateError);
         }
@@ -1750,10 +2110,16 @@ Deno.serve(async (req) => {
       // more with just the cancel field. The slot MUST be freed on a rejected
       // receipt — no exceptions.
       if (finalUpdateError && result === "rejected") {
-        const { data: fallbackRows, error: fallbackErr } = await bookingUpdateQuery(db, booking, {
-          status: "cancelled",
-          payment_status: "rejected",
-        }).in("status", ["verifying", "pending"]).select("ref");
+        const { data: fallbackRows, error: fallbackErr } =
+          await bookingUpdateQuery(
+            db,
+            booking,
+            {
+              status: "cancelled",
+              payment_status: "rejected",
+            },
+            bookingMutationScope,
+          ).in("status", ["verifying", "pending"]).select("ref");
         if (fallbackErr || !fallbackRows || fallbackRows.length === 0) {
           console.error("FALLBACK cancel also failed:", errMsg(fallbackErr));
         } else {
@@ -1778,19 +2144,27 @@ Deno.serve(async (req) => {
     });
 
     // ── alert admin on anything needing a human ─────────────────────────────
-    if (result !== "auto_approved") {
+    {
       const icon = result === "rejected" ? "❌" : "⚠️";
-      const head = result === "rejected" ? "RECEIPT REJECTED — BOOKING CANCELLED" : "RECEIPT NEEDS REVIEW";
+      const head = result === "rejected"
+        ? "RECEIPT REJECTED — BOOKING CANCELLED"
+        : "RECEIPT NEEDS REVIEW";
       await sendTelegram(
         `${icon} <b>${head}</b>\n` +
           `━━━━━━━━━━━━━━━━━━\n` +
-          `📋 Ref: <code>${bookingRef}</code>\n` +
-          `👤 ${booking.full_name || "—"}\n` +
+          `📋 Ref: <code>${escapeTelegramHtml(bookingRef)}</code>\n` +
+          `👤 ${escapeTelegramHtml(booking.full_name || "—")}\n` +
           `💰 Expected: ₱${expectedAmount.toFixed(2)}` +
-          (extractedAmount != null ? ` · Seen: ₱${extractedAmount.toFixed(2)}` : "") +
+          (extractedAmount != null
+            ? ` · Seen: ₱${extractedAmount.toFixed(2)}`
+            : "") +
           `\n` +
-          `🚩 Flags: <code>${flags.join(", ") || "none"}</code>\n` +
-          (result === "rejected" ? `🗑 Booking auto-cancelled. Slot is now free.` : `👉 Open admin panel to review the receipt.`),
+          `🚩 Flags: <code>${
+            escapeTelegramHtml(flags.join(", ") || "none")
+          }</code>\n` +
+          (result === "rejected"
+            ? `🗑 Booking auto-cancelled. Slot is now free.`
+            : `👉 Open admin panel to review the receipt.`),
       );
     }
 
@@ -1805,11 +2179,31 @@ Deno.serve(async (req) => {
       receiptImageHash: imageHash,
       receiptPhash: phash,
       receiptVerifiedAt: metadataUpdate.receipt_verified_at,
-      ...(finalUpdateError ? { warning: `booking update failed: ${finalUpdateError}` } : {}),
-      message: result === "auto_approved" ? "Payment verified." : result === "manual_review" ? "Received — the owner will verify your payment shortly." : "Your receipt could not be verified. Your booking has been cancelled — please try again with a valid receipt.",
+      ...(finalUpdateError
+        ? { warning: `booking update failed: ${finalUpdateError}` }
+        : {}),
+      message: result === "manual_review"
+        ? "Received — the owner will verify your payment shortly."
+        : "Your receipt could not be verified. Your booking has been cancelled — please try again with a valid receipt.",
     });
   } catch (err) {
     console.error("verify-gcash-receipt error:", errMsg(err));
     return json({ error: errMsg(err) }, 500);
+  } finally {
+    if (receiptLeaseKey && receiptLeaseToken) {
+      const { error: releaseError } = await db.rpc(
+        "release_receipt_verification_lease",
+        {
+          p_booking_key: receiptLeaseKey,
+          p_claim_token: receiptLeaseToken,
+        },
+      );
+      if (releaseError) {
+        console.error(
+          "receipt verification lease release failed:",
+          errMsg(releaseError),
+        );
+      }
+    }
   }
 });

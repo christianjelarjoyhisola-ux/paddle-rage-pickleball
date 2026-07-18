@@ -5,7 +5,7 @@
   "description": "Paddle Rage Pickleball court booking and operations platform",
   "scripts": {
     "dev": "node tools/local-server.js",
-    "test": "node --test booking-balance.test.js",
+    "test": "node --test booking-balance.test.js supabase-hardening.test.js turnstile-hardening.test.js balance-notification-lease.test.js integration-security.test.js",
     "check": "node --check booking-balance.js && node --check supabase-config.js && node --check create-accounts.js && node --check setup-db.js"
   },
   "dependencies": {

@@ -1,0 +1,6 @@
+-- Remote schema-history baseline.
+--
+-- The production project was initialized from the Paddle Rage schema before
+-- CLI migration tracking was adopted.  Supabase records this version as the
+-- baseline; the file intentionally has no statements so local and remote
+-- migration histories stay aligned without replaying the pre-baseline schema.

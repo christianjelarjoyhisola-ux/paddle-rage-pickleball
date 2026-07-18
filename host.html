@@ -39,7 +39,7 @@ textarea.fi{min-height:82px;resize:vertical}
 .msg{display:none;border-radius:8px;padding:11px 13px;font-size:.84rem;line-height:1.45;margin-bottom:14px}
 .msg.show{display:block}
 .msg.err{background:rgba(200,61,38,.10);border:1px solid rgba(200,61,38,.28);color:var(--red)}
-.msg.ok{background:rgba(var(--ac),.09);border:1px solid rgba(var(--ac),.22);color:var(--navy)}
+.msg.ok{background:rgba(var(--ac),.09);border:1px solid rgba(var(--ac),.22);color:var(--text)}
 .links{padding:0 24px 24px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .links a{color:var(--muted);font-size:.84rem;text-decoration:none}
 .links a:hover{color:var(--navy);text-decoration:underline;text-underline-offset:3px}
@@ -88,6 +88,10 @@ textarea.fi{min-height:82px;resize:vertical}
       <textarea class="fi" id="haNotes" placeholder="Optional: usual schedule, group size, or hosting experience"></textarea>
       <button class="btn btn-p" type="submit" id="hostApplyBtn">Submit Application</button>
     </form>
+    <div class="note" style="margin-top:14px;margin-bottom:0">
+      Verification links are one-use and expire after 1 hour. Already applied? Enter your email above, then request a fresh link.
+      <button class="btn btn-g" type="button" id="hostResendBtn" onclick="hostResendVerification()" style="margin-top:10px">Resend Verification Email</button>
+    </div>
   </section>
 
   <div class="links">
@@ -96,8 +100,9 @@ textarea.fi{min-height:82px;resize:vertical}
   </div>
 </main>
 
+<script src="runtime-config.js?v=20260719-integrations-v1"></script>
 <script src="supabase.min.js"></script>
-  <script src="supabase-config.js?v=20260714-owner-void-v1"></script>
+  <script src="supabase-config.js?v=20260719-integrations-v2"></script>
 <script>
 const dark = localStorage.getItem('pb_template_theme') !== 'light';
 document.body.classList.toggle('dark', dark);
@@ -169,7 +174,7 @@ async function hostApply(e) {
   btn.disabled = true;
   btn.textContent = 'Submitting...';
   try {
-    await DB.addOpenPlayHostApplication({
+    const result = await DB.addOpenPlayHostApplication({
       fullName,
       contactNumber,
       email,
@@ -178,7 +183,14 @@ async function hostApply(e) {
       notes: $('haNotes').value.trim(),
     });
     e.target.reset();
-    setMsg('applyMsg', 'Application submitted. Your host login is pending court owner approval.', 'ok');
+    $('haEmail').value = email;
+    setMsg(
+      'applyMsg',
+      result?.emailVerificationSent
+        ? 'Application submitted. Check your email to verify your address, then your host login will be ready for court owner review.'
+        : 'Application submitted for court owner review.',
+      'ok',
+    );
   } catch (err) {
     const msg = err?.message || 'Could not submit application.';
     setMsg('applyMsg', msg === 'Load failed' ? 'Could not reach the host application service. Please try again.' : msg, 'err');
@@ -187,6 +199,77 @@ async function hostApply(e) {
     btn.textContent = 'Submit Application';
   }
 }
+
+async function hostResendVerification() {
+  const email = $('haEmail').value.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showPanel('apply');
+    setMsg('applyMsg', 'Enter the email used for your host application.', 'err');
+    return;
+  }
+  const btn = $('hostResendBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  try {
+    const result = await DB.resendOpenPlayHostVerification(email);
+    setMsg(
+      'applyMsg',
+      result?.message || 'If the application is pending verification, a new email will arrive shortly.',
+      'ok',
+    );
+  } catch (error) {
+    setMsg('applyMsg', error?.message || 'Could not resend the verification email.', 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Resend Verification Email';
+  }
+}
+
+async function handleHostEntryState() {
+  const url = new URL(window.location.href);
+  const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+  const verificationReturn = url.searchParams.get('email_verified') === '1';
+  const authError = url.searchParams.get('error') || hashParams.get('error');
+
+  if (url.searchParams.get('apply') === '1') showPanel('apply');
+  if (!verificationReturn && !authError) return;
+
+  if (authError) {
+    showPanel('apply');
+    setMsg(
+      'applyMsg',
+      'This verification link is invalid or expired. Enter your application email below and request a fresh link.',
+      'err',
+    );
+  } else {
+    showPanel('login');
+    setMsg(
+      'loginMsg',
+      'Email verified successfully. Your application is awaiting court owner review; you can sign in after approval.',
+      'ok',
+    );
+    try {
+      const activeRole = await _pbCurrentAccountRole();
+      if (!activeRole) {
+        await _sb.auth.signOut({ scope: 'local' });
+        _pbAccountRoleCache = null;
+        localStorage.removeItem('pb_session');
+        sessionStorage.removeItem('pb_session');
+      }
+    } catch (_) {
+      // URL cleanup below still removes one-time Auth material from the page.
+    }
+  }
+
+  url.searchParams.delete('email_verified');
+  url.searchParams.delete('error');
+  url.searchParams.delete('error_code');
+  url.searchParams.delete('error_description');
+  url.hash = '';
+  history.replaceState({}, document.title, `${url.pathname}${url.search}`);
+}
+
+void handleHostEntryState();
 </script>
 </body>
 </html>
