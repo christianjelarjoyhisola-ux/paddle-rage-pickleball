@@ -9,9 +9,11 @@ const registrationEdge = read('supabase/functions/submit-public-registration/ind
 const telegramEdge = read('supabase/functions/send-telegram-notification/index.ts');
 const receiptEdge = read('supabase/functions/verify-gcash-receipt/index.ts');
 const confirmationEdge = read('supabase/functions/send-confirmation-email/index.ts');
+const bookingStatusEmailEdge = read('supabase/functions/send-booking-status-email/index.ts');
 const paymentSessionEdge = read('supabase/functions/create-payment-session/index.ts');
 const manageAccountEdge = read('supabase/functions/manage-account/index.ts');
 const hostApplicationEdge = read('supabase/functions/host-application/index.ts');
+const fullPaymentMigration = read('supabase/migrations/20260719130000_regular_bookings_full_payment.sql');
 
 test('all public creation paths are deployed behind hostname-bound Turnstile', () => {
   const config = read('supabase/config.toml');
@@ -160,6 +162,14 @@ test('Telegram endpoint authorizes active accounts and ignores browser message c
   assert.match(telegramEdge, /if \(!eventMatchesCanonicalState\(event, rows, privileged\)\)/);
 });
 
+test('booking status emails require an admin and use saved cancellation data', () => {
+  assert.match(bookingStatusEmailEdge, /requireAdminEmailRequest\(req, db\)/);
+  assert.match(bookingStatusEmailEdge, /row\.status !== "cancelled"/);
+  assert.match(bookingStatusEmailEdge, /row\.payment_status !== "rejected"/);
+  assert.match(bookingStatusEmailEdge, /renderBookingCancellationEmail/);
+  assert.doesNotMatch(bookingStatusEmailEdge, /body\?\.email/);
+});
+
 test('checkout creation requires booking ownership and uses canonical booking data', () => {
   const providerCall = paymentSessionEdge.indexOf('await createPayMongoCheckoutSession');
   const tokenCheck = paymentSessionEdge.indexOf('const customerAuthorized');
@@ -239,4 +249,33 @@ test('dynamic booking consent keeps Vision purpose and limited retention visible
   assert.match(page, /function syncGcashSharedPanel[\s\S]*?Google Cloud Vision only for payment verification and fraud prevention/);
   assert.match(page, /function updatePaymentAmountUI[\s\S]*?Google Cloud Vision processing it for payment verification/);
   assert.ok((page.match(/only as long as needed for disputes, fraud prevention, accounting, and legal requirements/g) || []).length >= 4);
+});
+
+test('only host court reservations can carry an outstanding balance', () => {
+  const page = read('index.html');
+  const paymentRules = read('supabase/functions/_shared/booking-payment.ts');
+  assert.match(page, /function downpaymentAmount[\s\S]*?if \(!isVerifiedHostBooking\(\)\) return Number\(total \|\| 0\)/);
+  assert.match(page, /const payType = '100%'/);
+  assert.doesNotMatch(page, /Full Booking Fee \+ 50% Court Fee Due/);
+  assert.match(bookingEdge, /downpayment: total/);
+  assert.match(registrationEdge, /p_payment_type: "100%"/);
+  assert.match(paymentRules, /Regular bookings require full payment/);
+  assert.match(paymentRules, /Only host court reservations can carry a balance/);
+  assert.match(confirmationEdge, /Regular bookings require verified full payment/);
+  assert.match(fullPaymentMigration, /payment_acceptance_mode', 'full_payment_only'/);
+  assert.match(fullPaymentMigration, /coalesce\(new\.host_booking, false\) = false/);
+  assert.match(fullPaymentMigration, /new\.downpayment := new\.total/);
+  assert.match(fullPaymentMigration, /new\.payment_status[\s\S]*?'downpayment_paid'[\s\S]*?raise exception/);
+});
+
+test('payment review covers every receipt-backed registration type', () => {
+  const admin = read('admin.html');
+  const client = read('supabase-config.js');
+  assert.match(admin, /renderPaymentReview[\s\S]*?DB\.getOpenPlayHostSessionRegistrations\(\)/);
+  assert.match(admin, /openHostSessionVerifyModal/);
+  assert.match(admin, /DB\.getHostSessionReceiptSignedUrl\(r\.id\)/);
+  assert.match(admin, /DB\.updateOpenPlayHostSessionRegistration\(id, \{ paymentStatus: 'paid' \}\)/);
+  assert.match(admin, /regular bookings require the full payment amount/);
+  assert.match(admin, /receiptRef: receiptItem\.ref/);
+  assert.match(client, /async updateOpenPlayHostSessionRegistration\(id, updates\)/);
 });

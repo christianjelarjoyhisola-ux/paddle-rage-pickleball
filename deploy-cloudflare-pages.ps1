@@ -58,6 +58,7 @@ $publicFiles = @(
   "paddle-rage-word-paddle.png",
   "paddle-rage-word-rage.png",
   "login.html",
+  "finance-core.js",
   "runtime-config.js",
   "supabase-config.js",
   "supabase.min.js",

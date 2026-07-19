@@ -36,6 +36,8 @@ import {
   receiptImageSafeToDecode,
 } from "../_shared/google-vision.ts";
 import { extractReceiptAmount } from "../_shared/receipt-amount.ts";
+import { isEmailAddress, sendMailerooEmail } from "../_shared/maileroo.ts";
+import { renderBookingCancellationEmail } from "../_shared/paddle-rage-email.ts";
 import {
   activeReceiptRole,
   bookingAccessTokenMatches,
@@ -1230,7 +1232,7 @@ Deno.serve(async (req) => {
     const { data: persistedRow, error: bookingErr } = await db
       .from("bookings")
       .select(
-        "ref, booking_group_ref, court_id, slots, total, downpayment, host_booking, host_user_id, created_by_user_id, customer_access_token_hash, gcash_ref, payment_method, date, payment_status, status, full_name, created_at, receipt_image_url, receipt_image_hash, receipt_phash, receipt_status, receipt_flags, receipt_extracted, receipt_confidence, receipt_verified_at",
+        "ref, booking_group_ref, court_id, court_name, slots, total, downpayment, host_booking, host_user_id, created_by_user_id, customer_access_token_hash, gcash_ref, payment_method, date, start_time, end_time, email, payment_status, status, full_name, created_at, receipt_image_url, receipt_image_hash, receipt_phash, receipt_status, receipt_flags, receipt_extracted, receipt_confidence, receipt_verified_at",
       )
       .eq("ref", bookingRef)
       .maybeSingle();
@@ -2166,6 +2168,43 @@ Deno.serve(async (req) => {
             ? `🗑 Booking auto-cancelled. Slot is now free.`
             : `👉 Open admin panel to review the receipt.`),
       );
+    }
+
+    if (result === "rejected" && hasPersistedBooking && !finalUpdateError) {
+      const customerEmail = String(booking.email || "").trim().toLowerCase();
+      if (isEmailAddress(customerEmail)) {
+        const reason = publicReceiptMessage(result, flags);
+        const content = renderBookingCancellationEmail({
+          bookingRef,
+          fullName: String(booking.full_name || "Player"),
+          courtName: String(booking.court_name || "Court"),
+          date: String(booking.date || ""),
+          startTime: String(booking.start_time || ""),
+          endTime: String(booking.end_time || ""),
+          total: Number(booking.total || 0),
+          paid: 0,
+          reason,
+          paymentRejected: true,
+        });
+        try {
+          await sendMailerooEmail({
+            to: customerEmail,
+            toName: String(booking.full_name || "Player"),
+            subject: `Payment rejected: ${bookingRef} | Paddle Rage Pickleball`,
+            html: content.html,
+            plain: content.plain,
+            tags: {
+              message_type: "payment-rejected",
+              booking_reference: bookingRef,
+            },
+          });
+        } catch (emailError) {
+          console.error(
+            "Rejected-payment customer email failed:",
+            errMsg(emailError),
+          );
+        }
+      }
     }
 
     return json({

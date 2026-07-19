@@ -254,7 +254,7 @@ Deno.serve(async (req) => {
           p_court_id: text(body.courtId, 100),
           p_date: text(body.date, 10),
           p_hour: Number(body.hour),
-          p_payment_type: text(body.paymentType, 10),
+          p_payment_type: "100%",
           p_payment_method: paymentMethod,
           p_gcash_ref: text(body.gcashRef, 100) || null,
           p_receipt_image_url: text(body.receiptImageUrl, 300) || null,

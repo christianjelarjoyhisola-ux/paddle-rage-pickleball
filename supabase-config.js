@@ -723,6 +723,13 @@ function rowToBooking(r) {
     paidAt:        r.paid_at || null,
     gcashRef:      r.gcash_ref || null,
     downpayment:   r.downpayment || null,
+    bookingFeeAmountSnapshot: r.booking_fee_amount_snapshot != null ? Number(r.booking_fee_amount_snapshot) : null,
+    bookingFeeRateSnapshot: r.booking_fee_rate_snapshot != null ? Number(r.booking_fee_rate_snapshot) : null,
+    bookingFeeTypeSnapshot: r.booking_fee_type_snapshot || null,
+    bookingFeeUnitsSnapshot: r.booking_fee_units_snapshot != null ? Number(r.booking_fee_units_snapshot) : null,
+    bookingFeeSnapshotSource: r.booking_fee_snapshot_source || null,
+    bookingFeeLedgerEligibleSnapshot: !!r.booking_fee_ledger_eligible_snapshot,
+    bookingFeeEarnedAt: r.booking_fee_earned_at || null,
     balanceDueAt:  r.balance_due_at || null,
     forfeitedAt:   r.forfeited_at || null,
     forfeitureReason: r.forfeiture_reason || null,
@@ -1626,6 +1633,27 @@ window.DB = {
     }
   },
 
+  async updateOpenPlayHostSessionRegistration(id, updates) {
+    const row = {};
+    if (updates.paymentStatus !== undefined) row.payment_status = updates.paymentStatus;
+    if (updates.gcashRef !== undefined) row.gcash_ref = updates.gcashRef;
+    if (updates.receiptStatus !== undefined) row.receipt_status = updates.receiptStatus;
+    if (updates.receiptFlags !== undefined) row.receipt_flags = updates.receiptFlags;
+    if (updates.receiptExtracted !== undefined) row.receipt_extracted = updates.receiptExtracted;
+    if (updates.receiptConfidence !== undefined) row.receipt_confidence = updates.receiptConfidence;
+    if (updates.receiptVerifiedAt !== undefined) row.receipt_verified_at = updates.receiptVerifiedAt;
+    const { data, error } = await _sb.from('open_play_host_session_registrations')
+      .update(row)
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) {
+      console.error('updateOpenPlayHostSessionRegistration:', error);
+      throw error;
+    }
+    return rowToOpenPlayHostSessionRegistration(data);
+  },
+
   // ---- OPEN PLAY GAME MANAGER ----
   async getOpenPlayGameSessions() {
     const { data, error } = await _sb.from('open_play_game_sessions').select('*').order('date', { ascending: false }).order('created_at', { ascending: false });
@@ -1871,6 +1899,18 @@ window.DB = {
       bookingRef: booking?.ref,
       event: 'new_booking',
     }, { allowFailure: true });
+  },
+
+  async sendBookingStatusEmail(bookingRef, event, reason = '', options = {}) {
+    if (!bookingRef) return { ok: false, skipped: true, reason: 'No booking reference' };
+    return _invokeEdgeFunction('send-booking-status-email', {
+      bookingRef,
+      event,
+      reason,
+    }, {
+      allowFailure: !!options.allowFailure,
+      retryDirect: false,
+    });
   },
 
   async notifyBookingUpdate(booking, event, note = '') {
@@ -2785,18 +2825,12 @@ window.DB = {
         throw new Error('This payment method is not currently enabled.');
       }
       const isRejected = requestedReceiptStatus === 'rejected';
-      const acceptanceMode = String(db.settings.payment_acceptance_mode || 'both').toLowerCase();
-      const paymentType = acceptanceMode === 'downpayment_only'
-        ? '50%'
-        : acceptanceMode === 'full_payment_only'
-          ? '100%'
-          : reg.paymentType;
-      if (!['50%', '100%'].includes(paymentType)) throw new Error('Open-play payment type is invalid.');
+      const paymentType = '100%';
 
       const openPlayFee = Number(config.fee ?? db.settings.open_play_fee ?? 100);
       const serviceFee = Number(db.settings.maintenance_fee ?? db.settings.service_fee_rate ?? db.settings.booking_fee ?? 0);
       const total = Math.round((openPlayFee + serviceFee) * 100) / 100;
-      const canonicalAmount = paymentType === '100%' ? total : Math.round((total / 2) * 100) / 100;
+      const canonicalAmount = total;
       const maxPlayers = Math.max(1, Number(config.maxPlayers || 40));
       const activeCount = db.openPlayRegistrations.filter(r =>
         r.date === reg.date &&
@@ -3076,6 +3110,18 @@ window.DB = {
       writeDb(db);
       return row;
     },
+    async updateOpenPlayHostSessionRegistration(id, updates) {
+      const db = readDb();
+      let saved = null;
+      db.openPlayHostSessionRegistrations = (db.openPlayHostSessionRegistrations || []).map(registration => {
+        if (String(registration.id) !== String(id)) return registration;
+        saved = { ...registration, ...updates, updatedAt: nowIso() };
+        return saved;
+      });
+      writeDb(db);
+      if (!saved) throw new Error('Hosted Open Play registration not found.');
+      return saved;
+    },
 
     async getOpenPlayGameSessions() {
       return readDb().openPlayGameSessions.sort((a, b) =>
@@ -3288,6 +3334,7 @@ window.DB = {
     async processHostBalanceDeadlines() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async getBookingBalanceNotifications() { return []; },
     async sendRescheduleEmail() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
+    async sendBookingStatusEmail() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async sendTelegramNotification() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async notifyBookingSubmitted() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async notifyBookingUpdate() { return { ok: true, skipped: true, reason: 'Local data mode' }; },

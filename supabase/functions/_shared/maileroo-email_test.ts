@@ -1,7 +1,10 @@
 import { sendMailerooEmail } from "./maileroo.ts";
 import { confirmedBookingPaidAmount } from "./booking-email-payment.ts";
 import {
+  renderBalanceNoticeEmail,
+  renderBookingCancellationEmail,
   renderConfirmationEmail,
+  renderHostDecisionEmail,
   renderHostVerificationEmail,
   renderRescheduleEmail,
 } from "./paddle-rage-email.ts";
@@ -85,6 +88,8 @@ Deno.test("confirmation email is responsive, readable, branded, and escapes cust
     total: 800,
     downpayment: 400,
     remainingBalance: 400,
+    hostBooking: true,
+    balanceDueAt: "2026-07-20T18:00:00+08:00",
   });
 
   assert(
@@ -92,8 +97,8 @@ Deno.test("confirmation email is responsive, readable, branded, and escapes cust
     "mobile styles missing",
   );
   assert(
-    email.html.includes("#143d63") && email.html.includes("#c83d26") &&
-      email.html.includes("#c9cf43"),
+    email.html.includes("#050706") && email.html.includes("#b6f000") &&
+      email.html.includes("#f6f8f2"),
     "site palette missing",
   );
   assert(
@@ -135,8 +140,8 @@ Deno.test("host verification email is branded, readable, and keeps approval sepa
     "verification heading or call-to-action missing",
   );
   assert(
-    email.html.includes("#143d63") && email.html.includes("#c83d26") &&
-      email.html.includes("#c9cf43"),
+    email.html.includes("#050706") && email.html.includes("#b6f000") &&
+      email.html.includes("#f6f8f2"),
     "site palette missing",
   );
   assert(
@@ -162,17 +167,9 @@ Deno.test("host verification email is branded, readable, and keeps approval sepa
   );
 });
 
-Deno.test("confirmed-unpaid booking never describes an expected downpayment as received", () => {
-  const paid = confirmedBookingPaidAmount({
-    paymentStatus: "unpaid",
-    total: 800,
-    // This is the expected amount stored on the booking, not money received.
-    downpayment: 400,
-  });
-  assert(paid === 0, "unpaid booking must report zero received");
-
+Deno.test("regular confirmation uses full-payment language and has no balance", () => {
   const email = renderConfirmationEmail({
-    bookingRef: "PR-TEST-UNPAID",
+    bookingRef: "PR-TEST-FULL",
     email: "player@example.com",
     fullName: "Taylor",
     courtName: "Center Court",
@@ -181,28 +178,29 @@ Deno.test("confirmed-unpaid booking never describes an expected downpayment as r
     endTime: "8:00 PM",
     duration: 2,
     total: 800,
-    downpayment: paid,
-    remainingBalance: 800,
+    downpayment: 800,
+    remainingBalance: 0,
   });
 
   assert(
     email.html.includes(
-      "Great news&mdash;your Paddle Rage booking is confirmed",
+      "Great news&mdash;we received your full payment",
     ),
-    "unpaid confirmation grammar regressed",
+    "regular full-payment confirmation grammar regressed",
   );
   assert(
-    email.html.includes("No payment has been recorded yet"),
-    "unpaid disclosure missing",
+    email.html.includes("There is no remaining balance"),
+    "regular paid-in-full disclosure missing",
   );
   assert(
     !email.html.includes("received your downpayment") &&
-      !email.html.includes("received your full payment"),
-    "unpaid booking falsely claims payment receipt",
+      !email.html.includes("due on the day of play"),
+    "regular booking contains partial-payment language",
   );
   assert(
-    email.plain.includes("Paid: PHP 0.00"),
-    "plain text paid amount must be zero",
+    email.plain.includes("Paid: PHP 800.00") &&
+      email.plain.includes("Payment status: Paid in full"),
+    "regular full-payment plain text is incomplete",
   );
 });
 
@@ -256,5 +254,75 @@ Deno.test("reschedule email makes the old and new schedules clear and escapes th
     email.plain.includes("PREVIOUS SCHEDULE") &&
       email.plain.includes("NEW SCHEDULE"),
     "plain comparison missing",
+  );
+});
+
+Deno.test("cancellation email explains the released slot and payment state", () => {
+  const email = renderBookingCancellationEmail({
+    bookingRef: "PR-CANCEL-001",
+    fullName: "Jamie",
+    courtName: "Rage Court",
+    date: "2026-07-25",
+    startTime: "6:00 PM",
+    endTime: "8:00 PM",
+    total: 800,
+    paid: 0,
+    paymentRejected: true,
+    reason: "Receipt reference did not match <script>alert(1)</script>",
+  });
+  assert(
+    email.html.includes("PAYMENT REJECTED · BOOKING CANCELLED"),
+    "cancellation state missing",
+  );
+  assert(
+    email.html.includes("court slot has been released"),
+    "released-slot guidance missing",
+  );
+  assert(
+    !email.html.includes("<script>alert(1)</script>"),
+    "cancellation reason was not escaped",
+  );
+  assert(
+    email.plain.includes("No settled payment is recorded"),
+    "plain payment state missing",
+  );
+});
+
+Deno.test("balance reminders and host decisions use the shared dark neon layout", () => {
+  const balance = renderBalanceNoticeEmail({
+    eventType: "reminder_1d",
+    bookingRef: "PR-HOST-001",
+    fullName: "Alex",
+    courtName: "Center Court",
+    schedules: [{
+      date: "2026-07-25",
+      startTime: "6:00 PM",
+      endTime: "8:00 PM",
+    }],
+    paid: 400,
+    remainingBalance: 400,
+    deadline: "2026-07-24T18:00:00+08:00",
+  });
+  const decision = renderHostDecisionEmail({
+    fullName: "Alex",
+    status: "approved",
+    reviewNote: "Approved for host access.",
+  });
+  assert(
+    balance.html.includes("#050706") && balance.html.includes("#b6f000"),
+    "balance email theme mismatch",
+  );
+  assert(
+    balance.plain.includes("PR-HOST-001") &&
+      balance.plain.includes("PHP 400.00"),
+    "balance plain details missing",
+  );
+  assert(
+    decision.html.includes("Open host dashboard"),
+    "approved host action missing",
+  );
+  assert(
+    decision.plain.includes("HOST APPLICATION APPROVED"),
+    "host decision plain state missing",
   );
 });

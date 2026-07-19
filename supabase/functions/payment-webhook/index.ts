@@ -1,9 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyStoredSessionPayment } from "../_shared/booking-payment.ts";
+import { isEmailAddress, sendMailerooEmail } from "../_shared/maileroo.ts";
+import { renderBookingCancellationEmail } from "../_shared/paddle-rage-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-payment-signature",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-payment-signature",
 };
 
 type WebhookBody = {
@@ -42,8 +45,16 @@ type PaymentSessionRow = {
 
 type BookingPaymentRow = {
   ref: string;
+  booking_group_ref: string | null;
+  full_name: string;
+  email: string | null;
+  court_name: string | null;
+  date: string;
+  start_time: string | null;
+  end_time: string | null;
   total: number | string | null;
   downpayment: number | string | null;
+  hostBooking: boolean;
   status: string;
 };
 
@@ -52,7 +63,9 @@ type ProviderPaymentStatus = "paid" | "failed" | "pending";
 function normalizeStatus(input?: string): ProviderPaymentStatus {
   const v = (input || "").toLowerCase();
   if (["paid", "succeeded", "success", "completed"].includes(v)) return "paid";
-  if (["failed", "canceled", "cancelled", "expired"].includes(v)) return "failed";
+  if (["failed", "canceled", "cancelled", "expired"].includes(v)) {
+    return "failed";
+  }
   return "pending";
 }
 
@@ -70,8 +83,14 @@ async function verifySignature(req: Request, bodyText: string) {
     false,
     ["sign"],
   );
-  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(bodyText));
-  const expected = Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(bodyText),
+  );
+  const expected = Array.from(new Uint8Array(sig)).map((b) =>
+    b.toString(16).padStart(2, "0")
+  ).join("");
   return expected === given;
 }
 
@@ -91,12 +110,17 @@ function parseWebhook(body: WebhookBody) {
     const evStatus = evData.attributes?.status || "";
     const evRef = evData.attributes?.reference_number || "";
     const evMeta = evData.attributes?.metadata || {};
-    const metaRef = typeof evMeta.booking_ref === "string" ? evMeta.booking_ref : "";
+    const metaRef = typeof evMeta.booking_ref === "string"
+      ? evMeta.booking_ref
+      : "";
     if (!bookingRef) bookingRef = evRef || metaRef || null;
     if (evStatus) normalized = normalizeStatus(evStatus);
     if (evData.attributes?.paid_at) paidAtIso = evData.attributes.paid_at;
     if (evType.toLowerCase().includes("paid")) normalized = "paid";
-    if (evType.toLowerCase().includes("failed") || evType.toLowerCase().includes("expired")) normalized = "failed";
+    if (
+      evType.toLowerCase().includes("failed") ||
+      evType.toLowerCase().includes("expired")
+    ) normalized = "failed";
     if (!sessionId) sessionId = evData.id || null;
   }
 
@@ -105,7 +129,11 @@ function parseWebhook(body: WebhookBody) {
 
 async function findPaymentSession(
   db: any,
-  identifiers: { sessionId: string | null; providerRef: string | null; bookingRef: string | null },
+  identifiers: {
+    sessionId: string | null;
+    providerRef: string | null;
+    bookingRef: string | null;
+  },
 ): Promise<PaymentSessionRow | null> {
   const select = "id,booking_ref,provider_reference,amount_php,status";
   const checked = new Set<string>();
@@ -144,69 +172,110 @@ async function findPaymentSession(
       .order("created_at", { ascending: false })
       .limit(2);
     if (error) throw error;
-    if ((data || []).length > 1) throw new Error("Webhook does not identify a unique payment session");
+    if ((data || []).length > 1) {
+      throw new Error("Webhook does not identify a unique payment session");
+    }
     return data?.[0] as PaymentSessionRow || null;
   }
 
   return null;
 }
 
-async function loadSessionBookings(db: any, sessionId: string): Promise<BookingPaymentRow[]> {
+async function loadSessionBookings(
+  db: any,
+  sessionId: string,
+): Promise<BookingPaymentRow[]> {
   const { data, error } = await db
     .from("bookings")
-    .select("ref,total,downpayment,status")
+    .select(
+      "ref,booking_group_ref,full_name,email,court_name,date,start_time,end_time,total,downpayment,host_booking,status",
+    )
     .eq("payment_session_id", sessionId);
   if (error) throw error;
-  return (data || []) as BookingPaymentRow[];
+  return (data || []).map((row: Record<string, unknown>) => ({
+    ...row,
+    hostBooking: row.host_booking === true,
+  })) as BookingPaymentRow[];
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: corsHeaders,
+    });
+  }
 
   try {
     const rawText = await req.text();
     const valid = await verifySignature(req, rawText);
-    if (!valid) return new Response("Invalid signature", { status: 401, headers: corsHeaders });
-
-    const body = JSON.parse(rawText) as WebhookBody;
-    const { sessionId, bookingRef, providerRef, normalized, paidAtIso } = parseWebhook(body);
-
-    if (!sessionId && !providerRef && !bookingRef) {
-      return new Response(JSON.stringify({ error: "Missing payment session identifier" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (!valid) {
+      return new Response("Invalid signature", {
+        status: 401,
+        headers: corsHeaders,
       });
     }
 
+    const body = JSON.parse(rawText) as WebhookBody;
+    const { sessionId, bookingRef, providerRef, normalized, paidAtIso } =
+      parseWebhook(body);
+
+    if (!sessionId && !providerRef && !bookingRef) {
+      return new Response(
+        JSON.stringify({ error: "Missing payment session identifier" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey =
-      Deno.env.get("SERVICE_ROLE_KEY") ||
+    const serviceRoleKey = Deno.env.get("SERVICE_ROLE_KEY") ||
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ||
       "";
     if (!serviceRoleKey) throw new Error("Missing SERVICE_ROLE_KEY");
     const db = createClient(supabaseUrl, serviceRoleKey);
 
-    const storedSession = await findPaymentSession(db, { sessionId, providerRef, bookingRef });
+    const storedSession = await findPaymentSession(db, {
+      sessionId,
+      providerRef,
+      bookingRef,
+    });
     if (!storedSession) {
-      return new Response(JSON.stringify({ error: "Payment session not found" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Payment session not found" }),
+        {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
     if (bookingRef && bookingRef !== storedSession.booking_ref) {
-      return new Response(JSON.stringify({ error: "Payment session does not match booking" }), {
-        status: 409,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Payment session does not match booking" }),
+        {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Never use an amount supplied by the webhook. The locally-created session
     // and the booking rows linked to that session are the payment authority.
     const sessionBookings = await loadSessionBookings(db, storedSession.id);
-    let bookingPaymentStatus: "paid" | "downpayment_paid" | "failed" | "pending" = normalized;
+    let bookingPaymentStatus:
+      | "paid"
+      | "downpayment_paid"
+      | "failed"
+      | "pending" = normalized;
     if (normalized === "paid") {
-      if (!sessionBookings.some((row) => row.ref === storedSession.booking_ref)) {
+      if (
+        !sessionBookings.some((row) => row.ref === storedSession.booking_ref)
+      ) {
         throw new Error("Payment session is not linked to its booking");
       }
       bookingPaymentStatus = classifyStoredSessionPayment(
@@ -244,14 +313,66 @@ Deno.serve(async (req) => {
       if (bookingUpdateErr) throw bookingUpdateErr;
     }
 
-    return new Response(JSON.stringify({
-      ok: true,
-      status: normalized,
-      bookingPaymentStatus,
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    if (
+      normalized === "failed" && storedSession.status !== "failed" &&
+      sessionBookings.length > 0
+    ) {
+      const first = sessionBookings[0];
+      const customerEmail = String(first.email || "").trim().toLowerCase();
+      if (isEmailAddress(customerEmail)) {
+        const displayRef = first.booking_group_ref
+          ? first.booking_group_ref.replace(/-G$/, "")
+          : first.ref;
+        const content = renderBookingCancellationEmail({
+          bookingRef: displayRef,
+          fullName: first.full_name || "Player",
+          courtName: [
+            ...new Set(
+              sessionBookings.map((row) => row.court_name).filter(Boolean),
+            ),
+          ].join(", ") || "Court",
+          date: first.date,
+          startTime: first.start_time || "",
+          endTime: first.end_time || "",
+          total: sessionBookings.reduce(
+            (sum, row) => sum + Number(row.total || 0),
+            0,
+          ),
+          paid: 0,
+          reason:
+            "The payment checkout failed, expired, or was cancelled before payment was completed.",
+          paymentRejected: true,
+        });
+        try {
+          await sendMailerooEmail({
+            to: customerEmail,
+            toName: first.full_name || "Player",
+            subject:
+              `Payment not completed: ${displayRef} | Paddle Rage Pickleball`,
+            html: content.html,
+            plain: content.plain,
+            tags: {
+              message_type: "payment-failed",
+              booking_reference: displayRef,
+            },
+          });
+        } catch (emailError) {
+          console.error("Failed-payment customer email failed:", emailError);
+        }
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        status: normalized,
+        bookingPaymentStatus,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   } catch (err) {
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,

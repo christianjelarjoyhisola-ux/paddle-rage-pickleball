@@ -7,6 +7,7 @@
 <link rel="icon" type="image/png" href="paddleragelogo.jpg">
 <script src="chart.min.js"></script>
 <script src="booking-balance.js?v=20260716-court-revenue-v2"></script>
+<script src="finance-core.js?v=20260719-finance-v2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
@@ -1420,106 +1421,230 @@ tr:hover td { background: var(--bg2); }
 }
 
 /* ── REPORTS ───────────────────────────────────────────── */
-#sec-reports .toolbar { align-items: flex-start; margin-bottom: 10px; }
-.rp-heading { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.rp-heading h2 { margin: 0; line-height: 1; }
-.rp-subtitle { color: var(--text3); font-size: .78rem; font-weight: 700; }
-.rp-export { min-height: 36px; }
-.rp-filter-row {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  margin-bottom: 12px;
+#sec-reports { --rp-positive: var(--green); --rp-warning: var(--yellow); --rp-danger: var(--red); }
+#sec-reports .toolbar { align-items: flex-end; margin-bottom: 14px; gap: 16px; }
+.rp-heading { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rp-kicker { color: var(--green); font-size: .66rem; font-weight: 900; letter-spacing: 1.35px; text-transform: uppercase; }
+.rp-heading h2 { margin: 0; line-height: .95; }
+.rp-subtitle { color: var(--text3); font-size: .8rem; font-weight: 700; line-height: 1.4; }
+.rp-export { min-height: 39px; border-radius: 11px; white-space: nowrap; }
+.rp-filter-shell {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: end;
+  margin-bottom: 14px; padding: 12px; border: 1px solid var(--border); border-radius: 15px;
+  background: linear-gradient(135deg, rgba(var(--green-rgb), .075), var(--surface) 56%);
+  box-shadow: var(--shadow);
 }
+.rp-filter-main { min-width: 0; }
+.rp-filter-label { display: block; margin: 0 0 7px 2px; color: var(--text3); font-size: .62rem; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+.rp-filter-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .rp-period {
   display: inline-flex; gap: 4px; flex-wrap: nowrap; align-items: center;
-  padding: 4px; background: var(--surface);
-  border: 1px solid var(--border); border-radius: 12px; max-width: 100%;
-  overflow-x: auto;
+  padding: 4px; background: var(--bg2); border: 1px solid var(--border); border-radius: 11px;
+  max-width: 100%; overflow-x: auto; scrollbar-width: none;
 }
+.rp-period::-webkit-scrollbar, .rp-breakdown-tabs::-webkit-scrollbar { display: none; }
 .rp-period .view-btn {
-  flex: 0 0 auto; min-height: 32px; padding: 6px 11px;
-  font-size: .8rem !important; border-radius: 9px;
+  flex: 0 0 auto; min-height: 32px; padding: 6px 11px; font-size: .76rem !important;
+  border-radius: 8px; border: 0;
 }
-.rp-date-range { display: none; gap: 6px; align-items: center; width: 100%; }
+.rp-date-range { display: none; gap: 7px; align-items: center; width: 100%; }
 .rp-filter-row.is-custom .rp-date-range { display: flex; }
-.rp-date-range input { width: 138px; padding: 6px 9px !important; font-size: .78rem !important; }
+.rp-date-range input { width: 142px; min-height: 36px; padding: 6px 9px !important; font-size: .77rem !important; }
 .rp-range-summary {
-  display: inline-flex; align-items: center; min-height: 34px;
-  padding: 6px 10px; border-radius: 10px; border: 1px solid var(--border);
-  background: rgba(var(--green-rgb), .055); color: var(--text2);
-  font-size: .78rem; font-weight: 800; white-space: nowrap;
+  display: inline-flex; align-items: center; min-height: 34px; padding: 6px 10px;
+  border-radius: 9px; border: 1px solid rgba(var(--green-rgb), .22);
+  background: rgba(var(--green-rgb), .075); color: var(--text2); font-size: .76rem;
+  font-weight: 800; white-space: nowrap;
 }
-#sec-reports .rp-stat-cards {
-  grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px !important;
+.rp-basis-wrap { min-width: 190px; }
+.rp-basis {
+  width: 100%; min-height: 42px; border: 1px solid var(--border); border-radius: 11px;
+  background: var(--surface); color: var(--text); padding: 8px 34px 8px 11px;
+  font: 800 .78rem 'DM Sans', sans-serif;
 }
-#sec-reports .rp-stat-cards .sc { min-height: 88px; padding: 14px 14px 12px; border-radius: 12px; }
-#sec-reports .rp-stat-cards .sc-lbl { font-size: .66rem; margin-bottom: 6px; }
-#sec-reports .rp-stat-cards .sc-val { font-size: 1.75rem; letter-spacing: .5px; }
-#sec-reports .rp-stat-cards .sc-ic { top: 12px; right: 12px; font-size: 1.15rem; opacity: .28; }
-.rp-breakdown-panel { padding: 14px; }
-.rp-breakdown-head {
-  display: flex; justify-content: space-between; align-items: center;
-  gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+.rp-basis-note { margin-top: 5px; color: var(--text3); font-size: .66rem; line-height: 1.35; }
+.rp-metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.rp-metric {
+  position: relative; min-width: 0; min-height: 124px; padding: 16px; overflow: hidden;
+  border: 1px solid var(--border); border-radius: 15px; background: var(--surface);
+  box-shadow: var(--shadow); transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
 }
-.rp-breakdown-head h4 { margin: 0; }
+.rp-metric:hover { transform: translateY(-2px); border-color: rgba(var(--green-rgb), .28); box-shadow: var(--shadow-lg); }
+.rp-metric::after { content: ''; position: absolute; width: 92px; height: 92px; right: -36px; bottom: -46px; border-radius: 50%; background: rgba(var(--green-rgb), .06); }
+.rp-metric.primary { border-color: rgba(var(--green-rgb), .34); background: linear-gradient(145deg, rgba(var(--green-rgb), .15), var(--surface) 64%); }
+.rp-metric.warning { border-color: rgba(var(--yellow-rgb), .28); }
+.rp-metric-mark {
+  position: absolute; top: 13px; right: 13px; z-index: 1; padding: 4px 7px; border-radius: 999px;
+  background: var(--bg2); color: var(--text3); font: 900 .54rem 'DM Mono', monospace; letter-spacing: .55px;
+}
+.rp-metric-label { max-width: calc(100% - 45px); color: var(--text3); font-size: .65rem; font-weight: 900; letter-spacing: .85px; text-transform: uppercase; }
+.rp-metric-value { margin-top: 14px; color: var(--green); font: 400 2rem/1 'Bebas Neue', sans-serif; letter-spacing: .7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-metric.warning .rp-metric-value { color: var(--yellow); }
+.rp-metric-note { position: relative; z-index: 1; margin-top: 8px; color: var(--text3); font-size: .69rem; font-weight: 700; line-height: 1.35; }
+.rp-metric-note strong { color: var(--text2); }
+.rp-remit-panel {
+  display: grid; grid-template-columns: minmax(220px, 1.2fr) repeat(4, minmax(120px, .65fr)) auto;
+  gap: 0; align-items: stretch; margin-bottom: 14px; overflow: hidden;
+  border: 1px solid rgba(var(--green-rgb), .22); border-radius: 15px;
+  background: linear-gradient(120deg, rgba(var(--green-rgb), .105), var(--surface) 38%); box-shadow: var(--shadow);
+}
+.rp-remit-intro, .rp-remit-stat, .rp-remit-action { padding: 14px; }
+.rp-remit-intro { display: flex; flex-direction: column; justify-content: center; }
+.rp-remit-title { color: var(--text); font-size: .82rem; font-weight: 900; }
+.rp-remit-copy { margin-top: 4px; color: var(--text3); font-size: .67rem; line-height: 1.35; }
+.rp-remit-stat { display: flex; flex-direction: column; justify-content: center; border-left: 1px solid var(--border); }
+.rp-remit-stat span { color: var(--text3); font-size: .58rem; font-weight: 900; letter-spacing: .7px; text-transform: uppercase; }
+.rp-remit-stat strong { margin-top: 5px; color: var(--text); font: 800 .88rem 'DM Mono', monospace; }
+.rp-remit-stat strong.accent { color: var(--green); }
+.rp-remit-action { display: flex; align-items: center; border-left: 1px solid var(--border); }
+.rp-remit-action .btn { white-space: nowrap; }
+.rp-breakdown-panel { padding: 15px; border-radius: 15px; }
+.rp-breakdown-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.rp-breakdown-title h4 { margin: 0; }
+.rp-breakdown-title p { margin: 4px 0 0; color: var(--text3); font-size: .7rem; line-height: 1.35; }
 .rp-breakdown-tabs {
-  display: flex; gap: 5px; padding: 4px; background: var(--bg2);
-  border: 1px solid var(--border); border-radius: 999px; overflow-x: auto;
+  display: flex; gap: 4px; padding: 4px; max-width: 100%; overflow-x: auto;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 11px; scrollbar-width: none;
 }
 .rp-tab {
-  border: 0; background: transparent; color: var(--text2); border-radius: 999px;
-  padding: 6px 10px; font-size: .74rem; font-weight: 900; cursor: pointer;
-  white-space: nowrap; transition: all var(--transition);
+  flex: 0 0 auto; border: 0; background: transparent; color: var(--text2); border-radius: 8px;
+  padding: 7px 10px; font-size: .7rem; font-weight: 900; cursor: pointer; white-space: nowrap;
+  transition: background var(--transition), color var(--transition), box-shadow var(--transition);
 }
-.rp-tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.rp-tab.active { background: var(--surface); color: var(--green); box-shadow: var(--shadow); }
 .rp-tab:hover:not(.active) { color: var(--text); }
-.rp-breakdown-view { display: none; }
+.rp-tab:focus-visible, .rp-period button:focus-visible, .rp-basis:focus-visible { outline: 3px solid rgba(var(--green-rgb), .28); outline-offset: 2px; }
+.rp-breakdown-view { display: none; min-height: 92px; }
 .rp-breakdown-view.active { display: block; }
-.rp-bar-row, .rp-trend-row {
-  display: grid; grid-template-columns: minmax(80px, .8fr) minmax(90px, 1fr) minmax(78px, auto);
-  align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border);
+.rp-bar-row {
+  display: grid; grid-template-columns: minmax(110px, .8fr) minmax(120px, 1.4fr) minmax(92px, auto) minmax(92px, auto);
+  align-items: center; gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--border);
 }
-.rp-bar-row:last-child, .rp-trend-row:last-child { border-bottom: 0; }
-.rp-bar-label, .rp-trend-month {
-  min-width: 0; font-size: .86rem; color: var(--text); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis;
-}
-.rp-bar-track, .rp-trend-track { height: 9px; background: var(--bg2); border-radius: 999px; overflow: hidden; }
-.rp-bar-fill, .rp-trend-fill { height: 100%; border-radius: 999px; transition: width .5s ease; background: var(--green); }
-.rp-bar-val, .rp-trend-val {
-  text-align: right; font-size: .82rem; font-weight: 900; color: var(--text);
-  font-family: 'DM Mono', monospace; white-space: nowrap;
-}
-.rp-panel-note {
-  margin-top: 10px; padding: 8px 10px; border-radius: 8px;
-  background: var(--input); border: 1px solid var(--border);
-  color: var(--text3); font-size: .74rem; line-height: 1.45;
-}
+.rp-bar-row:last-child, .rp-status-row:last-child, .rp-trend-row:last-child { border-bottom: 0; }
+.rp-bar-label { min-width: 0; font-size: .82rem; color: var(--text); font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-bar-track { height: 8px; background: var(--bg2); border-radius: 999px; overflow: hidden; }
+.rp-bar-fill { height: 100%; border-radius: 999px; transition: width .45s ease; background: linear-gradient(90deg, var(--green), rgba(var(--green-rgb), .58)); }
+.rp-bar-value { text-align: right; white-space: nowrap; }
+.rp-bar-value span { display: block; color: var(--text3); font-size: .56rem; font-weight: 900; letter-spacing: .65px; text-transform: uppercase; }
+.rp-bar-value strong { display: block; margin-top: 3px; color: var(--text); font: 800 .78rem 'DM Mono', monospace; }
+.rp-bar-value.collected strong { color: var(--green); }
+.rp-status-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.rp-status-row { min-width: 0; padding: 13px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg2); }
+.rp-status-label { color: var(--text3); font-size: .64rem; font-weight: 900; letter-spacing: .6px; text-transform: uppercase; }
+.rp-status-amount { margin-top: 7px; color: var(--text); font: 800 .95rem 'DM Mono', monospace; }
+.rp-status-row.positive .rp-status-amount { color: var(--green); }
+.rp-status-row.warning .rp-status-amount { color: var(--yellow); }
+.rp-status-row.danger .rp-status-amount { color: var(--red); }
+.rp-trend-head, .rp-trend-row { display: grid; grid-template-columns: minmax(90px, .65fr) minmax(120px, 1.6fr) minmax(92px, auto) minmax(92px, auto); align-items: center; gap: 12px; }
+.rp-trend-head { padding: 0 2px 7px; color: var(--text3); font-size: .56rem; font-weight: 900; letter-spacing: .65px; text-transform: uppercase; }
+.rp-trend-row { padding: 10px 2px; border-bottom: 1px solid var(--border); }
+.rp-trend-label { color: var(--text); font-size: .78rem; font-weight: 800; }
+.rp-trend-bars { display: grid; gap: 5px; }
+.rp-trend-track { height: 5px; overflow: hidden; border-radius: 999px; background: var(--bg2); }
+.rp-trend-fill { height: 100%; border-radius: inherit; background: rgba(var(--green-rgb), .35); }
+.rp-trend-fill.collected { background: var(--green); }
+.rp-trend-value { text-align: right; color: var(--text); font: 800 .76rem 'DM Mono', monospace; white-space: nowrap; }
+.rp-trend-value.collected { color: var(--green); }
+.rp-panel-note { margin-top: 11px; padding: 9px 11px; border-radius: 9px; background: var(--input); border: 1px solid var(--border); color: var(--text3); font-size: .7rem; line-height: 1.45; }
 .rp-panel-note summary { cursor: pointer; color: var(--text); font-weight: 900; }
 .rp-panel-note div { margin-top: 6px; }
-.rp-empty { font-size: 13px; color: var(--text3); font-style: italic; padding: 8px 0; }
-@media (max-width: 1100px) {
-  #sec-reports .rp-stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.rp-empty { display: grid; place-items: center; min-height: 92px; color: var(--text3); font-size: .78rem; font-style: italic; text-align: center; }
+.rp-simple-panel { padding: 18px; border-radius: 15px; }
+.rp-simple-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 15px; }
+.rp-simple-head .rp-breakdown-tabs { margin-left: auto; }
+.rp-simple-head h3 { margin: 0; font: 400 1.25rem/1 'Bebas Neue', sans-serif; letter-spacing: .45px; }
+.rp-simple-head p { margin: 5px 0 0; color: var(--text3); font-size: .72rem; line-height: 1.4; }
+.rp-court-list { display: grid; gap: 7px; }
+.rp-court-row { display: grid; grid-template-columns: minmax(110px, .75fr) minmax(130px, 1.5fr) auto; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.rp-court-row:last-child { border-bottom: 0; }
+.rp-court-name { min-width: 0; color: var(--text); font-size: .82rem; font-weight: 850; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-court-track { height: 8px; border-radius: 999px; overflow: hidden; background: var(--bg2); }
+.rp-court-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--green), rgba(var(--green-rgb), .55)); }
+.rp-court-amount { color: var(--green); font: 800 .82rem 'DM Mono', monospace; white-space: nowrap; }
+.rp-details { margin-top: 12px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); overflow: hidden; }
+.rp-details summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 18px; cursor: pointer; color: var(--text); font-size: .8rem; font-weight: 900; list-style: none; }
+.rp-details summary::-webkit-details-marker { display: none; }
+.rp-details summary::after { content: '+'; display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: var(--input); color: var(--green); font-size: 1rem; }
+.rp-details[open] summary::after { content: '\2212'; }
+.rp-details-body { padding: 0 18px 12px; border-top: 1px solid var(--border); }
+.rp-transaction { display: grid; grid-template-columns: minmax(105px, .65fr) minmax(160px, 1.3fr) minmax(120px, 1fr) auto; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.rp-transaction:last-child { border-bottom: 0; }
+.rp-transaction-date { color: var(--text3); font-size: .7rem; font-weight: 800; }
+.rp-transaction-person { min-width: 0; }
+.rp-transaction-person strong, .rp-transaction-person span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-transaction-person strong { color: var(--text); font-size: .78rem; }
+.rp-transaction-person span { margin-top: 3px; color: var(--text3); font-size: .64rem; }
+.rp-transaction-court { min-width: 0; color: var(--text2); font-size: .72rem; font-weight: 750; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rp-transaction-money { text-align: right; white-space: nowrap; }
+.rp-transaction-money strong { display: block; color: var(--green); font: 800 .78rem 'DM Mono', monospace; }
+.rp-transaction-money span { display: block; margin-top: 3px; color: var(--text3); font-size: .58rem; font-weight: 800; text-transform: uppercase; }
+@media (max-width: 1180px) {
+  .rp-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rp-remit-panel { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .rp-remit-intro { grid-column: 1 / -1; border-bottom: 1px solid var(--border); }
+  .rp-remit-stat:first-of-type { border-left: 0; }
+  .rp-remit-action { grid-column: 1 / -1; justify-content: flex-end; border-left: 0; border-top: 1px solid var(--border); padding: 10px 14px; }
 }
-@media (max-width: 700px) {
-  #sec-reports .toolbar { flex-direction: row; align-items: center; }
-  #sec-reports .toolbar > div { width: auto; flex: 1; }
-  #sec-reports .toolbar h2 { font-size: 1.5rem; }
-  .rp-export { padding: 8px 10px; }
-  .rp-filter-row { gap: 8px; margin-bottom: 10px; }
+@media (max-width: 800px) {
+  .rp-filter-shell { grid-template-columns: 1fr; }
+  .rp-basis-wrap { min-width: 0; }
+  .rp-breakdown-head { flex-direction: column; }
+  .rp-breakdown-tabs { width: 100%; }
+  .rp-bar-row { grid-template-columns: minmax(92px, .8fr) minmax(90px, 1fr) minmax(82px, auto); gap: 9px; }
+  .rp-bar-value.charges { display: none; }
+  .rp-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rp-simple-head { flex-direction: column; }
+  .rp-simple-head .rp-breakdown-tabs { width: 100%; margin-left: 0; }
+  .rp-simple-head .rp-tab { flex: 1 0 auto; min-height: 36px; }
+}
+@media (max-width: 600px) {
+  #sec-reports .toolbar { align-items: center; margin-bottom: 11px; }
+  #sec-reports .toolbar h2 { font-size: 1.6rem; }
+  .rp-kicker { display: none; }
+  .rp-subtitle { font-size: .69rem; }
+  .rp-export { width: 41px; min-width: 41px; padding: 0; font-size: 0; }
+  .rp-export span { display: none; }
+  .rp-export::before { content: '\2193'; font: 900 1rem 'DM Sans', sans-serif; }
+  .rp-filter-shell { padding: 10px; border-radius: 13px; }
+  .rp-filter-row { gap: 7px; }
   .rp-period { width: 100%; }
-  .rp-range-summary { width: 100%; justify-content: center; }
+  .rp-period .view-btn { flex: 1 0 auto; }
+  .rp-range-summary { width: 100%; justify-content: center; white-space: normal; text-align: center; }
   .rp-date-range input { flex: 1; min-width: 0; width: auto; }
-  #sec-reports .rp-stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  #sec-reports .rp-stat-cards .sc { min-height: 78px; padding: 12px; }
-  #sec-reports .rp-stat-cards .sc-val { font-size: 1.45rem; }
-  .rp-breakdown-panel { padding: 12px; }
-  .rp-breakdown-tabs { width: 100%; border-radius: 12px; }
-  .rp-tab { flex: 1 0 auto; }
-  .rp-bar-row, .rp-trend-row {
-    grid-template-columns: minmax(70px, .75fr) minmax(72px, 1fr) auto;
-    gap: 8px; padding: 9px 0;
-  }
-  .rp-bar-val, .rp-trend-val { font-size: .76rem; }
+  .rp-metric-grid { gap: 8px; }
+  .rp-metric { min-height: 108px; padding: 13px; border-radius: 13px; }
+  .rp-metric-mark { top: 10px; right: 10px; }
+  .rp-metric-value { margin-top: 12px; font-size: 1.65rem; }
+  .rp-metric-note { font-size: .61rem; }
+  .rp-remit-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); border-radius: 13px; }
+  .rp-remit-stat:nth-of-type(3) { border-left: 0; border-top: 1px solid var(--border); }
+  .rp-remit-stat:nth-of-type(4) { border-top: 1px solid var(--border); }
+  .rp-remit-action .btn { width: 100%; justify-content: center; }
+  .rp-breakdown-panel { padding: 11px; border-radius: 13px; }
+  .rp-tab { padding: 7px 9px; }
+  .rp-bar-row { grid-template-columns: minmax(82px, .9fr) minmax(60px, 1fr) auto; gap: 7px; }
+  .rp-bar-label { font-size: .73rem; }
+  .rp-bar-value strong { font-size: .7rem; }
+  .rp-trend-head, .rp-trend-row { grid-template-columns: minmax(62px, .65fr) minmax(65px, 1fr) minmax(76px, auto); gap: 7px; }
+  .rp-trend-head span:nth-child(3), .rp-trend-value.charges { display: none; }
+  .rp-trend-label { font-size: .7rem; }
+  .rp-trend-value { font-size: .68rem; }
+  .rp-simple-panel { padding: 13px; }
+  .rp-simple-head { gap: 11px; margin-bottom: 12px; }
+  .rp-simple-head .rp-breakdown-tabs { overflow-x: auto; }
+  .rp-simple-head .rp-tab { min-width: 68px; padding: 8px 7px; }
+  .rp-court-row { grid-template-columns: minmax(92px, .85fr) minmax(58px, 1fr) auto; gap: 8px; }
+  .rp-court-name, .rp-court-amount { font-size: .72rem; }
+  .rp-details summary { padding: 14px; }
+  .rp-details-body { padding: 0 14px 8px; }
+  .rp-transaction { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 10px; }
+  .rp-transaction-date, .rp-transaction-person, .rp-transaction-court { grid-column: 1; }
+  .rp-transaction-money { grid-column: 2; grid-row: 1 / span 3; align-self: center; }
+}
+@media (max-width: 370px) {
+  .rp-metric-grid { grid-template-columns: 1fr; }
+  .rp-metric { min-height: 102px; }
+  .rp-status-grid { grid-template-columns: 1fr; }
 }
 
 /* ── OPEN PLAY DAY CHIPS ──────────────────────────────── */
@@ -2043,6 +2168,603 @@ tr:hover td { background: var(--bg2); }
 
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260716-paddle-rage-v1">
+<style id="admin-modern-refresh">
+/* Modern admin shell — visual-only refresh; dashboard features and data stay unchanged. */
+:root {
+  --admin-topbar-h: 68px;
+  --admin-sidebar-w: 264px;
+  --admin-panel: rgba(13, 19, 15, .92);
+  --admin-panel-raised: rgba(18, 26, 20, .96);
+  --admin-line: rgba(182, 240, 0, .14);
+  --admin-line-strong: rgba(182, 240, 0, .28);
+  --admin-soft: rgba(182, 240, 0, .075);
+  --admin-shadow: 0 18px 48px rgba(0, 0, 0, .26);
+  --admin-shadow-soft: 0 10px 30px rgba(0, 0, 0, .18);
+  --admin-radius: 18px;
+  --admin-radius-sm: 12px;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  --red: #ff686d;
+  --red-bg: rgba(255, 104, 109, .11);
+  --yellow: #e8b94d;
+  --yellow-bg: rgba(232, 185, 77, .12);
+  --yellow-rgb: 232, 185, 77;
+  background-color: #060907 !important;
+  background-image:
+    radial-gradient(circle at 26% -15%, rgba(182, 240, 0, .10), transparent 31rem),
+    radial-gradient(circle at 92% 18%, rgba(215, 255, 63, .045), transparent 24rem) !important;
+  color: #f5f8f1;
+}
+
+body::before {
+  opacity: .55;
+  background-size: auto, 72px 72px, 72px 72px;
+}
+
+button, input, select, textarea { font: inherit; }
+a, button, input, select, textarea, .nav-item { -webkit-tap-highlight-color: transparent; }
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid rgba(215, 255, 63, .42) !important;
+  outline-offset: 2px;
+}
+
+/* Navigation shell */
+.topnav {
+  z-index: 300;
+  height: var(--admin-topbar-h);
+  padding: 0 clamp(16px, 2.2vw, 34px);
+  gap: 18px;
+  background: rgba(5, 8, 6, .86) !important;
+  border-bottom: 1px solid var(--admin-line) !important;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .18);
+  backdrop-filter: blur(20px) saturate(125%);
+  -webkit-backdrop-filter: blur(20px) saturate(125%);
+}
+
+.nav-brand {
+  min-width: 0;
+  gap: 12px;
+  color: #f8fbf4;
+  font-size: clamp(1rem, 1.4vw, 1.18rem);
+  letter-spacing: -.015em;
+  font-weight: 800;
+}
+
+.nav-brand .logo-img {
+  width: 42px !important;
+  height: 42px !important;
+  border-radius: 13px !important;
+  flex: 0 0 auto;
+}
+
+.brand-accent {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid rgba(182, 240, 0, .24);
+  border-radius: 999px;
+  background: rgba(182, 240, 0, .08);
+  font-size: .66rem;
+  font-weight: 900;
+  letter-spacing: .08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.nav-actions { margin-left: auto; gap: 9px; }
+.nav-user {
+  min-height: 40px;
+  padding: 6px 10px 6px 13px;
+  border: 1px solid var(--admin-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.nav-actions .btn-icon,
+.burger {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border-color: var(--admin-line);
+  background: rgba(255, 255, 255, .03);
+}
+
+.nav-actions .btn-icon:hover,
+.burger:hover {
+  color: var(--pr-neon-bright);
+  border-color: var(--admin-line-strong);
+  background: var(--admin-soft);
+  transform: translateY(-1px);
+}
+
+.nav-actions .btn-d {
+  min-height: 42px;
+  padding-inline: 15px;
+  border-radius: 12px;
+}
+
+.admin-layout { min-height: calc(100dvh - var(--admin-topbar-h)); }
+.sidebar {
+  width: var(--admin-sidebar-w);
+  flex-basis: var(--admin-sidebar-w);
+  top: var(--admin-topbar-h);
+  height: calc(100dvh - var(--admin-topbar-h));
+  padding: 18px 12px 14px;
+  background: linear-gradient(180deg, rgba(10, 15, 11, .98), rgba(6, 10, 7, .98));
+  border-right: 1px solid var(--admin-line);
+  scrollbar-gutter: stable;
+}
+
+.sb-section { padding: 4px 2px; margin-top: 8px; }
+.sb-section:first-child { margin-top: 0; }
+.nav-grp {
+  padding: 0 11px;
+  margin: 0 0 7px;
+  color: #758075;
+  font-size: .61rem;
+  font-weight: 800;
+  letter-spacing: .15em;
+}
+
+.nav-item {
+  position: relative;
+  min-height: 44px;
+  margin-bottom: 4px;
+  padding: 10px 12px;
+  gap: 11px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: #b9c2b7;
+  font-size: .86rem;
+  font-weight: 650;
+}
+
+.nav-item > span {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .035);
+  font-size: .91rem;
+  filter: grayscale(.18);
+}
+
+.nav-item:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, .06);
+  background: rgba(255, 255, 255, .035);
+}
+
+.nav-item.on {
+  color: var(--pr-neon-bright);
+  border-color: var(--admin-line-strong);
+  background: linear-gradient(100deg, rgba(182, 240, 0, .15), rgba(182, 240, 0, .055));
+  box-shadow: inset 3px 0 0 var(--pr-neon), 0 8px 24px rgba(0, 0, 0, .12);
+}
+
+.nav-item.on > span { background: rgba(182, 240, 0, .13); }
+.sb-foot { padding: 15px 2px 0; border-top-color: var(--admin-line); }
+.sb-foot .btn { min-height: 42px; justify-content: center; }
+
+/* Page header and content */
+.main {
+  min-height: calc(100dvh - var(--admin-topbar-h));
+  background: linear-gradient(180deg, rgba(9, 13, 10, .32), rgba(5, 8, 6, .08));
+}
+
+.topbar {
+  width: 100%;
+  max-width: 1780px;
+  margin: 0 auto;
+  padding: clamp(25px, 3vw, 42px) clamp(18px, 3vw, 42px) 0;
+}
+
+.topbar h2 {
+  position: relative;
+  padding-left: 17px;
+  color: #f8faf5;
+  font-family: 'DM Sans', sans-serif;
+  font-size: clamp(1.55rem, 2.4vw, 2.15rem);
+  font-weight: 800;
+  letter-spacing: -.035em;
+  line-height: 1.15;
+}
+
+.topbar h2::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12%;
+  bottom: 10%;
+  width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--pr-neon-bright), var(--pr-neon));
+  box-shadow: 0 0 18px rgba(182, 240, 0, .38);
+}
+
+.content {
+  width: 100%;
+  max-width: 1780px;
+  margin: 0 auto;
+  padding: 20px clamp(18px, 3vw, 42px) 44px;
+}
+
+.adm-sec.on { animation: adminReveal .32s cubic-bezier(.2, .8, .2, 1); }
+@keyframes adminReveal {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Dashboard cards */
+.stat-cards {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.sc {
+  min-height: 138px;
+  padding: 21px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-radius);
+  background:
+    radial-gradient(circle at 94% 8%, rgba(182, 240, 0, .09), transparent 44%),
+    linear-gradient(145deg, var(--admin-panel-raised), rgba(10, 15, 11, .96));
+  box-shadow: var(--admin-shadow-soft);
+}
+
+.sc::before {
+  top: auto;
+  right: auto;
+  bottom: 0;
+  width: 58%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--pr-neon), transparent);
+}
+
+.sc::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025);
+}
+
+.sc:hover {
+  border-color: var(--admin-line-strong);
+  transform: translateY(-3px);
+  box-shadow: var(--admin-shadow);
+}
+
+.sc-lbl {
+  max-width: calc(100% - 52px);
+  margin-bottom: 13px;
+  color: #929d91;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+
+.sc-val {
+  max-width: calc(100% - 48px);
+  color: var(--pr-neon-bright);
+  font-family: 'DM Sans', sans-serif;
+  font-size: clamp(1.75rem, 2.7vw, 2.35rem);
+  font-weight: 800;
+  letter-spacing: -.04em;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+#dMost { font-family: 'DM Sans', sans-serif !important; font-size: .98rem !important; line-height: 1.35; letter-spacing: -.01em; }
+.sc-ic {
+  top: 17px;
+  right: 17px;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid var(--admin-line);
+  border-radius: 13px;
+  background: rgba(182, 240, 0, .07);
+  font-size: 1.05rem;
+  opacity: .88;
+}
+
+.panel,
+.tbl-wrap,
+.chart-card,
+.pr-panel,
+.gm-panel,
+.host-panel,
+.rm-panel,
+.hf-panel {
+  border-color: var(--admin-line);
+  border-radius: var(--admin-radius);
+  background: linear-gradient(145deg, var(--admin-panel), rgba(9, 14, 10, .95));
+  box-shadow: var(--admin-shadow-soft);
+}
+
+.panel { padding: 20px; }
+.panel h4 {
+  margin-bottom: 16px;
+  color: #9ca69a;
+  font-family: 'DM Sans', sans-serif;
+  font-size: .69rem;
+  font-weight: 850;
+  letter-spacing: .1em;
+}
+
+.rev-grid { gap: 16px; margin-bottom: 18px; }
+.rev-grid .panel { min-width: 0; }
+#sec-dash .rev-grid .panel > div[style*="flex-direction:column"] {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px !important;
+}
+
+#sec-dash .rev-grid .panel > div[style*="flex-direction:column"] .btn {
+  min-height: 43px;
+  justify-content: flex-start;
+}
+
+#maintFeePanel {
+  margin-bottom: 18px !important;
+  padding: 20px !important;
+  border: 1px solid rgba(var(--yellow-rgb), .22) !important;
+  background:
+    radial-gradient(circle at 100% 0, rgba(var(--yellow-rgb), .08), transparent 42%),
+    linear-gradient(145deg, var(--admin-panel), rgba(9, 14, 10, .95)) !important;
+}
+
+#maintFeePanel .mf-head { margin-bottom: 14px !important; }
+#maintFeePanel .mf-month-wrap {
+  min-height: 42px;
+  padding: 5px 6px 5px 12px;
+  border: 1px solid var(--admin-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .025);
+}
+
+#maintFeePanel #maintMonth { min-height: 32px; border-radius: 9px !important; }
+#maintFeePanel .mf-summary { gap: 10px !important; margin-bottom: 14px !important; }
+#maintFeePanel .mf-tile {
+  min-height: 94px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-color: var(--admin-line) !important;
+  border-radius: 13px !important;
+  background: rgba(255, 255, 255, .025) !important;
+}
+
+#maintFeePanel .mf-tile:last-child {
+  border-color: rgba(var(--yellow-rgb), .32) !important;
+  background: rgba(var(--yellow-rgb), .075) !important;
+}
+
+#mfBreakdown {
+  border-color: var(--admin-line) !important;
+  border-radius: 13px !important;
+  background: rgba(255, 255, 255, .024) !important;
+}
+
+.pay-row { margin-bottom: 8px; color: #d6ddd3; }
+.bar { height: 8px; margin-bottom: 16px; background: rgba(255, 255, 255, .06); }
+
+/* Shared forms, tables and actions */
+.toolbar { margin-bottom: 16px; gap: 12px; }
+.toolbar h2 {
+  color: #f8faf5;
+  font-family: 'DM Sans', sans-serif;
+  font-size: clamp(1.4rem, 2vw, 1.8rem);
+  font-weight: 800;
+  letter-spacing: -.03em;
+}
+
+.btn {
+  min-height: 40px;
+  padding: 9px 16px;
+  border-radius: 11px;
+  font-weight: 750;
+  line-height: 1.15;
+}
+
+.btn-sm { min-height: 36px; padding: 7px 12px; }
+.btn-g {
+  border-color: var(--admin-line);
+  background: rgba(255, 255, 255, .035);
+}
+
+.btn-g:hover {
+  color: #fff;
+  border-color: var(--admin-line-strong);
+  background: rgba(182, 240, 0, .075);
+  transform: translateY(-1px);
+}
+
+.fi,
+.filters input,
+.filters select,
+.pr-filter-bar input,
+.pr-filter-bar select,
+input.fi,
+select.fi,
+textarea.fi {
+  min-height: 42px;
+  border-color: var(--admin-line);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .035);
+}
+
+.fi:focus,
+.filters input:focus,
+.filters select:focus,
+.pr-filter-bar input:focus,
+.pr-filter-bar select:focus {
+  border-color: rgba(182, 240, 0, .55);
+  box-shadow: 0 0 0 3px rgba(182, 240, 0, .08);
+}
+
+.tbl-wrap { overflow: hidden; }
+.tbl-hd { padding: 17px 19px; border-bottom-color: var(--admin-line); background: rgba(255, 255, 255, .018); }
+.tbl-hd h3 {
+  color: #f2f6ef;
+  font-size: .98rem;
+  font-weight: 800;
+}
+
+.tbl-scroll { scrollbar-color: rgba(182, 240, 0, .28) transparent; }
+th {
+  padding: 12px 16px;
+  color: #929d91;
+  border-bottom-color: var(--admin-line);
+  background: rgba(255, 255, 255, .028);
+  font-size: .64rem;
+  font-weight: 850;
+  letter-spacing: .09em;
+}
+
+td { padding: 14px 16px; border-bottom-color: rgba(182, 240, 0, .075); line-height: 1.45; }
+tr:hover td { background: rgba(182, 240, 0, .035); }
+.booking-type-tabs { border-color: var(--admin-line); border-radius: 14px; background: rgba(255, 255, 255, .02); }
+.booking-type-tab { min-height: 42px; }
+
+.sidebar-overlay {
+  top: var(--admin-topbar-h);
+  z-index: 240;
+  background: rgba(0, 0, 0, .68);
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+.modal-bg { backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
+.modal {
+  border-color: var(--admin-line);
+  border-radius: 20px;
+  background: #0d130f;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .55);
+}
+
+.toast { border-radius: 13px; border-color: var(--admin-line); background: #111813; }
+
+@media (max-width: 1180px) {
+  :root { --admin-sidebar-w: 232px; }
+  .stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 900px) {
+  :root { --admin-topbar-h: 64px; }
+  .topnav { padding-inline: 14px; }
+  .admin-layout { display: block; }
+  .sidebar {
+    display: flex;
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    z-index: 250;
+    width: min(86vw, 310px);
+    max-width: 310px;
+    height: calc(100dvh - var(--admin-topbar-h));
+    padding: 16px 12px calc(16px + env(safe-area-inset-bottom));
+    transform: translateX(-105%);
+    visibility: hidden;
+    transition: transform .24s cubic-bezier(.2, .8, .2, 1), visibility .24s;
+    box-shadow: 24px 0 60px rgba(0, 0, 0, .45);
+  }
+
+  .sidebar.open {
+    display: flex;
+    visibility: visible;
+    transform: translateX(0);
+  }
+
+  .main { min-height: calc(100dvh - var(--admin-topbar-h)); }
+  .topbar { padding: 21px 16px 0; }
+  .content { padding: 16px 16px calc(32px + env(safe-area-inset-bottom)); }
+  .rev-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 700px) {
+  .nav-brand { max-width: min(48vw, 250px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .nav-brand > span { display: none; }
+  .nav-actions { gap: 6px; }
+  .nav-user { display: none; }
+  .nav-actions .btn-icon, .burger { width: 40px; height: 40px; }
+  .nav-actions .btn-d { min-width: 40px; min-height: 40px; padding: 8px 10px; justify-content: center; }
+  .topbar h2 { font-size: 1.5rem; }
+  .stat-cards { gap: 10px; margin-bottom: 12px; }
+  .sc { min-height: 118px; padding: 15px; border-radius: 15px; }
+  .sc-lbl { max-width: calc(100% - 38px); margin-bottom: 11px; font-size: .59rem; line-height: 1.4; }
+  .sc-val { max-width: 100%; font-size: clamp(1.45rem, 7.3vw, 1.9rem); }
+  #dMost { max-width: 100%; font-size: .8rem !important; padding-right: 0; }
+  .sc-ic { top: 12px; right: 12px; width: 32px; height: 32px; border-radius: 10px; font-size: .82rem; }
+  .dash-mobile-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0 0 12px;
+  }
+
+  .dash-mobile-actions .btn { min-width: 0; padding-inline: 8px; justify-content: center; }
+  .panel, #maintFeePanel { padding: 15px !important; border-radius: 15px; }
+  #maintFeePanel .mf-head { align-items: stretch !important; }
+  #maintFeePanel .mf-month-wrap { width: 100%; justify-content: space-between; }
+  #maintFeePanel .mf-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  #maintFeePanel .mf-tile { min-height: 84px; padding: 10px !important; }
+  #maintFeePanel .mf-note { text-align: left !important; line-height: 1.5; }
+  #sec-dash .rev-grid .panel > div[style*="flex-direction:column"] { grid-template-columns: 1fr; }
+  #sec-dash .rev-grid .panel > div[style*="flex-direction:column"] .btn { justify-content: center; }
+  .tbl-wrap { border-radius: 15px; }
+  .tbl-scroll tr { border-color: var(--admin-line); border-radius: 13px; background: rgba(255, 255, 255, .018); }
+  .tbl-scroll td { line-height: 1.4; }
+  .toolbar { align-items: stretch; }
+  .toolbar > div { min-width: 0; }
+  #tableView .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #tableView .filters input[type="search"] { grid-column: 1 / -1; }
+  #tableView .filters .btn { width: 100%; }
+  .booking-type-tabs { display: flex; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
+  .booking-type-tabs::-webkit-scrollbar { display: none; }
+  .booking-type-tab { flex: 0 0 auto; white-space: nowrap; }
+  .modal-bg { align-items: flex-end; padding: 0; }
+  .modal {
+    width: 100%;
+    max-height: calc(100dvh - 18px);
+    border-radius: 20px 20px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .toasts { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .toast { min-width: 0; width: 100%; }
+}
+
+@media (max-width: 390px) {
+  .topnav { padding-inline: 10px; }
+  .nav-brand { max-width: 40vw; gap: 8px; font-size: .9rem; }
+  .nav-brand .logo-img { width: 38px !important; height: 38px !important; }
+  .nav-actions .btn-icon, .burger, .nav-actions .btn-d { width: 38px; min-width: 38px; height: 38px; min-height: 38px; }
+  .topbar { padding-inline: 12px; }
+  .content { padding-inline: 12px; }
+  .stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sc { min-height: 112px; padding: 13px; }
+  .sc-val { font-size: 1.4rem; }
+  #maintFeePanel .mf-summary { gap: 7px !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .adm-sec.on, .sc, .btn, .sidebar { animation: none; transition: none; }
+}
+
+@media print {
+  .topnav { display: none !important; }
+  .content, .topbar { max-width: none !important; padding: 0 !important; }
+}
+</style>
 </head>
 <body data-theme="dark">
 <div class="toasts" id="toasts"></div>
@@ -2352,6 +3074,7 @@ tr:hover td { background: var(--bg2); }
               <option value="">All Types</option>
               <option value="booking">Court Bookings</option>
               <option value="open_play">Open Play Reservations</option>
+              <option value="host_session">Hosted Open Play Signups</option>
             </select>
             <select id="prStatus" onchange="renderPaymentReview()">
               <option value="attention">Needs Attention</option>
@@ -2384,66 +3107,91 @@ tr:hover td { background: var(--bg2); }
     <div id="sec-reports" class="adm-sec">
       <div class="toolbar">
         <div class="rp-heading">
-          <h2>📈 REVENUE REPORTS</h2>
-          <div class="rp-subtitle" id="rpPeriodLabel">This Week</div>
+          <div class="rp-kicker">Revenue</div>
+          <h2>REVENUE REPORTS</h2>
+          <div class="rp-subtitle" id="rpPeriodLabel">Court date · This Week</div>
         </div>
-        <button class="btn btn-p btn-sm rp-export" onclick="exportReportCSV()">📥 Export CSV</button>
+        <button class="btn btn-p btn-sm rp-export" type="button" onclick="exportReportCSV()" aria-label="Export revenue report as CSV"><span>Export report</span></button>
       </div>
 
-      <!-- Period filter -->
-      <div class="rp-filter-row" id="rpFilterRow">
-        <div class="rp-period" id="rpPeriodControl">
-          <button class="view-btn active" id="rp-week" onclick="setReportPeriod('week')">Week</button>
-          <button class="view-btn" id="rp-month" onclick="setReportPeriod('month')">Month</button>
-          <button class="view-btn" id="rp-last" onclick="setReportPeriod('last')">Last Month</button>
-          <button class="view-btn" id="rp-all" onclick="setReportPeriod('all')">All</button>
-          <button class="view-btn" id="rp-custom" onclick="setReportPeriod('custom')">Custom</button>
-        </div>
-        <div class="rp-range-summary" id="rpRangeSummary">This week</div>
-        <span class="rp-date-range">
-          <input type="date" id="rpFrom" class="fi" onchange="setReportPeriod('custom')">
-          <span style="color:var(--muted);font-size:.8rem">–</span>
-          <input type="date" id="rpTo" class="fi" onchange="setReportPeriod('custom')">
-        </span>
-      </div>
-
-      <!-- Summary cards -->
-      <div class="stat-cards rp-stat-cards">
-        <div class="sc"><div class="sc-lbl">Gross Revenue</div><div class="sc-val" id="rpGross">₱0</div><div class="sc-ic">💰</div></div>
-        <div class="sc"><div class="sc-lbl">Collected</div><div class="sc-val" id="rpCollected">₱0</div><div class="sc-ic">✅</div></div>
-        <div class="sc"><div class="sc-lbl">Pending</div><div class="sc-val" id="rpPending">₱0</div><div class="sc-ic">⏳</div></div>
-        <div class="sc"><div class="sc-lbl">Forfeited Deposits</div><div class="sc-val" id="rpForfeited">₱0</div><div class="sc-ic">🔓</div></div>
-        <div class="sc"><div class="sc-lbl">Active Bookings</div><div class="sc-val" id="rpCount">0</div><div class="sc-ic">📋</div></div>
-      </div>
-
-      <!-- Compact breakdown -->
-      <div class="panel rp-breakdown-panel">
-        <div class="rp-breakdown-head">
-          <h4>Breakdown</h4>
-          <div class="rp-breakdown-tabs" role="tablist" aria-label="Report breakdown">
-            <button class="rp-tab active" data-rp-tab="court" onclick="setReportBreakdown('court')">Court</button>
-            <button class="rp-tab" data-rp-tab="payment" onclick="setReportBreakdown('payment')">Payment</button>
-            <button class="rp-tab" data-rp-tab="received" onclick="setReportBreakdown('received')">Received</button>
-            <button class="rp-tab" data-rp-tab="trend" onclick="setReportBreakdown('trend')">Trend</button>
+      <div class="rp-filter-shell">
+        <div class="rp-filter-main">
+          <span class="rp-filter-label">Reporting period</span>
+          <div class="rp-filter-row" id="rpFilterRow">
+            <div class="rp-period" id="rpPeriodControl">
+              <button class="view-btn active" id="rp-week" type="button" onclick="setReportPeriod('week')">Week</button>
+              <button class="view-btn" id="rp-month" type="button" onclick="setReportPeriod('month')">Month</button>
+              <button class="view-btn" id="rp-all" type="button" onclick="setReportPeriod('all')">All time</button>
+              <button class="view-btn" id="rp-custom" type="button" onclick="setReportPeriod('custom')">Custom</button>
+            </div>
+            <div class="rp-range-summary" id="rpRangeSummary">This week</div>
+            <span class="rp-date-range">
+              <input type="date" id="rpFrom" class="fi" aria-label="Report start date" onchange="setReportPeriod('custom')">
+              <span style="color:var(--muted);font-size:.8rem">to</span>
+              <input type="date" id="rpTo" class="fi" aria-label="Report end date" onchange="setReportPeriod('custom')">
+            </span>
           </div>
         </div>
-        <div class="rp-breakdown-view active" data-rp-panel="court">
-          <div id="rpCourtChart"><p class="rp-empty">No data.</p></div>
+      </div>
+
+      <div class="rp-metric-grid" aria-label="Revenue summary">
+        <article class="rp-metric primary">
+          <span class="rp-metric-mark">TOTAL</span>
+          <div class="rp-metric-label">Total revenue</div>
+          <div class="rp-metric-value" id="rpCollected">₱0</div>
+          <div class="rp-metric-note">All verified payments received</div>
+        </article>
+        <article class="rp-metric primary">
+          <span class="rp-metric-mark">COURT</span>
+          <div class="rp-metric-label">Court revenue</div>
+          <div class="rp-metric-value" id="rpCourtRevenue">₱0</div>
+          <div class="rp-metric-note">Court share plus Open Play revenue</div>
+        </article>
+        <article class="rp-metric">
+          <span class="rp-metric-mark">FEE</span>
+          <div class="rp-metric-label" id="rpPlatformLabel">Platform fees</div>
+          <div class="rp-metric-value" id="rpPlatformFees">₱0</div>
+          <div class="rp-metric-note" id="rpPlatformNote">System-owner booking fees earned</div>
+        </article>
+        <article class="rp-metric warning">
+          <span class="rp-metric-mark">DUE</span>
+          <div class="rp-metric-label">Outstanding balance</div>
+          <div class="rp-metric-value" id="rpOutstanding">₱0</div>
+          <div class="rp-metric-note">Unpaid amount still to collect</div>
+        </article>
+      </div>
+
+      <div class="panel rp-simple-panel">
+        <div class="rp-simple-head">
+          <div>
+            <h3>BREAKDOWN</h3>
+            <p id="rpBreakdownCopy">Collected revenue by court.</p>
+          </div>
+          <div class="rp-breakdown-tabs" role="tablist" aria-label="Revenue breakdown">
+            <button class="rp-tab active" type="button" role="tab" aria-selected="true" data-rp-tab="court" onclick="setReportBreakdown('court')">Court</button>
+            <button class="rp-tab" type="button" role="tab" aria-selected="false" data-rp-tab="payment" onclick="setReportBreakdown('payment')">Payment</button>
+            <button class="rp-tab" type="button" role="tab" aria-selected="false" data-rp-tab="received" onclick="setReportBreakdown('received')">Received</button>
+            <button class="rp-tab" type="button" role="tab" aria-selected="false" data-rp-tab="trend" onclick="setReportBreakdown('trend')">Trend</button>
+          </div>
         </div>
-        <div class="rp-breakdown-view" data-rp-panel="payment">
-          <div id="rpPayChart"><p class="rp-empty">No data.</p></div>
+        <div class="rp-breakdown-view active" role="tabpanel" data-rp-panel="court">
+          <div id="rpCourtChart" class="rp-court-list"><p class="rp-empty">No court revenue in this period.</p></div>
         </div>
-        <div class="rp-breakdown-view" data-rp-panel="received">
-          <div id="rpReceivedChart"><p class="rp-empty">No data.</p></div>
-          <details class="rp-panel-note">
-            <summary>Accounting view</summary>
-            <div>Digital rails such as BDO Pay, Maya, GoTyme, and PNB are recorded as received to GCash unless a booking has an explicit receiving account.</div>
-          </details>
+        <div class="rp-breakdown-view" role="tabpanel" data-rp-panel="payment">
+          <div id="rpPaymentChart" class="rp-court-list"><p class="rp-empty">No payment revenue in this period.</p></div>
         </div>
-        <div class="rp-breakdown-view" data-rp-panel="trend">
-          <div id="rpTrend"><p class="rp-empty">No data.</p></div>
+        <div class="rp-breakdown-view" role="tabpanel" data-rp-panel="received">
+          <div id="rpReceivedSimpleChart" class="rp-court-list"><p class="rp-empty">No receiving-account revenue in this period.</p></div>
+        </div>
+        <div class="rp-breakdown-view" role="tabpanel" data-rp-panel="trend">
+          <div id="rpTrendSimpleChart" class="rp-court-list"><p class="rp-empty">No revenue trend in this period.</p></div>
         </div>
       </div>
+
+      <details class="rp-details">
+        <summary>View transaction details</summary>
+        <div class="rp-details-body" id="rpRecentRows"><p class="rp-empty">No transactions in this period.</p></div>
+      </details>
     </div>
 
     <!-- COURTS -->
@@ -3043,13 +3791,11 @@ tr:hover td { background: var(--bg2); }
         </p>
 
         <div class="fg" style="margin-bottom:14px">
-          <label class="fl">Payment Acceptance Mode</label>
-          <select class="fi" id="paymentAcceptanceModeSelect" style="font-size:.84rem" onchange="savePaymentSettings()">
-            <option value="both">Accept Downpayment (Full Fee + 50% Court) or Full Payment</option>
-            <option value="downpayment_only">Downpayment Only (Full Fee + 50% Court)</option>
-            <option value="full_payment_only">Full Payment Only (100%)</option>
+          <label class="fl">Customer Payment Policy</label>
+          <select class="fi" id="paymentAcceptanceModeSelect" style="font-size:.84rem" onchange="savePaymentSettings()" disabled>
+            <option value="full_payment_only">Full Payment Required</option>
           </select>
-          <div style="font-size:.72rem;color:var(--muted);margin-top:4px">Court players will only see the selected payment option(s) during booking.</div>
+          <div style="font-size:.72rem;color:var(--muted);margin-top:4px">Regular court bookings and player registrations require full payment. Only approved host court reservations can carry a balance.</div>
         </div>
 
         <div class="fg">
@@ -3326,7 +4072,7 @@ tr:hover td { background: var(--bg2); }
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>Booking Ref</span><code style="color:var(--green)" id="vmRef">—</code></div>
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>Court</span><span id="vmCourt">—</span></div>
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>Schedule</span><span id="vmDate">—</span></div>
-        <div style="display:flex;justify-content:space-between;padding:6px 0"><span>Downpayment</span><strong style="color:var(--yellow)" id="vmAmount">—</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0"><span>Payment amount</span><strong style="color:var(--yellow)" id="vmAmount">—</strong></div>
       </div>
       <div id="vmGroupBreakdown" style="display:none;margin-top:8px;font-size:.76rem;color:var(--muted)"></div>
       <div id="vmReceiptWrap" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
@@ -3441,10 +4187,10 @@ tr:hover td { background: var(--bg2); }
         <input type="text" class="fi" id="nbGcashRef" placeholder="e.g. 123456789012"/>
       </div>
       <div style="margin-top:12px">
-        <label class="fl">Downpayment</label>
+        <label class="fl">Payment Amount</label>
         <div style="display:flex;gap:8px;margin-top:6px">
-          <button type="button" class="btn btn-sm" id="nbDp50Btn" style="flex:1;padding:10px;font-weight:700;border:2px solid var(--green);background:var(--green);color:#fff" onclick="nbSetDp(false)">Full Fee + 50% Court — <span id="nbDp50Amt">₱0</span></button>
-          <button type="button" class="btn btn-sm" id="nbDp100Btn" style="flex:1;padding:10px;font-weight:700;border:2px solid var(--border);background:transparent;color:var(--text2)" onclick="nbSetDp(true)">100% — <span id="nbDp100Amt">₱0</span></button>
+          <button type="button" class="btn btn-sm" id="nbDp50Btn" style="display:none" aria-hidden="true"><span id="nbDp50Amt">₱0</span></button>
+          <button type="button" class="btn btn-sm" id="nbDp100Btn" style="flex:1;padding:10px;font-weight:700;border:2px solid var(--green);background:var(--green);color:#fff">Full Payment — <span id="nbDp100Amt">₱0</span></button>
         </div>
       </div>
 
@@ -3850,9 +4596,14 @@ function groupBookings(bookings = []) {
     const refs = allItems.map(b => b.ref).filter(Boolean);
     const total = items.reduce((sum, b) => sum + (Number(b.total) || 0), 0);
     const downpayment = items.reduce((sum, b) => {
-      const dp = b.downpayment !== undefined && b.downpayment !== null ? Number(b.downpayment) : ((Number(b.total) || 0) / 2);
+      const dp = b.downpayment !== undefined && b.downpayment !== null
+        ? Number(b.downpayment)
+        : b.hostBooking
+          ? (Number(b.total) || 0) * 0.25
+          : Number(b.total) || 0;
       return sum + (Number.isFinite(dp) ? dp : 0);
     }, 0);
+    const receiptItem = items.find(b => b.receiptImageUrl) || primary;
     const receiptFlags = [...new Set(items.flatMap(b => b.receiptFlags || []))];
     return {
       ...primary,
@@ -3888,10 +4639,11 @@ function groupBookings(bookings = []) {
       createdByEmail: commonValue(items, 'createdByEmail', primary.createdByEmail || null),
       receiptStatus: bookingGroupReceiptStatus(items),
       receiptFlags,
-      receiptExtracted: items.find(b => b.receiptExtracted)?.receiptExtracted || primary.receiptExtracted,
-      receiptConfidence: primary.receiptConfidence,
-      receiptImageUrl: primary.receiptImageUrl,
-      receiptVerifiedAt: primary.receiptVerifiedAt,
+      receiptExtracted: items.find(b => b.receiptExtracted)?.receiptExtracted || receiptItem.receiptExtracted,
+      receiptConfidence: receiptItem.receiptConfidence,
+      receiptImageUrl: receiptItem.receiptImageUrl,
+      receiptRef: receiptItem.ref,
+      receiptVerifiedAt: receiptItem.receiptVerifiedAt,
       createdAt: items.map(b => b.createdAt || b.created_at).filter(Boolean).sort()[0] || primary.createdAt || primary.created_at,
       duration: items.reduce((sum, b) => sum + (Number(b.duration) || 0), 0),
     };
@@ -4284,7 +5036,7 @@ function bookingPayStateSelect(b){
   return `<select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" onchange="updatePaymentStatus('${jsArg(actionRef)}',this.value)">
     ${b.paymentStatus==='mixed'?'<option value="mixed" selected disabled>Mixed</option>':''}
     <option value="unpaid" ${(!b.paymentStatus||b.paymentStatus==='unpaid')?'selected':''}>Unpaid</option>
-    <option value="downpayment_paid" ${b.paymentStatus==='downpayment_paid'?'selected':''}>Balance Due</option>
+    ${b.hostBooking ? `<option value="downpayment_paid" ${b.paymentStatus==='downpayment_paid'?'selected':''}>Balance Due</option>` : b.paymentStatus==='downpayment_paid' ? '<option value="downpayment_paid" selected disabled>Legacy Partial Payment</option>' : ''}
     <option value="paid" ${b.paymentStatus==='paid'?'selected':''}>Fully Paid</option>
     <option value="for_verification" ${b.paymentStatus==='for_verification'?'selected':''}>For Verification</option>
     <option value="rejected" ${b.paymentStatus==='rejected'?'selected':''}>Rejected</option>
@@ -4311,7 +5063,7 @@ function bookingAmountSummaryHtml(b) {
     ${b.gcashRef ? `<div class="amount-ref">Ref: <code>${esc(b.gcashRef)}</code></div>` : ''}${duplicatePaymentRefBadge(b)}</div>`;
 }
 function mobileBookingCard(b, canDelete){
-  const dp = b.downpayment || b.total / 2;
+  const dp = b.downpayment || (b.hostBooking ? b.total * 0.25 : b.total);
   const payMethod = paymentMethodLabel(b.paymentMethod);
   const payState = payStatusText(b.paymentStatus);
   const refLabel = b.displayRef || b.ref;
@@ -5130,11 +5882,14 @@ function paymentReviewAction(item) {
   if (item.type === 'open_play' && item.status !== 'paid') {
     return `<button class="btn btn-sm" style="background:rgba(56,189,248,.12);color:#38bdf8;border:1px solid rgba(56,189,248,.35);font-weight:700" onclick="openOpVerifyModal('${jsArg(item.id)}')">Review</button>`;
   }
+  if (item.type === 'host_session' && item.status !== 'paid') {
+    return `<button class="btn btn-sm" style="background:rgba(56,189,248,.12);color:#38bdf8;border:1px solid rgba(56,189,248,.35);font-weight:700" onclick="openHostSessionVerifyModal('${jsArg(item.id)}')">Review</button>`;
+  }
   return '<span style="color:var(--muted);font-size:.78rem">No action</span>';
 }
 
 function paymentReviewRow(item) {
-  const typeLabel = item.type === 'booking' ? 'Court Booking' : 'Open Play Reservation';
+  const typeLabel = item.type === 'booking' ? 'Court Booking' : item.type === 'host_session' ? 'Hosted Open Play Signup' : 'Open Play Reservation';
   const typeClass = item.type === 'booking' ? 'pr-type-booking' : 'pr-type-open';
   const flags = item.flags?.length
     ? receiptFlagChips(item.flags)
@@ -5165,7 +5920,12 @@ function paymentReviewRow(item) {
 }
 
 async function renderPaymentReview() {
-  const [bookings, regs] = await Promise.all([DB.getBookings(), DB.getOpenPlayRegistrations()]);
+  const [bookings, regs, hostRegs, hostSessions] = await Promise.all([
+    DB.getBookings(),
+    DB.getOpenPlayRegistrations(),
+    DB.getOpenPlayHostSessionRegistrations(),
+    DB.getOpenPlayHostSessions(),
+  ]);
   const bookingItems = groupBookings(bookings.filter(b => b.email !== 'reserve@hold.internal' && isDigitalPayment(b.paymentMethod)))
     .map(b => ({
       type: 'booking',
@@ -5199,7 +5959,27 @@ async function renderPaymentReview() {
       flags: r.receipt_flags || [],
       createdAt: r.receipt_verified_at || r.created_at,
     }));
-  const items = [...bookingItems, ...opItems].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const hostSessionMap = new Map(hostSessions.map(session => [String(session.id), session]));
+  const hostItems = hostRegs
+    .filter(r => isDigitalPayment(r.paymentMethod))
+    .map(r => {
+      const session = hostSessionMap.get(String(r.sessionId)) || {};
+      return {
+        type: 'host_session',
+        id: String(r.id),
+        ref: r.gcashRef || String(r.id),
+        name: r.fullName || '--',
+        courtName: (session.courtNames || []).join(', ') || session.title || 'Hosted Open Play',
+        dateLabel: session.date ? fmtD(session.date) : '--',
+        timeLabel: session.date ? `${hostFmtTime(session.startHour)}-${hostFmtTime(session.endHour)}` : '--',
+        method: r.paymentMethod,
+        amount: r.amount || 0,
+        status: bookingReviewStatus(r),
+        flags: r.receiptFlags || [],
+        createdAt: r.receiptVerifiedAt || r.createdAt,
+      };
+    });
+  const items = [...bookingItems, ...opItems, ...hostItems].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   const counts = {
     needsReview: items.filter(i => i.status === 'manual_review').length,
     pending: items.filter(i => i.status === 'pending').length,
@@ -5232,7 +6012,7 @@ async function renderPaymentReview() {
   $('prLogBody').innerHTML = recent.length ? recent.map(i => `<article class="pr-log-item">
     <div>
       <div class="pr-log-name">${esc(i.name)}</div>
-      <div class="pr-log-meta">${esc(paymentReviewWhenText(i.createdAt))} · ${esc(i.type === 'booking' ? 'Court Booking' : 'Open Play')} · <code>${esc(i.ref)}</code></div>
+      <div class="pr-log-meta">${esc(paymentReviewWhenText(i.createdAt))} · ${esc(i.type === 'booking' ? 'Court Booking' : i.type === 'host_session' ? 'Hosted Open Play Signup' : 'Open Play')} · <code>${esc(i.ref)}</code></div>
       <div class="pr-log-meta">${esc(i.dateLabel || '--')} · ${esc(i.timeLabel || '--')}</div>
     </div>
     <div class="pr-log-pay">
@@ -5557,16 +6337,20 @@ function renderCalendarDayPanel(dateStr, bookings = [], bkMap = {}, courts = [])
 
 async function updatePaymentStatus(ref, status) {
   try {
+    const booking = await getBookingGroupByRef(ref);
+    if (status === 'downpayment_paid' && !booking?.hostBooking) {
+      throw new Error('Only host court reservations can carry a balance.');
+    }
     const updates = { paymentStatus: status };
     if (status === 'paid') updates.paidAt = new Date().toISOString();
     await updateBookingGroupByRef(ref, updates);
     const labels = { unpaid: 'Unpaid', downpayment_paid: 'Balance Due', paid: 'Fully Paid', for_verification: 'For Verification', deposit_retained: 'Deposit Retained' };
     toast(`Payment marked as: ${labels[status] || status}.`);
     if (status === 'paid') {
-      getBookingGroupByRef(ref).then(bk => bk && sendBookingConfirmationNotice(bk, `Balance settled. Confirmation sent to ${bk.email}.`)).catch(() => {});
+      getBookingGroupByRef(ref).then(bk => bk && sendBookingConfirmationNotice(bk, `Full payment confirmed. Confirmation sent to ${bk.email}.`)).catch(() => {});
     }
   } catch(e) {
-    toast('Failed to update payment status.', 'err');
+    toast(e.message || 'Failed to update payment status.', 'err');
     console.error('updatePaymentStatus error:', e);
   }
   await renderBookings();
@@ -5623,7 +6407,10 @@ async function updateStatus(ref, status) {
         notifyBookingUpdateSafe(bk, 'booking_forfeited', 'Remaining balance was not paid by the deadline; slot released and deposit retained.'),
       ]);
     } else if (status === 'cancelled') {
-      await notifyBookingUpdateSafe(bk, 'booking_cancelled');
+      await Promise.all([
+        DB.sendBookingStatusEmail(bk.primaryRef || bk.ref, 'booking_cancelled', 'The booking was cancelled by the Paddle Rage team.', { allowFailure: true }),
+        notifyBookingUpdateSafe(bk, 'booking_cancelled'),
+      ]);
     }
   }).catch(() => {});
 }
@@ -5641,7 +6428,7 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   $('vmRef').textContent = b.displayRef || b.ref;
   $('vmCourt').textContent = b.courtName;
   $('vmDate').textContent = `${fmtD(b.date)} · ${b.startTime}–${b.endTime}`;
-  $('vmAmount').textContent = fmt(b.downpayment || b.total / 2);
+  $('vmAmount').textContent = fmt(b.downpayment || b.total);
   if ($('vmDate') && b.scheduleLabel) $('vmDate').textContent = b.scheduleLabel;
   const breakdown = $('vmGroupBreakdown');
   if (breakdown) {
@@ -5724,7 +6511,7 @@ async function vmPopulateReceipt(b){
   if (noImg) noImg.style.display = 'none';
   if (b.receiptImageUrl) {
     try {
-      const url = await DB.getReceiptSignedUrl(b.ref);
+      const url = await DB.getReceiptSignedUrl(b.receiptRef || b.ref);
       if (img) img.src = url;
       if (link) { link.href = url; link.style.display = ''; }
     } catch(e) {
@@ -5744,8 +6531,12 @@ async function verifyAndConfirm() {
       toast('Cannot confirm: no receipt image is attached to this digital payment.', 'err');
       return;
     }
+    if (!bkForPay?.hostBooking && Number(bkForPay?.downpayment || 0) < Number(bkForPay?.total || 0)) {
+      toast('Cannot confirm: regular bookings require the full payment amount.', 'err');
+      return;
+    }
     const isFullyPaid = bkForPay && bkForPay.downpayment >= bkForPay.total;
-    const verifiedPayStatus = isFullyPaid ? 'paid' : 'downpayment_paid';
+    const verifiedPayStatus = bkForPay?.hostBooking && !isFullyPaid ? 'downpayment_paid' : 'paid';
     await updateBookingGroupByRef(ref, { status: 'confirmed', paymentStatus: verifiedPayStatus });
 
     closeVerifyModal();
@@ -5762,7 +6553,7 @@ async function verifyAndConfirm() {
       ]);
     }).catch(() => {});
   } catch(e) {
-    toast('Failed to confirm booking.', 'err');
+    toast(e.message || 'Failed to confirm booking.', 'err');
   }
 }
 
@@ -5789,7 +6580,10 @@ async function rejectPayment() {
     await renderBookings();
     if (_curSection === 'payreview') await renderPaymentReview();
     renderDash();
-    notifyBookingUpdateSafe(ref, 'payment_rejected', 'Payment marked not received by admin.');
+    Promise.all([
+      DB.sendBookingStatusEmail(ref, 'payment_rejected', 'The submitted payment could not be verified by the Paddle Rage team.', { allowFailure: true }),
+      notifyBookingUpdateSafe(ref, 'payment_rejected', 'Payment marked not received by admin.'),
+    ]).catch(() => {});
   } catch(e) {
     toast('Failed to cancel booking.', 'err');
   }
@@ -5865,7 +6659,7 @@ async function openNewBookingModal() {
   $('nbMethod').value = 'cash';
   $('nbStatus').value = 'confirmed';
   $('nbRefWrap').style.display = 'none';
-  _nbDpFull = false;
+  _nbDpFull = true;
   _nbSelSlots = [];
 
   // Reset slot area
@@ -6094,10 +6888,11 @@ function nbToggleSlot(h) {
   nbUpdateTotal();
 }
 
-let _nbDpFull = false;
+let _nbDpFull = true;
 
 function nbSetDp(full) {
-  _nbDpFull = full;
+  full = true;
+  _nbDpFull = true;
   const btn50 = $('nbDp50Btn');
   const btn100 = $('nbDp100Btn');
   if (full) {
@@ -6157,8 +6952,8 @@ async function saveNewBooking() {
   const courtTotal = court_ ? _nbSelSlots.reduce((s, h) => s + _nbGetRateForHour(court_, h), 0) : 0;
   const bookingFee = court_ && _nbSelSlots.length ? _nbBookingFeeForHours(_nbSelSlots.length) : 0;
   const total = courtTotal + bookingFee;
-  const dpAmount = _nbDpFull ? total : Math.round((courtTotal * 0.5 + bookingFee) * 100) / 100;
-  const payStatus = _nbDpFull ? 'paid' : 'downpayment_paid';
+  const dpAmount = total;
+  const payStatus = 'paid';
 
   // Validation
   if (!name || name.length < 2) { toast('Enter a valid customer name.', 'err'); return; }
@@ -6401,8 +7196,15 @@ async function openNewBookingModal() {
   $('nbMethod').value = 'cash';
   $('nbStatus').value = 'confirmed';
   $('nbRefWrap').style.display = 'none';
-  _nbDpFull = false;
-  nbSetDp(false);
+  _nbDpFull = true;
+  nbSetDp(true);
+  if ($('nbDp50Btn')) $('nbDp50Btn').style.display = 'none';
+  if ($('nbDp100Btn')) {
+    $('nbDp100Btn').style.flex = '1';
+    if ($('nbDp100Btn').childNodes[0]) $('nbDp100Btn').childNodes[0].nodeValue = 'Full Payment - ';
+    const paymentLabel = $('nbDp100Btn').closest('div')?.previousElementSibling;
+    if (paymentLabel) paymentLabel.textContent = 'Payment Amount';
+  }
   $('nbStatus').value = 'confirmed';
   nbRenderCourtPicker();
   $('newBookingModal').classList.add('show');
@@ -6563,8 +7365,8 @@ async function saveNewBooking() {
   const status = $('nbStatus').value;
   const groups = nbGroupsWithFees();
   const total = groups.reduce((sum, group) => sum + group.total, 0);
-  const downpayment = _nbDpFull ? total : Math.round(groups.reduce((sum, group) => sum + (group.courtFee * 0.5) + group.bookingFee, 0) * 100) / 100;
-  const payStatus = _nbDpFull ? 'paid' : 'downpayment_paid';
+  const downpayment = total;
+  const payStatus = 'paid';
 
   if (!name || name.length < 2) { toast('Enter a valid customer name.', 'err'); return; }
   if (!/^(09|\+639)\d{9}$/.test(phone)) { toast('Enter a valid PH number (e.g. 09XX XXX XXXX).', 'err'); return; }
@@ -6594,7 +7396,7 @@ async function saveNewBooking() {
       total: group.total,
       paymentMethod: method,
       gcashRef,
-      downpayment: _nbDpFull ? group.total : Math.round((group.courtFee * 0.5 + group.bookingFee) * 100) / 100,
+      downpayment: group.total,
       paymentStatus: payStatus,
       paymentFlow: method,
       status,
@@ -6782,10 +7584,15 @@ async function exportCSV(){
 /* ==============================================
    REPORTS
    ============================================== */
-let _rpPeriod='week', _rpBks=[], _rpBreakdown='court';
+let _rpPeriod='week', _rpBasis='service', _rpBreakdown='court', _rpReport=null;
+let _rpRemittanceCache={data:null,at:0};
 
 function fmtReportMoney(n) {
-  return '₱' + Number(n || 0).toLocaleString('en-PH', { maximumFractionDigits: 0 });
+  const value=Number(n||0);
+  return '₱' + value.toLocaleString('en-PH', {
+    minimumFractionDigits:Number.isInteger(value)?0:2,
+    maximumFractionDigits:2,
+  });
 }
 
 function reportPeriodLabel(p = _rpPeriod) {
@@ -6819,8 +7626,14 @@ function reportRangeLabel(range, p = _rpPeriod) {
 function syncReportPeriodUi(range) {
   $('rpPeriodControl')?.classList.toggle('is-custom', _rpPeriod === 'custom');
   $('rpFilterRow')?.classList.toggle('is-custom', _rpPeriod === 'custom');
-  if ($('rpPeriodLabel')) $('rpPeriodLabel').textContent = reportPeriodLabel();
+  if ($('rpPeriodLabel')) $('rpPeriodLabel').textContent = `Court date · ${reportPeriodLabel()}`;
   if ($('rpRangeSummary')) $('rpRangeSummary').textContent = reportRangeLabel(range);
+  if ($('rpBasis')) $('rpBasis').value=_rpBasis;
+  if ($('rpBasisNote')) $('rpBasisNote').textContent={
+    payment:'Shows money when payment was verified or recorded.',
+    service:'Groups activity by the scheduled court or Open Play date.',
+    created:'Groups activity by when the reservation was created.',
+  }[_rpBasis];
   if (_rpPeriod !== 'custom') {
     if ($('rpFrom')) $('rpFrom').value = range?.from || '';
     if ($('rpTo')) $('rpTo').value = range?.to || '';
@@ -6835,16 +7648,30 @@ function setReportPeriod(p){
   renderReport();
 }
 
+function setReportBasis(value){
+  _rpBasis=['payment','service','created'].includes(value)?value:'payment';
+  renderReport();
+}
+
 function setReportBreakdown(key) {
-  const valid = ['court', 'payment', 'received', 'trend'];
+  const valid = ['court','payment','received','trend'];
   _rpBreakdown = valid.includes(key) ? key : 'court';
   document.querySelectorAll('#sec-reports [data-rp-tab]').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.rpTab === _rpBreakdown);
     btn.setAttribute('aria-selected', btn.dataset.rpTab === _rpBreakdown ? 'true' : 'false');
+    btn.tabIndex=btn.dataset.rpTab===_rpBreakdown?0:-1;
   });
   document.querySelectorAll('#sec-reports [data-rp-panel]').forEach(panel => {
     panel.classList.toggle('active', panel.dataset.rpPanel === _rpBreakdown);
   });
+  const meta={
+    court:['Breakdown','Collected revenue by court.'],
+    payment:['Breakdown','Collected revenue by customer payment method.'],
+    received:['Breakdown','Collected revenue by receiving account.'],
+    trend:['Breakdown','Collected revenue over time.'],
+  }[_rpBreakdown];
+  if($('rpBreakdownTitle')) $('rpBreakdownTitle').textContent=meta[0];
+  if($('rpBreakdownCopy')) $('rpBreakdownCopy').textContent=meta[1];
 }
 
 function _rpDateRange(){
@@ -6870,138 +7697,196 @@ function _rpDateRange(){
   return{from:'',to:''};
 }
 
-function renderReportBars(targetId, entries, emptyCopy = 'No bookings in this period.') {
+function reportBreakdownLabel(value, type='plain'){
+  if(type==='payment') return paymentMethodLabel(value);
+  if(type==='received') return receivedAccountLabel({receivedAccount:value,paymentMethod:value});
+  return String(value||'Unknown');
+}
+
+function renderReportBars(targetId, entries, {emptyCopy='No financial activity in this period.',type='plain'}={}) {
   const target = $(targetId);
   if (!target) return;
-  if (!entries.length) {
+  const visible=(entries||[]).filter(entry=>Number(entry.charges||0)>0||Number(entry.collected||0)>0);
+  if (!visible.length) {
     target.innerHTML = `<p class="rp-empty">${esc(emptyCopy)}</p>`;
     return;
   }
-  const max = Math.max(...entries.map(([, rev]) => Number(rev) || 0), 1);
-  target.innerHTML = entries.map(([name, rev]) => {
-    const value = Number(rev) || 0;
+  const max = Math.max(...visible.map(entry=>Math.max(Number(entry.charges)||0,Number(entry.collected)||0)),1);
+  target.innerHTML = visible.map(entry => {
+    const charges=Number(entry.charges)||0;
+    const collected=Number(entry.collected)||0;
+    const label=reportBreakdownLabel(entry.label,type);
     return `<div class="rp-bar-row">
-      <div class="rp-bar-label" title="${esc(name)}">${esc(name)}</div>
-      <div class="rp-bar-track"><div class="rp-bar-fill" style="width:${Math.round(value / max * 100)}%"></div></div>
-      <div class="rp-bar-val">${fmtReportMoney(value)}</div>
+      <div class="rp-bar-label" title="${esc(label)}">${esc(label)}</div>
+      <div class="rp-bar-track" title="${esc(`${label}: ${fmtReportMoney(charges)}`)}"><div class="rp-bar-fill" style="width:${Math.round(charges/max*100)}%"></div></div>
+      <div class="rp-bar-value charges"><span>Value</span><strong>${fmtReportMoney(charges)}</strong></div>
+      <div class="rp-bar-value collected"><span>Collected</span><strong>${fmtReportMoney(collected)}</strong></div>
     </div>`;
   }).join('');
 }
 
-function reportCourtRevenueBreakdown(transactions) {
-  if (typeof window.BookingBalance?.courtRevenueBreakdown === 'function') {
-    return window.BookingBalance.courtRevenueBreakdown(transactions);
+function renderSimpleRevenueBreakdown(targetId,entries,{type='plain',trend=false,emptyCopy='No collected revenue in this period.'}={}){
+  const target=$(targetId);
+  if(!target)return;
+  const visible=(entries||[]).filter(entry=>Number(entry.collected||0)>0);
+  if(!visible.length){target.innerHTML=`<p class="rp-empty">${esc(emptyCopy)}</p>`;return;}
+  const max=Math.max(...visible.map(entry=>Number(entry.collected)||0),1);
+  target.innerHTML=visible.map(entry=>{
+    const collected=Number(entry.collected)||0;
+    const label=trend?reportTrendLabel(entry.label):reportBreakdownLabel(entry.label,type);
+    return `<div class="rp-court-row">
+      <div class="rp-court-name" title="${esc(label)}">${esc(label)}</div>
+      <div class="rp-court-track" aria-label="${esc(label)} ${fmtReportMoney(collected)}"><div class="rp-court-fill" style="width:${Math.round(collected/max*100)}%"></div></div>
+      <div class="rp-court-amount">${fmtReportMoney(collected)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderSimpleTransactions(rows){
+  const target=$('rpRecentRows');
+  if(!target)return;
+  const visible=[...(rows||[])].sort((a,b)=>String(b.reportDate||'').localeCompare(String(a.reportDate||''))).slice(0,12);
+  if(!visible.length){target.innerHTML='<p class="rp-empty">No transactions in this period.</p>';return;}
+  target.innerHTML=visible.map(row=>{
+    const registration=row.registration;
+    const record=registration||(row.transaction||{});
+    const name=registration?(registration.full_name||registration.fullName||'Open Play player'):(record.fullName||'Guest');
+    const reference=registration?`OP-${registration.id||''}`:(record.displayRef||record.ref||'Booking');
+    const court=registration?(registration.court_name||registration.courtName||'Open Play'):(record.courtName||'Court booking');
+    const paid=Number(row.paid||0),outstanding=Number(row.outstanding||0);
+    const state=row.forfeited?'Deposit kept':outstanding>0?(paid>0?'Partial':'Unpaid'):'Paid';
+    return `<div class="rp-transaction">
+      <div class="rp-transaction-date">${esc(formatReportDateLabel(row.reportDate))}</div>
+      <div class="rp-transaction-person"><strong>${esc(name)}</strong><span>${esc(reference)}</span></div>
+      <div class="rp-transaction-court" title="${esc(court)}">${esc(court)}</div>
+      <div class="rp-transaction-money"><strong>${fmtReportMoney(paid)}</strong><span>${esc(state)}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function renderReportReceivables(entries){
+  const target=$('rpReceivables');
+  if(!target) return;
+  const visible=(entries||[]).filter(entry=>Number(entry.amount||0)>0);
+  target.innerHTML=visible.length?`<div class="rp-status-grid">${visible.map(entry=>`
+    <div class="rp-status-row ${esc(entry.tone||'neutral')}">
+      <div class="rp-status-label">${esc(entry.label)}</div>
+      <div class="rp-status-amount">${fmtReportMoney(entry.amount)}</div>
+    </div>`).join('')}</div>`:'<p class="rp-empty">No payment balances in this period.</p>';
+}
+
+function reportTrendLabel(key){
+  if(/^\d{4}-\d{2}-\d{2}$/.test(key)) return formatReportDateLabel(key);
+  if(/^\d{4}-\d{2}$/.test(key)){
+    const[y,m]=key.split('-').map(Number);
+    return new Date(y,m-1,1).toLocaleDateString('en-PH',{month:'short',year:'numeric'});
   }
+  return key;
+}
 
-  // Compatibility path for devices that still have an older helper script in
-  // their browser cache. Keep the report usable while the new asset refreshes.
-  const totals = {};
-  (Array.isArray(transactions) ? transactions : []).forEach(transaction => {
-    const items = Array.isArray(transaction?.items) && transaction.items.length
-      ? transaction.items
-      : [transaction];
-    const forfeited = String(transaction?.status || '').toLowerCase() === 'forfeited';
+function renderReportTrend(entries){
+  const target=$('rpTrend');
+  if(!target) return;
+  const visible=(entries||[]).filter(entry=>Number(entry.charges||0)>0||Number(entry.collected||0)>0);
+  if(!visible.length){target.innerHTML='<p class="rp-empty">No trend data in this period.</p>';return;}
+  const max=Math.max(...visible.map(entry=>Math.max(Number(entry.charges)||0,Number(entry.collected)||0)),1);
+  target.innerHTML=`<div class="rp-trend-head"><span>Period</span><span>Comparison</span><span>Charges</span><span>Collected</span></div>${visible.map(entry=>{
+    const charges=Number(entry.charges)||0,collected=Number(entry.collected)||0;
+    return `<div class="rp-trend-row">
+      <div class="rp-trend-label">${esc(reportTrendLabel(entry.label))}</div>
+      <div class="rp-trend-bars"><div class="rp-trend-track"><div class="rp-trend-fill" style="width:${Math.round(charges/max*100)}%"></div></div><div class="rp-trend-track"><div class="rp-trend-fill collected" style="width:${Math.round(collected/max*100)}%"></div></div></div>
+      <div class="rp-trend-value charges">${fmtReportMoney(charges)}</div>
+      <div class="rp-trend-value collected">${fmtReportMoney(collected)}</div>
+    </div>`;
+  }).join('')}`;
+}
 
-    items.filter(Boolean).forEach(item => {
-      const court = String(item.courtName || item.court_name || 'Unknown Court').trim() || 'Unknown Court';
-      const value = forfeited
-        ? (window.BookingBalance?.paidAmount?.(item) || 0)
-        : Math.max(0, Number(item.total || 0));
-      totals[court] = (totals[court] || 0) + value;
-    });
-  });
-
-  return Object.entries(totals).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+async function renderReportRemittance(){
+  const panel=$('rpRemittancePanel');
+  if(!panel||!Auth.can('remittances',sess?.role)){if(panel)panel.hidden=true;return;}
+  panel.hidden=false;
+  const role=sess?.role;
+  $('rpRemitTitle').textContent=role==='owner'?'System-owner fee ledger':'Booking fees held for the system owner';
+  $('rpRemitCopy').textContent=role==='owner'
+    ? 'All-time earned-fee collection and settlement position, independent of the selected report period.'
+    : 'These customer-paid fees are not court revenue and remain payable through the remittance ledger.';
+  try{
+    if(!_rpRemittanceCache.data||Date.now()-_rpRemittanceCache.at>30000){
+      _rpRemittanceCache={data:await DB.getBookingFeeRemittanceDashboard(),at:Date.now()};
+    }
+    const response=_rpRemittanceCache.data;
+    const dashboard=response?.data&&!response.live?response.data:(response||{});
+    const live=rmPick(dashboard,'live','current','accumulated','live_balance','liveBalance')||{};
+    const active=rmRows(rmPick(dashboard,'active','active_remittances','activeRemittances','open_remittances','openRemittances'));
+    const liveAmount=rmAmountDue(live);
+    const openAmount=active.reduce((sum,record)=>sum+rmAmountRemaining(record),0);
+    const reviewAmount=active.filter(record=>rmStatusKey(record)==='under-review').reduce((sum,record)=>sum+(rmPaymentAmount(record)||rmAmountDue(record)),0);
+    const settled=Math.max(0,rmNumber(rmPick(dashboard,'settled_total','settledTotal')));
+    $('rpRemitLive').textContent=fmtReportMoney(liveAmount);
+    $('rpRemitOpen').textContent=fmtReportMoney(openAmount);
+    $('rpRemitReview').textContent=fmtReportMoney(reviewAmount);
+    $('rpRemitSettled').textContent=fmtReportMoney(settled);
+  }catch(error){
+    console.warn('[renderReportRemittance]',error);
+    ['rpRemitLive','rpRemitOpen','rpRemitReview','rpRemitSettled'].forEach(id=>{if($(id))$(id).textContent='Unavailable';});
+  }
 }
 
 async function renderReport(){
-  const allBks=await DB.getBookings();
-  const{from,to}=_rpDateRange();
-  syncReportPeriodUi({ from, to });
-  // Reports start from online system usage only. Manual spreadsheet imports
-  // remain schedule/history records but do not appear in analytics.
-  let bks=allBks.filter(isPlatformBillableBooking);
-  let forfeitedRows=allBks.filter(b=>isDashboardReportBooking(b) && b.status==='forfeited' && b.paymentStatus==='deposit_retained');
-  if(from) bks=bks.filter(b=>b.date>=from);
-  if(to)   bks=bks.filter(b=>b.date<=to);
-  if(from) forfeitedRows=forfeitedRows.filter(b=>b.date>=from);
-  if(to)   forfeitedRows=forfeitedRows.filter(b=>b.date<=to);
-  const txns = groupBookings(bks);
-  const forfeitedTxns = groupBookings(forfeitedRows);
-  const reportTxns = [...txns, ...forfeitedTxns];
-  _rpBks=reportTxns;
-
-  // Forfeited deposits remain collected revenue, but their unpaid balances are
-  // historical only and are never counted as receivables.
-  const forfeited=forfeitedTxns.reduce((s,b)=>s+(window.BookingBalance?.paidAmount?.(b)||0),0);
-  const gross=txns.reduce((s,b)=>s+(b.total||0),0)+forfeited;
-  const collected=txns.reduce((s,b)=>s+(window.BookingBalance?.paidAmount?.(b)||0),0)+forfeited;
-  const pending=txns.reduce((s,b)=>s+(window.BookingBalance?.balanceAmount?.(b)||0),0);
-  $('rpGross').textContent=fmtReportMoney(gross);
-  $('rpCollected').textContent=fmtReportMoney(collected);
-  $('rpPending').textContent=fmtReportMoney(pending);
-  $('rpForfeited').textContent=fmtReportMoney(forfeited);
-  $('rpCount').textContent=txns.length;
-
-  // Revenue by court
-  // Multi-court transactions are allocated from their individual booking rows,
-  // so each physical court has one accurate total instead of a combined label.
-  const courtEntries=reportCourtRevenueBreakdown(reportTxns);
-  renderReportBars('rpCourtChart', courtEntries);
-
-  // Revenue by how the player paid. This is kept separate from where the money
-  // is ultimately recorded so receipt verification remains accurate.
-  const payMap={};
-  reportTxns.forEach(b=>{const k=paymentMethodLabel(b.paymentMethod);const value=b.status==='forfeited'?(window.BookingBalance?.paidAmount?.(b)||0):(b.total||0);payMap[k]=(payMap[k]||0)+value;});
-  const payEntries=Object.entries(payMap).sort((a,b)=>b[1]-a[1]);
-  renderReportBars('rpPayChart', payEntries);
-
-  // Accounting view: all current digital payment rails settle/are recorded to GCash.
-  const receivedMap={};
-  reportTxns.forEach(b=>{const k=receivedAccountLabel(b);const value=b.status==='forfeited'?(window.BookingBalance?.paidAmount?.(b)||0):(b.total||0);receivedMap[k]=(receivedMap[k]||0)+value;});
-  const receivedEntries=Object.entries(receivedMap).sort((a,b)=>b[1]-a[1]);
-  renderReportBars('rpReceivedChart', receivedEntries);
-
-  // Monthly trend follows the active report filter and shows booked months with revenue.
-  const monthMap={};
-  reportTxns.forEach(b=>{
-    const mk=(b.date||'').substring(0,7);
-    const value=b.status==='forfeited'?(window.BookingBalance?.paidAmount?.(b)||0):(b.total||0);
-    if(mk) monthMap[mk]=(monthMap[mk]||0)+value;
-  });
-  const months=Object.keys(monthMap).sort().slice(-12).map(key=>{
-    const [y,m]=key.split('-').map(Number);
-    const d=new Date(y,m-1,1);
-    return {key,label:d.toLocaleDateString('en-PH',{month:'short',year:'2-digit'})};
-  });
-  if(!months.length){
-    $('rpTrend').innerHTML='<p class="rp-empty">No bookings in this period.</p>';
-  } else {
-    const maxMon=Math.max(...months.map(m=>monthMap[m.key]||0),1);
-    $('rpTrend').innerHTML=months.map(m=>{
-      const rev=monthMap[m.key]||0;
-      const w=Math.round(rev/maxMon*100);
-      return`<div class="rp-trend-row">
-        <div class="rp-trend-month">${m.label}</div>
-        <div class="rp-trend-track"><div class="rp-trend-fill" style="width:${w}%"></div></div>
-        <div class="rp-trend-val">${rev>0?fmtReportMoney(rev):'—'}</div>
-      </div>`;
-    }).join('');
+  const section=$('sec-reports');
+  if(section)section.setAttribute('aria-busy','true');
+  try{
+    if(!window.RevenueReport)throw new Error('Revenue report calculator is unavailable.');
+    const range=_rpDateRange();
+    if(range.from&&range.to&&range.from>range.to){toast('Report start date must be before the end date.','err');return;}
+    syncReportPeriodUi(range);
+    const[allBks,openPlay,settings]=await Promise.all([DB.getBookings(),DB.getOpenPlayRegistrations(),DB.getSettings()]);
+    const active=groupBookings(allBks.filter(isPlatformBillableBooking));
+    const forfeited=groupBookings(allBks.filter(b=>isDashboardReportBooking(b)&&b.status==='forfeited'&&b.paymentStatus==='deposit_retained'));
+    _rpReport=window.RevenueReport.build({transactions:[...active,...forfeited],openPlay,settings,range,basis:_rpBasis});
+    const s=_rpReport.summary;
+    $('rpCollected').textContent=fmtReportMoney(s.collected);
+    $('rpCourtRevenue').textContent=fmtReportMoney(Number(s.courtCollected||0)+Number(s.openPlayCollected||0));
+    $('rpOutstanding').textContent=fmtReportMoney(s.outstanding);
+    $('rpPlatformFees').textContent=fmtReportMoney(s.platformFeesEarned);
+    const isOwner=sess?.role==='owner';
+    $('rpPlatformLabel').textContent=isOwner?'Platform fees':'Platform fees held';
+    $('rpPlatformNote').textContent=isOwner?'System-owner booking fees earned':'Fees payable to the system owner';
+    renderSimpleRevenueBreakdown('rpCourtChart',_rpReport.breakdowns.court,{emptyCopy:'No court revenue in this period.'});
+    renderSimpleRevenueBreakdown('rpPaymentChart',_rpReport.breakdowns.payment,{type:'payment',emptyCopy:'No payment revenue in this period.'});
+    renderSimpleRevenueBreakdown('rpReceivedSimpleChart',_rpReport.breakdowns.received,{type:'received',emptyCopy:'No receiving-account revenue in this period.'});
+    renderSimpleRevenueBreakdown('rpTrendSimpleChart',_rpReport.breakdowns.trend,{trend:true,emptyCopy:'No revenue trend in this period.'});
+    setReportBreakdown(_rpBreakdown);
+    renderSimpleTransactions(_rpReport.rows);
+  }catch(error){
+    console.error('[renderReport]',error);
+    toast(error?.message||'Could not build the revenue report.','err');
+  }finally{
+    if(section)section.removeAttribute('aria-busy');
   }
-  setReportBreakdown(_rpBreakdown);
 }
 
 async function exportReportCSV(){
-  if(!_rpBks.length && _curSection !== 'reports') await renderReport();
-  const bks=_rpBks;
-  const h=['Transaction Ref','Name','Email','Contact','Court(s)','Schedule','Hrs','Total','Amount Paid/Downpayment','Paid Using','Money Received To','Payment Status','Booking Status','Created','Child Refs'];
-  const rows=bks.map(b=>[b.displayRef||b.ref,b.fullName,b.email,b.contactNumber,b.courtName,b.scheduleLabel||`${fmtD(b.date)} ${b.startTime}-${b.endTime}`,b.duration,b.total,b.downpayment??'',paymentMethodLabel(b.paymentMethod),receivedAccountLabel(b),b.paymentStatus||'unpaid',b.status,b.createdAt,(b.refs||[b.ref]).join(' ')]);
+  if(!_rpReport)await renderReport();
+  const reportRows=_rpReport?.rows||[];
+  if(!reportRows.length){toast('There is no report data to export.','inf');return;}
+  const h=['Source','Report Date','Reference','Customer','Email','Contact','Court(s)','Service Date','Booked Hours','Court Rental','Platform Booking Fee','Customer Charge','Amount Collected','Outstanding','Paid Using','Received To','Payment Status','Booking Status','Created','Fee Earned At','Child Refs'];
+  const rows=reportRows.map(row=>{
+    if(row.registration){
+      const r=row.registration;
+      return['Open Play',row.reportDate,`OP-${r.id||''}`,r.full_name||r.fullName||'',r.email||'',r.contact_number||r.contactNumber||'',r.court_name||r.courtName||'Open Play',r.date||'',0,row.courtRental.toFixed(2),'0.00',row.total.toFixed(2),row.paid.toFixed(2),row.outstanding.toFixed(2),paymentMethodLabel(r.payment_method||r.paymentMethod),receivedAccountLabel({receivedAccount:r.received_account||r.receivedAccount,paymentMethod:r.payment_method||r.paymentMethod}),r.payment_status||r.paymentStatus||'pending','registration',r.created_at||r.createdAt||'','',r.id||''];
+    }
+    const b=row.transaction||{};
+    const children=Array.isArray(b.items)&&b.items.length?b.items:[b];
+    const earnedAt=children.map(item=>item.bookingFeeEarnedAt||item.booking_fee_earned_at).filter(Boolean).sort()[0]||'';
+    return[row.source,row.reportDate,b.displayRef||b.ref,b.fullName,b.email,b.contactNumber,b.courtName,b.date,row.forfeited?0:b.duration,row.courtRental.toFixed(2),row.feeCharged.toFixed(2),row.total.toFixed(2),row.paid.toFixed(2),row.outstanding.toFixed(2),paymentMethodLabel(b.paymentMethod),receivedAccountLabel(b),b.paymentStatus||'unpaid',b.status,b.createdAt||'',earnedAt,(b.refs||[b.ref]).join(' ')];
+  });
   const csv=[h,...rows].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download=`smashgrove_report_${new Date().toISOString().split('T')[0]}.csv`;
+  a.download=`paddle_rage_revenue_${_rpBasis}_${new Date().toISOString().split('T')[0]}.csv`;
   a.click();
-  toast('Report exported!');
+  toast('Revenue report exported!');
 }
 
 /* ==============================================
@@ -7354,7 +8239,7 @@ async function renderPaymentSettings() {
   const bpiOn = settings.payment_method_bpi === '1';
   const gotymeOn = settings.payment_method_gotyme === '1';
   const pnbOn = settings.payment_method_pnb === '1';
-  const paymentAcceptanceMode = settings.payment_acceptance_mode || 'both';
+  const paymentAcceptanceMode = 'full_payment_only';
 
   if ($('paymentAcceptanceModeSelect')) $('paymentAcceptanceModeSelect').value = paymentAcceptanceMode;
   $('payMethodCashOn').checked = cashOn;
@@ -8454,7 +9339,7 @@ async function savePaymentSettings() {
   }
 
   try {
-    const paymentAcceptanceMode = $('paymentAcceptanceModeSelect')?.value || 'both';
+    const paymentAcceptanceMode = 'full_payment_only';
     
     await DB.saveSetting('payment_method_cash', cashOn ? '1' : '0');
     await DB.saveSetting('payment_method_gcash', gcashOn ? '1' : '0');
@@ -9643,12 +10528,48 @@ async function openOpVerifyModal(id) {
   $('ovDate').textContent    = `${fmtD(r.date)} · ${r.time_label || '—'}`;
   $('ovPayType').textContent = r.payment_type || '—';
   $('ovAmount').textContent  = '₱' + Number(r.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 });
-  await ovPopulateReceipt(r);
+  await ovPopulateReceipt(r, 'open_play');
   $('opVerifyModal').dataset.regId = id;
+  $('opVerifyModal').dataset.regType = 'open_play';
   $('opVerifyModal').classList.add('show');
 }
 
-async function ovPopulateReceipt(r) {
+async function openHostSessionVerifyModal(id) {
+  const [registrations, sessions] = await Promise.all([
+    DB.getOpenPlayHostSessionRegistrations(),
+    DB.getOpenPlayHostSessions(),
+  ]);
+  const registration = registrations.find(item => String(item.id) === String(id));
+  if (!registration) { toast('Hosted Open Play registration not found.', 'err'); return; }
+  const session = sessions.find(item => String(item.id) === String(registration.sessionId)) || {};
+  const receipt = {
+    id: registration.id,
+    payment_method: registration.paymentMethod,
+    gcash_ref: registration.gcashRef,
+    full_name: registration.fullName,
+    court_name: (session.courtNames || []).join(', ') || session.title || 'Hosted Open Play',
+    date: session.date,
+    time_label: session.date ? `${hostFmtTime(session.startHour)} - ${hostFmtTime(session.endHour)}` : '--',
+    payment_type: '100%',
+    amount: registration.amount,
+    receipt_status: registration.receiptStatus,
+    receipt_image_url: registration.receiptImageUrl,
+    receipt_flags: registration.receiptFlags,
+  };
+  $('ovMethod').textContent = paymentMethodLabel(registration.paymentMethod);
+  $('ovGcashRef').textContent = registration.gcashRef || '—';
+  $('ovName').textContent = registration.fullName || '--';
+  $('ovCourt').textContent = receipt.court_name;
+  $('ovDate').textContent = session.date ? `${fmtD(session.date)} · ${receipt.time_label}` : '--';
+  $('ovPayType').textContent = '100%';
+  $('ovAmount').textContent = fmt(registration.amount || 0);
+  await ovPopulateReceipt(receipt, 'host_session');
+  $('opVerifyModal').dataset.regId = id;
+  $('opVerifyModal').dataset.regType = 'host_session';
+  $('opVerifyModal').classList.add('show');
+}
+
+async function ovPopulateReceipt(r, receiptType = 'open_play') {
   const wrap = $('ovReceiptWrap');
   const s = r.receipt_status || 'none';
   if (s === 'none' && !r.receipt_image_url) { if (wrap) wrap.style.display = 'none'; return; }
@@ -9668,7 +10589,9 @@ async function ovPopulateReceipt(r) {
   if (noImg) noImg.style.display = 'none';
   if (r.receipt_image_url) {
     try {
-      const url = await DB.getOpenPlayReceiptSignedUrl(r.id);
+      const url = receiptType === 'host_session'
+        ? await DB.getHostSessionReceiptSignedUrl(r.id)
+        : await DB.getOpenPlayReceiptSignedUrl(r.id);
       if (img) img.src = url;
       if (link) { link.href = url; link.style.display = ''; }
     } catch(e) {
@@ -9681,9 +10604,14 @@ async function ovPopulateReceipt(r) {
 
 async function confirmOpPayment() {
   const id = $('opVerifyModal').dataset.regId;
+  const registrationType = $('opVerifyModal').dataset.regType || 'open_play';
   if (!id) return;
   try {
-    await DB.updateOpenPlayRegistration(id, { paymentStatus: 'paid' });
+    if (registrationType === 'host_session') {
+      await DB.updateOpenPlayHostSessionRegistration(id, { paymentStatus: 'paid' });
+    } else {
+      await DB.updateOpenPlayRegistration(id, { paymentStatus: 'paid' });
+    }
     closeModal('opVerifyModal');
     toast('✅ Open Play payment confirmed!');
     await renderOpRegistrations();
@@ -9698,10 +10626,15 @@ async function confirmOpPayment() {
 
 async function rejectOpPayment() {
   const id = $('opVerifyModal').dataset.regId;
+  const registrationType = $('opVerifyModal').dataset.regType || 'open_play';
   if (!id) return;
   if (!confirm('Mark this payment as not received?')) return;
   try {
-    await DB.updateOpenPlayRegistration(id, { paymentStatus: 'rejected' });
+    if (registrationType === 'host_session') {
+      await DB.updateOpenPlayHostSessionRegistration(id, { paymentStatus: 'rejected' });
+    } else {
+      await DB.updateOpenPlayRegistration(id, { paymentStatus: 'rejected' });
+    }
     closeModal('opVerifyModal');
     toast('Payment marked as not received.', 'err');
     await renderOpRegistrations();
@@ -11063,6 +11996,6 @@ async function checkAgreementGate(session) {
 </script>
 
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20260719-integrations-v2"></script>
+<script src="supabase-config.js?v=20260719-payment-policy-v4"></script>
 </body>
 </html>

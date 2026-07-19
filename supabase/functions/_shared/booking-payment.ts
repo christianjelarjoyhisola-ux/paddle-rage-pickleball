@@ -26,6 +26,7 @@ export type CourtPaymentAmounts = {
 export type StoredBookingPayment = {
   total: unknown;
   downpayment: unknown;
+  hostBooking?: unknown;
 };
 
 export function toNumber(value: unknown, fallback = 0): number {
@@ -80,15 +81,12 @@ function isFlatFeeType(value: unknown): boolean {
 export function chooseExpectedDue(
   total: number,
   storedDownpayment: number,
-  paymentAcceptanceMode: unknown,
+  _paymentAcceptanceMode: unknown,
 ): number {
-  const half = roundMoney(total / 2);
-  const mode = String(paymentAcceptanceMode || "both");
-  if (mode === "full_payment_only") return total;
-  if (mode === "downpayment_only") return half;
-  if (closeMoney(storedDownpayment, total)) return total;
-  if (closeMoney(storedDownpayment, half)) return half;
-  throw new Error("Stored payment amount does not match current pricing");
+  if (!closeMoney(storedDownpayment, total)) {
+    throw new Error("Regular bookings require full payment");
+  }
+  return total;
 }
 
 export function calculateCourtPayment(
@@ -180,5 +178,9 @@ export function classifyStoredSessionPayment(
       "Stored payment session amount does not match the booking amount due",
     );
   }
-  return closeMoney(paidAmount, expectedTotal) ? "paid" : "downpayment_paid";
+  if (closeMoney(paidAmount, expectedTotal)) return "paid";
+  if (bookings.some((booking) => booking.hostBooking !== true)) {
+    throw new Error("Only host court reservations can carry a balance");
+  }
+  return "downpayment_paid";
 }

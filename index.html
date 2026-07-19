@@ -3077,7 +3077,7 @@ body.host-mode .courts { padding-bottom:140px; }
               </div>
               <div class="pay-amount-toggle" id="gcPayAmtToggle">
                 <div class="pat-btn on" id="gcPat50" onclick="setPayAmount('half')" style="display:none">
-                  <div>Fee + 50% Court</div>
+                  <div>Full Payment</div>
                   <div class="pat-amt" id="gcPat50Amt"></div>
                 </div>
                 <div class="pat-btn" id="gcPat100" onclick="setPayAmount('full')" style="display:none">
@@ -3125,7 +3125,7 @@ body.host-mode .courts { padding-bottom:140px; }
               </div>
               <div class="pay-amount-toggle" id="gtPayAmtToggle">
                 <div class="pat-btn on" id="gtPat50" onclick="setPayAmount('half')" style="display:none">
-                  <div>Fee + 50% Court</div>
+                  <div>Full Payment</div>
                   <div class="pat-amt" id="gtPat50Amt"></div>
                 </div>
                 <div class="pat-btn" id="gtPat100" onclick="setPayAmount('full')" style="display:none">
@@ -3173,7 +3173,7 @@ body.host-mode .courts { padding-bottom:140px; }
               </div>
               <div class="pay-amount-toggle" id="pnPayAmtToggle">
                 <div class="pat-btn on" id="pnPat50" onclick="setPayAmount('half')" style="display:none">
-                  <div>Fee + 50% Court</div>
+                  <div>Full Payment</div>
                   <div class="pat-amt" id="pnPat50Amt"></div>
                 </div>
                 <div class="pat-btn" id="pnPat100" onclick="setPayAmount('full')" style="display:none">
@@ -3264,7 +3264,7 @@ body.host-mode .courts { padding-bottom:140px; }
           </div>
 
           <div class="down-note" id="downNote" style="margin-top:10px">
-            ⚠️ The <strong>full booking fee plus 50% of the court fee</strong> is required to confirm your booking. Follow the payment instructions above.
+            ⚠️ <strong>Full payment</strong> is required to confirm your booking. Follow the payment instructions above.
           </div>
         </div>
 
@@ -3371,7 +3371,7 @@ body.host-mode .courts { padding-bottom:140px; }
       <div class="inv-amt-total">Total Amount</div>
       <div class="inv-amt-val" id="iTot">₱0.00</div>
       <div class="inv-amt-down-wrap">
-        <div class="inv-amt-down-label" id="iDownLabel">Booking Fee + 50% Court Fee Due</div>
+        <div class="inv-amt-down-label" id="iDownLabel">Full Payment Due</div>
         <div class="inv-amt-down-val" id="iDown">₱0.00</div>
         <div class="inv-amt-down-note" id="iDownNote">—</div>
       </div>
@@ -3497,7 +3497,7 @@ let closeHour = 22;
 let openPlayConfig = null; // { enabled, start, end, days[], specificDates[], courtIds[], fee, maxPlayers }
 let openPlayFee = 100; // default ₱100, overridden by settings
 let openPlayMaxPlayers = 40; // default 40, overridden by settings
-let paymentAcceptanceMode = 'both'; // 'both', 'downpayment_only', 'full_payment_only'
+let paymentAcceptanceMode = 'full_payment_only';
 let _serviceFeeRate = 0; // booking fee amount, loaded from settings
 let _serviceFeeType = 'per_hour'; // 'per_hour' or 'flat'
 const HOST_DOWNPAYMENT_RATE = 0.25;
@@ -3578,13 +3578,14 @@ function hostBookingDepositEligible(items = activeBookingItems()) {
 }
 function downpaymentRate() {
   if (isVerifiedHostBooking()) return hostBookingDepositEligible() ? HOST_DOWNPAYMENT_RATE : 1;
-  return 0.5;
+  return 1;
 }
 function downpaymentLabel() {
   if (isVerifiedHostBooking()) return hostBookingDepositEligible() ? '25% Reservation Payment' : 'Full Payment Required';
-  return 'Booking Fee + 50% Court Fee';
+  return 'Full Payment Required';
 }
 function downpaymentAmount(total, courtFee = null, serviceFee = null) {
+  if (!isVerifiedHostBooking()) return Number(total || 0);
   if (isVerifiedHostBooking() && !hostBookingDepositEligible()) return total;
   if (payFull) return total;
   const fee = Number(serviceFee ?? 0);
@@ -3603,7 +3604,7 @@ function hostBookingNoteText() {
 function downpaymentNoteHtml(prefix = '') {
   if (payFull) return '';
   if (isVerifiedHostBooking()) return `${hostBookingNoteText()} ${paymentInstructionText()}`;
-  return `${prefix}<strong>full booking fee plus 50% of the court fee</strong> is required to confirm your booking. ${paymentInstructionText()}`;
+  return `${prefix}<strong>full payment</strong> is required to confirm your booking. ${paymentInstructionText()}`;
 }
 function bookingFeeDisplay(totalFee, hrs) {
   const fee = Number(totalFee || 0);
@@ -4083,7 +4084,7 @@ function getCourtRepair(courtName, date) {
   ) || null;
 }
 let cachedBookedSlots = new Set(); // cached after renderSlots() — avoids re-fetching on every click
-let payFull = false; // false = full booking fee + court downpayment, true = 100% full payment
+let payFull = true;
 let cardSel   = { courtId: null, courtName: '', date: null, slots: [], rate: 0, tiers: [] };
 let cardSelections = {};
 let bookingItems = [];
@@ -4889,7 +4890,7 @@ function applyPaymentSettings(settings) {
   paymentMethods.bpi = settings.payment_method_bpi === '1' && receiverReady('bpi');
   paymentMethods.gotyme = settings.payment_method_gotyme === '1' && receiverReady('gotyme');
   paymentMethods.pnb = settings.payment_method_pnb === '1' && receiverReady('pnb');
-  paymentAcceptanceMode = settings.payment_acceptance_mode || 'both';
+  paymentAcceptanceMode = 'full_payment_only';
 
   if ($('gcMerchantNumber')) $('gcMerchantNumber').textContent = gcashSettings.merchantNumber;
   if ($('gcMerchantName')) $('gcMerchantName').textContent = maskGcashOwnerName(gcashSettings.merchantName) || 'Court owner account';
@@ -6639,7 +6640,7 @@ function updatePriceLegacy() {
     $('downNote').style.display = payFull ? 'none' : '';
     $('downNote').innerHTML = payFull
       ? ''
-      : `⚠️ The <strong>full booking fee plus 50% of the court fee</strong> is required to confirm your booking. ${paymentInstructionText()}`;
+      : `⚠️ <strong>Full payment</strong> is required to confirm your booking. ${paymentInstructionText()}`;
   }
 }
 
@@ -6927,15 +6928,15 @@ function updatePaymentAmountUI() {
     const btn50 = $(p + 'Pat50');
     const btn100 = $(p + 'Pat100');
     const dpLabel = btn50?.querySelector('div:first-child');
-    if (dpLabel) dpLabel.textContent = hostBooking ? (hostDeposit ? 'Fee + 25% Court' : 'Full Payment') : 'Fee + 50% Court';
+    if (dpLabel) dpLabel.textContent = hostDeposit ? 'Fee + 25% Court' : 'Full Payment';
 
-    if (hostBooking || dpOnly) {
+    if (true) {
       // Only downpayment — hide toggle and label, auto-select 50%
       if (label) label.style.display = 'none';
       if (toggle) toggle.style.display = 'none';
-      if (btn50) btn50.classList.toggle('on', hostBooking ? hostDeposit : true);
-      if (btn100) btn100.classList.toggle('on', hostBooking ? !hostDeposit : false);
-      payFull = hostBooking ? !hostDeposit : false;
+      if (btn50) btn50.classList.toggle('on', hostDeposit);
+      if (btn100) btn100.classList.toggle('on', !hostDeposit);
+      payFull = !hostDeposit;
     } else if (fpOnly) {
       // Only full payment — hide toggle and label, auto-select 100%
       if (label) label.style.display = 'none';
@@ -6964,7 +6965,7 @@ function updatePaymentAmountUI() {
 }
 
 function setPayAmount(mode) {
-  if (isVerifiedHostBooking()) mode = hostBookingDepositEligible() ? 'half' : 'full';
+  mode = isVerifiedHostBooking() && hostBookingDepositEligible() ? 'half' : 'full';
   payFull = (mode === 'full');
   ['gc','gt','pn'].forEach(p => {
     const btn50  = $(p + 'Pat50');
@@ -7623,13 +7624,13 @@ function showInvoice(b) {
   // Amount
   set('iTot', fmt(b.total));
   set('iDown', fmt(b.downpayment));
-  const invoiceDownLabel = (!isFullPay && b.hostBooking) ? 'Full Booking Fee + 25% Court Fee Due' : 'Full Booking Fee + 50% Court Fee Due';
+  const invoiceDownLabel = (!isFullPay && b.hostBooking) ? 'Full Booking Fee + 25% Court Fee Due' : 'Full Payment Due';
   set('iDownLabel', isFullPay ? 'Full Payment' : invoiceDownLabel);
   set('iDownNote', isRejected ? 'Receipt verification failed. The slot has been released.' :
     isFullPay ? 'Fully paid. No balance due on arrival.' :
     hostDeadline ? `Your remaining balance is due by ${window.BookingBalance.formatDeadline(hostDeadline)}. All payments are non-refundable.` :
     b.gcashRef ? `${payLabel} ref submitted. Owner will verify shortly.` :
-    'Pay downpayment at the front desk before your session.');
+    'Pay the full amount at the front desk before your session.');
 
   if (b._receiptResult) {
     const s = b._receiptResult.status;
@@ -7711,7 +7712,7 @@ function showInvoice(b) {
       ['You\'ll receive a confirmation once the owner verifies payment.', '3'],
     ] : b.paymentMethod === 'cash' ? [
       ['Show this booking ref to the front desk.', '1'],
-      [`Pay the ${isFullPay ? 'full amount' : (b.hostBooking ? 'full booking fee plus 25% court fee' : 'full booking fee plus 50% court fee')} of <strong>${fmt(b.downpayment)}</strong> in cash on arrival.`, '2'],
+      [`Pay the ${isFullPay ? 'full amount' : 'full booking fee plus 25% court fee'} of <strong>${fmt(b.downpayment)}</strong> in cash on arrival.`, '2'],
       ['Your slot will be confirmed after payment.', '3'],
     ] : [
       ['Show this booking ref to the front desk.', '1'],
@@ -7723,7 +7724,7 @@ function showInvoice(b) {
 
   // Email note
   set('iEmailNote', !b.email ? '' :
-    isRejected ? 'No confirmation email was sent because this receipt was rejected.' :
+    isRejected ? `A payment rejection and cancellation notice was sent to ${b.email}` :
     isConfirmed ? `Confirmation details sent to ${b.email}` :
     `We will email ${b.email} after owner confirmation.`);
 
@@ -8392,7 +8393,7 @@ function closeGrandSplash() {
 /* =============================================
    OPEN PLAY SIGN-UP
    ============================================= */
-let _opSignupData = { courtId: null, courtName: '', date: '', hour: 0, sessionEnd: 0, sessionLabel: '', fullPay: false, payMethod: 'gcash', gcashRef: '', startedAt: null };
+let _opSignupData = { courtId: null, courtName: '', date: '', hour: 0, sessionEnd: 0, sessionLabel: '', fullPay: true, payMethod: 'gcash', gcashRef: '', startedAt: null };
 
 function firstEnabledPaymentMethod() {
   return ALL_PAYMENT_METHODS.find(m => paymentMethods[m]) || '';
@@ -8405,7 +8406,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
     toast('Open Play session has ended for this date.', 'inf');
     return;
   }
-  _opSignupData = { courtId, courtName, date, hour: session.start, sessionEnd: session.end, sessionLabel: session.label, fullPay: false, payMethod: defaultPayMethod, gcashRef: '', startedAt: new Date().toISOString() };
+  _opSignupData = { courtId, courtName, date, hour: session.start, sessionEnd: session.end, sessionLabel: session.label, fullPay: true, payMethod: defaultPayMethod, gcashRef: '', startedAt: new Date().toISOString() };
   _opReceiptFile = null;
   const sysFee = _serviceFeeRate;
   const opTotal = openPlayFee + sysFee;
@@ -8466,8 +8467,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
   // Auto-set downpayment based on mode
   const dpOnly = paymentAcceptanceMode === 'downpayment_only';
   const fpOnly = paymentAcceptanceMode === 'full_payment_only';
-  if (dpOnly) _opSignupData.fullPay = false;
-  else if (fpOnly) _opSignupData.fullPay = true;
+  _opSignupData.fullPay = true;
 
   const dpSection = (dpOnly || fpOnly) ? `<div style="display:none"></div>` : `
     <div class="op-section-label">Payment Amount</div>
@@ -8500,7 +8500,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
             </div>
             <div class="op-summary-cell">
               <span class="op-stat-label">Amount Due</span>
-              <span class="op-stat-value" id="opAmtDue">${fmt(half)}</span>
+              <span class="op-stat-value" id="opAmtDue">${fmt(opTotal)}</span>
             </div>
           </div>
         </div>
@@ -8519,9 +8519,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
     <button class="btn btn-g" id="opSubmitBtn" onclick="submitOpenPlay()">🏓 Join Open Play</button>`;
   opPickPay(defaultPayMethod);
   // Auto-set DP based on payment acceptance mode
-  if (dpOnly || fpOnly) {
-    opSetDP(_opSignupData.fullPay);
-  }
+  opSetDP(true);
   setTimeout(() => $('opFullName')?.focus(), 80);
   $('opPolicyAgree')?.addEventListener('change', e => {
     if (e.target.checked) clearBookingInvalid(e.target.closest('.booking-policy-check'));
@@ -8529,24 +8527,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
 }
 
 function openPlayDpControlsHtml(opTotal) {
-  const dpOnly = paymentAcceptanceMode === 'downpayment_only';
-  const fpOnly = paymentAcceptanceMode === 'full_payment_only';
-  if (dpOnly || fpOnly) return '';
-  const half = opTotal / 2;
-  return `
-    <div class="op-pay-choice-panel">
-      <div class="op-section-label">Payment Amount</div>
-      <div class="op-dp-toggle">
-        <div class="pat-btn ${_opSignupData.fullPay ? '' : 'on'}" id="opDp50" onclick="opSetDP(false)" style="cursor:pointer">
-          <div style="font-size:.78rem;font-weight:700;margin:2px 0">50%</div>
-          <div class="pat-amt">${fmt(half)}</div>
-        </div>
-        <div class="pat-btn ${_opSignupData.fullPay ? 'on' : ''}" id="opDp100" onclick="opSetDP(true)" style="cursor:pointer">
-          <div style="font-size:.78rem;font-weight:700;margin:2px 0">100%</div>
-          <div class="pat-amt">${fmt(opTotal)}</div>
-        </div>
-      </div>
-    </div>`;
+  return '';
 }
 
 function opPickPay(method) {
@@ -8556,7 +8537,7 @@ function opPickPay(method) {
   const info = $('opPayInfo');
   if (!info) return;
   const opTotal = openPlayFee + _serviceFeeRate;
-  const amt = _opSignupData.fullPay ? opTotal : opTotal / 2;
+  const amt = opTotal;
   const cleanRef = normalizePaymentRef(_opSignupData.gcashRef || '', method);
   _opSignupData.gcashRef = cleanRef;
   const refCountText = method === 'gcash'
@@ -8704,11 +8685,11 @@ function syncOpenPlayRefInput(method = _opSignupData.payMethod || 'gcash') {
 }
 
 function opSetDP(full) {
-  _opSignupData.fullPay = full;
-  $('opDp50')?.classList.toggle('on', !full);
-  $('opDp100')?.classList.toggle('on', full);
+  _opSignupData.fullPay = true;
+  $('opDp50')?.classList.remove('on');
+  $('opDp100')?.classList.add('on');
   const opTotal = openPlayFee + _serviceFeeRate;
-  if ($('opAmtDue')) $('opAmtDue').textContent = fmt(full ? opTotal : opTotal / 2);
+  if ($('opAmtDue')) $('opAmtDue').textContent = fmt(opTotal);
   opPickPay(_opSignupData.payMethod);
 }
 
@@ -8839,8 +8820,8 @@ async function submitOpenPlay() {
     return;
   }
   const opTotal = openPlayFee + _serviceFeeRate;
-  const amt = _opSignupData.fullPay ? opTotal : opTotal / 2;
-  const payType = _opSignupData.fullPay ? '100%' : '50%';
+  const amt = opTotal;
+  const payType = '100%';
   const btn = $('opSubmitBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
   try {
@@ -8961,7 +8942,7 @@ async function submitOpenPlay() {
 </script>
 <script src="supabase.min.js"></script>
 <script src="runtime-config.js"></script>
-<script src="supabase-config.js?v=20260719-integrations-v2"></script>
+<script src="supabase-config.js?v=20260719-payment-policy-v4"></script>
 
 <!-- MOBILE STICKY BOOK NOW BAR -->
 <div id="mobileBookBar" class="mobile-book-bar" style="display:none">

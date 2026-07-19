@@ -1,7 +1,10 @@
 // deno-lint-ignore-file no-explicit-any no-import-prefix
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendMailerooEmail } from "../_shared/maileroo.ts";
-import { renderHostVerificationEmail } from "../_shared/paddle-rage-email.ts";
+import {
+  renderHostDecisionEmail,
+  renderHostVerificationEmail,
+} from "../_shared/paddle-rage-email.ts";
 import {
   HOST_APPLICATION_TURNSTILE_ACTION,
   parseTurnstileHostnames,
@@ -750,6 +753,35 @@ Deno.serve(async (req): Promise<Response> => {
     });
   }
 
+  async function deliverHostDecisionEmail(
+    app: HostApplicationRecord,
+    status: "approved" | "rejected",
+    reviewNote: string,
+  ): Promise<boolean> {
+    const recipientEmail = normalizedEmail(app.email);
+    if (!validEmail(recipientEmail)) return false;
+    const recipientName = clean(app.full_name) || "Host applicant";
+    const emailContent = renderHostDecisionEmail({
+      fullName: recipientName,
+      status,
+      reviewNote,
+    });
+    try {
+      await sendMailerooEmail({
+        to: recipientEmail,
+        toName: recipientName,
+        subject: `Host application ${status} | Paddle Rage Pickleball`,
+        html: emailContent.html,
+        plain: emailContent.plain,
+        tags: { category: `host_application_${status}` },
+      });
+      return true;
+    } catch (error) {
+      console.error("Host decision email failed:", errMsg(error));
+      return false;
+    }
+  }
+
   async function createAuthUser(
     email: string,
     password: string,
@@ -1088,12 +1120,18 @@ Deno.serve(async (req): Promise<Response> => {
           reviewNote,
           markApproved: true,
         });
+        const decisionEmailSent = await deliverHostDecisionEmail(
+          app,
+          "approved",
+          reviewNote,
+        );
         return json({
           ok: true,
           status: "approved",
           loginLinked: true,
           hostUserId: activated.hostUserId,
           accountStatus: activated.accountStatus,
+          decisionEmailSent,
         });
       } catch (error) {
         const errorStatus = error instanceof HostActivationError
@@ -1217,6 +1255,11 @@ Deno.serve(async (req): Promise<Response> => {
     if (updErr) return json({ error: errMsg(updErr) }, 500);
     if (!updatedApp) return json({ error: "Host application not found" }, 404);
 
+    const decisionEmailSent = await deliverHostDecisionEmail(
+      app,
+      "rejected",
+      reviewNote,
+    );
     return json({
       ok: true,
       status,
@@ -1227,6 +1270,7 @@ Deno.serve(async (req): Promise<Response> => {
       accountStatus: typeof hostUserId === "string" && hostUserId
         ? "suspended"
         : null,
+      decisionEmailSent,
     });
   }
 

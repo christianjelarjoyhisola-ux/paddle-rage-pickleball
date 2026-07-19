@@ -30,17 +30,19 @@ const base = {
   paymentAcceptanceMode: "both",
 };
 
-Deno.test("regular booking keeps the existing 50% downpayment", () => {
-  const amounts = calculateCourtPayment({ ...base, storedDownpayment: 420 });
+Deno.test("regular booking requires full payment", () => {
+  const amounts = calculateCourtPayment({ ...base, storedDownpayment: 840 });
   assertEquals(amounts.courtTotal, 800, "court total");
   assertEquals(amounts.serviceFee, 40, "service fee");
   assertEquals(amounts.total, 840, "booking total");
-  assertEquals(amounts.due, 420, "regular downpayment");
+  assertEquals(amounts.due, 840, "regular full payment");
 });
 
-Deno.test("regular booking still permits full payment", () => {
-  const amounts = calculateCourtPayment({ ...base, storedDownpayment: 840 });
-  assertEquals(amounts.due, 840, "full payment");
+Deno.test("regular booking rejects a partial payment", () => {
+  assertThrows(
+    () => calculateCourtPayment({ ...base, storedDownpayment: 420 }),
+    "regular partial payment should be rejected",
+  );
 });
 
 Deno.test("host due is 25% of court charges plus the full service fee", () => {
@@ -106,6 +108,7 @@ Deno.test("stored partial checkout becomes downpayment paid", () => {
   const status = classifyStoredSessionPayment(240, [{
     total: 840,
     downpayment: 240,
+    hostBooking: true,
   }]);
   assertEquals(status, "downpayment_paid", "partial checkout status");
 });
@@ -120,8 +123,8 @@ Deno.test("stored full checkout becomes fully paid", () => {
 
 Deno.test("stored grouped checkout sums every active booking row", () => {
   const status = classifyStoredSessionPayment(360, [
-    { total: 840, downpayment: 240 },
-    { total: 420, downpayment: 120 },
+    { total: 840, downpayment: 240, hostBooking: true },
+    { total: 420, downpayment: 120, hostBooking: true },
   ]);
   assertEquals(status, "downpayment_paid", "group checkout status");
 });
@@ -134,5 +137,17 @@ Deno.test("webhook payment cannot override the stored session amount", () => {
         downpayment: 240,
       }]),
     "mismatched session amount should be rejected",
+  );
+});
+
+Deno.test("regular checkout cannot become a partial-payment booking", () => {
+  assertThrows(
+    () =>
+      classifyStoredSessionPayment(420, [{
+        total: 840,
+        downpayment: 420,
+        hostBooking: false,
+      }]),
+    "regular partial checkout should be rejected",
   );
 });

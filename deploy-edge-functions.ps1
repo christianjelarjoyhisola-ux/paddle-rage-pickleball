@@ -180,6 +180,7 @@ try {
     "host-application",
     "manage-account",
     "send-confirmation-email",
+    "send-booking-status-email",
     "process-host-balance-deadlines",
     "send-reschedule-email",
     "send-telegram-notification",

@@ -163,6 +163,7 @@ function publicBookingRow(value: unknown): Record<string, unknown> {
   const row = value && typeof value === "object"
     ? value as Record<string, unknown>
     : {};
+  const total = Number(row.total);
   return {
     ref: text(row.ref, 100),
     booking_group_ref: text(row.booking_group_ref, 100) || null,
@@ -177,14 +178,14 @@ function publicBookingRow(value: unknown): Record<string, unknown> {
     end_time: text(row.end_time, 30),
     duration: Number(row.duration),
     rate: Number(row.rate),
-    total: Number(row.total),
+    total,
     payment_method: text(row.payment_method || "cash", 30).toLowerCase(),
     received_account: text(row.received_account || "cash", 30).toLowerCase(),
     payment_flow: text(row.payment_flow, 30) || null,
     gcash_ref: text(row.gcash_ref, 100) || null,
-    downpayment: row.downpayment == null || row.downpayment === ""
-      ? null
-      : Number(row.downpayment),
+    // Public court bookings always require full payment. Host reservation
+    // payments use the authenticated account path instead of this endpoint.
+    downpayment: total,
   };
 }
 

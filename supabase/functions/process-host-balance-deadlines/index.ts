@@ -4,6 +4,7 @@ import {
   finishBalanceNotification,
 } from "../_shared/balance-notification-lease.ts";
 import { sendMailerooEmail } from "../_shared/maileroo.ts";
+import { renderBalanceNoticeEmail } from "../_shared/paddle-rage-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,8 +12,6 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 const JSON_HEADERS = { ...corsHeaders, "Content-Type": "application/json" };
-const LOGO_URL = Deno.env.get("PUBLIC_LOGO_URL") ||
-  "https://paddleragecdo.ph/paddleragelogo.jpg";
 const DAY_MS = 86_400_000;
 const NOTICE_LEASE_SECONDS = 300;
 const BALANCE_EVENT_TYPES = new Set([
@@ -42,48 +41,6 @@ type BookingRow = {
   payment_status: string;
 };
 
-function esc(value: unknown): string {
-  return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;",
-  }[ch] || ch));
-}
-
-function php(value: number): string {
-  return `&#8369;${
-    Number(value || 0).toLocaleString("en-PH", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })
-  }`;
-}
-
-function phDateTime(value: string): string {
-  return new Intl.DateTimeFormat("en-PH", {
-    timeZone: "Asia/Manila",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(new Date(value));
-}
-
-function dateLabel(value: string): string {
-  return new Intl.DateTimeFormat("en-PH", {
-    timeZone: "Asia/Manila",
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(`${value}T00:00:00+08:00`));
-}
-
 function groupRows(rows: BookingRow[]): BookingRow[][] {
   const groups = new Map<string, BookingRow[]>();
   for (const row of rows) {
@@ -103,11 +60,17 @@ function summary(rows: BookingRow[]) {
     rows.map((row) => row.balance_due_at).filter(Boolean).sort()[0];
   const courts = [...new Set(rows.map((row) => row.court_name).filter(Boolean))]
     .join(", ");
-  const schedules = rows.map((row) =>
-    `${dateLabel(row.date)} &middot; ${esc(row.start_time)}&ndash;${
-      esc(row.end_time)
-    }`
-  ).filter((v, i, all) => all.indexOf(v) === i).join("<br>");
+  const schedules = rows.map((row) => ({
+    date: row.date,
+    startTime: row.start_time,
+    endTime: row.end_time,
+  })).filter((value, index, all) =>
+    all.findIndex((candidate) =>
+      candidate.date === value.date &&
+      candidate.startTime === value.startTime &&
+      candidate.endTime === value.endTime
+    ) === index
+  );
   return {
     key,
     ref: first.ref,
@@ -120,98 +83,6 @@ function summary(rows: BookingRow[]) {
     courts,
     schedules,
   };
-}
-
-function noticeCopy(eventType: string, balance: number, deadline: string) {
-  if (eventType === "forfeited") {
-    return {
-      subject: "Reservation forfeited - slot released",
-      heading: "RESERVATION FORFEITED",
-      accent: "#c83d26",
-      message:
-        `Your reservation was forfeited because the remaining balance of <strong>${
-          php(balance)
-        }</strong> was not paid by the deadline. The court slot has been released and the payment already made remains non-refundable.`,
-    };
-  }
-  const days = eventType === "reminder_3d"
-    ? 3
-    : eventType === "reminder_2d"
-    ? 2
-    : 1;
-  return {
-    subject: days === 1
-      ? "Final balance reminder - 24 hours remaining"
-      : `${days} days remaining to settle your balance`,
-    heading: days === 1 ? "FINAL BALANCE REMINDER" : `${days} DAYS REMAINING`,
-    accent: days === 1 ? "#c83d26" : "#143d63",
-    message: `Your remaining balance of <strong>${
-      php(balance)
-    }</strong> must be paid by <strong>${esc(phDateTime(deadline))}</strong>. ${
-      days === 1
-        ? "If payment is not completed within 24 hours, the reservation will be forfeited and the slot will be released."
-        : "Please settle the balance before the deadline to keep your reservation."
-    }`,
-  };
-}
-
-function emailHtml(
-  info: ReturnType<typeof summary>,
-  eventType: string,
-): string {
-  const copy = noticeCopy(eventType, info.balance, info.deadline);
-  return `<!doctype html><html><body style="margin:0;background:#eef3f6;font-family:Arial,sans-serif;color:#0f2438">
-  <table width="100%" cellpadding="0" cellspacing="0" style="padding:28px 12px"><tr><td align="center">
-  <table width="580" cellpadding="0" cellspacing="0" style="max-width:580px;width:100%;background:#fff;border:1px solid #d7e0e6;border-radius:18px;overflow:hidden;box-shadow:0 14px 40px rgba(20,61,99,.12)">
-    <tr><td style="background:#0b2744;padding:24px 30px;text-align:center"><img src="${LOGO_URL}" width="72" height="72" alt="Paddle Rage Pickleball" style="border-radius:50%;background:#fff;padding:2px;border:2px solid #c9cf43"><div style="color:#ffffff;font-weight:900;letter-spacing:2px;margin-top:10px">PADDLE RAGE PICKLEBALL</div><div style="color:#c9cf43;font-size:11px;letter-spacing:1px;margin-top:4px">IPONAN, CAGAYAN DE ORO</div></td></tr>
-    <tr><td style="height:5px;background:${copy.accent}"></td></tr>
-    <tr><td style="padding:30px">
-      <div style="font-size:12px;font-weight:900;letter-spacing:1.4px;color:${copy.accent}">${copy.heading}</div>
-      <h1 style="font-size:24px;line-height:1.2;margin:8px 0 18px">Host court reservation</h1>
-      <p style="font-size:15px;line-height:1.65;margin:0 0 20px">Hi <strong>${
-    esc(info.name)
-  }</strong>,</p>
-      <p style="font-size:15px;line-height:1.65;margin:0 0 22px">${copy.message}</p>
-      <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f7f8;border:1px solid #d7e0e6;border-radius:12px">
-        <tr><td style="padding:15px 18px;border-bottom:1px solid #d7e0e6"><small style="color:#657486">Booking reference</small><br><strong>${
-    esc(info.key)
-  }</strong></td></tr>
-        <tr><td style="padding:15px 18px;border-bottom:1px solid #d7e0e6"><small style="color:#657486">Court and schedule</small><br><strong>${
-    esc(info.courts)
-  }</strong><br>${info.schedules}</td></tr>
-        <tr><td style="padding:15px 18px"><table width="100%"><tr><td><small style="color:#657486">Paid</small><br><strong>${
-    php(info.paid)
-  }</strong></td><td><small style="color:#657486">Remaining balance</small><br><strong style="color:${copy.accent}">${
-    php(info.balance)
-  }</strong></td></tr></table></td></tr>
-      </table>
-      ${
-    eventType === "forfeited"
-      ? ""
-      : `<p style="font-size:13px;line-height:1.6;color:#657486;margin:20px 0 0">All payments are final and non-refundable. Contact Paddle Rage Pickleball or follow your original payment instructions to settle the balance.</p>`
-  }
-    </td></tr>
-    <tr><td style="background:#0b2744;padding:16px 30px;text-align:center;color:#d6e1e9;font-size:12px">Automated account notice from Paddle Rage Pickleball</td></tr>
-  </table></td></tr></table></body></html>`;
-}
-
-function emailPlain(
-  info: ReturnType<typeof summary>,
-  eventType: string,
-): string {
-  const copy = noticeCopy(eventType, info.balance, info.deadline);
-  const action = eventType === "forfeited"
-    ? `The remaining balance of PHP ${
-      info.balance.toLocaleString("en-PH", { minimumFractionDigits: 2 })
-    } was not paid by the deadline. The slot was released, and payments already made remain non-refundable.`
-    : `Please pay the remaining balance of PHP ${
-      info.balance.toLocaleString("en-PH", { minimumFractionDigits: 2 })
-    } by ${phDateTime(info.deadline)} to keep the reservation.`;
-  return `PADDLE RAGE PICKLEBALL\n${copy.heading}\n\nHi ${info.name},\n\n${action}\n\nBooking reference: ${info.key}\nCourt: ${info.courts}\nPaid: PHP ${
-    info.paid.toLocaleString("en-PH", { minimumFractionDigits: 2 })
-  }\nRemaining balance: PHP ${
-    info.balance.toLocaleString("en-PH", { minimumFractionDigits: 2 })
-  }\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\nhttps://paddleragecdo.ph`;
 }
 
 async function assertAdmin(req: Request, db: any) {
@@ -283,15 +154,29 @@ async function sendNotice(
     };
   }
 
-  const copy = noticeCopy(eventType, info.balance, info.deadline);
+  const content = renderBalanceNoticeEmail({
+    eventType: eventType as
+      | "reminder_3d"
+      | "reminder_2d"
+      | "reminder_1d"
+      | "forfeited"
+      | "manual",
+    bookingRef: info.key,
+    fullName: info.name,
+    courtName: info.courts,
+    schedules: info.schedules,
+    paid: info.paid,
+    remainingBalance: info.balance,
+    deadline: info.deadline,
+  });
   let sent: { id: string };
   try {
     sent = await sendMailerooEmail({
       to: info.email,
       toName: info.name,
-      subject: `${copy.subject} | Paddle Rage Pickleball`,
-      html: emailHtml(info, eventType),
-      plain: emailPlain(info, eventType),
+      subject: `${content.subject} | Paddle Rage Pickleball`,
+      html: content.html,
+      plain: content.plain,
       tags: {
         message_type: `balance-${eventType}`,
         booking_reference: info.key,

@@ -188,11 +188,11 @@ async function createPayMongoCheckoutSession(input: {
             amount: amountCents,
             name: `Booking ${input.bookingRef}`,
             quantity: 1,
-            description: `Downpayment for booking ${input.bookingRef}`,
+            description: `Payment for booking ${input.bookingRef}`,
           },
         ],
         reference_number: input.bookingRef,
-        description: `Downpayment for ${input.bookingRef}`,
+        description: `Payment for ${input.bookingRef}`,
         metadata: input.metadata,
         billing: {
           name: input.customer.name,

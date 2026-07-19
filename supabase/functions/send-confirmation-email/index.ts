@@ -104,6 +104,13 @@ function verifiedPayload(
   ) {
     throw new Error("Booking could not be verified");
   }
+  const isHostBooking = rows.every((row) => row.host_booking === true);
+  if (
+    !isHostBooking &&
+    rows.some((row) => String(row.payment_status || "") !== "paid")
+  ) {
+    throw new Error("Regular bookings require verified full payment");
+  }
 
   const total = rows.reduce((sum, row) => sum + Number(row.total || 0), 0);
   const paid = rows.reduce(
@@ -134,7 +141,7 @@ function verifiedPayload(
     total,
     downpayment: paid,
     remainingBalance: Math.max(0, total - paid),
-    hostBooking: rows.some((row) => row.host_booking),
+    hostBooking: isHostBooking,
     balanceDueAt: firstDeadline,
     bookingItems: rows.map((row) => ({
       courtName: row.court_name || "Court",
