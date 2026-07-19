@@ -2765,6 +2765,336 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
   .content, .topbar { max-width: none !important; padding: 0 !important; }
 }
 </style>
+<style id="admin-system-refresh">
+/* Shared workspace language for every admin module beyond the overview dashboard. */
+.adm-sec:not(#sec-dash) {
+  --workspace-surface: rgba(12, 18, 14, .94);
+  --workspace-raised: rgba(17, 25, 19, .96);
+  --workspace-muted: rgba(255, 255, 255, .028);
+  --workspace-line: rgba(182, 240, 0, .13);
+  --workspace-line-strong: rgba(182, 240, 0, .25);
+}
+
+.adm-sec:not(#sec-dash):not(#sec-bookings) > .toolbar:first-child {
+  position: relative;
+  min-height: 82px;
+  margin-bottom: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--workspace-line);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 96% 0, rgba(182, 240, 0, .095), transparent 28rem),
+    linear-gradient(145deg, var(--workspace-raised), rgba(9, 14, 10, .96));
+  box-shadow: var(--admin-shadow-soft);
+  overflow: hidden;
+}
+
+.adm-sec:not(#sec-dash):not(#sec-bookings) > .toolbar:first-child::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 17px;
+  bottom: 17px;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: linear-gradient(180deg, var(--pr-neon-bright), var(--pr-neon));
+  box-shadow: 0 0 18px rgba(182, 240, 0, .36);
+}
+
+.adm-sec:not(#sec-dash):not(#sec-reports):not(#sec-remittances):not(#sec-accounts) > .toolbar h2,
+.adm-sec:not(#sec-dash):not(#sec-reports):not(#sec-remittances):not(#sec-accounts) h3,
+.adm-sec:not(#sec-dash):not(#sec-reports):not(#sec-remittances):not(#sec-accounts) h4 {
+  font-family: 'DM Sans', sans-serif;
+  letter-spacing: -.015em;
+}
+
+.adm-sec:not(#sec-dash) > .toolbar h2 {
+  font-size: clamp(1.22rem, 1.8vw, 1.62rem);
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.adm-sec:not(#sec-dash) .panel,
+.adm-sec:not(#sec-dash) .gm-panel,
+.adm-sec:not(#sec-dash) .host-panel,
+.adm-sec:not(#sec-dash) .pr-panel,
+.adm-sec:not(#sec-dash) .tbl-wrap,
+.adm-sec:not(#sec-dash) .rp-filter-shell,
+.adm-sec:not(#sec-dash) .rp-details,
+.adm-sec:not(#sec-dash) .account-page-head,
+.adm-sec:not(#sec-dash) .rm-page-head,
+.adm-sec:not(#sec-dash) .rm-cycle-banner,
+.adm-sec:not(#sec-dash) .rm-live-card,
+.adm-sec:not(#sec-dash) .rm-panel {
+  border-color: var(--workspace-line);
+  border-radius: 18px;
+  box-shadow: var(--admin-shadow-soft);
+}
+
+.adm-sec:not(#sec-dash) .panel,
+.adm-sec:not(#sec-dash) .gm-panel,
+.adm-sec:not(#sec-dash) .host-panel {
+  background:
+    linear-gradient(145deg, var(--workspace-surface), rgba(8, 13, 9, .965));
+}
+
+.adm-sec:not(#sec-dash) .panel:hover,
+.adm-sec:not(#sec-dash) .gm-panel:hover,
+.adm-sec:not(#sec-dash) .host-panel:hover {
+  border-color: var(--workspace-line-strong);
+}
+
+.adm-sec:not(#sec-dash) .panel h4,
+.adm-sec:not(#sec-dash) .gm-panel > h3,
+.adm-sec:not(#sec-dash) .host-panel > h3 {
+  color: #eef3eb;
+  font-size: .83rem;
+  font-weight: 850;
+  letter-spacing: .015em;
+  text-transform: none;
+}
+
+.adm-sec:not(#sec-dash) .fl {
+  margin-bottom: 7px;
+  color: #98a497;
+  font-size: .65rem;
+  font-weight: 850;
+  letter-spacing: .085em;
+}
+
+.adm-sec:not(#sec-dash) .fi {
+  min-height: 44px;
+  border-color: var(--workspace-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .035);
+}
+
+.adm-sec:not(#sec-dash) .fi:hover { border-color: var(--workspace-line-strong); }
+.adm-sec:not(#sec-dash) .fg { margin-bottom: 16px; }
+.adm-sec:not(#sec-dash) .frow { gap: 12px; }
+
+.adm-sec:not(#sec-dash) .tbl-wrap {
+  background: linear-gradient(145deg, var(--workspace-surface), rgba(8, 13, 9, .97));
+}
+
+.adm-sec:not(#sec-dash) .tbl-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 42px;
+  background: #101711;
+}
+
+.adm-sec:not(#sec-dash) .tbl-wrap td { background: transparent; }
+.adm-sec:not(#sec-dash) .tbl-wrap tr:hover td { background: rgba(182, 240, 0, .038); }
+
+/* Payment review */
+#sec-payreview .pr-toolbar { min-height: 96px; }
+#sec-payreview .pr-title { gap: 5px; }
+#sec-payreview .pr-title h2 { font-size: 1.45rem; }
+#sec-payreview .pr-subtitle { color: #98a497; font-weight: 650; }
+#sec-payreview .pr-stat-grid { gap: 12px; margin-bottom: 16px; }
+#sec-payreview .pr-stat {
+  min-height: 92px;
+  padding: 16px;
+  border-color: var(--workspace-line);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 98% 0, rgba(182, 240, 0, .075), transparent 55%),
+    var(--workspace-surface);
+  box-shadow: var(--admin-shadow-soft);
+}
+
+#sec-payreview .pr-stat::before { left: 15px; right: auto; width: 46px; border-radius: 999px; }
+#sec-payreview .pr-stat-value { margin-top: 9px; font-family: 'DM Sans', sans-serif; font-size: 1.65rem; letter-spacing: -.04em; }
+#sec-payreview .pr-panel-head { padding: 17px; }
+#sec-payreview .pr-card-list { padding: 14px; }
+#sec-payreview .pr-card { padding: 14px; border-color: var(--workspace-line); border-radius: 14px; background: rgba(255, 255, 255, .018); }
+
+/* Reports, accounts and remittances already have dedicated structures; align their surfaces. */
+#sec-reports .rp-filter-shell,
+#sec-reports .rp-metric,
+#sec-reports .rp-simple-panel,
+#sec-reports .rp-details {
+  border-color: var(--workspace-line);
+  box-shadow: var(--admin-shadow-soft);
+}
+
+#sec-reports .rp-metric { border-radius: 16px; }
+#sec-reports .rp-metric-value { font-family: 'DM Sans', sans-serif; letter-spacing: -.04em; }
+#sec-accounts .account-page-head,
+#sec-remittances .rm-page-head { padding: 22px; background-color: var(--workspace-surface); }
+#sec-accounts .account-directory-meta { gap: 8px; margin: 12px 0; }
+
+/* Court management uses two clear work cards above one full-width table. */
+#sec-courts.on {
+  display: grid;
+  grid-template-columns: minmax(320px, .82fr) minmax(440px, 1.18fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+#sec-courts > .toolbar,
+#sec-courts > .tbl-wrap { grid-column: 1 / -1; }
+#sec-courts > .panel { max-width: none !important; height: 100%; margin: 0 !important; padding: 20px !important; }
+#sec-courts > .panel > p { line-height: 1.55; }
+#sec-courts #ohSummary,
+#sec-courts #tiersBody > div {
+  border-color: var(--workspace-line) !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, .03) !important;
+}
+
+/* Open Play becomes a practical scheduling workspace. */
+#sec-blocked.on {
+  display: grid;
+  grid-template-columns: minmax(410px, .92fr) minmax(440px, 1.08fr);
+  gap: 16px;
+  align-items: start;
+}
+
+#sec-blocked > .toolbar { grid-column: 1 / -1; }
+#sec-blocked > .panel { max-width: none !important; margin: 0 !important; padding: 20px !important; }
+#sec-blocked > .panel:nth-child(2) { grid-row: 2 / span 2; }
+#sec-blocked > .panel:nth-child(3) { grid-column: 2; grid-row: 2; }
+#sec-blocked > .panel:nth-child(4) { grid-column: 2; grid-row: 3; }
+#sec-blocked .op-court-grid { gap: 9px; }
+#sec-blocked .op-day,
+#sec-gamemgr .op-day {
+  min-height: 40px;
+  border-color: var(--workspace-line);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .026);
+  font-weight: 750;
+}
+
+#sec-blocked .op-day:has(input:checked),
+#sec-gamemgr .op-day:has(input:checked) {
+  color: var(--pr-neon-bright);
+  border-color: rgba(182, 240, 0, .42);
+  background: rgba(182, 240, 0, .115);
+  box-shadow: inset 0 0 0 1px rgba(182, 240, 0, .06);
+}
+
+/* Host Center and Game Manager */
+#sec-hosts .host-shell,
+#sec-gamemgr .gm-shell { gap: 18px; }
+#sec-hosts .host-panel,
+#sec-gamemgr .gm-panel { padding: 18px; border-radius: 16px; }
+#sec-hosts .host-feature { min-height: 76px; border-color: var(--workspace-line); border-radius: 12px; background: rgba(255, 255, 255, .03); }
+#sec-hosts .host-session-card,
+#sec-hosts .host-app-card { border-color: var(--workspace-line); border-radius: 14px; background: rgba(255, 255, 255, .018); }
+
+#sec-gamemgr .gm-shell { grid-template-columns: minmax(300px, 350px) minmax(0, 1fr); }
+#sec-gamemgr .gm-stack { gap: 16px; }
+#sec-gamemgr .gm-stat { min-height: 70px; padding: 12px; border-color: var(--workspace-line); border-radius: 12px; background: rgba(255, 255, 255, .03); }
+#sec-gamemgr .gm-playbar {
+  min-height: 58px;
+  color: #071006;
+  border: 1px solid rgba(215, 255, 63, .65);
+  background: linear-gradient(135deg, var(--pr-neon-bright), var(--pr-neon));
+  box-shadow: 0 10px 26px rgba(182, 240, 0, .16);
+}
+
+#sec-gamemgr .gm-court-card,
+#sec-gamemgr .gm-next-card,
+#sec-gamemgr .gm-standing-row,
+#sec-gamemgr .gm-wait { border-color: var(--workspace-line); border-radius: 14px; background: rgba(255, 255, 255, .02); }
+
+/* Payments use the available desktop width instead of one narrow column. */
+#sec-payments.on {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+#sec-payments > .toolbar,
+#sec-payments > .panel:nth-child(2),
+#sec-payments > .panel:nth-child(5) { grid-column: 1 / -1; }
+#sec-payments > .panel { max-width: none !important; margin: 0 !important; padding: 20px !important; }
+#sec-payments .integration-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+#sec-payments .integration-card { min-height: 98px; padding: 14px; border-color: var(--workspace-line); border-radius: 13px; background: rgba(255, 255, 255, .025); }
+#sec-payments label[style*="cursor:pointer"],
+#sec-payments div[style*="background:var(--input)"] {
+  border-color: var(--workspace-line) !important;
+  border-radius: 12px !important;
+}
+
+#sec-payments label[style*="cursor:pointer"]:hover { border-color: var(--workspace-line-strong) !important; }
+
+/* Maintenance and archive should feel like full workspaces, not narrow utilities. */
+#sec-maintenance > .panel { max-width: none !important; margin: 0 !important; padding: 20px !important; }
+#sec-maintenance #mtRulesList { display: grid; gap: 12px; }
+#sec-deleted > .panel { border-left: 3px solid rgba(232, 185, 77, .58); }
+
+@media (max-width: 1120px) {
+  #sec-courts.on,
+  #sec-blocked.on,
+  #sec-payments.on { grid-template-columns: 1fr; }
+  #sec-courts > .toolbar,
+  #sec-courts > .tbl-wrap,
+  #sec-blocked > .toolbar,
+  #sec-blocked > .panel:nth-child(2),
+  #sec-blocked > .panel:nth-child(3),
+  #sec-blocked > .panel:nth-child(4),
+  #sec-payments > .toolbar,
+  #sec-payments > .panel:nth-child(2),
+  #sec-payments > .panel:nth-child(5) { grid-column: 1; grid-row: auto; }
+  #sec-gamemgr .gm-shell { grid-template-columns: 1fr; }
+  #sec-payments .integration-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .adm-sec:not(#sec-dash):not(#sec-bookings) > .toolbar:first-child {
+    min-height: 0;
+    padding: 15px;
+    border-radius: 15px;
+  }
+  .adm-sec:not(#sec-dash):not(#sec-bookings) > .toolbar:first-child::before { top: 14px; bottom: 14px; }
+  .adm-sec:not(#sec-dash) > .toolbar h2 { font-size: 1.18rem; }
+  .adm-sec:not(#sec-dash) .panel,
+  .adm-sec:not(#sec-dash) .gm-panel,
+  .adm-sec:not(#sec-dash) .host-panel,
+  .adm-sec:not(#sec-dash) .pr-panel,
+  .adm-sec:not(#sec-dash) .tbl-wrap,
+  .adm-sec:not(#sec-dash) .rp-filter-shell,
+  .adm-sec:not(#sec-dash) .account-page-head,
+  .adm-sec:not(#sec-dash) .rm-page-head { border-radius: 15px; }
+  #sec-courts > .panel,
+  #sec-blocked > .panel,
+  #sec-payments > .panel,
+  #sec-maintenance > .panel,
+  #sec-hosts .host-panel,
+  #sec-gamemgr .gm-panel { padding: 15px !important; }
+  #sec-blocked .op-court-grid,
+  #sec-gamemgr .op-court-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #sec-blocked .frow,
+  #sec-payments .frow { display: grid; grid-template-columns: 1fr; }
+  #sec-blocked > .panel:nth-child(3) > div:first-child { align-items: stretch !important; }
+  #sec-blocked > .panel:nth-child(3) > div:first-child > div { display: grid !important; grid-template-columns: 1fr 1fr; width: 100%; }
+  #sec-blocked > .panel:nth-child(3) > div:first-child .fi { max-width: none !important; min-width: 0; }
+  #sec-payments .integration-grid { grid-template-columns: 1fr; }
+  #sec-accounts .account-page-actions,
+  #sec-remittances .rm-head-actions { width: 100%; }
+  #sec-accounts .account-page-actions .btn,
+  #sec-remittances .rm-head-actions .btn { flex: 1; justify-content: center; }
+  #sec-deleted > .toolbar > div { display: grid !important; grid-template-columns: 1fr 1fr; }
+  #sec-deleted > .toolbar input { grid-column: 1 / -1; width: 100% !important; }
+  #sec-deleted > .toolbar select { width: 100% !important; }
+}
+
+@media (max-width: 480px) {
+  #sec-payreview .pr-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #sec-payreview .pr-stat { min-height: 82px; padding: 13px; }
+  #sec-gamemgr .gm-board { grid-template-columns: 1fr; }
+  #sec-blocked > .panel:nth-child(3) > div:first-child > div { grid-template-columns: 1fr; }
+}
+
+@media print {
+  .adm-sec:not(#sec-dash) > .toolbar:first-child { border: 0 !important; box-shadow: none !important; }
+}
+</style>
 </head>
 <body data-theme="dark">
 <div class="toasts" id="toasts"></div>
@@ -5209,7 +5539,7 @@ let sess;
 /* ==============================================
    NAVIGATION
    ============================================== */
-const titles={dash:'Dashboard',bookings:'Bookings',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',accounts:'Accounts',remittances:'Remittances',blocked:'Open Play',hosts:'Host Center',gamemgr:'Game Manager',maintenance:'Maintenance',payments:'Payments'};
+const titles={dash:'Dashboard',bookings:'Bookings',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',accounts:'Host Accounts',remittances:'Remittances',blocked:'Open Play',hosts:'Host Center',gamemgr:'Game Manager',maintenance:'Maintenance',payments:'Payments'};
 const SECTION_PERM={dash:'dashboard',bookings:'bookings',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',accounts:'host_accounts_view',remittances:'remittances',blocked:'open_play',hosts:'host_open_play',gamemgr:'open_play',maintenance:'maintenance',payments:'payments'};
 const SECTION_LOADERS={dash:renderDash,bookings:renderBookings,deleted:renderDeletedBookings,payreview:renderPaymentReview,reports:renderReport,courts:renderCourts,accounts:renderAccounts,remittances:renderRemittances,blocked:renderBlocked,hosts:renderHostCenter,gamemgr:renderGameManager,maintenance:renderMaintenance,payments:renderPaymentSettings};
 let _curSection=null;
