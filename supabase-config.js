@@ -1661,6 +1661,42 @@ window.DB = {
     return data || [];
   },
 
+  async setOpenPlayGamePublicShare(sessionId, enabled) {
+    const { data, error } = await _sb.rpc('set_open_play_game_public_share', {
+      p_session_id: sessionId,
+      p_enabled: Boolean(enabled),
+    });
+    if (error) {
+      console.error('setOpenPlayGamePublicShare:', error);
+      throw error;
+    }
+    return data || null;
+  },
+
+  async rotateOpenPlayGamePublicShare(sessionId) {
+    const { data, error } = await _sb.rpc('rotate_open_play_game_public_share', {
+      p_session_id: sessionId,
+    });
+    if (error) {
+      console.error('rotateOpenPlayGamePublicShare:', error);
+      throw error;
+    }
+    return data || null;
+  },
+
+  async getPublicOpenPlayGameLiveBoard(shareToken) {
+    const token = String(shareToken || '').trim();
+    if (!/^[0-9a-f]{64}$/.test(token)) return null;
+    const { data, error } = await _sb.rpc('get_public_open_play_game_live_board', {
+      p_share_token: token,
+    });
+    if (error) {
+      console.error('getPublicOpenPlayGameLiveBoard:', error);
+      throw error;
+    }
+    return data || null;
+  },
+
   async createOpenPlayGameSession(session) {
     const row = {
       date: session.date,
@@ -1696,6 +1732,19 @@ window.DB = {
     return data || [];
   },
 
+  async addOpenPlayGamePlayer(sessionId, player) {
+    const row = {
+      session_id: sessionId,
+      full_name: player.fullName || player.full_name,
+      source_registration_id: player.sourceRegistrationId || player.source_registration_id || null,
+      status: player.status || 'active',
+      seed_order: Number(player.seedOrder ?? player.seed_order ?? 0),
+    };
+    const { data, error } = await _sb.from('open_play_game_players').insert(row).select('*').single();
+    if (error) { console.error('addOpenPlayGamePlayer:', error); throw error; }
+    return data;
+  },
+
   async replaceOpenPlayGamePlayers(sessionId, players) {
     const { error: delError } = await _sb.from('open_play_game_players').delete().eq('session_id', sessionId);
     if (delError) { console.error('replaceOpenPlayGamePlayers delete:', delError); throw delError; }
@@ -1709,6 +1758,15 @@ window.DB = {
     }));
     const { data, error } = await _sb.from('open_play_game_players').insert(rows).select('*').order('seed_order');
     if (error) { console.error('replaceOpenPlayGamePlayers insert:', error); throw error; }
+    return data || [];
+  },
+
+  async syncOpenPlayGameQueueWaitTimes(sessionId, queuePlayerIds) {
+    const { data, error } = await _sb.rpc('sync_open_play_game_queue_wait_times', {
+      p_session_id: sessionId,
+      p_queue_player_ids: (queuePlayerIds || []).map(String),
+    });
+    if (error) { console.error('syncOpenPlayGameQueueWaitTimes:', error); throw error; }
     return data || [];
   },
 
@@ -1730,7 +1788,6 @@ window.DB = {
     };
     const { data, error } = await _sb.from('open_play_game_rounds').insert(row).select('*').single();
     if (error) { console.error('addOpenPlayGameRound:', error); throw error; }
-    await this.updateOpenPlayGameSession(round.sessionId, { currentRound: round.roundNo, status: 'active' }).catch(() => {});
     return data;
   },
 
@@ -1746,20 +1803,61 @@ window.DB = {
     return data;
   },
 
+  async updateOpenPlayGameRoundIfCurrent(id, expected, updates) {
+    const { data, error } = await _sb.rpc('update_open_play_game_round_if_current', {
+      p_round_id: id,
+      p_expected_assignments: expected.assignments || [],
+      p_expected_queue_snapshot: expected.queueSnapshot ?? expected.queue_snapshot ?? [],
+      p_assignments: updates.assignments || [],
+      p_queue_snapshot: updates.queueSnapshot ?? updates.queue_snapshot ?? [],
+    });
+    if (error) { console.error('updateOpenPlayGameRoundIfCurrent:', error); throw error; }
+    return data;
+  },
+
+  async replaceOpenPlayGameCourtPlayer(id, expected, replacement) {
+    const { data, error } = await _sb.rpc('replace_open_play_game_court_player', {
+      p_round_id: id,
+      p_expected_assignments: expected.assignments || [],
+      p_expected_queue_snapshot: expected.queueSnapshot ?? expected.queue_snapshot ?? [],
+      p_court_index: Number(replacement.courtIndex),
+      p_team: replacement.team,
+      p_slot_index: Number(replacement.slotIndex),
+      p_outgoing_player_id: replacement.outgoingPlayerId,
+      p_incoming_player_id: replacement.incomingPlayerId || null,
+      p_incoming_player_name: replacement.incomingPlayerName || null,
+      p_mark_outgoing_removed: replacement.markOutgoingRemoved === true,
+    });
+    if (error) { console.error('replaceOpenPlayGameCourtPlayer:', error); throw error; }
+    return data;
+  },
+
+  async correctOpenPlayGameMatchWinner(id, expected, correction) {
+    const { data, error } = await _sb.rpc('correct_open_play_game_match_winner', {
+      p_round_id: id,
+      p_expected_assignments: expected.assignments || [],
+      p_court_index: Number(correction.courtIndex),
+      p_completed_game_index: correction.completedGameIndex ?? null,
+      p_expected_winner: correction.expectedWinner,
+      p_new_winner: correction.newWinner,
+    });
+    if (error) { console.error('correctOpenPlayGameMatchWinner:', error); throw error; }
+    return data;
+  },
+
   async deleteLatestOpenPlayGameRound(sessionId) {
-    const rounds = await this.getOpenPlayGameRounds(sessionId);
-    const last = rounds[rounds.length - 1];
-    if (!last) return null;
-    const { error } = await _sb.from('open_play_game_rounds').delete().eq('id', last.id);
+    const { data, error } = await _sb.rpc('delete_latest_open_play_game_round_guarded', {
+      p_session_id: sessionId,
+    });
     if (error) { console.error('deleteLatestOpenPlayGameRound:', error); throw error; }
-    await this.updateOpenPlayGameSession(sessionId, { currentRound: Math.max(0, Number(last.round_no || 1) - 1) }).catch(() => {});
-    return last;
+    return data || null;
   },
 
   async clearOpenPlayGameRounds(sessionId) {
-    const { error } = await _sb.from('open_play_game_rounds').delete().eq('session_id', sessionId);
+    const { error } = await _sb.rpc('clear_open_play_game_rounds_guarded', {
+      p_session_id: sessionId,
+    });
     if (error) { console.error('clearOpenPlayGameRounds:', error); throw error; }
-    await this.updateOpenPlayGameSession(sessionId, { currentRound: 0, status: 'draft' }).catch(() => {});
   },
 
   // ---- BLOCKED DATES ----
@@ -2434,6 +2532,21 @@ window.DB = {
   const STORE_KEY = 'paddle_rage_local_db_v1';
   const nowIso = () => new Date().toISOString();
   const localRef = prefix => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`.toUpperCase();
+  const localShareToken = () => {
+    const bytes = new Uint8Array(32);
+    if (window.crypto?.getRandomValues) {
+      window.crypto.getRandomValues(bytes);
+    } else {
+      for (let index = 0; index < bytes.length; index += 1) {
+        bytes[index] = Math.floor(Math.random() * 256);
+      }
+    }
+    return [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
+  };
+  const withLocalPlayManagerLock = task =>
+    window.navigator?.locks?.request
+      ? window.navigator.locks.request(`${STORE_KEY}:play-manager`, task)
+      : task();
 
   const defaultCourts = () => Array.from({ length: 10 }, (_, i) => {
     const n = i + 1;
@@ -2565,6 +2678,7 @@ window.DB = {
       openPlayGameSessions: [],
       openPlayGamePlayers: [],
       openPlayGameRounds: [],
+      openPlayGameShares: [],
       blockedDates: [],
       deletedBookingArchive: [],
       accounts: defaultAccounts(),
@@ -2609,6 +2723,7 @@ window.DB = {
       openPlayGameSessions: Array.isArray(parsed.openPlayGameSessions) ? parsed.openPlayGameSessions : [],
       openPlayGamePlayers: Array.isArray(parsed.openPlayGamePlayers) ? parsed.openPlayGamePlayers : [],
       openPlayGameRounds: Array.isArray(parsed.openPlayGameRounds) ? parsed.openPlayGameRounds : [],
+      openPlayGameShares: Array.isArray(parsed.openPlayGameShares) ? parsed.openPlayGameShares : [],
       blockedDates: Array.isArray(parsed.blockedDates) ? parsed.blockedDates : [],
       deletedBookingArchive: Array.isArray(parsed.deletedBookingArchive) ? parsed.deletedBookingArchive : [],
       accounts,
@@ -2621,6 +2736,222 @@ window.DB = {
 
   function writeDb(db) {
     localStorage.setItem(STORE_KEY, JSON.stringify(db));
+  }
+
+  function mutateLocalOpenPlayGamePublicShare(db, sessionId, enabled, rotate = false) {
+    const session = db.openPlayGameSessions.find(item =>
+      String(item.id) === String(sessionId)
+    );
+    if (!session) throw new Error('PLAY_MANAGER_SESSION_NOT_FOUND');
+
+    if (!enabled) {
+      db.openPlayGameShares = (db.openPlayGameShares || []).filter(share =>
+        String(share.session_id) !== String(sessionId)
+      );
+      return null;
+    }
+
+    const now = Date.now();
+    const status = String(session.status || '');
+    const completedAt = Date.parse(session.updated_at || '');
+    const completedIsFresh = status === 'completed'
+      && Number.isFinite(completedAt)
+      && now - completedAt <= 24 * 60 * 60 * 1000;
+    if (!['active', 'paused'].includes(status) && !completedIsFresh) {
+      throw new Error('PLAY_MANAGER_SESSION_NOT_SHAREABLE');
+    }
+
+    db.openPlayGameShares = (db.openPlayGameShares || []).filter(share => {
+      const expiresAt = Date.parse(share.expires_at || '');
+      const belongsToSession = String(share.session_id) === String(sessionId);
+      return Number.isFinite(expiresAt) && expiresAt > now && !(rotate && belongsToSession);
+    });
+    const token = localShareToken();
+    const expiresAt = status === 'completed'
+      ? Math.min(now + 24 * 60 * 60 * 1000, completedAt + 24 * 60 * 60 * 1000)
+      : now + 24 * 60 * 60 * 1000;
+    db.openPlayGameShares.push({
+      id: localRef('gms'),
+      session_id: sessionId,
+      token,
+      created_at: new Date(now).toISOString(),
+      rotated_at: new Date(now).toISOString(),
+      expires_at: new Date(expiresAt).toISOString(),
+    });
+    return token;
+  }
+
+  function requireLocalPlayManagerSession(db, sessionId, allowedStatuses) {
+    const session = db.openPlayGameSessions.find(item =>
+      String(item.id) === String(sessionId)
+    );
+    if (!session) throw new Error('PLAY_MANAGER_SESSION_NOT_FOUND');
+    if (!allowedStatuses.includes(String(session.status || ''))) {
+      throw new Error('PLAY_MANAGER_SESSION_NOT_ACTIVE');
+    }
+    return session;
+  }
+
+  function localOpenPlayLiveBoard(db, shareToken) {
+    const token = String(shareToken || '').trim();
+    if (!/^[0-9a-f]{64}$/.test(token)) return null;
+    const share = (db.openPlayGameShares || []).find(row => row.token === token);
+    if (!share) return null;
+    const shareExpiresAt = Date.parse(share.expires_at || '');
+    if (!Number.isFinite(shareExpiresAt) || shareExpiresAt <= Date.now()) return null;
+
+    const session = (db.openPlayGameSessions || []).find(row =>
+      String(row.id) === String(share.session_id)
+    );
+    if (!session) return null;
+    const status = String(session.status || '');
+    const completedAt = Date.parse(session.updated_at || '');
+    const completedIsFresh = status === 'completed'
+      && Number.isFinite(completedAt)
+      && Date.now() - completedAt <= 24 * 60 * 60 * 1000;
+    if (!['active', 'paused'].includes(status) && !completedIsFresh) return null;
+
+    const sessionPlayers = (db.openPlayGamePlayers || [])
+      .filter(player => String(player.session_id) === String(session.id));
+    const activePlayers = sessionPlayers
+      .filter(player => player.status === 'active')
+      .sort((left, right) =>
+        Number(left.seed_order || 0) - Number(right.seed_order || 0) ||
+        String(left.created_at || '').localeCompare(String(right.created_at || '')) ||
+        String(left.id).localeCompare(String(right.id))
+      );
+    const playerById = new Map(sessionPlayers.map(player => [String(player.id), player.full_name || 'Player']));
+    const rounds = (db.openPlayGameRounds || [])
+      .filter(round => String(round.session_id) === String(session.id))
+      .sort((left, right) =>
+        Number(left.round_no || 0) - Number(right.round_no || 0) ||
+        String(left.created_at || '').localeCompare(String(right.created_at || ''))
+      );
+    const latestRound = rounds[rounds.length - 1] || null;
+    const liveAssigned = new Set(
+      (latestRound?.assignments || [])
+        .flatMap(game => game.winner
+          ? [
+              ...(game.readyMatch?.teamA || []),
+              ...(game.readyMatch?.teamB || []),
+            ]
+          : [...(game.teamA || []), ...(game.teamB || [])]
+        )
+        .map(String)
+    );
+    const activeIds = new Set(activePlayers.map(player => String(player.id)));
+    const queuedIds = [];
+    const queuedSet = new Set();
+    (latestRound?.queue_snapshot || []).map(String).forEach(playerId => {
+      if (activeIds.has(playerId) && !liveAssigned.has(playerId) && !queuedSet.has(playerId)) {
+        queuedSet.add(playerId);
+        queuedIds.push(playerId);
+      }
+    });
+    activePlayers.forEach(player => {
+      const playerId = String(player.id);
+      if (!liveAssigned.has(playerId) && !queuedSet.has(playerId)) {
+        queuedSet.add(playerId);
+        queuedIds.push(playerId);
+      }
+    });
+
+    const scores = new Map(activePlayers.map(player => [
+      String(player.id),
+      { name: player.full_name || 'Player', games: 0, wins: 0 },
+    ]));
+    let resultCount = 0;
+    let latestResult = null;
+    let latestResultTime = -Infinity;
+    const processGame = (game, round, courtIndex) => {
+      const teamOne = (game.teamA || []).map(String);
+      const teamTwo = (game.teamB || []).map(String);
+      [...teamOne, ...teamTwo].forEach(playerId => {
+        const score = scores.get(playerId);
+        if (score) score.games += 1;
+      });
+      if (game.winner === 'A') {
+        resultCount += 1;
+        teamOne.forEach(playerId => {
+          const score = scores.get(playerId);
+          if (score) score.wins += 1;
+        });
+      }
+      if (game.winner === 'B') {
+        resultCount += 1;
+        teamTwo.forEach(playerId => {
+          const score = scores.get(playerId);
+          if (score) score.wins += 1;
+        });
+      }
+      if (game.winner === 'A' || game.winner === 'B') {
+        const resultAt = game.resultAt || null;
+        const parsedResultTime = Date.parse(resultAt || '');
+        const parsedRoundTime = Date.parse(round?.created_at || '');
+        const resultTime = Number.isFinite(parsedResultTime)
+          ? parsedResultTime
+          : (Number.isFinite(parsedRoundTime) ? parsedRoundTime : 0);
+        if (resultTime >= latestResultTime) {
+          const courtName = game.courtName || `Court ${courtIndex + 1}`;
+          latestResultTime = resultTime;
+          latestResult = {
+            eventId: [
+              Number(round?.round_no || 0),
+              courtName,
+              resultAt || '',
+              game.winner,
+            ].join(':'),
+            roundNo: Number(round?.round_no || 0),
+            courtIndex,
+            courtName,
+            team1: teamOne.map(playerId => playerById.get(playerId) || 'Player'),
+            team2: teamTwo.map(playerId => playerById.get(playerId) || 'Player'),
+            winner: game.winner,
+            resultAt,
+          };
+        }
+      }
+    };
+    rounds.forEach(round => {
+      (round.assignments || []).forEach((game, courtIndex) => {
+        (game.completedGames || []).forEach(completedGame => {
+          processGame(completedGame, round, courtIndex);
+        });
+        processGame(game, round, courtIndex);
+      });
+    });
+    const standings = [...scores.values()].sort((left, right) =>
+      right.wins - left.wins ||
+      left.games - right.games ||
+      left.name.localeCompare(right.name)
+    );
+
+    return {
+      generatedAt: nowIso(),
+      session: {
+        date: session.date || '',
+        timeLabel: session.time_label || '',
+        courtNames: session.court_names || [],
+        status,
+        currentRound: Number(latestRound?.round_no || session.current_round || 0),
+      },
+      players: activePlayers.map(player => player.full_name || 'Player'),
+      latestRound: latestRound ? {
+        roundNo: Number(latestRound.round_no || 0),
+        assignments: (latestRound.assignments || []).map((game, index) => ({
+          courtName: game.courtName || `Court ${index + 1}`,
+          team1: (game.teamA || []).map(playerId => playerById.get(String(playerId)) || 'Player'),
+          team2: (game.teamB || []).map(playerId => playerById.get(String(playerId)) || 'Player'),
+          startedAt: game.startedAt || null,
+          winner: game.winner || null,
+          gameCount: 1 + (Array.isArray(game.completedGames) ? game.completedGames.length : 0),
+        })),
+        queue: queuedIds.map(playerId => playerById.get(playerId) || 'Player'),
+      } : null,
+      standings,
+      resultCount,
+      latestResult,
+    };
   }
 
   window.DB = {
@@ -3129,6 +3460,25 @@ window.DB = {
         String(b.created_at || '').localeCompare(String(a.created_at || ''))
       );
     },
+    async setOpenPlayGamePublicShare(sessionId, enabled) {
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        const token = mutateLocalOpenPlayGamePublicShare(db, sessionId, enabled, false);
+        writeDb(db);
+        return token;
+      });
+    },
+    async rotateOpenPlayGamePublicShare(sessionId) {
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        const token = mutateLocalOpenPlayGamePublicShare(db, sessionId, true, true);
+        writeDb(db);
+        return token;
+      });
+    },
+    async getPublicOpenPlayGameLiveBoard(shareToken) {
+      return localOpenPlayLiveBoard(readDb(), shareToken);
+    },
     async createOpenPlayGameSession(session) {
       const db = readDb();
       const row = {
@@ -3148,46 +3498,103 @@ window.DB = {
       return row;
     },
     async updateOpenPlayGameSession(id, updates) {
-      const db = readDb();
-      let saved = null;
-      db.openPlayGameSessions = db.openPlayGameSessions.map(s => {
-        if (String(s.id) !== String(id)) return s;
-        saved = {
-          ...s,
-          date: updates.date !== undefined ? updates.date : s.date,
-          time_label: updates.timeLabel !== undefined ? updates.timeLabel : s.time_label,
-          court_ids: updates.courtIds !== undefined ? updates.courtIds : s.court_ids,
-          court_names: updates.courtNames !== undefined ? updates.courtNames : s.court_names,
-          mode: updates.mode !== undefined ? updates.mode : s.mode,
-          status: updates.status !== undefined ? updates.status : s.status,
-          current_round: updates.currentRound !== undefined ? updates.currentRound : s.current_round,
-          updated_at: nowIso(),
-        };
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        let saved = null;
+        db.openPlayGameSessions = db.openPlayGameSessions.map(s => {
+          if (String(s.id) !== String(id)) return s;
+          const nextStatus = updates.status !== undefined ? updates.status : s.status;
+          if (
+            ['completed', 'cancelled'].includes(String(s.status || ''))
+            && String(nextStatus || '') !== String(s.status || '')
+          ) {
+            throw new Error('PLAY_MANAGER_SESSION_TERMINAL');
+          }
+          saved = {
+            ...s,
+            date: updates.date !== undefined ? updates.date : s.date,
+            time_label: updates.timeLabel !== undefined ? updates.timeLabel : s.time_label,
+            court_ids: updates.courtIds !== undefined ? updates.courtIds : s.court_ids,
+            court_names: updates.courtNames !== undefined ? updates.courtNames : s.court_names,
+            mode: updates.mode !== undefined ? updates.mode : s.mode,
+            status: nextStatus,
+            current_round: updates.currentRound !== undefined ? updates.currentRound : s.current_round,
+            updated_at: nowIso(),
+          };
+          return saved;
+        });
+        if (!saved) throw new Error('PLAY_MANAGER_SESSION_NOT_FOUND');
+        writeDb(db);
         return saved;
       });
-      writeDb(db);
-      return saved;
     },
     async getOpenPlayGamePlayers(sessionId) {
       return readDb().openPlayGamePlayers
         .filter(p => String(p.session_id) === String(sessionId))
         .sort((a, b) => Number(a.seed_order || 0) - Number(b.seed_order || 0));
     },
+    async addOpenPlayGamePlayer(sessionId, player) {
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        requireLocalPlayManagerSession(db, sessionId, ['draft', 'active']);
+        const row = {
+          id: localRef('gmp'),
+          session_id: sessionId,
+          full_name: player.fullName || player.full_name,
+          source_registration_id: player.sourceRegistrationId || player.source_registration_id || null,
+          status: player.status || 'active',
+          seed_order: Number(player.seedOrder ?? player.seed_order ?? 0),
+          queue_entered_at: player.queueEnteredAt || player.queue_entered_at || null,
+          created_at: nowIso(),
+        };
+        db.openPlayGamePlayers.push(row);
+        writeDb(db);
+        return row;
+      });
+    },
     async replaceOpenPlayGamePlayers(sessionId, players) {
-      const db = readDb();
-      db.openPlayGamePlayers = db.openPlayGamePlayers.filter(p => String(p.session_id) !== String(sessionId));
-      const rows = players.map((p, i) => ({
-        id: localRef('gmp'),
-        session_id: sessionId,
-        full_name: p.fullName || p.full_name,
-        source_registration_id: p.sourceRegistrationId || p.source_registration_id || null,
-        status: p.status || 'active',
-        seed_order: i,
-        created_at: nowIso(),
-      }));
-      db.openPlayGamePlayers.push(...rows);
-      writeDb(db);
-      return rows;
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        requireLocalPlayManagerSession(db, sessionId, ['draft', 'active']);
+        db.openPlayGamePlayers = db.openPlayGamePlayers.filter(p => String(p.session_id) !== String(sessionId));
+        const rows = players.map((p, i) => ({
+          id: localRef('gmp'),
+          session_id: sessionId,
+          full_name: p.fullName || p.full_name,
+          source_registration_id: p.sourceRegistrationId || p.source_registration_id || null,
+          status: p.status || 'active',
+          seed_order: i,
+          queue_entered_at: p.queueEnteredAt || p.queue_entered_at || null,
+          created_at: nowIso(),
+        }));
+        db.openPlayGamePlayers.push(...rows);
+        writeDb(db);
+        return rows;
+      });
+    },
+    async syncOpenPlayGameQueueWaitTimes(sessionId, queuePlayerIds) {
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        requireLocalPlayManagerSession(db, sessionId, ['active']);
+        const queuedIds = new Set((queuePlayerIds || []).map(String));
+        const enteredAt = nowIso();
+        db.openPlayGamePlayers = db.openPlayGamePlayers.map(player => {
+          if (String(player.session_id) !== String(sessionId)) return player;
+          const isQueued = player.status === 'active' && queuedIds.has(String(player.id));
+          return {
+            ...player,
+            queue_entered_at: isQueued ? (player.queue_entered_at || enteredAt) : null,
+          };
+        });
+        writeDb(db);
+        return db.openPlayGamePlayers
+          .filter(player => String(player.session_id) === String(sessionId))
+          .sort((a, b) =>
+            Number(a.seed_order || 0) - Number(b.seed_order || 0) ||
+            String(a.created_at || '').localeCompare(String(b.created_at || '')) ||
+            String(a.id).localeCompare(String(b.id))
+          );
+      });
     },
     async getOpenPlayGameRounds(sessionId) {
       return readDb().openPlayGameRounds
@@ -3195,70 +3602,357 @@ window.DB = {
         .sort((a, b) => Number(a.round_no || 0) - Number(b.round_no || 0));
     },
     async addOpenPlayGameRound(round) {
-      const db = readDb();
-      const row = {
-        id: localRef('gmr'),
-        session_id: round.sessionId,
-        round_no: round.roundNo,
-        assignments: round.assignments || [],
-        queue_snapshot: round.queueSnapshot || [],
-        partner_history: round.partnerHistory || {},
-        opponent_history: round.opponentHistory || {},
-        created_at: nowIso(),
-        completed_at: round.completedAt || null,
-      };
-      db.openPlayGameRounds.push(row);
-      db.openPlayGameSessions = db.openPlayGameSessions.map(s =>
-        String(s.id) === String(round.sessionId)
-          ? { ...s, current_round: round.roundNo, status: 'active', updated_at: nowIso() }
-          : s
-      );
-      writeDb(db);
-      return row;
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        const session = requireLocalPlayManagerSession(db, round.sessionId, ['draft', 'active']);
+        if (Number(round.roundNo) !== Number(session.current_round || 0) + 1) {
+          throw new Error('PLAY_MANAGER_ROUND_CONFLICT');
+        }
+        const row = {
+          id: localRef('gmr'),
+          session_id: round.sessionId,
+          round_no: round.roundNo,
+          assignments: round.assignments || [],
+          queue_snapshot: round.queueSnapshot || [],
+          partner_history: round.partnerHistory || {},
+          opponent_history: round.opponentHistory || {},
+          created_at: nowIso(),
+          completed_at: round.completedAt || null,
+        };
+        db.openPlayGameRounds.push(row);
+        db.openPlayGameSessions = db.openPlayGameSessions.map(s =>
+          String(s.id) === String(round.sessionId)
+            ? { ...s, current_round: round.roundNo, status: 'active', updated_at: nowIso() }
+            : s
+        );
+        writeDb(db);
+        return row;
+      });
     },
     async updateOpenPlayGameRound(id, updates) {
-      const db = readDb();
-      let saved = null;
-      db.openPlayGameRounds = db.openPlayGameRounds.map(r => {
-        if (String(r.id) !== String(id)) return r;
-        saved = {
-          ...r,
-          assignments: updates.assignments !== undefined ? updates.assignments : r.assignments,
-          queue_snapshot: updates.queueSnapshot !== undefined ? updates.queueSnapshot : r.queue_snapshot,
-          partner_history: updates.partnerHistory !== undefined ? updates.partnerHistory : r.partner_history,
-          opponent_history: updates.opponentHistory !== undefined ? updates.opponentHistory : r.opponent_history,
-          completed_at: updates.completedAt !== undefined ? updates.completedAt : r.completed_at,
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        const current = db.openPlayGameRounds.find(r => String(r.id) === String(id));
+        if (!current) throw new Error('Open Play round not found.');
+        const session = requireLocalPlayManagerSession(db, current.session_id, ['active']);
+        if (Number(current.round_no || 0) !== Number(session.current_round || 0)) {
+          throw new Error('PLAY_MANAGER_SESSION_NOT_ACTIVE');
+        }
+        const saved = {
+          ...current,
+          assignments: updates.assignments !== undefined ? updates.assignments : current.assignments,
+          queue_snapshot: updates.queueSnapshot !== undefined ? updates.queueSnapshot : current.queue_snapshot,
+          partner_history: updates.partnerHistory !== undefined ? updates.partnerHistory : current.partner_history,
+          opponent_history: updates.opponentHistory !== undefined ? updates.opponentHistory : current.opponent_history,
+          completed_at: updates.completedAt !== undefined ? updates.completedAt : current.completed_at,
         };
+        db.openPlayGameRounds = db.openPlayGameRounds.map(r =>
+          String(r.id) === String(id) ? saved : r
+        );
+        writeDb(db);
         return saved;
       });
+    },
+    async updateOpenPlayGameRoundIfCurrent(id, expected, updates) {
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+      const index = db.openPlayGameRounds.findIndex(r => String(r.id) === String(id));
+      if (index < 0) throw new Error('Open Play round not found.');
+      const current = db.openPlayGameRounds[index];
+      const session = requireLocalPlayManagerSession(db, current.session_id, ['active']);
+      if (Number(current.round_no || 0) !== Number(session.current_round || 0)) {
+        throw new Error('PLAY_MANAGER_SESSION_NOT_ACTIVE');
+      }
+      const expectedAssignments = expected.assignments || [];
+      const expectedQueue = expected.queueSnapshot ?? expected.queue_snapshot ?? [];
+      if (
+        JSON.stringify(current.assignments || []) !== JSON.stringify(expectedAssignments) ||
+        JSON.stringify(current.queue_snapshot || []) !== JSON.stringify(expectedQueue)
+      ) {
+        throw new Error('PLAY_MANAGER_ROUND_CONFLICT');
+      }
+      const saved = {
+        ...current,
+        assignments: updates.assignments !== undefined ? updates.assignments : current.assignments,
+        queue_snapshot: updates.queueSnapshot !== undefined ? updates.queueSnapshot : current.queue_snapshot,
+      };
+      db.openPlayGameRounds[index] = saved;
       writeDb(db);
-      return saved;
+        return saved;
+      });
+    },
+    async replaceOpenPlayGameCourtPlayer(id, expected, replacement) {
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+      const roundIndex = db.openPlayGameRounds.findIndex(r => String(r.id) === String(id));
+      if (roundIndex < 0) throw new Error('Open Play round not found.');
+      const current = db.openPlayGameRounds[roundIndex];
+      const expectedAssignments = expected.assignments || [];
+      const expectedQueue = expected.queueSnapshot ?? expected.queue_snapshot ?? [];
+      if (
+        JSON.stringify(current.assignments || []) !== JSON.stringify(expectedAssignments) ||
+        JSON.stringify(current.queue_snapshot || []) !== JSON.stringify(expectedQueue)
+      ) {
+        throw new Error('PLAY_MANAGER_ROUND_CONFLICT');
+      }
+      const session = db.openPlayGameSessions.find(item => String(item.id) === String(current.session_id));
+      const hasNewerRound = db.openPlayGameRounds.some(round =>
+        String(round.session_id) === String(current.session_id) &&
+        Number(round.round_no || 0) > Number(current.round_no || 0)
+      );
+      if (
+        !session ||
+        session.status !== 'active' ||
+        current.completed_at ||
+        hasNewerRound
+      ) {
+        throw new Error('PLAY_MANAGER_SESSION_NOT_ACTIVE');
+      }
+      const courtIndex = Number(replacement.courtIndex);
+      const slotIndex = Number(replacement.slotIndex);
+      const teamKey = replacement.team === 'B' ? 'teamB' : replacement.team === 'A' ? 'teamA' : '';
+      if (!Number.isInteger(courtIndex) || courtIndex < 0 || !Number.isInteger(slotIndex) || slotIndex < 0 || !teamKey) {
+        throw new Error('PLAY_MANAGER_REPLACEMENT_SLOT_INVALID');
+      }
+      const assignments = JSON.parse(JSON.stringify(current.assignments || []));
+      const game = assignments[courtIndex];
+      if (!game || game.winner || String(game[teamKey]?.[slotIndex]) !== String(replacement.outgoingPlayerId)) {
+        throw new Error('PLAY_MANAGER_REPLACEMENT_SLOT_CHANGED');
+      }
+
+      const outgoingIndex = db.openPlayGamePlayers.findIndex(player =>
+        String(player.id) === String(replacement.outgoingPlayerId) &&
+        String(player.session_id) === String(current.session_id) &&
+        player.status === 'active'
+      );
+      if (outgoingIndex < 0) throw new Error('PLAY_MANAGER_REPLACEMENT_PLAYER_NOT_ACTIVE');
+
+      const incomingName = String(replacement.incomingPlayerName || '').trim();
+      const incomingId = replacement.incomingPlayerId ? String(replacement.incomingPlayerId) : '';
+      if ((!incomingId && !incomingName) || (incomingId && incomingName)) {
+        throw new Error('PLAY_MANAGER_REPLACEMENT_PLAYER_REQUIRED');
+      }
+
+      let incoming = null;
+      if (incomingName) {
+        if (incomingName.length > 90) throw new Error('Player name is too long.');
+        if (db.openPlayGamePlayers.some(player =>
+          String(player.session_id) === String(current.session_id) &&
+          String(player.full_name || '').trim().toLowerCase() === incomingName.toLowerCase()
+        )) {
+          throw new Error('That player is already in the session.');
+        }
+        incoming = {
+          id: localRef('gmp'),
+          session_id: current.session_id,
+          full_name: incomingName,
+          source_registration_id: null,
+          status: 'active',
+          seed_order: db.openPlayGamePlayers
+            .filter(player => String(player.session_id) === String(current.session_id))
+            .reduce((highest, player) => Math.max(highest, Number(player.seed_order || 0) + 1), 0),
+          created_at: nowIso(),
+        };
+      } else {
+        if (String(replacement.outgoingPlayerId) === incomingId) {
+          throw new Error('Replacement player must be different.');
+        }
+        incoming = db.openPlayGamePlayers.find(player =>
+          String(player.id) === incomingId &&
+          String(player.session_id) === String(current.session_id) &&
+          player.status === 'active'
+        );
+        if (!incoming) throw new Error('PLAY_MANAGER_REPLACEMENT_PLAYER_NOT_ACTIVE');
+        const alreadyPlaying = assignments
+          .filter(assignment => !assignment.winner)
+          .some(assignment =>
+            [...(assignment.teamA || []), ...(assignment.teamB || [])]
+              .some(playerId => String(playerId) === incomingId)
+          );
+        if (alreadyPlaying) throw new Error('PLAY_MANAGER_REPLACEMENT_PLAYER_ALREADY_PLAYING');
+      }
+
+      game[teamKey][slotIndex] = String(incoming.id);
+      game.startedAt = nowIso();
+      const players = db.openPlayGamePlayers.map(player =>
+        replacement.markOutgoingRemoved === true && String(player.id) === String(replacement.outgoingPlayerId)
+          ? { ...player, status: 'removed' }
+          : player
+      );
+      if (incomingName) players.push(incoming);
+
+      const assignedIds = assignments
+        .filter(assignment => !assignment.winner)
+        .flatMap(assignment =>
+          [...(assignment.teamA || []), ...(assignment.teamB || [])].map(String)
+        );
+      if (assignedIds.length !== new Set(assignedIds).size) {
+        throw new Error('PLAY_MANAGER_REPLACEMENT_DUPLICATE_ASSIGNMENT');
+      }
+      const activeIds = new Set(players
+        .filter(player =>
+          String(player.session_id) === String(current.session_id) &&
+          player.status === 'active'
+        )
+        .map(player => String(player.id))
+      );
+      if (assignedIds.some(playerId => !activeIds.has(playerId))) {
+        throw new Error('PLAY_MANAGER_REPLACEMENT_PLAYER_NOT_ACTIVE');
+      }
+
+      const assignedSet = new Set(assignedIds);
+      const outgoingId = String(replacement.outgoingPlayerId);
+      const queueSnapshot = [];
+      const queueIds = new Set();
+      (current.queue_snapshot || []).map(String).forEach(playerId => {
+        if (
+          playerId !== outgoingId &&
+          activeIds.has(playerId) &&
+          !assignedSet.has(playerId) &&
+          !queueIds.has(playerId)
+        ) {
+          queueIds.add(playerId);
+          queueSnapshot.push(playerId);
+        }
+      });
+      players
+        .filter(player =>
+          String(player.session_id) === String(current.session_id) &&
+          player.status === 'active' &&
+          String(player.id) !== outgoingId &&
+          !assignedSet.has(String(player.id))
+        )
+        .sort((a, b) =>
+          Number(a.seed_order || 0) - Number(b.seed_order || 0) ||
+          String(a.created_at || '').localeCompare(String(b.created_at || '')) ||
+          String(a.id).localeCompare(String(b.id))
+        )
+        .forEach(player => {
+          const playerId = String(player.id);
+          if (!queueIds.has(playerId)) {
+            queueIds.add(playerId);
+            queueSnapshot.push(playerId);
+          }
+        });
+      if (!replacement.markOutgoingRemoved) {
+        queueIds.add(outgoingId);
+        queueSnapshot.push(outgoingId);
+      }
+
+      const saved = {
+        ...current,
+        assignments,
+        queue_snapshot: queueSnapshot,
+      };
+      db.openPlayGameRounds[roundIndex] = saved;
+      db.openPlayGamePlayers = players;
+      writeDb(db);
+        return {
+          round: saved,
+          incoming_player: incoming,
+          created_walk_in: Boolean(incomingName),
+        };
+      });
+    },
+    async correctOpenPlayGameMatchWinner(id, expected, correction) {
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        const roundIndex = db.openPlayGameRounds.findIndex(round => String(round.id) === String(id));
+        if (roundIndex < 0) throw new Error('PLAY_MANAGER_ROUND_NOT_FOUND');
+        const current = db.openPlayGameRounds[roundIndex];
+        if (JSON.stringify(current.assignments || []) !== JSON.stringify(expected.assignments || [])) {
+          throw new Error('PLAY_MANAGER_ROUND_CONFLICT');
+        }
+
+        const session = db.openPlayGameSessions.find(item =>
+          String(item.id) === String(current.session_id)
+        );
+        const role = window.Auth?.getSession?.()?.role || '';
+        const staffRoles = new Set(['owner', 'court_owner', 'staff']);
+        if (
+          !session ||
+          (['active', 'paused'].includes(session.status) && !staffRoles.has(role)) ||
+          (session.status === 'completed' && role !== 'owner') ||
+          !['active', 'paused', 'completed'].includes(session.status)
+        ) {
+          throw new Error('PLAY_MANAGER_WINNER_CORRECTION_FORBIDDEN');
+        }
+
+        const courtIndex = Number(correction.courtIndex);
+        const completedGameIndex = correction.completedGameIndex === null ||
+          correction.completedGameIndex === undefined
+          ? null
+          : Number(correction.completedGameIndex);
+        const expectedWinner = correction.expectedWinner;
+        const newWinner = correction.newWinner;
+        if (
+          !Number.isInteger(courtIndex) ||
+          courtIndex < 0 ||
+          (completedGameIndex !== null && (!Number.isInteger(completedGameIndex) || completedGameIndex < 0)) ||
+          !['A', 'B'].includes(expectedWinner) ||
+          !['A', 'B'].includes(newWinner) ||
+          expectedWinner === newWinner
+        ) {
+          throw new Error('PLAY_MANAGER_WINNER_CORRECTION_INVALID');
+        }
+
+        const assignments = JSON.parse(JSON.stringify(current.assignments || []));
+        const game = assignments[courtIndex];
+        const result = completedGameIndex === null
+          ? game
+          : game?.completedGames?.[completedGameIndex];
+        if (!result || result.winner !== expectedWinner) {
+          throw new Error('PLAY_MANAGER_WINNER_CORRECTION_CHANGED');
+        }
+
+        const correctedAt = nowIso();
+        result.winnerCorrections = [
+          ...(Array.isArray(result.winnerCorrections) ? result.winnerCorrections : []),
+          {
+            previousWinner: expectedWinner,
+            winner: newWinner,
+            correctedAt,
+            correctedBy: window.Auth?.getSession?.()?.id || null,
+          },
+        ];
+        result.winner = newWinner;
+        const saved = { ...current, assignments };
+        db.openPlayGameRounds[roundIndex] = saved;
+        writeDb(db);
+        return saved;
+      });
     },
     async deleteLatestOpenPlayGameRound(sessionId) {
-      const db = readDb();
-      const rounds = db.openPlayGameRounds
-        .filter(r => String(r.session_id) === String(sessionId))
-        .sort((a, b) => Number(a.round_no || 0) - Number(b.round_no || 0));
-      const last = rounds[rounds.length - 1];
-      if (!last) return null;
-      db.openPlayGameRounds = db.openPlayGameRounds.filter(r => String(r.id) !== String(last.id));
-      db.openPlayGameSessions = db.openPlayGameSessions.map(s =>
-        String(s.id) === String(sessionId)
-          ? { ...s, current_round: Math.max(0, Number(last.round_no || 1) - 1), updated_at: nowIso() }
-          : s
-      );
-      writeDb(db);
-      return last;
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        requireLocalPlayManagerSession(db, sessionId, ['active']);
+        const rounds = db.openPlayGameRounds
+          .filter(r => String(r.session_id) === String(sessionId))
+          .sort((a, b) => Number(a.round_no || 0) - Number(b.round_no || 0));
+        const last = rounds[rounds.length - 1];
+        if (!last) return null;
+        db.openPlayGameRounds = db.openPlayGameRounds.filter(r => String(r.id) !== String(last.id));
+        db.openPlayGameSessions = db.openPlayGameSessions.map(s =>
+          String(s.id) === String(sessionId)
+            ? { ...s, current_round: Math.max(0, Number(last.round_no || 1) - 1), updated_at: nowIso() }
+            : s
+        );
+        writeDb(db);
+        return last;
+      });
     },
     async clearOpenPlayGameRounds(sessionId) {
-      const db = readDb();
-      db.openPlayGameRounds = db.openPlayGameRounds.filter(r => String(r.session_id) !== String(sessionId));
-      db.openPlayGameSessions = db.openPlayGameSessions.map(s =>
-        String(s.id) === String(sessionId)
-          ? { ...s, current_round: 0, status: 'draft', updated_at: nowIso() }
-          : s
-      );
-      writeDb(db);
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        requireLocalPlayManagerSession(db, sessionId, ['draft', 'active']);
+        db.openPlayGameRounds = db.openPlayGameRounds.filter(r => String(r.session_id) !== String(sessionId));
+        db.openPlayGameSessions = db.openPlayGameSessions.map(s =>
+          String(s.id) === String(sessionId)
+            ? { ...s, current_round: 0, status: 'draft', updated_at: nowIso() }
+            : s
+        );
+        writeDb(db);
+      });
     },
 
     async getBlockedDates() { return readDb().blockedDates; },

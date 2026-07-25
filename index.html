@@ -3494,6 +3494,7 @@ let wizStep = 1, wizStartStep = 1;
 let _lastSubmitAt = 0; // rate limiting — ms timestamp of last submission attempt
 let openHour  = 6;
 let closeHour = 22;
+const OPEN_PLAY_AVAILABLE = false;
 let openPlayConfig = null; // { enabled, start, end, days[], specificDates[], courtIds[], fee, maxPlayers }
 let openPlayFee = 100; // default ₱100, overridden by settings
 let openPlayMaxPlayers = 40; // default 40, overridden by settings
@@ -4809,7 +4810,7 @@ async function loadOperatingHours() {
     try { pricingTiers = JSON.parse(settings.pricing_tiers); } catch(e) {}
   }
   _settingsTiers = pricingTiers.length ? [...pricingTiers] : null;
-  if (settings.open_play_config) {
+  if (OPEN_PLAY_AVAILABLE && settings.open_play_config) {
     try {
       openPlayConfig = JSON.parse(settings.open_play_config);
       if (openPlayConfig?.fee) openPlayFee = parseFloat(openPlayConfig.fee) || 100;
@@ -8400,6 +8401,10 @@ function firstEnabledPaymentMethod() {
 }
 
 async function openPlaySignup(courtId, date, h, courtName) {
+  if (!OPEN_PLAY_AVAILABLE) {
+    toast('Open Play is currently unavailable.', 'inf');
+    return;
+  }
   const defaultPayMethod = firstEnabledPaymentMethod();
   const session = getOpenPlaySessionForDate(date, courtId) || { start: h, end: h + 1, label: `${fmtT(h)} – ${fmtT(h + 1)}` };
   if (getOpenPlaySessionState(date, session, 1) === 'ended') {
@@ -8762,6 +8767,10 @@ async function verifyOpReceipt(ref, method, inlineData) {
 }
 
 async function submitOpenPlay() {
+  if (!OPEN_PLAY_AVAILABLE) {
+    toast('Open Play is currently unavailable.', 'inf');
+    return;
+  }
   const nameEl = $('opFullName');
   const name = (nameEl?.value || '').trim();
   if (!name) {

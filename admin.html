@@ -1677,13 +1677,21 @@ tr:hover td { background: var(--bg2); }
   white-space: nowrap;
 }
 
-/* OPEN PLAY GAME MANAGER */
+/* PADDLE RAGE PLAY MANAGER */
 .gm-shell { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 14px; align-items: start; }
 .gm-stack { display: flex; flex-direction: column; gap: 14px; }
 .gm-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; }
 .gm-panel h3 { font-family: 'DM Sans', sans-serif; font-size: .92rem; margin-bottom: 12px; letter-spacing: 0; }
 .gm-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .gm-mini { font-size: .75rem; color: var(--text3); line-height: 1.45; }
+.gm-flow { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:14px; }
+.gm-flow-step { display:flex; align-items:center; gap:9px; min-width:0; padding:10px 11px; border:1px solid var(--border); border-radius:11px; background:var(--bg); color:var(--text3); }
+.gm-flow-step b { width:25px; height:25px; flex:0 0 25px; display:inline-flex; align-items:center; justify-content:center; border-radius:50%; background:var(--surface2); color:var(--text3); font-size:.72rem; }
+.gm-flow-step span { min-width:0; font-size:.72rem; font-weight:900; line-height:1.2; text-transform:uppercase; letter-spacing:.45px; }
+.gm-flow-step.done { border-color:rgba(var(--green-rgb),.34); color:var(--green); background:rgba(var(--green-rgb),.08); }
+.gm-flow-step.done b { background:var(--green); color:#fff; }
+.gm-flow-step.current { border-color:rgba(var(--yellow-rgb),.52); color:var(--text); box-shadow:inset 0 0 0 1px rgba(var(--yellow-rgb),.12); }
+.gm-flow-step.current b { background:var(--yellow); color:#161100; }
 .gm-stat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .gm-stat { background: var(--bg2); border: 1px solid var(--border); border-radius: 9px; padding: 10px; min-width: 0; }
 .gm-stat b { display: block; font-size: 1.3rem; color: var(--green); line-height: 1; }
@@ -1705,6 +1713,9 @@ tr:hover td { background: var(--bg2); }
 .gm-court-hd { display: flex; justify-content: space-between; gap: 8px; padding: 11px 12px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg,var(--bg2),var(--surface2)); }
 .gm-court-hd strong { font-size: .86rem; }
 .gm-court-hd span { font-size: .72rem; color: var(--text3); font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+.gm-court-state { display:flex; align-items:center; gap:7px; white-space:nowrap; }
+.gm-live-dot { width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 0 4px rgba(var(--green-rgb),.13); }
+.gm-timer { font-family:'DM Mono',monospace; font-variant-numeric:tabular-nums; }
 .gm-teams { display: grid; gap: 8px; padding: 12px; }
 .gm-matchup { display:grid; grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr); gap:8px; align-items:stretch; padding:12px; }
 .gm-vs { display:flex; align-items:center; justify-content:center; color:var(--text3); font-size:.7rem; font-weight:900; }
@@ -1742,6 +1753,240 @@ tr:hover td { background: var(--bg2); }
 .gm-warn { border: 1px solid rgba(229,57,53,.35); background: rgba(229,57,53,.08); color: var(--red); border-radius: 10px; padding: 10px 12px; font-size: .8rem; font-weight: 700; }
 .gm-ready { border: 1px solid rgba(var(--green-rgb),.35); background: rgba(var(--green-rgb),.1); color: var(--green); border-radius: 10px; padding: 10px 12px; font-size: .8rem; font-weight: 700; }
 .gm-textarea { min-height: 92px; resize: vertical; }
+.gm-display { position:fixed; inset:0; z-index:10050; display:none; overflow:auto; padding:22px; color:#f7f8f2; background:
+  radial-gradient(circle at 88% 4%,rgba(182,240,0,.12),transparent 34%),
+  linear-gradient(145deg,#0c100d,#111613 55%,#080b09); }
+.gm-display.on { display:block; }
+.gm-display-shell { width:min(1520px,100%); margin:0 auto; }
+.gm-display-head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding:4px 0 18px; border-bottom:1px solid rgba(255,255,255,.12); }
+.gm-display-brand { color:var(--pr-neon-bright,#d7ff3f); font-family:'Bebas Neue',sans-serif; font-size:clamp(1.8rem,4vw,3.5rem); line-height:.92; letter-spacing:1.5px; }
+.gm-display-sub { margin-top:8px; color:rgba(255,255,255,.63); font-size:.88rem; font-weight:800; text-transform:uppercase; letter-spacing:.75px; }
+.gm-display-clock { font-family:'DM Mono',monospace; font-size:clamp(1rem,2vw,1.45rem); color:#fff; text-align:right; }
+.gm-display-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
+.gm-display-kpis { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:16px 0; }
+.gm-display-kpi { padding:13px 15px; border:1px solid rgba(255,255,255,.1); border-radius:13px; background:rgba(255,255,255,.045); }
+.gm-display-kpi b { display:block; color:var(--pr-neon-bright,#d7ff3f); font-size:clamp(1.35rem,3vw,2.2rem); line-height:1; }
+.gm-display-kpi span { display:block; margin-top:5px; color:rgba(255,255,255,.55); font-size:.66rem; font-weight:900; text-transform:uppercase; letter-spacing:.7px; }
+.gm-display-grid { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(300px,.55fr); gap:16px; }
+.gm-display-panel { padding:16px; border:1px solid rgba(255,255,255,.1); border-radius:16px; background:rgba(255,255,255,.035); }
+.gm-display-panel h2 { margin:0 0 12px; font-family:'DM Sans',sans-serif; font-size:.78rem; color:rgba(255,255,255,.55); text-transform:uppercase; letter-spacing:1px; }
+.gm-display-courts { display:grid; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); gap:12px; }
+.gm-display-court { overflow:hidden; border:1px solid rgba(215,255,63,.22); border-radius:15px; background:#131915; }
+.gm-display-court-head { display:flex; justify-content:space-between; gap:10px; padding:12px 14px; color:#10150d; background:linear-gradient(135deg,var(--pr-neon-bright,#d7ff3f),#9bc900); font-weight:950; }
+.gm-display-match { display:grid; grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr); gap:8px; align-items:center; padding:15px; }
+.gm-display-team { display:grid; gap:7px; }
+.gm-display-player { padding:9px 10px; border:1px solid rgba(255,255,255,.1); border-radius:9px; background:rgba(255,255,255,.05); font-weight:900; overflow-wrap:anywhere; }
+.gm-display-vs { color:rgba(255,255,255,.42); font-size:.7rem; font-weight:900; text-align:center; }
+.gm-display-queue { display:grid; gap:7px; }
+.gm-display-queue-row { display:grid; grid-template-columns:28px minmax(0,1fr) auto; gap:8px; align-items:center; padding:8px 9px; border-radius:9px; background:rgba(255,255,255,.045); }
+.gm-display-queue-row b { color:var(--pr-neon-bright,#d7ff3f); text-align:center; }
+.gm-display-queue-row span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:850; }
+.gm-display-queue-row small { color:rgba(255,255,255,.5); font-weight:800; }
+.gm-display-empty { padding:18px; color:rgba(255,255,255,.48); font-style:italic; text-align:center; }
+body.gm-display-open { overflow:hidden; }
+
+/* Modern two-stage Play Manager */
+#sec-gamemgr { --gm-accent:var(--pr-neon-bright,#d7ff3f); --gm-ink:#0b1107; }
+#sec-gamemgr .toolbar { display:none; }
+.gm-app { display:grid; gap:16px; max-width:1500px; margin:0 auto; }
+.gm-app-header { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:15px 17px; border:1px solid var(--workspace-line,var(--border)); border-radius:18px; background:
+  radial-gradient(circle at 8% 0,rgba(182,240,0,.11),transparent 38%),
+  var(--surface); box-shadow:0 14px 38px rgba(0,0,0,.08); }
+.gm-app-identity { display:flex; align-items:center; gap:12px; min-width:0; }
+.gm-app-mark { width:43px; height:43px; flex:0 0 43px; display:grid; place-items:center; border-radius:13px; color:var(--gm-ink); background:linear-gradient(145deg,var(--gm-accent),#9ac900); box-shadow:0 8px 22px rgba(182,240,0,.2); font-family:'Bebas Neue',sans-serif; font-size:1.2rem; letter-spacing:1px; }
+.gm-app-title { min-width:0; }
+.gm-app-title h2 { margin:0; font-family:'DM Sans',sans-serif; font-size:1rem; letter-spacing:-.2px; }
+.gm-app-title p { margin:3px 0 0; color:var(--text3); font-size:.72rem; font-weight:700; }
+.gm-stage-switch { display:flex; gap:5px; padding:4px; border:1px solid var(--workspace-line,var(--border)); border-radius:13px; background:var(--bg2); }
+.gm-stage-tab { min-height:38px; padding:0 15px; border:0; border-radius:9px; color:var(--text3); background:transparent; font:800 .75rem 'DM Sans',sans-serif; cursor:pointer; transition:.18s ease; }
+.gm-stage-tab:hover { color:var(--text); }
+.gm-stage-tab.on { color:var(--gm-ink); background:var(--gm-accent); box-shadow:0 5px 15px rgba(182,240,0,.16); }
+.gm-screen { display:none; }
+.gm-screen.on { display:block; animation:gm-screen-in .2s ease; }
+@keyframes gm-screen-in { from { opacity:.3; transform:translateY(4px); } to { opacity:1; transform:none; } }
+.gm-setup-hero { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px; border:1px solid rgba(182,240,0,.2); border-radius:18px; background:linear-gradient(135deg,rgba(182,240,0,.11),rgba(255,255,255,.018) 55%); }
+.gm-setup-hero-copy { max-width:640px; }
+.gm-eyebrow { margin-bottom:7px; color:var(--gm-accent); font-size:.67rem; font-weight:950; letter-spacing:1.2px; text-transform:uppercase; }
+.gm-setup-hero h3 { margin:0; font:700 clamp(1.3rem,2.5vw,2rem)/1.1 'DM Sans',sans-serif; letter-spacing:-.8px; }
+.gm-setup-hero p { margin:8px 0 0; color:var(--text2); font-size:.82rem; line-height:1.55; }
+.gm-flow.gm-flow-compact { width:min(460px,46%); margin:0; }
+.gm-flow.gm-flow-compact .gm-flow-step { min-height:54px; padding:8px 10px; background:rgba(0,0,0,.08); }
+.gm-setup-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,350px); gap:16px; margin-top:16px; align-items:start; }
+.gm-main-column,.gm-side-column { display:grid; gap:16px; }
+.gm-card { border:1px solid var(--workspace-line,var(--border)); border-radius:18px; background:var(--surface); box-shadow:0 12px 34px rgba(0,0,0,.055); overflow:hidden; }
+.gm-card-body { padding:18px; }
+.gm-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:16px; }
+.gm-card-heading { display:flex; align-items:center; gap:10px; min-width:0; }
+.gm-step-number { width:29px; height:29px; flex:0 0 29px; display:grid; place-items:center; border-radius:9px; color:var(--gm-ink); background:var(--gm-accent); font-size:.75rem; font-weight:950; }
+.gm-card-title { min-width:0; }
+.gm-card-title h3 { margin:0; font:800 .98rem 'DM Sans',sans-serif; }
+.gm-card-title p { margin:4px 0 0; color:var(--text3); font-size:.72rem; line-height:1.4; }
+.gm-court-control { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; align-items:center; padding:14px; border:1px solid var(--workspace-line,var(--border)); border-radius:14px; background:var(--bg); }
+.gm-control-label { color:var(--text3); font-size:.67rem; font-weight:900; letter-spacing:.65px; text-transform:uppercase; }
+.gm-control-value { margin-top:3px; color:var(--text); font-size:.9rem; font-weight:850; }
+.gm-stepper { display:grid; grid-template-columns:42px 48px 42px; align-items:center; gap:5px; }
+.gm-stepper button { width:42px; height:42px; border:1px solid var(--workspace-line,var(--border)); border-radius:11px; color:var(--text); background:var(--surface2); font-size:1.2rem; font-weight:900; cursor:pointer; }
+.gm-stepper button:hover { color:var(--gm-ink); border-color:var(--gm-accent); background:var(--gm-accent); }
+.gm-stepper output { text-align:center; font:900 1.35rem 'DM Mono',monospace; }
+.gm-mode-section { margin-top:16px; }
+.gm-mode-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; margin-top:9px; }
+.gm-mode-card { min-height:105px; padding:13px; text-align:left; border:1px solid var(--workspace-line,var(--border)); border-radius:13px; color:var(--text); background:var(--bg); cursor:pointer; transition:.18s ease; }
+.gm-mode-card:hover { transform:translateY(-1px); border-color:rgba(182,240,0,.35); }
+.gm-mode-card.on { border-color:var(--gm-accent); background:rgba(182,240,0,.09); box-shadow:inset 0 0 0 1px rgba(182,240,0,.13); }
+.gm-mode-card strong { display:block; font-size:.79rem; }
+.gm-mode-card span { display:block; margin-top:6px; color:var(--text3); font-size:.68rem; line-height:1.4; }
+.gm-mode-card em { display:inline-block; margin-bottom:7px; padding:3px 6px; border-radius:999px; color:var(--gm-ink); background:var(--gm-accent); font-size:.58rem; font-style:normal; font-weight:950; letter-spacing:.4px; text-transform:uppercase; }
+#sec-gamemgr #gmMode { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.gm-player-toolbar { display:flex; flex-wrap:wrap; gap:7px; }
+#sec-gamemgr .gm-player-list { max-height:none; gap:8px; }
+#sec-gamemgr .gm-player-row { min-height:54px; padding:8px; border:1px solid var(--workspace-line,var(--border)); border-radius:13px; background:var(--bg); }
+#sec-gamemgr .gm-player-row .fi { min-height:38px; border-radius:9px; background:var(--surface); }
+.gm-player-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:14px; padding-top:14px; border-top:1px solid var(--workspace-line,var(--border)); }
+.gm-start-card { position:sticky; top:86px; }
+.gm-start-card .gm-card-body { padding:18px; }
+.gm-session-summary { display:grid; gap:10px; }
+.gm-summary-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:9px; border-bottom:1px solid var(--workspace-line,var(--border)); font-size:.76rem; }
+.gm-summary-row:last-child { padding-bottom:0; border-bottom:0; }
+.gm-summary-row span { color:var(--text3); }
+.gm-summary-row strong { max-width:64%; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gm-quick-stats { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:14px 0; }
+.gm-quick-stat { padding:11px; border:1px solid var(--workspace-line,var(--border)); border-radius:12px; background:var(--bg); }
+.gm-quick-stat b { display:block; color:var(--gm-accent); font-size:1.25rem; line-height:1; }
+.gm-quick-stat span { display:block; margin-top:5px; color:var(--text3); font-size:.61rem; font-weight:900; letter-spacing:.5px; text-transform:uppercase; }
+.gm-start-action { width:100%; min-height:54px; border:0; border-radius:13px; color:var(--gm-ink); background:linear-gradient(135deg,var(--gm-accent),#9ac900); box-shadow:0 12px 25px rgba(182,240,0,.18); font:950 .9rem 'DM Sans',sans-serif; cursor:pointer; }
+.gm-start-action:hover { filter:brightness(1.04); transform:translateY(-1px); }
+.gm-start-hint { margin:9px 0 0; color:var(--text3); font-size:.67rem; line-height:1.45; text-align:center; }
+.gm-advanced { border-top:1px solid var(--workspace-line,var(--border)); }
+.gm-advanced summary { display:flex; align-items:center; justify-content:space-between; min-height:49px; padding:0 17px; color:var(--text2); font-size:.75rem; font-weight:850; cursor:pointer; list-style:none; }
+.gm-advanced summary::-webkit-details-marker { display:none; }
+.gm-advanced summary::after { content:'+'; color:var(--gm-accent); font-size:1.1rem; }
+.gm-advanced[open] summary::after { content:'−'; }
+.gm-advanced-body { display:grid; gap:13px; padding:0 17px 17px; }
+.gm-advanced-actions { display:flex; flex-wrap:wrap; gap:7px; }
+.gm-mobile-start { display:none; }
+.gm-live-top { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:14px; padding:15px 17px; border:1px solid var(--workspace-line,var(--border)); border-radius:18px; background:var(--surface); }
+.gm-live-title { min-width:0; }
+.gm-live-title h3 { margin:0; font:850 1rem 'DM Sans',sans-serif; }
+.gm-live-title p { margin:4px 0 0; color:var(--text3); font-size:.72rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gm-live-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:7px; }
+.gm-live-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(270px,340px); gap:16px; align-items:start; }
+.gm-live-main,.gm-live-rail { display:grid; gap:14px; }
+#sec-gamemgr .gm-playbar { margin:0; border-radius:16px; padding:14px 16px; }
+#sec-gamemgr .gm-score-strip { margin:0; }
+#sec-gamemgr .gm-board { grid-template-columns:repeat(2,minmax(0,1fr)); }
+#sec-gamemgr .gm-court-card { overflow:hidden; border:1px solid #d6dde7; border-radius:16px; background:#f8fafc; box-shadow:0 13px 30px rgba(0,0,0,.18); }
+.gm-court-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:58px; padding:0 15px; color:#fff; background:#111a2a; }
+.gm-court-bar strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.95rem; }
+.gm-court-bar-meta { display:flex; align-items:center; gap:10px; flex:0 0 auto; }
+.gm-live-badge { display:inline-flex; align-items:center; gap:5px; padding:5px 7px; border-radius:6px; color:#fff; background:#ed1734; font-size:.66rem; font-weight:950; letter-spacing:.35px; }
+.gm-live-badge::before { content:''; width:6px; height:6px; border-radius:50%; background:#fff; box-shadow:0 0 0 3px rgba(255,255,255,.14); }
+.gm-court-bar .gm-timer { color:#d5deeb; font-size:.72rem; font-weight:850; }
+.gm-court-match { display:grid; grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr); gap:8px; align-items:center; padding:14px; }
+.gm-court-team { min-width:0; overflow:hidden; border:1px solid #d7e0ea; border-radius:12px; background:#fff; }
+.gm-court-team.team-one { border-color:#bcd8f4; background:#eaf4ff; }
+.gm-court-team.team-two { border-color:#f3d0a8; background:#fff1e2; }
+.gm-court-team.winner { outline:3px solid rgba(182,240,0,.68); box-shadow:0 0 0 5px rgba(182,240,0,.12); }
+.gm-court-team-head { padding:10px 12px; color:#fff; font-size:.69rem; font-weight:950; letter-spacing:.45px; text-transform:uppercase; }
+.team-one .gm-court-team-head { background:#247bd1; }
+.team-two .gm-court-team-head { background:#f57b00; }
+.gm-court-roster { display:grid; gap:0; padding:7px 12px 9px; }
+.gm-court-player { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:48px; padding:6px 0; border-bottom:1px solid rgba(15,23,42,.09); }
+.gm-court-player:last-child { border-bottom:0; }
+.gm-court-player-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#111827; font-size:.88rem; font-weight:900; }
+.gm-court-player-state { color:#8a94a6; font-size:.61rem; font-weight:800; text-transform:uppercase; letter-spacing:.35px; }
+.gm-court-vs { color:#8791a2; font-size:.67rem; font-weight:950; text-align:center; }
+#sec-gamemgr .gm-court-card .gm-result-actions { display:grid; grid-template-columns:1fr 1fr; gap:9px; padding:0 14px 14px; }
+#sec-gamemgr .gm-court-card .gm-result-btn { min-height:50px; border:0; border-radius:12px; color:#fff; font-size:.78rem; font-weight:950; box-shadow:none; }
+#sec-gamemgr .gm-court-card .gm-result-btn.team-one { background:#247bd1; }
+#sec-gamemgr .gm-court-card .gm-result-btn.team-two { background:#f57b00; }
+#sec-gamemgr .gm-court-card .gm-result-btn:hover { filter:brightness(1.06); transform:translateY(-1px); }
+#sec-gamemgr .gm-court-card .gm-result-btn.on { outline:3px solid var(--gm-accent); outline-offset:2px; }
+#sec-gamemgr .gm-court-card .gm-result-note { margin:0 14px 10px; padding:8px 10px; border-radius:9px; color:#355000; background:#eaffb2; text-align:center; }
+.gm-live-panel { padding:15px; border:1px solid var(--workspace-line,var(--border)); border-radius:16px; background:var(--surface); }
+.gm-live-panel-head { display:flex; align-items:center; justify-content:space-between; gap:9px; margin-bottom:10px; }
+.gm-live-panel-head h3 { margin:0; font:850 .82rem 'DM Sans',sans-serif; }
+.gm-live-panel-head span { color:var(--text3); font-size:.64rem; }
+#sec-gamemgr .gm-next-grid { grid-template-columns:1fr; }
+#sec-gamemgr .gm-live-grid { grid-template-columns:1fr; margin:0; }
+#sec-gamemgr .gm-wait { min-height:64px; padding:9px; }
+.gm-live-mobile-dock { display:none; }
+
+@media (max-width:1100px) {
+  .gm-setup-hero { align-items:flex-start; flex-direction:column; }
+  .gm-flow.gm-flow-compact { width:100%; }
+  .gm-setup-layout,.gm-live-layout { grid-template-columns:1fr; }
+  .gm-start-card { position:static; }
+  .gm-side-column { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .gm-start-card { grid-column:1; }
+}
+
+@media (max-width:700px) {
+  #sec-gamemgr { padding-bottom:76px; }
+  .gm-app { gap:11px; }
+  .gm-app-header { position:sticky; top:0; z-index:50; align-items:stretch; flex-direction:column; padding:11px; border-radius:14px; backdrop-filter:blur(12px); }
+  .gm-app-mark { width:38px; height:38px; flex-basis:38px; border-radius:11px; }
+  .gm-app-title h2 { font-size:.9rem; }
+  .gm-app-title p { display:none; }
+  .gm-stage-switch { width:100%; }
+  .gm-stage-tab { flex:1; min-height:44px; }
+  .gm-setup-hero { padding:15px; border-radius:14px; }
+  .gm-setup-hero h3 { font-size:1.25rem; }
+  .gm-setup-hero p { font-size:.76rem; }
+  .gm-flow.gm-flow-compact { grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
+  .gm-flow.gm-flow-compact .gm-flow-step { min-height:47px; padding:6px; gap:5px; flex-direction:column; justify-content:center; text-align:center; }
+  .gm-flow.gm-flow-compact .gm-flow-step b { width:21px; height:21px; flex-basis:21px; }
+  .gm-flow.gm-flow-compact .gm-flow-step span { font-size:.57rem; }
+  .gm-setup-layout { margin-top:11px; gap:11px; }
+  .gm-main-column,.gm-side-column { display:grid; grid-template-columns:1fr; gap:11px; }
+  .gm-card { border-radius:14px; }
+  .gm-card-body { padding:13px; }
+  .gm-card-head { align-items:stretch; flex-direction:column; margin-bottom:13px; }
+  .gm-card-heading { align-items:flex-start; }
+  .gm-player-toolbar { width:100%; }
+  .gm-player-toolbar .btn { flex:1; min-height:44px; }
+  .gm-court-control { padding:11px; }
+  .gm-stepper { grid-template-columns:44px 42px 44px; }
+  .gm-stepper button { width:44px; height:44px; }
+  .gm-mode-grid { grid-template-columns:1fr; gap:7px; }
+  .gm-mode-card { min-height:0; padding:12px; }
+  #sec-gamemgr .gm-player-row { grid-template-columns:30px minmax(0,1fr) 38px; gap:6px; }
+  #sec-gamemgr .gm-player-row .gm-player-status { grid-column:2 / 4; grid-row:2; width:100%; }
+  #sec-gamemgr .gm-player-row .btn { grid-column:3; grid-row:1; width:38px; min-width:38px; padding:0; }
+  .gm-player-footer { align-items:stretch; flex-direction:column; }
+  .gm-player-footer .gm-actions { display:grid; grid-template-columns:1fr 1fr; }
+  .gm-player-footer .btn { min-height:44px; }
+  .gm-mobile-start { display:block; position:fixed; left:12px; right:12px; bottom:calc(10px + env(safe-area-inset-bottom)); z-index:120; padding:7px; border:1px solid rgba(182,240,0,.28); border-radius:16px; background:rgba(11,15,12,.92); box-shadow:0 15px 40px rgba(0,0,0,.32); backdrop-filter:blur(12px); }
+  .gm-mobile-start .gm-start-action { min-height:50px; }
+  .gm-live-top { align-items:stretch; flex-direction:column; padding:13px; border-radius:14px; }
+  .gm-live-actions { display:grid; grid-template-columns:1fr 1fr; }
+  .gm-live-actions .btn { min-height:44px; }
+  #sec-gamemgr .gm-score-strip { grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; }
+  #sec-gamemgr .gm-score-strip .gm-stat { min-height:58px; padding:8px 5px; text-align:center; }
+  #sec-gamemgr .gm-score-strip .gm-stat b { font-size:1.08rem; }
+  #sec-gamemgr .gm-score-strip .gm-stat span { font-size:.51rem; letter-spacing:.25px; }
+  #sec-gamemgr .gm-board { grid-template-columns:1fr; }
+  .gm-court-bar { min-height:54px; padding:0 11px; }
+  .gm-court-bar strong { font-size:.86rem; }
+  .gm-court-bar-meta { gap:7px; }
+  .gm-live-badge { padding:4px 6px; font-size:.59rem; }
+  .gm-court-match { grid-template-columns:minmax(0,1fr) 18px minmax(0,1fr); gap:5px; padding:9px; }
+  .gm-court-team { border-radius:10px; }
+  .gm-court-team-head { padding:8px 9px; font-size:.61rem; }
+  .gm-court-roster { padding:5px 9px 7px; }
+  .gm-court-player { min-height:44px; }
+  .gm-court-player-name { font-size:.76rem; }
+  .gm-court-player-state { font-size:.52rem; }
+  #sec-gamemgr .gm-matchup { grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr); padding:9px; }
+  #sec-gamemgr .gm-player-chip { width:100%; justify-content:center; min-height:31px; }
+  #sec-gamemgr .gm-result-actions { padding:0 9px 10px; }
+  #sec-gamemgr .gm-court-card .gm-result-actions { gap:7px; padding:0 9px 10px; }
+  #sec-gamemgr .gm-court-card .gm-result-btn { min-height:48px; padding:7px 5px; font-size:.68rem; }
+  .gm-live-panel { padding:12px; border-radius:14px; }
+  .gm-live-panel-head .gm-chip-action { min-height:36px; padding:6px 10px; }
+  .gm-live-rail > .gm-live-panel:last-child .btn { min-height:44px; }
+  .gm-live-mobile-dock { display:grid; grid-template-columns:1fr 1.35fr; gap:7px; position:fixed; left:12px; right:12px; bottom:calc(10px + env(safe-area-inset-bottom)); z-index:120; padding:7px; border:1px solid rgba(182,240,0,.28); border-radius:16px; background:rgba(11,15,12,.92); box-shadow:0 15px 40px rgba(0,0,0,.32); backdrop-filter:blur(12px); }
+  .gm-live-mobile-dock .btn { min-height:49px; }
+}
 .host-shell { display:grid; grid-template-columns:minmax(0,380px) minmax(0,1fr); gap:14px; align-items:start; }
 .host-stack { display:flex; flex-direction:column; gap:14px; }
 .host-panel { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:16px; }
@@ -1767,6 +2012,7 @@ tr:hover td { background: var(--bg2); }
 @media (max-width: 980px) { .gm-shell, .gm-live-grid { grid-template-columns: 1fr; } }
 @media (max-width: 700px) {
   .gm-panel { padding: 13px; }
+  .gm-flow { grid-template-columns:1fr; }
   .gm-stat-grid, .gm-score-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .gm-player-row { grid-template-columns: 28px minmax(0, 1fr) 76px 32px; gap: 5px; }
   .gm-board { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -1786,6 +2032,12 @@ tr:hover td { background: var(--bg2); }
   .gm-queue-row { grid-template-columns:28px minmax(0,1fr); }
   .gm-queue-row .gm-chip-action { grid-column:2; width:max-content; }
   .gm-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .gm-display { padding:13px; }
+  .gm-display-head { align-items:stretch; flex-direction:column; }
+  .gm-display-clock { text-align:left; }
+  .gm-display-actions { justify-content:flex-start; }
+  .gm-display-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .gm-display-grid { grid-template-columns:1fr; }
 }
 
 /* ── ADMIN SLOT GRID ───────────────────────────────────── */
@@ -2168,6 +2420,7 @@ tr:hover td { background: var(--bg2); }
 
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260716-paddle-rage-v1">
+<link rel="stylesheet" href="play-manager.css?v=20260725-live-cyan-v7">
 <style id="admin-modern-refresh">
 /* Modern admin shell — visual-only refresh; dashboard features and data stay unchanged. */
 :root {
@@ -2976,7 +3229,7 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
   box-shadow: inset 0 0 0 1px rgba(182, 240, 0, .06);
 }
 
-/* Host Center and Game Manager */
+/* Host Center and Paddle Rage Play Manager */
 #sec-hosts .host-shell,
 #sec-gamemgr .gm-shell { gap: 18px; }
 #sec-hosts .host-panel,
@@ -3091,12 +3344,126 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
   #sec-blocked > .panel:nth-child(3) > div:first-child > div { grid-template-columns: 1fr; }
 }
 
+.admin-boot-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  visibility: hidden;
+  opacity: 0;
+  color: #f5f8f4;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(182, 240, 0, .1), transparent 30%),
+    linear-gradient(145deg, #060907, #0d140f);
+  pointer-events: none;
+  transition: opacity .16s ease;
+}
+
+.admin-boot-splash[hidden] {
+  display: none;
+}
+
+body.admin-booting {
+  overflow: hidden;
+}
+
+body.admin-booting .admin-boot-splash {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.admin-boot-card {
+  display: grid;
+  justify-items: center;
+  gap: 11px;
+  min-width: min(320px, calc(100vw - 48px));
+  padding: 26px 30px;
+  border: 1px solid rgba(182, 240, 0, .18);
+  border-radius: 18px;
+  background: rgba(14, 21, 16, .88);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .38);
+  text-align: center;
+}
+
+.admin-boot-logo {
+  width: 96px;
+  height: 105px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  object-fit: contain;
+}
+
+.admin-boot-card strong {
+  font-size: .92rem;
+  letter-spacing: .01em;
+}
+
+.admin-boot-card span {
+  color: #9eaa9c;
+  font-size: .72rem;
+  font-weight: 650;
+}
+
+.admin-boot-spinner {
+  width: 24px;
+  height: 24px;
+  margin-top: 3px;
+  border: 3px solid rgba(255, 255, 255, .12);
+  border-top-color: var(--pr-neon-bright);
+  border-radius: 50%;
+  animation: admin-boot-spin .75s linear infinite;
+}
+
+.admin-boot-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.admin-boot-reload {
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 1px solid rgba(182, 240, 0, .38);
+  border-radius: 10px;
+  color: #172004;
+  background: var(--pr-neon-bright);
+  font-size: .7rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+@keyframes admin-boot-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-boot-spinner { animation: none; }
+}
+
 @media print {
   .adm-sec:not(#sec-dash) > .toolbar:first-child { border: 0 !important; box-shadow: none !important; }
 }
 </style>
 </head>
-<body data-theme="dark">
+<body class="admin-booting" data-theme="dark">
+<div class="admin-boot-splash" id="adminBootSplash" role="status" aria-live="polite" aria-atomic="true">
+  <div class="admin-boot-card">
+    <img class="admin-boot-logo" src="paddleragelogo-transparent.png" alt="Paddle Rage Pickleball">
+    <strong>Paddle Rage Admin</strong>
+    <span id="adminBootMessage">Restoring your workspace…</span>
+    <div class="admin-boot-spinner" id="adminBootSpinner" aria-hidden="true"></div>
+    <div class="admin-boot-actions" id="adminBootActions" hidden>
+      <button class="admin-boot-reload" type="button" onclick="window.location.reload()">Reload Admin</button>
+    </div>
+  </div>
+</div>
+<div id="adminShell" inert aria-hidden="true">
 <div class="toasts" id="toasts"></div>
 
 <!-- TOP NAV -->
@@ -3131,9 +3498,8 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
     <div class="sb-section">
       <div class="nav-grp">Management</div>
       <div class="nav-item" data-s="courts" data-perm="courts" onclick="goto('courts')"><span>&#127967;</span> Courts</div>
-      <div class="nav-item" data-s="blocked" data-perm="open_play" onclick="goto('blocked')"><span>&#127934;</span> Open Play</div>
+      <div class="nav-item" data-s="gamemgr" data-perm="open_play" onclick="goto('gamemgr')"><span>&#127955;</span> Play Manager</div>
       <div class="nav-item" data-s="hosts" data-perm="host_open_play" onclick="goto('hosts')"><span>&#128101;</span> Host Center</div>
-      <div class="nav-item" data-s="gamemgr" data-perm="open_play" onclick="goto('gamemgr')"><span>&#127955;</span> Game Manager</div>
       <div class="nav-item" data-s="maintenance" data-perm="maintenance" onclick="goto('maintenance')"><span>&#128295;</span> Maintenance</div>
       <div class="nav-item" data-s="payments" data-perm="payments" onclick="goto('payments')"><span>&#128179;</span> Payments</div>
     </div>
@@ -3234,7 +3600,6 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
             <button class="btn btn-g" onclick="goto('bookings')">📋 View All Bookings</button>
             <button class="btn btn-g" data-perm="export" onclick="exportCSV()">📥 Export CSV</button>
             <button class="btn btn-g" onclick="goto('courts')">🏟️ Manage Courts</button>
-            <button class="btn btn-g" onclick="goto('blocked')">🎾 Open Play</button>
           </div>
         </div>
       </div>
@@ -3381,6 +3746,7 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
         </div>
         <div class="pr-actions">
           <button class="btn btn-g btn-sm" onclick="renderPaymentReview()">Refresh</button>
+          <button class="btn btn-g btn-sm" onclick="goto('gamemgr')">Play Manager</button>
           <button class="btn btn-p btn-sm" onclick="goto('payments')">QR</button>
         </div>
       </div>
@@ -3703,8 +4069,8 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
       </section>
     </div>
 
-    <!-- BLOCKED -->
-    <div id="sec-blocked" class="adm-sec">
+    <!-- Legacy Open Play interface retained inert while the replacement is rebuilt. -->
+    <template id="legacy-open-play-interface">
       <div class="toolbar"><h2>🎾 OPEN PLAY</h2></div>
 
       <!-- OPEN PLAY HOURS -->
@@ -3797,7 +4163,7 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
               <option value="">All Courts</option>
             </select>
             <input type="date" class="fi" id="opRegDate" style="max-width:160px" onchange="renderOpRegistrations()"/>
-            <button class="btn btn-p btn-sm" onclick="gmOpenFromReservations()">Game Manager</button>
+            <button class="btn btn-p btn-sm" onclick="pmOpenFromReservations()">Play Manager</button>
             <button class="btn btn-g btn-sm" onclick="gmCopyReservationManagerLink()">Copy Link</button>
             <button class="btn btn-sm" style="border:1px solid var(--border);color:var(--muted);background:transparent;font-size:.78rem" onclick="$('opRegDate').value='';$('opRegCourt').value='';renderOpRegistrations()">Clear</button>
           </div>
@@ -3818,7 +4184,7 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
         </div>
         <div id="blkList"><p style="color:var(--muted);font-style:italic">No blocked dates.</p></div>
       </div>
-    </div>
+    </template>
 
     <!-- HOST CENTER -->
     <div id="sec-hosts" class="adm-sec">
@@ -3897,146 +4263,292 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
       </div>
     </div>
 
-    <!-- GAME MANAGER -->
+    <!-- PLAY MANAGER -->
     <div id="sec-gamemgr" class="adm-sec">
-      <div class="toolbar">
-        <h2>OPEN PLAY GAME MANAGER</h2>
-        <div class="gm-actions">
-          <button class="btn btn-g btn-sm" onclick="renderGameManager()">Refresh</button>
-          <button class="btn btn-p btn-sm" onclick="gmCopyManagerLink()">Copy Manager Link</button>
-        </div>
-      </div>
-
-      <div class="gm-shell">
-        <div class="gm-stack">
-          <div class="gm-panel">
-            <h3>Session Setup</h3>
-            <div class="fg">
-              <label class="fl">Open Play Date</label>
-              <input type="date" class="fi" id="gmDate" onchange="gmRefreshSourceSummary()"/>
-            </div>
-            <div class="fg">
-              <label class="fl">Open Play Courts</label>
-              <div id="gmCourtList" class="op-court-grid"></div>
-              <div class="gm-mini" style="margin-top:8px">Uses the Open Play courts by default. You can override this for a busy or reduced-court session.</div>
-            </div>
-            <div class="fg">
-              <label class="fl">Time Label</label>
-              <input type="text" class="fi" id="gmTimeLabel" placeholder="e.g. 5PM-12AM"/>
-            </div>
-            <div class="fg">
-              <label class="fl">Open Existing Session</label>
-              <select class="fi" id="gmSessionSelect" onchange="gmLoadSelectedSession()">
-                <option value="">New session</option>
-              </select>
-            </div>
-            <div class="gm-actions">
-              <button class="btn btn-p btn-sm" onclick="gmCreateOrOpenSession()">Create / Open</button>
-              <button class="btn btn-g btn-sm" onclick="gmImportPaidPlayers()">Import Paid Players</button>
-            </div>
-          </div>
-
-          <div class="gm-panel">
-            <h3>Paste Link or Names</h3>
-            <textarea class="fi gm-textarea" id="gmPasteBox" placeholder="Paste a manager link, or paste player names separated by lines or commas."></textarea>
-            <div class="gm-actions" style="margin-top:10px">
-              <button class="btn btn-g btn-sm" onclick="gmLoadPaste()">Load Paste</button>
-              <button class="btn btn-g btn-sm" onclick="$('gmPasteBox').value=''">Clear</button>
-            </div>
-            <div class="gm-mini" style="margin-top:8px">Links identify the session only. Player names are saved in the manager after import.</div>
-          </div>
-
-          <div class="gm-panel">
-            <h3>Readiness</h3>
-            <div class="gm-stat-grid">
-              <div class="gm-stat"><b id="gmPaidCount">0</b><span>Paid players</span></div>
-              <div class="gm-stat"><b id="gmExcludedCount">0</b><span>Excluded</span></div>
-              <div class="gm-stat"><b id="gmCourtCount">0</b><span>Courts</span></div>
-              <div class="gm-stat"><b id="gmGameCount">0</b><span>Games now</span></div>
-            </div>
-            <div id="gmReadyNote" style="margin-top:10px" class="gm-empty">Choose a date to check paid players.</div>
-          </div>
-        </div>
-
-        <div class="gm-stack">
-          <div class="gm-panel">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-              <h3 style="margin:0">Prepare Players</h3>
-              <div class="gm-actions">
-                <button class="btn btn-g btn-sm" onclick="gmAddWalkIn()">Add Walk-in</button>
-                <button class="btn btn-p btn-sm" onclick="gmSavePlayers()">Save Players</button>
-                <button class="btn btn-g btn-sm" onclick="gmResetFromPaid()">Reset From Paid</button>
-              </div>
-            </div>
-            <div id="gmPlayerWarnings"></div>
-            <div id="gmPlayerList" class="gm-player-list"><div class="gm-empty">Create or open a session first.</div></div>
-          </div>
-
-          <div class="gm-panel">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-              <div>
-                <h3 style="margin:0">Live Game Board</h3>
-                <div class="gm-mini" id="gmSessionMeta">No active game session.</div>
-              </div>
-              <div class="gm-actions">
-                <select class="fi" id="gmMode" style="width:auto;min-width:180px" onchange="gmSaveSessionMeta()">
-                  <option value="smart_random_mixer">Smart Random Mixer</option>
-                  <option value="all_rotate">All Rotate Queue</option>
-                  <option value="manual">Manual Assign</option>
-                </select>
-                <button class="btn btn-p btn-sm" onclick="gmGenerateNextRound()">Start / Next Round</button>
-                <button class="btn btn-g btn-sm" onclick="gmUndoRound()">Undo</button>
-                <button class="btn btn-g btn-sm" onclick="gmTogglePause()">Pause / Resume</button>
-              </div>
-            </div>
-            <div class="gm-playbar">
-              <div class="gm-playbar-title">
-                <div class="gm-playbar-kicker">Open Play Rotation</div>
-                <div class="gm-playbar-name" id="gmPlaybarName">No active session</div>
-              </div>
-              <div class="gm-playbar-stats">
-                <span>Games <b id="gmBarGames">0</b></span>
-                <span>Courts <b id="gmBarCourts">0</b></span>
-                <span>Queue <b id="gmBarQueue">0</b></span>
-              </div>
-            </div>
-            <div class="gm-score-strip">
-              <div class="gm-stat"><b id="gmLiveActive">0</b><span>Active</span></div>
-              <div class="gm-stat"><b id="gmLivePlaying">0</b><span>Playing</span></div>
-              <div class="gm-stat"><b id="gmLiveWaiting">0</b><span>Waiting</span></div>
-              <div class="gm-stat"><b id="gmLiveResults">0</b><span>Results</span></div>
-            </div>
-            <div id="gmBoard" class="gm-board"><div class="gm-empty">No round generated yet.</div></div>
-            <div style="margin-top:12px">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
-                <h3 style="margin:0">Next Up</h3>
-                <span class="gm-mini">Groups are previewed from the waiting queue.</span>
-              </div>
-              <div id="gmNextUp" class="gm-next-grid"><div class="gm-empty">Next groups appear after a round starts.</div></div>
-            </div>
-            <div style="margin-top:12px">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
-                <h3 style="margin:0">Players + Results</h3>
-                <div class="gm-actions">
-                  <button class="btn btn-g btn-sm" onclick="gmCopyOrder()">Copy Names + Order</button>
-                  <button class="btn btn-g btn-sm" onclick="gmExportCsv()">Export CSV</button>
-                </div>
-              </div>
-              <div class="gm-live-grid">
-                <div>
-                  <div class="gm-mini" style="margin-bottom:6px;font-weight:900;color:var(--text2)">Player Queue</div>
-                  <div id="gmQueue" class="gm-wait"><span class="gm-empty">Waiting players appear here.</span></div>
-                </div>
-                <div>
-                  <div class="gm-mini" style="margin-bottom:6px;font-weight:900;color:var(--text2)">Standings</div>
-                  <div id="gmStandings" class="gm-standing-list"><div class="gm-empty">Results appear after winner clicks.</div></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div id="playManagerRoot"></div>
     </div>
+
+    <!-- Removed Play Manager retained only as inert legacy markup. -->
+    <template id="legacy-play-manager-interface">
+      <div class="gm-app">
+        <header class="gm-app-header">
+          <div class="gm-app-identity">
+            <div class="gm-app-mark" aria-hidden="true">PR</div>
+            <div class="gm-app-title">
+              <h2>Paddle Rage Play Manager</h2>
+              <p>Set up players, run courts, and keep every rotation moving.</p>
+            </div>
+          </div>
+          <div class="gm-stage-switch" role="tablist" aria-label="Play Manager stage">
+            <button class="gm-stage-tab on" id="gmSetupTab" type="button" role="tab" aria-selected="true" aria-controls="gmSetupScreen" onclick="gmShowStage('setup')">1 · Setup</button>
+            <button class="gm-stage-tab" id="gmLiveTab" type="button" role="tab" aria-selected="false" aria-controls="gmLiveScreen" onclick="gmShowStage('live')">2 · Live Play</button>
+          </div>
+        </header>
+
+        <section class="gm-screen on" id="gmSetupScreen" role="tabpanel" aria-labelledby="gmSetupTab">
+          <div class="gm-setup-hero">
+            <div class="gm-setup-hero-copy">
+              <div class="gm-eyebrow">Open play control room</div>
+              <h3>Get everyone on court in a few simple steps.</h3>
+              <p>Choose the courts, check players in, and start a fair rotation. Detailed session tools stay out of the way until you need them.</p>
+            </div>
+            <div class="gm-flow gm-flow-compact" aria-label="Setup progress">
+              <div class="gm-flow-step current" id="gmFlowSession"><b>1</b><span>Session</span></div>
+              <div class="gm-flow-step" id="gmFlowPlayers"><b>2</b><span>Players</span></div>
+              <div class="gm-flow-step" id="gmFlowCourts"><b>3</b><span>Play</span></div>
+            </div>
+          </div>
+
+          <div class="gm-mobile-start">
+            <button class="gm-start-action" type="button" onclick="gmStartPlayFromSetup()">Start Live Play →</button>
+          </div>
+
+          <div class="gm-setup-layout">
+            <div class="gm-main-column">
+              <article class="gm-card">
+                <div class="gm-card-body">
+                  <div class="gm-card-head">
+                    <div class="gm-card-heading">
+                      <span class="gm-step-number">1</span>
+                      <div class="gm-card-title">
+                        <h3>Courts &amp; rotation</h3>
+                        <p>Start simple. You can choose exact courts in Advanced Setup.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="gm-court-control">
+                    <div>
+                      <div class="gm-control-label">Courts in play</div>
+                      <div class="gm-control-value" id="gmCourtNamesSummary">Open Play courts</div>
+                    </div>
+                    <div class="gm-stepper" aria-label="Number of courts">
+                      <button type="button" onclick="gmAdjustCourtCount(-1)" aria-label="Use fewer courts">−</button>
+                      <output id="gmCourtCountControl">0</output>
+                      <button type="button" onclick="gmAdjustCourtCount(1)" aria-label="Use more courts">+</button>
+                    </div>
+                  </div>
+
+                  <div class="gm-mode-section">
+                    <div class="gm-control-label">Matching style</div>
+                    <div class="gm-mode-grid">
+                      <button class="gm-mode-card on" type="button" data-gm-mode="smart_random_mixer" onclick="gmSetMode('smart_random_mixer')">
+                        <em>Recommended</em>
+                        <strong>Balanced rotation</strong>
+                        <span>Fair play counts with fewer repeat partners.</span>
+                      </button>
+                      <button class="gm-mode-card" type="button" data-gm-mode="all_rotate" onclick="gmSetMode('all_rotate')">
+                        <strong>Queue order</strong>
+                        <span>Keep turns predictable and move through the line.</span>
+                      </button>
+                      <button class="gm-mode-card" type="button" data-gm-mode="manual" onclick="gmSetMode('manual')">
+                        <strong>Manual lineup</strong>
+                        <span>Keep control when you want to arrange matches yourself.</span>
+                      </button>
+                    </div>
+                    <select class="fi" id="gmMode" aria-label="Matching style" onchange="gmSaveSessionMeta();gmSyncSetupControls()">
+                      <option value="smart_random_mixer">Balanced rotation</option>
+                      <option value="all_rotate">Queue order</option>
+                      <option value="manual">Manual lineup</option>
+                    </select>
+                  </div>
+                </div>
+              </article>
+
+              <article class="gm-card">
+                <div class="gm-card-body">
+                  <div class="gm-card-head">
+                    <div class="gm-card-heading">
+                      <span class="gm-step-number">2</span>
+                      <div class="gm-card-title">
+                        <h3>Check in players</h3>
+                        <p>Import paid registrations or add walk-ins as they arrive.</p>
+                      </div>
+                    </div>
+                    <div class="gm-player-toolbar">
+                      <button class="btn btn-g btn-sm" type="button" onclick="gmImportPaidPlayers()">Import Paid</button>
+                      <button class="btn btn-p btn-sm" type="button" onclick="gmAddWalkIn()">+ Add Walk-in</button>
+                    </div>
+                  </div>
+                  <div id="gmPlayerWarnings"></div>
+                  <div id="gmPlayerList" class="gm-player-list"><div class="gm-empty">Import paid players or add walk-ins.</div></div>
+                  <div class="gm-player-footer">
+                    <span class="gm-mini">Only checked-in players are included in the rotation.</span>
+                    <div class="gm-actions">
+                      <button class="btn btn-g btn-sm" type="button" onclick="gmSetAllPlayerStatuses('active')">Check In All</button>
+                      <button class="btn btn-g btn-sm" type="button" onclick="gmSetAllPlayerStatuses('no_show')">Clear Check-ins</button>
+                      <button class="btn btn-p btn-sm" type="button" onclick="gmSavePlayers()">Save Players</button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <aside class="gm-side-column">
+              <article class="gm-card gm-start-card">
+                <div class="gm-card-body">
+                  <div class="gm-eyebrow">Session summary</div>
+                  <div class="gm-session-summary">
+                    <div class="gm-summary-row"><span>Date</span><strong id="gmSummaryDate">Today</strong></div>
+                    <div class="gm-summary-row"><span>Time</span><strong id="gmSummaryTime">Open Play</strong></div>
+                    <div class="gm-summary-row"><span>Rotation</span><strong id="gmSummaryMode">Balanced rotation</strong></div>
+                  </div>
+                  <div class="gm-quick-stats">
+                    <div class="gm-quick-stat"><b id="gmPaidCount">0</b><span>Paid</span></div>
+                    <div class="gm-quick-stat"><b id="gmExcludedCount">0</b><span>Pending</span></div>
+                    <div class="gm-quick-stat"><b id="gmCourtCount">0</b><span>Courts</span></div>
+                    <div class="gm-quick-stat"><b id="gmGameCount">0</b><span>Games ready</span></div>
+                  </div>
+                  <div id="gmReadyNote" class="gm-empty">Choose courts and check in four players.</div>
+                  <button class="gm-start-action" type="button" onclick="gmStartPlayFromSetup()">Start Live Play →</button>
+                  <p class="gm-start-hint">The first matches are generated when you start.</p>
+                </div>
+                <details class="gm-advanced">
+                  <summary>Advanced Setup</summary>
+                  <div class="gm-advanced-body">
+                    <div class="fg">
+                      <label class="fl" for="gmDate">Open Play Date</label>
+                      <input type="date" class="fi" id="gmDate" onchange="gmRefreshSourceSummary();gmSyncSetupControls()"/>
+                    </div>
+                    <div class="fg">
+                      <label class="fl" for="gmTimeLabel">Session Time</label>
+                      <input type="text" class="fi" id="gmTimeLabel" placeholder="e.g. 5PM-12AM" oninput="gmSyncSetupControls()"/>
+                    </div>
+                    <div class="fg">
+                      <label class="fl" for="gmSessionSelect">Open Existing Session</label>
+                      <select class="fi" id="gmSessionSelect" onchange="gmLoadSelectedSession()">
+                        <option value="">New session</option>
+                      </select>
+                    </div>
+                    <div class="fg">
+                      <label class="fl">Exact Courts</label>
+                      <div id="gmCourtList" class="op-court-grid"></div>
+                    </div>
+                    <div class="fg">
+                      <label class="fl" for="gmPasteBox">Paste Names or Setup Link</label>
+                      <textarea class="fi gm-textarea" id="gmPasteBox" placeholder="One player per line, or paste a setup link."></textarea>
+                    </div>
+                    <div class="gm-advanced-actions">
+                      <button class="btn btn-p btn-sm" type="button" onclick="gmCreateOrOpenSession()">Create / Open</button>
+                      <button class="btn btn-g btn-sm" type="button" onclick="gmLoadPaste()">Load Paste</button>
+                      <button class="btn btn-g btn-sm" type="button" onclick="gmCopyManagerLink()">Copy Setup Link</button>
+                      <button class="btn btn-g btn-sm" type="button" onclick="gmResetFromPaid()">Reset From Paid</button>
+                      <button class="btn btn-g btn-sm" type="button" onclick="renderGameManager()">Refresh</button>
+                    </div>
+                  </div>
+                </details>
+              </article>
+            </aside>
+          </div>
+        </section>
+
+        <section class="gm-screen" id="gmLiveScreen" role="tabpanel" aria-labelledby="gmLiveTab">
+          <div class="gm-live-top">
+            <div class="gm-live-title">
+              <div class="gm-eyebrow">Live open play</div>
+              <h3 id="gmSessionMeta">No active session</h3>
+              <p>Record a winner and the next group moves into place.</p>
+            </div>
+            <div class="gm-live-actions">
+              <button class="btn btn-g btn-sm" type="button" onclick="gmShowStage('setup')">Edit Setup</button>
+              <button class="btn btn-g btn-sm" type="button" onclick="gmAddWalkIn();gmShowStage('setup')">+ Player</button>
+              <button class="btn btn-g btn-sm" type="button" onclick="gmOpenDisplay()">Venue Display</button>
+              <button class="btn btn-p btn-sm" type="button" onclick="gmGenerateNextRound()">Next Round</button>
+            </div>
+          </div>
+
+          <div class="gm-live-layout">
+            <div class="gm-live-main">
+              <div class="gm-playbar">
+                <div class="gm-playbar-title">
+                  <div class="gm-playbar-kicker">Paddle Rage Live Rotation</div>
+                  <div class="gm-playbar-name" id="gmPlaybarName">No active session</div>
+                </div>
+                <div class="gm-playbar-stats">
+                  <span>Round <b id="gmBarGames">0</b></span>
+                  <span>Courts <b id="gmBarCourts">0</b></span>
+                  <span>Queue <b id="gmBarQueue">0</b></span>
+                </div>
+              </div>
+              <div class="gm-score-strip">
+                <div class="gm-stat"><b id="gmLiveActive">0</b><span>Checked in</span></div>
+                <div class="gm-stat"><b id="gmLivePlaying">0</b><span>Playing</span></div>
+                <div class="gm-stat"><b id="gmLiveWaiting">0</b><span>Waiting</span></div>
+                <div class="gm-stat"><b id="gmLiveResults">0</b><span>Finished</span></div>
+              </div>
+              <div id="gmBoard" class="gm-board"><div class="gm-empty">Start live play to generate the first matches.</div></div>
+            </div>
+
+            <aside class="gm-live-rail">
+              <div class="gm-live-panel">
+                <div class="gm-live-panel-head"><h3>Up Next</h3><span>Next available group</span></div>
+                <div id="gmNextUp" class="gm-next-grid"><div class="gm-empty">Waiting for the first round.</div></div>
+              </div>
+              <div class="gm-live-panel">
+                <div class="gm-live-panel-head"><h3>Player Queue</h3><button class="gm-chip-action" type="button" onclick="gmCopyLiveUpdate()">Copy update</button></div>
+                <div id="gmQueue" class="gm-wait"><span class="gm-empty">No players waiting.</span></div>
+              </div>
+              <div class="gm-live-panel">
+                <div class="gm-live-panel-head"><h3>Standings</h3><button class="gm-chip-action" type="button" onclick="gmExportCsv()">Export</button></div>
+                <div id="gmStandings" class="gm-standing-list"><div class="gm-empty">Results appear after winner clicks.</div></div>
+              </div>
+              <div class="gm-live-panel">
+                <div class="gm-actions">
+                  <button class="btn btn-g btn-sm" type="button" onclick="gmUndoRound()">Undo Last</button>
+                  <button class="btn btn-g btn-sm" type="button" onclick="gmTogglePause()">Pause / Resume</button>
+                  <button class="btn btn-g btn-sm" type="button" onclick="gmCopyOrder()">Copy Full Order</button>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <div class="gm-live-mobile-dock">
+            <button class="btn btn-g" type="button" onclick="gmShowStage('setup')">Setup</button>
+            <button class="btn btn-p" type="button" onclick="gmGenerateNextRound()">Next Round</button>
+          </div>
+        </section>
+      </div>
+
+      <div id="gmDisplay" class="gm-display" role="dialog" aria-modal="true" aria-labelledby="gmDisplayTitle">
+        <div class="gm-display-shell">
+          <div class="gm-display-head">
+            <div>
+              <div class="gm-display-brand" id="gmDisplayTitle">PADDLE RAGE PLAY</div>
+              <div class="gm-display-sub" id="gmDisplaySession">No active session</div>
+            </div>
+            <div>
+              <div class="gm-display-clock" id="gmDisplayClock"></div>
+              <div class="gm-display-actions">
+                <button class="btn btn-g btn-sm" onclick="gmCopyLiveUpdate()">Copy Update</button>
+                <button class="btn btn-p btn-sm" onclick="gmCloseDisplay()">Close Display</button>
+              </div>
+            </div>
+          </div>
+          <div class="gm-display-kpis">
+            <div class="gm-display-kpi"><b id="gmDisplayActive">0</b><span>Checked in</span></div>
+            <div class="gm-display-kpi"><b id="gmDisplayPlaying">0</b><span>On court</span></div>
+            <div class="gm-display-kpi"><b id="gmDisplayWaiting">0</b><span>Waiting</span></div>
+            <div class="gm-display-kpi"><b id="gmDisplayResults">0</b><span>Games finished</span></div>
+          </div>
+          <div class="gm-display-grid">
+            <div class="gm-display-panel">
+              <h2>Live Courts</h2>
+              <div id="gmDisplayCourts" class="gm-display-courts"></div>
+            </div>
+            <div style="display:grid;gap:16px;align-content:start">
+              <div class="gm-display-panel">
+                <h2>Up Next &amp; Queue</h2>
+                <div id="gmDisplayQueue" class="gm-display-queue"></div>
+              </div>
+              <div class="gm-display-panel">
+                <h2>Standings</h2>
+                <div id="gmDisplayStandings" class="gm-display-queue"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <!-- PAYMENTS -->
     <div id="sec-payments" class="adm-sec">
@@ -4723,6 +5235,7 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
   </form>
 </div>
 
+</div>
 <script>
 /* ==============================================
    UTILS
@@ -5539,14 +6052,45 @@ let sess;
 /* ==============================================
    NAVIGATION
    ============================================== */
-const titles={dash:'Dashboard',bookings:'Bookings',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',accounts:'Host Accounts',remittances:'Remittances',blocked:'Open Play',hosts:'Host Center',gamemgr:'Game Manager',maintenance:'Maintenance',payments:'Payments'};
-const SECTION_PERM={dash:'dashboard',bookings:'bookings',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',accounts:'host_accounts_view',remittances:'remittances',blocked:'open_play',hosts:'host_open_play',gamemgr:'open_play',maintenance:'maintenance',payments:'payments'};
-const SECTION_LOADERS={dash:renderDash,bookings:renderBookings,deleted:renderDeletedBookings,payreview:renderPaymentReview,reports:renderReport,courts:renderCourts,accounts:renderAccounts,remittances:renderRemittances,blocked:renderBlocked,hosts:renderHostCenter,gamemgr:renderGameManager,maintenance:renderMaintenance,payments:renderPaymentSettings};
+const titles={dash:'Dashboard',bookings:'Bookings',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',gamemgr:'Play Manager',accounts:'Host Accounts',remittances:'Remittances',hosts:'Host Center',maintenance:'Maintenance',payments:'Payments'};
+const SECTION_PERM={dash:'dashboard',bookings:'bookings',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',gamemgr:'open_play',accounts:'host_accounts_view',remittances:'remittances',hosts:'host_open_play',maintenance:'maintenance',payments:'payments'};
+const SECTION_LOADERS={dash:renderDash,bookings:renderBookings,deleted:renderDeletedBookings,payreview:renderPaymentReview,reports:renderReport,courts:renderCourts,gamemgr:()=>window.PlayManager?.render(),accounts:renderAccounts,remittances:renderRemittances,hosts:renderHostCenter,maintenance:renderMaintenance,payments:renderPaymentSettings};
 let _curSection=null;
-async function goto(s){
-  // Block navigation to sections the current role can't access
+function canAccessSection(s,role=sess?.role){
+  if(!SECTION_LOADERS[s] || !$('sec-'+s)) return false;
   const perm=SECTION_PERM[s];
-  if(perm && sess && !Auth.can(perm, sess.role)){ toast('You do not have access to this section.','err'); return; }
+  return !perm || !role || Auth.can(perm,role);
+}
+function firstAllowedSection(role=sess?.role){
+  return Object.keys(SECTION_LOADERS).find(s=>canAccessSection(s,role)) || 'dash';
+}
+function sectionFromLocation(){
+  const raw=String(location.hash||'').replace(/^#/,'');
+  if(!raw) return '';
+  try{
+    const section=decodeURIComponent(raw).trim().toLowerCase();
+    return SECTION_LOADERS[section] && $('sec-'+section) ? section : '';
+  }catch(_){
+    return '';
+  }
+}
+function updateSectionRoute(s,mode='push'){
+  const nextHash='#'+encodeURIComponent(s);
+  const nextState={...(history.state&&typeof history.state==='object'?history.state:{}),adminSection:s};
+  if(location.hash===nextHash){
+    if(mode==='replace') history.replaceState(nextState,'',nextHash);
+    return;
+  }
+  if(mode==='replace') history.replaceState(nextState,'',nextHash);
+  else history.pushState(nextState,'',nextHash);
+}
+async function goto(s,{historyMode='push',announceDenied=true}={}){
+  if(!SECTION_LOADERS[s] || !$('sec-'+s)) s=firstAllowedSection();
+  // Block navigation to sections the current role can't access
+  if(!canAccessSection(s)){
+    if(announceDenied) toast('You do not have access to this section.','err');
+    return false;
+  }
   document.querySelectorAll('.adm-sec').forEach(el=>el.classList.remove('on'));
   document.querySelectorAll('.nav-item').forEach(el=>el.classList.toggle('on',el.dataset.s===s));
   $('sec-'+s).classList.add('on');
@@ -5554,9 +6098,33 @@ async function goto(s){
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebarOverlay').classList.remove('show');
   _curSection=s;
+  if(historyMode!=='none') updateSectionRoute(s,historyMode);
   if (s === 'bookings') resetBookingFilters({ render: false });
   if(SECTION_LOADERS[s]) await SECTION_LOADERS[s]();
+  return true;
 }
+async function restoreSectionFromLocation({replaceInvalid=false}={}){
+  if(!sess) return;
+  const requested=sectionFromLocation();
+  const current=canAccessSection(_curSection)?_curSection:firstAllowedSection();
+  const target=requested&&canAccessSection(requested)?requested:current;
+  const historyMode=replaceInvalid&&requested!==target?'replace':'none';
+  if(target===_curSection){
+    if(historyMode==='replace') updateSectionRoute(target,'replace');
+    return;
+  }
+  await goto(target,{historyMode,announceDenied:false});
+}
+function handleAdminRouteChange(){
+  const requested=sectionFromLocation();
+  if(requested&&requested===_curSection) return;
+  restoreSectionFromLocation({replaceInvalid:true}).catch(error=>{
+    console.error('[admin navigation]',error);
+    toast('This section could not be restored.','err');
+  });
+}
+window.addEventListener('popstate',handleAdminRouteChange);
+window.addEventListener('hashchange',handleAdminRouteChange);
 
 /* ==============================================
    REALTIME — keep the admin dashboard live (no manual refresh)
@@ -5586,9 +6154,6 @@ function startAdminRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'open_play_registrations'},rerender)
     .on('postgres_changes',{event:'*',schema:'public',table:'open_play_host_applications'},rerender)
     .on('postgres_changes',{event:'*',schema:'public',table:'open_play_host_sessions'},rerender)
-    .on('postgres_changes',{event:'*',schema:'public',table:'open_play_game_sessions'},rerender)
-    .on('postgres_changes',{event:'*',schema:'public',table:'open_play_game_players'},rerender)
-    .on('postgres_changes',{event:'*',schema:'public',table:'open_play_game_rounds'},rerender)
     .on('postgres_changes',{event:'*',schema:'public',table:'weekly_fees'},rerender)
     .on('postgres_changes',{event:'*',schema:'public',table:'booking_fee_remittances'},rerender)
     .on('postgres_changes',{event:'*',schema:'public',table:'booking_fee_remittance_items'},rerender)
@@ -6950,6 +7515,7 @@ const nbGenRef = () => 'PB-' + Date.now().toString(36).toUpperCase() + '-' + Mat
 let _nbCourts = [];
 let _nbSelSlots = [];
 let _nbOpenHour = 6, _nbCloseHour = 22;
+const ADMIN_OPEN_PLAY_AVAILABLE = false;
 let _nbOpenPlayCfg = null;
 let _nbMaintenanceCfg = null;
 let _nbPricingTiers = [];
@@ -7002,6 +7568,7 @@ async function openNewBookingModal() {
 }
 
 function _nbIsOpenPlayHour(dateStr, h, courtId = null) {
+  if (!ADMIN_OPEN_PLAY_AVAILABLE) return false;
   if (!_nbOpenPlayCfg || !_nbOpenPlayCfg.enabled) return false;
   const courtIds = Array.isArray(_nbOpenPlayCfg.courtIds) ? _nbOpenPlayCfg.courtIds.map(String).filter(Boolean) : [];
   if (courtId && courtIds.length > 0 && !courtIds.includes(String(courtId))) return false;
@@ -10975,7 +11542,7 @@ async function rejectOpPayment() {
 }
 
 /* ==============================================
-   OPEN PLAY GAME MANAGER
+   PADDLE RAGE PLAY MANAGER
    ============================================== */
 let _gm = {
   courts: [],
@@ -10986,6 +11553,7 @@ let _gm = {
   rounds: [],
   source: { paid: [], excluded: [] },
   loadedUrl: false,
+  stage: 'setup',
 };
 
 function gmToday() {
@@ -11027,10 +11595,12 @@ function gmCourtNames(ids) {
 function gmRenderCourtPicker(selectedIds = []) {
   const wrap = $('gmCourtList');
   if (!wrap) return;
-  const selected = new Set((selectedIds.length ? selectedIds : gmDefaultCourtIds()).map(String));
+  const defaults = gmDefaultCourtIds();
+  const selected = new Set((selectedIds.length ? selectedIds : defaults.slice(0, Math.min(2, defaults.length))).map(String));
   wrap.innerHTML = _gm.courts.length
-    ? _gm.courts.map(c => `<label class="op-day op-court-chip"><input type="checkbox" class="gm-court-cb" value="${esc(c.id)}" ${selected.has(String(c.id)) ? 'checked' : ''} onchange="gmRefreshSourceSummary()"> <span>${esc(c.name || 'Court')}</span></label>`).join('')
+    ? _gm.courts.map(c => `<label class="op-day op-court-chip"><input type="checkbox" class="gm-court-cb" value="${esc(c.id)}" ${selected.has(String(c.id)) ? 'checked' : ''} onchange="gmHandleCourtChange()"> <span>${esc(c.name || 'Court')}</span></label>`).join('')
     : '<div class="gm-empty">No courts found.</div>';
+  gmSyncSetupControls();
 }
 
 function gmSessionTitle(s) {
@@ -11050,6 +11620,77 @@ function gmManagerUrl(params = {}) {
     else if (v) url.searchParams.set(k, v);
   });
   return url.toString();
+}
+
+function gmModeLabel(mode = $('gmMode')?.value) {
+  return {
+    smart_random_mixer: 'Balanced rotation',
+    all_rotate: 'Queue order',
+    manual: 'Manual lineup',
+  }[mode] || 'Balanced rotation';
+}
+
+function gmShowStage(stage = 'setup', shouldScroll = true) {
+  const next = stage === 'live' ? 'live' : 'setup';
+  _gm.stage = next;
+  const setupOn = next === 'setup';
+  $('gmSetupScreen')?.classList.toggle('on', setupOn);
+  $('gmLiveScreen')?.classList.toggle('on', !setupOn);
+  $('gmSetupTab')?.classList.toggle('on', setupOn);
+  $('gmLiveTab')?.classList.toggle('on', !setupOn);
+  $('gmSetupTab')?.setAttribute('aria-selected', String(setupOn));
+  $('gmLiveTab')?.setAttribute('aria-selected', String(!setupOn));
+  if (shouldScroll) $('sec-gamemgr')?.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function gmSyncSetupControls() {
+  const courtIds = gmSelectedCourtIds();
+  const courtNames = gmCourtNames(courtIds);
+  if ($('gmCourtCountControl')) $('gmCourtCountControl').textContent = courtIds.length;
+  if ($('gmCourtNamesSummary')) {
+    $('gmCourtNamesSummary').textContent = courtNames.length > 3
+      ? `${courtNames.slice(0, 2).join(', ')} +${courtNames.length - 2} more`
+      : courtNames.join(', ') || 'Choose at least one court';
+  }
+  const mode = $('gmMode')?.value || _gm.session?.mode || 'smart_random_mixer';
+  document.querySelectorAll('.gm-mode-card').forEach(card => card.classList.toggle('on', card.dataset.gmMode === mode));
+  if ($('gmSummaryMode')) $('gmSummaryMode').textContent = gmModeLabel(mode);
+  if ($('gmSummaryDate')) {
+    const date = $('gmDate')?.value;
+    $('gmSummaryDate').textContent = date ? fmtD(date) : 'Today';
+  }
+  if ($('gmSummaryTime')) $('gmSummaryTime').textContent = ($('gmTimeLabel')?.value || 'Open Play').trim();
+}
+
+async function gmHandleCourtChange() {
+  await gmRefreshSourceSummary();
+  gmSyncSetupControls();
+}
+
+async function gmAdjustCourtCount(delta) {
+  const courts = [...document.querySelectorAll('.gm-court-cb')];
+  if (!courts.length) return;
+  const checked = courts.filter(cb => cb.checked);
+  if (delta > 0) {
+    courts.find(cb => !cb.checked)?.click();
+  } else if (checked.length > 1) {
+    checked[checked.length - 1].click();
+  } else {
+    toast('Keep at least one court in play.', 'inf');
+  }
+}
+
+async function gmSetMode(mode) {
+  const select = $('gmMode');
+  if (!select) return;
+  select.value = mode;
+  gmSyncSetupControls();
+  if (_gm.session) await gmSaveSessionMeta();
+}
+
+async function gmStartPlayFromSetup() {
+  await gmGenerateNextRound();
+  if (_gm.rounds.length) gmShowStage('live');
 }
 
 async function gmClipboard(text, ok = 'Copied.') {
@@ -11084,6 +11725,9 @@ async function renderGameManager() {
     gmRenderBoard();
   }
   await gmRefreshSourceSummary();
+  gmUpdateFlow();
+  gmShowStage(_gm.rounds.length ? 'live' : _gm.stage, false);
+  gmSyncSetupControls();
 }
 
 function gmRenderSessionSelect() {
@@ -11098,7 +11742,7 @@ async function gmLoadSelectedSession() {
   const id = $('gmSessionSelect')?.value;
   if (!id) {
     _gm.session = null; _gm.players = []; _gm.rounds = [];
-    gmRenderPlayers(); gmRenderBoard(); return;
+    gmRenderPlayers(); gmRenderBoard(); gmShowStage('setup'); return;
   }
   await gmLoadSession(id);
 }
@@ -11117,6 +11761,8 @@ async function gmLoadSession(id) {
   gmRenderPlayers();
   gmRenderBoard();
   await gmRefreshSourceSummary();
+  gmShowStage(_gm.rounds.length ? 'live' : 'setup');
+  gmSyncSetupControls();
 }
 
 async function gmCreateOrOpenSession() {
@@ -11138,7 +11784,7 @@ async function gmCreateOrOpenSession() {
     mode: $('gmMode')?.value || 'smart_random_mixer',
     status: 'draft',
   });
-  toast('Game manager session created.');
+  toast('Play Manager session created.');
   await gmLoadSession(created.id);
   return _gm.session;
 }
@@ -11155,6 +11801,7 @@ async function gmSaveSessionMeta() {
   });
   _gm.session = saved || _gm.session;
   gmRenderBoard();
+  gmSyncSetupControls();
 }
 
 async function gmGetSourcePlayers() {
@@ -11171,18 +11818,21 @@ async function gmGetSourcePlayers() {
 async function gmRefreshSourceSummary() {
   const { paid, excluded } = await gmGetSourcePlayers();
   const courts = gmSelectedCourtIds().length;
-  const games = Math.min(courts, Math.floor(paid.length / 4));
+  const checkedIn = gmActivePlayers().length;
+  const readyPlayers = Math.max(paid.length, checkedIn);
+  const games = Math.min(courts, Math.floor(readyPlayers / 4));
   if ($('gmPaidCount')) $('gmPaidCount').textContent = paid.length;
   if ($('gmExcludedCount')) $('gmExcludedCount').textContent = excluded.length;
   if ($('gmCourtCount')) $('gmCourtCount').textContent = courts;
   if ($('gmGameCount')) $('gmGameCount').textContent = games;
   const note = $('gmReadyNote');
   if (note) {
-    note.className = paid.length >= 4 && courts ? 'gm-ready' : 'gm-warn';
-    note.textContent = paid.length >= 4 && courts
-      ? `${games} game${games === 1 ? '' : 's'} can start now. Pending/rejected players stay out until paid.`
-      : 'Need at least 4 paid players and 1 court to generate games.';
+    note.className = readyPlayers >= 4 && courts ? 'gm-ready' : 'gm-warn';
+    note.textContent = readyPlayers >= 4 && courts
+      ? `${games} court game${games === 1 ? '' : 's'} can start now.`
+      : 'Check in at least 4 players and choose 1 court.';
   }
+  gmSyncSetupControls();
 }
 
 async function gmImportPaidPlayers() {
@@ -11239,7 +11889,7 @@ function gmRenderPlayers() {
     const active = players.filter(p => p.status === 'active');
     warn.innerHTML = [
       dups.size ? `<div class="gm-warn" style="margin-bottom:8px">Duplicate names found. Please confirm they are different players.</div>` : '',
-      active.length && active.length < 4 ? `<div class="gm-warn" style="margin-bottom:8px">Only ${active.length} active player${active.length === 1 ? '' : 's'}. You need 4 to start a game.</div>` : '',
+      active.length && active.length < 4 ? `<div class="gm-warn" style="margin-bottom:8px">Only ${active.length} checked-in player${active.length === 1 ? '' : 's'}. You need 4 to start a game.</div>` : '',
     ].join('');
   }
   if (!players.length) {
@@ -11252,13 +11902,15 @@ function gmRenderPlayers() {
       <span class="gm-player-no">${i + 1}</span>
       <input class="fi gm-player-name" value="${esc(p.full_name)}" placeholder="Player name"/>
       <select class="fi gm-player-status">
-        <option value="active" ${p.status === 'active' ? 'selected' : ''}>Active</option>
-        <option value="no_show" ${p.status === 'no_show' ? 'selected' : ''}>No-show</option>
+        <option value="active" ${p.status === 'active' ? 'selected' : ''}>Checked in</option>
+        <option value="no_show" ${p.status === 'no_show' ? 'selected' : ''}>Not here</option>
         <option value="removed" ${p.status === 'removed' ? 'selected' : ''}>Removed</option>
       </select>
       <button class="btn btn-d btn-sm" onclick="gmRemovePlayerRow(this)" title="Remove">X</button>
     </div>`;
   }).join('');
+  gmUpdateFlow();
+  gmSyncSetupControls();
 }
 
 function gmCollectPlayers() {
@@ -11278,7 +11930,25 @@ async function gmSavePlayers() {
   _gm.players = await DB.replaceOpenPlayGamePlayers(s.id, players);
   toast('Players saved.');
   gmRenderPlayers();
+  gmUpdateFlow();
+  await gmRefreshSourceSummary();
   return true;
+}
+
+async function gmSetAllPlayerStatuses(status) {
+  const selects = [...document.querySelectorAll('.gm-player-status')];
+  if (!selects.length) { toast('Add or import players first.', 'inf'); return; }
+  selects.forEach(select => { select.value = status; });
+  _gm.players = gmCollectPlayers().map((p, i) => ({
+    id: '',
+    full_name: p.fullName,
+    source_registration_id: p.sourceRegistrationId,
+    status: p.status,
+    seed_order: i,
+  }));
+  gmRenderPlayers();
+  await gmRefreshSourceSummary();
+  toast(status === 'active' ? 'All players checked in. Save when ready.' : 'All players marked not here.');
 }
 
 function gmAddWalkIn() {
@@ -11293,6 +11963,7 @@ function gmAddWalkIn() {
     seed_order: currentPlayers.length,
   }];
   gmRenderPlayers();
+  gmRefreshSourceSummary().catch(() => {});
   setTimeout(() => {
     const inputs = document.querySelectorAll('.gm-player-name');
     inputs[inputs.length - 1]?.focus();
@@ -11303,6 +11974,7 @@ function gmRemovePlayerRow(btn) {
   btn.closest('.gm-player-row')?.remove();
   _gm.players = gmCollectPlayers().map((p, i) => ({ id: '', full_name: p.fullName, source_registration_id: p.sourceRegistrationId, status: p.status, seed_order: i }));
   gmRenderPlayers();
+  gmRefreshSourceSummary().catch(() => {});
 }
 
 function gmPairKey(a, b) { return [String(a), String(b)].sort().join('|'); }
@@ -11387,6 +12059,7 @@ function gmGenerateAssignments(active, courtIds, rounds) {
         courtName: gmCourtNames([courtId])[0],
         teamA: split.teamA.map(p => p.id),
         teamB: split.teamB.map(p => p.id),
+        startedAt: new Date().toISOString(),
       });
     }
     if (!best || score < best.score) best = { assignments, score };
@@ -11407,7 +12080,7 @@ async function gmGenerateNextRound() {
     seed_order: p.seed_order,
   }));
   const courtIds = gmSelectedCourtIds();
-  if (active.length < 4) { toast('Need at least 4 active players.', 'err'); return; }
+  if (active.length < 4) { toast('Need at least 4 checked-in players.', 'err'); return; }
   if (!courtIds.length) { toast('Choose at least one court.', 'err'); return; }
   const result = gmGenerateAssignments(active, courtIds, _gm.rounds);
   if (!result.assignments.length) { toast('Not enough players for a game.', 'err'); return; }
@@ -11423,6 +12096,8 @@ async function gmGenerateNextRound() {
   });
   toast(`Round ${roundNo} generated.`);
   await gmLoadSession(_gm.session.id);
+  gmShowStage('live');
+  return true;
 }
 
 async function gmUndoRound() {
@@ -11446,7 +12121,7 @@ function gmPlayerName(id) {
 }
 
 function gmWinnerLabel(g) {
-  return g?.winner === 'A' ? 'Left side won' : g?.winner === 'B' ? 'Right side won' : '';
+  return g?.winner === 'A' ? 'Team 1 won' : g?.winner === 'B' ? 'Team 2 won' : '';
 }
 
 function gmActivePlayers() {
@@ -11494,6 +12169,7 @@ async function gmSetWinner(assignmentIndex, winner) {
       courtName: current.courtName,
       teamA: split.teamA.map(p => p.id),
       teamB: split.teamB.map(p => p.id),
+      startedAt: resultAt,
       completedGames: [...(current.completedGames || []), completedGame],
     };
   }
@@ -11508,7 +12184,7 @@ async function gmSetWinner(assignmentIndex, winner) {
   if (saved) _gm.rounds[_gm.rounds.length - 1] = saved;
   else _gm.rounds[_gm.rounds.length - 1] = { ...last, assignments, queue_snapshot: queueSnapshot };
   gmRenderBoard();
-  const winnerText = winner === 'A' ? 'Left side won.' : 'Right side won.';
+  const winnerText = winner === 'A' ? 'Team 1 won.' : 'Team 2 won.';
   toast(nextAssignment ? `${winnerText} Next queue loaded.` : `${winnerText} No full next group yet.`);
 }
 
@@ -11535,9 +12211,9 @@ function gmRenderNextUp(round) {
     ? groups.map((group, i) => `<div class="gm-next-card">
         <div class="gm-next-title"><span>Next Game ${i + 1}</span><span>${group.length}/4</span></div>
         <div class="gm-matchup" style="padding:0;grid-template-columns:minmax(0,1fr) 22px minmax(0,1fr)">
-          <div class="gm-team"><div class="gm-team-label">Left</div><div class="gm-chip-row">${group.slice(0, 2).map(id => gmPlayerChip(id, 'waiting')).join('')}</div></div>
+          <div class="gm-team"><div class="gm-team-label">Team 1</div><div class="gm-chip-row">${group.slice(0, 2).map(id => gmPlayerChip(id, 'waiting')).join('')}</div></div>
           <div class="gm-vs">VS</div>
-          <div class="gm-team"><div class="gm-team-label">Right</div><div class="gm-chip-row">${group.slice(2, 4).map(id => gmPlayerChip(id, 'waiting')).join('')}</div></div>
+          <div class="gm-team"><div class="gm-team-label">Team 2</div><div class="gm-chip-row">${group.slice(2, 4).map(id => gmPlayerChip(id, 'waiting')).join('')}</div></div>
         </div>
       </div>`).join('')
     : '<div class="gm-empty">No full next-up group yet.</div>';
@@ -11577,7 +12253,7 @@ function gmRenderStandings(rounds = _gm.rounds) {
         <span class="gm-standing-name">${esc(p.name)}</span>
         <span class="gm-standing-meta">${p.wins}W / ${p.games}G</span>
       </div>`).join('')
-    : '<div class="gm-empty">No active players yet.</div>';
+    : '<div class="gm-empty">No checked-in players yet.</div>';
 }
 
 function gmRenderLiveStats(round) {
@@ -11593,6 +12269,103 @@ function gmRenderLiveStats(round) {
   if ($('gmBarGames')) $('gmBarGames').textContent = round?.round_no || 0;
   if ($('gmBarCourts')) $('gmBarCourts').textContent = (round?.assignments || []).length || gmSelectedCourtIds().length || 0;
   if ($('gmBarQueue')) $('gmBarQueue').textContent = waiting;
+  if ($('gmDisplayActive')) $('gmDisplayActive').textContent = active;
+  if ($('gmDisplayPlaying')) $('gmDisplayPlaying').textContent = playing;
+  if ($('gmDisplayWaiting')) $('gmDisplayWaiting').textContent = waiting;
+  if ($('gmDisplayResults')) $('gmDisplayResults').textContent = results;
+}
+
+function gmElapsedLabel(startedAt) {
+  const start = Date.parse(startedAt || '');
+  if (!Number.isFinite(start)) return '00:00';
+  const seconds = Math.max(0, Math.floor((Date.now() - start) / 1000));
+  const mins = Math.floor(seconds / 60);
+  return `${String(mins).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+function gmTickTimers() {
+  document.querySelectorAll('[data-gm-started]').forEach(el => {
+    el.textContent = gmElapsedLabel(el.dataset.gmStarted);
+  });
+  const clock = $('gmDisplayClock');
+  if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+}
+
+function gmUpdateFlow() {
+  const active = (_gm.players || []).map(gmNormalizePlayer).filter(p => p.status === 'active' && p.full_name).length;
+  const hasSession = !!_gm.session;
+  const hasRound = !!(_gm.rounds || []).length;
+  const steps = [
+    { el:$('gmFlowSession'), done:hasSession, current:!hasSession },
+    { el:$('gmFlowPlayers'), done:active >= 4, current:hasSession && active < 4 },
+    { el:$('gmFlowCourts'), done:hasRound, current:hasSession && active >= 4 },
+  ];
+  steps.forEach(step => {
+    if (!step.el) return;
+    step.el.classList.toggle('done', step.done);
+    step.el.classList.toggle('current', step.current && !step.done);
+    const badge = step.el.querySelector('b');
+    if (badge) badge.textContent = step.done ? '✓' : badge.textContent === '✓'
+      ? String(steps.indexOf(step) + 1)
+      : badge.textContent;
+  });
+}
+
+function gmRenderDisplay() {
+  if (!$('gmDisplay')) return;
+  const last = _gm.rounds[_gm.rounds.length - 1];
+  const hist = gmBuildHistory();
+  const active = gmActivePlayers();
+  const queueIds = last ? gmQueueIds(last) : [];
+  if ($('gmDisplaySession')) $('gmDisplaySession').textContent = _gm.session ? gmSessionTitle(_gm.session) : 'No active session';
+  const courts = $('gmDisplayCourts');
+  if (courts) {
+    courts.innerHTML = last && (last.assignments || []).length
+      ? last.assignments.map((g, i) => `
+        <div class="gm-display-court">
+          <div class="gm-display-court-head">
+            <span>${esc(g.courtName || `Court ${i + 1}`)}</span>
+            <span>LIVE · <span class="gm-timer" data-gm-started="${esc(g.startedAt || last.created_at || '')}">${gmElapsedLabel(g.startedAt || last.created_at)}</span></span>
+          </div>
+          <div class="gm-display-match">
+            <div class="gm-display-team">${(g.teamA || []).map(id => `<div class="gm-display-player">${esc(gmPlayerName(id))}</div>`).join('')}</div>
+            <div class="gm-display-vs">VS</div>
+            <div class="gm-display-team">${(g.teamB || []).map(id => `<div class="gm-display-player">${esc(gmPlayerName(id))}</div>`).join('')}</div>
+          </div>
+        </div>`).join('')
+      : '<div class="gm-display-empty">Courts will appear when the first round starts.</div>';
+  }
+  const queue = $('gmDisplayQueue');
+  if (queue) {
+    queue.innerHTML = queueIds.length
+      ? queueIds.map((id, i) => `<div class="gm-display-queue-row"><b>${i + 1}</b><span>${esc(gmPlayerName(id))}</span><small>${i < 4 ? 'UP NEXT' : `${hist.playCount[id] || 0} games`}</small></div>`).join('')
+      : '<div class="gm-display-empty">No players are waiting.</div>';
+  }
+  const standings = $('gmDisplayStandings');
+  if (standings) {
+    const rows = active.map(p => {
+      const id = String(p.id);
+      const games = hist.playCount[id] || 0;
+      const wins = hist.winCount[id] || 0;
+      return { name:p.full_name, games, wins, pct:games ? wins / games : 0 };
+    }).sort((a, b) => b.wins - a.wins || b.pct - a.pct || a.games - b.games || a.name.localeCompare(b.name));
+    standings.innerHTML = rows.length
+      ? rows.map((p, i) => `<div class="gm-display-queue-row"><b>${i + 1}</b><span>${esc(p.name)}</span><small>${p.wins}W / ${p.games}G</small></div>`).join('')
+      : '<div class="gm-display-empty">Standings appear after players check in.</div>';
+  }
+  gmTickTimers();
+}
+
+function gmOpenDisplay() {
+  if (!_gm.session) { toast('Create or open a session first.', 'err'); return; }
+  $('gmDisplay')?.classList.add('on');
+  document.body.classList.add('gm-display-open');
+  gmRenderDisplay();
+}
+
+function gmCloseDisplay() {
+  $('gmDisplay')?.classList.remove('on');
+  document.body.classList.remove('gm-display-open');
 }
 
 function gmRenderBoard() {
@@ -11607,38 +12380,56 @@ function gmRenderBoard() {
     if ($('gmNextUp')) $('gmNextUp').innerHTML = '<div class="gm-empty">Next groups appear after a round starts.</div>';
     if ($('gmQueue')) $('gmQueue').innerHTML = '<span class="gm-empty">Waiting players appear here.</span>';
     gmRenderStandings();
+    gmRenderDisplay();
+    gmUpdateFlow();
+    gmSyncSetupControls();
     return;
   }
   gmRenderLiveStats(last);
   board.innerHTML = (last.assignments || []).map((g, i) => `
     <div class="gm-court-card">
-      <div class="gm-court-hd"><strong>${esc(g.courtName || `Court ${i + 1}`)}</strong><span>Round ${last.round_no}</span></div>
-      <div class="gm-matchup">
-        <div class="gm-team ${g.winner === 'A' ? 'win' : ''}"><div class="gm-team-label">Left</div><div class="gm-chip-row">${(g.teamA || []).map(id => `<span class="gm-player-chip">${esc(gmPlayerName(id))}</span>`).join('')}</div></div>
-        <div class="gm-vs">VS</div>
-        <div class="gm-team ${g.winner === 'B' ? 'win' : ''}"><div class="gm-team-label">Right</div><div class="gm-chip-row">${(g.teamB || []).map(id => `<span class="gm-player-chip">${esc(gmPlayerName(id))}</span>`).join('')}</div></div>
+      <div class="gm-court-bar">
+        <strong>${esc(g.courtName || `Court ${i + 1}`)}</strong>
+        <div class="gm-court-bar-meta">
+          <span class="gm-live-badge">LIVE</span>
+          <span class="gm-timer" data-gm-started="${esc(g.startedAt || last.created_at || '')}">${gmElapsedLabel(g.startedAt || last.created_at)}</span>
+        </div>
+      </div>
+      <div class="gm-court-match">
+        <section class="gm-court-team team-one ${g.winner === 'A' ? 'winner' : ''}">
+          <div class="gm-court-team-head">Team 1</div>
+          <div class="gm-court-roster">${(g.teamA || []).map(id => `<div class="gm-court-player"><div><div class="gm-court-player-name">${esc(gmPlayerName(id))}</div><div class="gm-court-player-state">Ready</div></div></div>`).join('')}</div>
+        </section>
+        <div class="gm-court-vs">VS</div>
+        <section class="gm-court-team team-two ${g.winner === 'B' ? 'winner' : ''}">
+          <div class="gm-court-team-head">Team 2</div>
+          <div class="gm-court-roster">${(g.teamB || []).map(id => `<div class="gm-court-player"><div><div class="gm-court-player-name">${esc(gmPlayerName(id))}</div><div class="gm-court-player-state">Ready</div></div></div>`).join('')}</div>
+        </section>
       </div>
       ${g.winner ? `<div class="gm-result-note">${esc(gmWinnerLabel(g))}</div>` : ''}
       <div class="gm-result-actions">
-        <button class="gm-result-btn ${g.winner === 'A' ? 'on' : ''}" onclick="gmSetWinner(${i}, 'A')">Left wins + next</button>
-        <button class="gm-result-btn ${g.winner === 'B' ? 'on' : ''}" onclick="gmSetWinner(${i}, 'B')">Right wins + next</button>
+        <button class="gm-result-btn team-one ${g.winner === 'A' ? 'on' : ''}" onclick="gmSetWinner(${i}, 'A')">Team 1 Wins</button>
+        <button class="gm-result-btn team-two ${g.winner === 'B' ? 'on' : ''}" onclick="gmSetWinner(${i}, 'B')">Team 2 Wins</button>
       </div>
     </div>`).join('');
   gmRenderNextUp(last);
   gmRenderQueue(last);
   gmRenderStandings();
+  gmRenderDisplay();
+  gmUpdateFlow();
+  gmSyncSetupControls();
 }
 
 function gmOrderText() {
   const s = _gm.session;
   const last = _gm.rounds[_gm.rounds.length - 1];
-  const lines = [`Open Play Game Manager`, s ? gmSessionTitle(s) : '', ''].filter(Boolean);
+  const lines = [`Paddle Rage Play Manager`, s ? gmSessionTitle(s) : '', ''].filter(Boolean);
   if (last) {
     lines.push(`Round ${last.round_no}`);
     (last.assignments || []).forEach((g, i) => {
       lines.push(`${g.courtName || `Court ${i + 1}`}:`);
-      lines.push(`  Left / Team A: ${(g.teamA || []).map(gmPlayerName).join(' / ')}`);
-      lines.push(`  Right / Team B: ${(g.teamB || []).map(gmPlayerName).join(' / ')}`);
+      lines.push(`  Team 1: ${(g.teamA || []).map(gmPlayerName).join(' / ')}`);
+      lines.push(`  Team 2: ${(g.teamB || []).map(gmPlayerName).join(' / ')}`);
       if (g.winner) lines.push(`  Winner: ${gmWinnerLabel(g)}`);
     });
     const activeInGames = new Set((last.assignments || []).flatMap(g => [...(g.teamA || []), ...(g.teamB || [])].map(String)));
@@ -11654,15 +12445,45 @@ async function gmCopyOrder() {
   await gmClipboard(gmOrderText(), 'Game order copied.');
 }
 
+function gmLiveUpdateText() {
+  if (!_gm.session) return '';
+  const last = _gm.rounds[_gm.rounds.length - 1];
+  const hist = gmBuildHistory();
+  const lines = ['PADDLE RAGE PLAY', gmSessionTitle(_gm.session), ''];
+  if (!last) {
+    lines.push('Courts are being prepared.');
+  } else {
+    lines.push('LIVE COURTS');
+    (last.assignments || []).forEach((g, i) => {
+      lines.push(`${g.courtName || `Court ${i + 1}`}: ${(g.teamA || []).map(gmPlayerName).join(' & ')} vs ${(g.teamB || []).map(gmPlayerName).join(' & ')}`);
+    });
+    const queue = gmQueueIds(last);
+    lines.push('', `UP NEXT: ${queue.slice(0, 4).map(gmPlayerName).join(', ') || 'No full group yet'}`);
+    if (queue.length > 4) lines.push(`WAITING: ${queue.slice(4).map(gmPlayerName).join(', ')}`);
+  }
+  const leaders = gmActivePlayers().map(p => {
+    const id = String(p.id);
+    return { name:p.full_name, wins:hist.winCount[id] || 0, games:hist.playCount[id] || 0 };
+  }).sort((a, b) => b.wins - a.wins || a.games - b.games || a.name.localeCompare(b.name)).slice(0, 3);
+  if (leaders.length) lines.push('', `LEADERS: ${leaders.map((p, i) => `${i + 1}. ${p.name} ${p.wins}W/${p.games}G`).join(' · ')}`);
+  lines.push('', 'Play hard. Keep the rotation moving.');
+  return lines.join('\n');
+}
+
+async function gmCopyLiveUpdate() {
+  if (!_gm.session) { toast('Open a session first.', 'err'); return; }
+  await gmClipboard(gmLiveUpdateText(), 'Live court update copied.');
+}
+
 async function gmCopyManagerLink() {
   const params = _gm.session ? { gm: _gm.session.id } : { gmDate: $('gmDate')?.value || gmToday(), gmCourts: gmSelectedCourtIds() };
-  await gmClipboard(gmManagerUrl(params), 'Manager link copied.');
+  await gmClipboard(gmManagerUrl(params), 'Setup link copied.');
 }
 
 async function gmCopyReservationManagerLink() {
   const date = $('opRegDate')?.value || gmToday();
   const court = $('opRegCourt')?.value || '';
-  await gmClipboard(gmManagerUrl({ gmDate: date, gmCourt: court }), 'Manager link copied.');
+  await gmClipboard(gmManagerUrl({ gmDate: date, gmCourt: court }), 'Setup link copied.');
 }
 
 async function gmOpenFromReservations() {
@@ -11684,7 +12505,7 @@ async function gmLoadPaste() {
     if (date && $('gmDate')) $('gmDate').value = date;
     if (courts.length) gmRenderCourtPicker(courts);
     await gmRefreshSourceSummary();
-    toast('Manager link loaded.');
+    toast('Setup link loaded.');
     return;
   } catch(_) {}
   const names = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
@@ -11720,12 +12541,11 @@ function gmExportCsv() {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `open-play-game-manager-${_gm.session.date}.csv`;
+  a.download = `paddle-rage-play-manager-${_gm.session.date}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
-  toast('Game manager CSV exported.');
+  toast('Play Manager CSV exported.');
 }
-
 
 let _mtRules = [];
 let _mtCourts = [];
@@ -11955,9 +12775,55 @@ function updateThemeBtn() {
   btn.title = isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode';
 }
 
+function showAdminBoot(message='Restoring your workspace…') {
+  const splash = $('adminBootSplash');
+  const shell = $('adminShell');
+  document.body.classList.add('admin-booting');
+  if (shell) {
+    shell.inert = true;
+    shell.setAttribute('inert', '');
+    shell.setAttribute('aria-hidden', 'true');
+  }
+  if (!splash) return;
+  splash.hidden = false;
+  splash.setAttribute('role', 'status');
+  splash.setAttribute('aria-hidden', 'false');
+  const messageEl = $('adminBootMessage');
+  if (messageEl) messageEl.textContent = message;
+  const spinner = $('adminBootSpinner');
+  if (spinner) spinner.hidden = false;
+  const actions = $('adminBootActions');
+  if (actions) actions.hidden = true;
+}
+
+function showAdminBootError(message='The admin workspace could not be restored.') {
+  showAdminBoot(message);
+  const splash = $('adminBootSplash');
+  if (splash) splash.setAttribute('role', 'alert');
+  const spinner = $('adminBootSpinner');
+  if (spinner) spinner.hidden = true;
+  const actions = $('adminBootActions');
+  if (actions) actions.hidden = false;
+}
+
+function finishAdminBoot() {
+  const shell = $('adminShell');
+  if (shell) {
+    shell.inert = false;
+    shell.removeAttribute('inert');
+    shell.removeAttribute('aria-hidden');
+  }
+  document.body.classList.remove('admin-booting');
+  const splash = $('adminBootSplash');
+  if (!splash) return;
+  splash.setAttribute('aria-hidden', 'true');
+  splash.hidden = true;
+}
+
 function logout(){ Auth.logout(); }
 
 document.addEventListener('DOMContentLoaded', async ()=>{
+  try {
   // Local demo data can use a browser-only owner session. When localhost is
   // connected to the live Supabase project, require real Supabase Auth so RLS
   // permits settings writes such as platform rate changes.
@@ -11975,15 +12841,22 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     if (!verifiedSession) {
       localStorage.removeItem('pb_session');
       sessionStorage.removeItem('pb_session');
-      window.location.href = 'login.html?next=admin.html';
+      const requestedSection = sectionFromLocation();
+      const returnTo = `admin.html${requestedSection ? `#${encodeURIComponent(requestedSection)}` : ''}`;
+      showAdminBoot('Redirecting to sign in…');
+      window.location.href = `login.html?next=${encodeURIComponent(returnTo)}`;
       return;
     }
     sess = verifiedSession;
   } else {
     sess = Auth.requireAuth();
   }
-  if (!sess) return;
+  if (!sess) {
+    showAdminBootError('Your admin session could not be restored.');
+    return;
+  }
   if (sess.role === 'host') {
+    showAdminBoot('Opening Host Center…');
     window.location.href = 'index.html?hostBooking=1';
     return;
   }
@@ -12014,18 +12887,25 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     else ov.classList.remove('show');
   }));
 
-  // Land on the first section this role is allowed to see
-  const firstAllowed = Auth.can('dashboard', role) ? 'dash'
-    : Auth.can('bookings', role) ? 'bookings'
-    : Auth.can('host_open_play', role) ? 'hosts'
-    : 'payments';
+  // Restore the URL-backed section on refresh; otherwise use the first section
+  // this role is allowed to see.
+  const firstAllowed = firstAllowedSection(role);
+  const requestedSection = sectionFromLocation();
+  const initialSection = requestedSection && canAccessSection(requestedSection, role)
+    ? requestedSection
+    : firstAllowed;
   // Show agreement gate for court_owner before entering dashboard
   const gated = await checkAgreementGate(sess);
-  if (!gated) await goto(firstAllowed);
+  if (!gated) await goto(initialSection,{historyMode:'replace',announceDenied:false});
   startAdminRealtime();
+  finishAdminBoot();
   // Housekeeping: purge old abandoned slot-holds so the table stays tidy.
   // Runs in the background (admin is authenticated, so DELETE is permitted by RLS).
   cleanupAbandonedHolds();
+  } catch (error) {
+    console.error('[admin boot]', error);
+    showAdminBootError('The admin workspace could not be restored. Please reload and try again.');
+  }
 });
 
 /* Delete leftover "Reserving…" holds that were abandoned (cancelled) more than
@@ -12281,10 +13161,13 @@ async function submitAgreement() {
     document.getElementById('agreementOverlay').style.display = 'none';
     document.getElementById('agreementOverlay').style.alignItems = '';
     toast('✅ Agreement signed and recorded. Welcome!', 'ok');
-    // Now land on the dashboard
+    // Continue to the section requested before the agreement gate.
     const role = session.role;
-    const firstAllowed = Auth.can('dashboard', role) ? 'dash' : Auth.can('bookings', role) ? 'bookings' : 'payments';
-    await goto(firstAllowed);
+    const requestedSection = sectionFromLocation();
+    const destination = requestedSection && canAccessSection(requestedSection, role)
+      ? requestedSection
+      : firstAllowedSection(role);
+    await goto(destination,{historyMode:'replace',announceDenied:false});
   } catch(e) {
     errEl.textContent = 'Failed to save agreement: ' + (e.message || 'Unknown error. Please try again.');
     errEl.style.display = '';
@@ -12326,6 +13209,8 @@ async function checkAgreementGate(session) {
 </script>
 
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20260719-payment-policy-v4"></script>
+<script src="supabase-config.js?v=20260725-ready-courts-v1"></script>
+<script src="qrcode.min.js?v=1.5.4"></script>
+<script src="play-manager.js?v=20260725-ready-reference-v5"></script>
 </body>
 </html>
