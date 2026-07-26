@@ -18,6 +18,8 @@
     matchupRevealTimer: null,
     pollTimer: null,
     clockTimer: null,
+    shareFeedbackTimer: null,
+    navObserver: null,
   };
 
   const root = () => document.getElementById("playerLiveRoot");
@@ -115,6 +117,21 @@
 
   function isMine(name) {
     return Boolean(state.selectedName && String(name) === state.selectedName);
+  }
+
+  function playerStanding(name) {
+    return (state.snapshot?.standings || []).find(item =>
+      String(item?.name || "") === String(name || "")
+    ) || null;
+  }
+
+  function playerRecord(name) {
+    const standing = playerStanding(name);
+    if (!standing) return "No games yet";
+    const games = Number(standing.games || 0);
+    const wins = Number(standing.wins || 0);
+    const winRate = games ? Math.round((wins / games) * 100) : 0;
+    return `${games}G · ${winRate}% wins`;
   }
 
   function nameFitClass(name) {
@@ -274,6 +291,32 @@
     }, reducedMotion ? 120 : 1900);
   }
 
+  function resolveUpNext(round) {
+    const projected = round?.upNext;
+    const projectedPlayers = Array.isArray(projected?.players)
+      ? projected.players.filter(Boolean)
+      : [
+          ...(projected?.team1 || []),
+          ...(projected?.team2 || []),
+        ].filter(Boolean);
+    if (projectedPlayers.length === 4) {
+      return {
+        players: projectedPlayers,
+        team1: Array.isArray(projected?.team1) ? projected.team1.filter(Boolean) : projectedPlayers.slice(0, 2),
+        team2: Array.isArray(projected?.team2) ? projected.team2.filter(Boolean) : projectedPlayers.slice(2, 4),
+        courtName: projected.courtName || "Ready court",
+        reserved: true,
+      };
+    }
+    return {
+      players: (round?.queue || []).slice(0, 4),
+      team1: (round?.queue || []).slice(0, 2),
+      team2: (round?.queue || []).slice(2, 4),
+      courtName: "",
+      reserved: false,
+    };
+  }
+
   function myPosition(snapshot) {
     const name = state.selectedName;
     if (!name) return null;
@@ -292,6 +335,8 @@
     );
     const queue = snapshot.latestRound?.queue || [];
     const queueIndex = queue.indexOf(name);
+    const upNext = resolveUpNext(snapshot.latestRound);
+    const reservedIndex = upNext.reserved ? upNext.players.indexOf(name) : -1;
 
     if (sessionStatus === "completed") {
       return {
@@ -309,6 +354,14 @@
           eyebrow: "Session paused",
           title: liveGame.courtName || "Current court",
           detail: `${team} · Play will continue when the manager resumes`,
+          tone: "muted",
+        };
+      }
+      if (reservedIndex >= 0) {
+        return {
+          eyebrow: "Session paused",
+          title: upNext.courtName,
+          detail: "Your next lineup is reserved and will start when play resumes.",
           tone: "muted",
         };
       }
@@ -338,8 +391,25 @@
       };
     }
 
+    if (reservedIndex >= 0) {
+      return {
+        eyebrow: "You are up next",
+        title: upNext.courtName,
+        detail: "Your place is reserved in the next match.",
+        tone: "next",
+      };
+    }
+
     if (queueIndex >= 0) {
       if (queueIndex < 4) {
+        if (upNext.reserved) {
+          return {
+            eyebrow: "You are on deck",
+            title: `Queue position #${queueIndex + 1}`,
+            detail: "One match is already reserved ahead of your group.",
+            tone: "waiting",
+          };
+        }
         return {
           eyebrow: "You are up next",
           title: "Stay close to the courts",
@@ -350,7 +420,9 @@
       return {
         eyebrow: "Your queue position",
         title: `#${queueIndex + 1}`,
-        detail: `${queueIndex - 3} player${queueIndex - 3 === 1 ? "" : "s"} ahead of the next group`,
+        detail: upNext.reserved
+          ? `${queueIndex} waiting player${queueIndex === 1 ? "" : "s"} ahead, plus one reserved match`
+          : `${queueIndex - 3} player${queueIndex - 3 === 1 ? "" : "s"} ahead of the next group`,
         tone: "waiting",
       };
     }
@@ -387,6 +459,107 @@
     `;
   }
 
+  function resolveDispatchGroups(round, upNext) {
+    const queue = Array.isArray(round?.queue) ? round.queue.filter(Boolean) : [];
+    const groups = [];
+
+    if (upNext?.reserved && upNext.players?.length === 4) {
+      groups.push({
+        kind: "ready",
+        players: upNext.players,
+        team1: upNext.team1?.length ? upNext.team1 : upNext.players.slice(0, 2),
+        team2: upNext.team2?.length ? upNext.team2 : upNext.players.slice(2, 4),
+        courtName: upNext.courtName || "Ready court",
+      });
+    }
+
+    let queueOffset = 0;
+    while (groups.length < 3) {
+      const players = queue.slice(queueOffset, queueOffset + 4);
+      queueOffset += 4;
+      groups.push({
+        kind: players.length === 4 ? "auto" : "waiting",
+        players,
+        team1: players.slice(0, 2),
+        team2: players.slice(2, 4),
+        courtName: "",
+      });
+    }
+
+    return groups.slice(0, 3).map((group, index) => ({
+      ...group,
+      order: index + 1,
+    }));
+  }
+
+  function renderDispatchPlayer(name) {
+    if (!name) {
+      return `<span class="plb-dispatch-player is-empty">Open slot</span>`;
+    }
+    return `
+      <span class="plb-dispatch-player ${isMine(name) ? "is-mine" : ""}">
+        <strong class="${nameFitClass(name)}" title="${escapeHtml(name)}">${escapeHtml(name)}</strong>
+        ${isMine(name) ? `<b>YOU</b>` : ""}
+      </span>
+    `;
+  }
+
+  function renderDispatchTeam(label, names) {
+    const players = Array.isArray(names) ? names : [];
+    return `
+      <section class="plb-dispatch-team" aria-label="${escapeHtml(label)}">
+        <span class="plb-dispatch-team-label">${escapeHtml(label)}</span>
+        <div>
+          ${[players[0], players[1]].map(renderDispatchPlayer).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderDispatchCard(group, sessionStatus = "active") {
+    const playerCount = group.players.length;
+    const complete = playerCount === 4;
+    const ready = group.kind === "ready";
+    const paused = sessionStatus === "paused";
+    const status = paused ? "PAUSED" : ready ? "READY" : complete ? "AUTO" : "WAITING";
+    const eyebrow = ready ? "Open court" : complete ? `Next group ${group.order}` : `Queue group ${group.order}`;
+    const title = ready
+      ? group.courtName
+      : complete
+        ? "Any open court"
+        : `Need ${4 - playerCount} more`;
+    const detail = paused
+      ? "Position held until play resumes"
+      : ready
+        ? "Lineup reserved for this court"
+        : complete
+          ? "Moves to the first court that opens"
+          : `${playerCount} of 4 players available`;
+    const containsMine = group.players.some(isMine);
+
+    return `
+      <article
+        class="plb-dispatch-card is-${group.kind} ${containsMine ? "has-mine" : ""}"
+        data-plb-dispatch-order="${group.order}"
+        style="--plb-order:${group.order - 1}"
+      >
+        <header class="plb-dispatch-card-head">
+          <span class="plb-dispatch-order" aria-hidden="true">${group.order}</span>
+          <div>
+            <span>${escapeHtml(eyebrow)}</span>
+            <strong>${escapeHtml(title)}</strong>
+          </div>
+          <b class="plb-dispatch-status">${status}</b>
+        </header>
+        <div class="plb-dispatch-matchup">
+          ${renderDispatchTeam("Team 1", group.team1)}
+          ${renderDispatchTeam("Team 2", group.team2)}
+        </div>
+        <footer>${escapeHtml(detail)}</footer>
+      </article>
+    `;
+  }
+
   function renderCourt(game, index, sessionStatus = "active") {
     const hasWinner = Boolean(game.winner);
     const ready = hasWinner && sessionStatus !== "completed";
@@ -411,7 +584,6 @@
       <article class="plb-court-card ${courtStateClass} ${selectedOnCourt ? "has-mine" : ""} ${revealOnCourt ? "has-winner-reveal" : ""} ${matchupReveal ? "has-matchup-reveal" : ""}">
         <header class="plb-court-head">
           <div>
-            <span>Court ${index + 1}</span>
             <h3>${escapeHtml(game.courtName || `Court ${index + 1}`)}</h3>
           </div>
           <div class="plb-court-state">
@@ -429,7 +601,6 @@
             <div class="plb-team-label"><span>Team 1</span>${teamOneWon ? "<b>WINNER</b>" : ""}</div>
             <ul>${(game.team1 || []).map(playerItem).join("")}</ul>
           </section>
-          <span class="plb-vs" aria-hidden="true">VS</span>
           <section class="plb-team team-two ${teamTwoWon ? "is-winner" : ""}" aria-label="Team 2${teamTwoWon ? ", winner" : ""}">
             <div class="plb-team-label"><span>Team 2</span>${teamTwoWon ? "<b>WINNER</b>" : ""}</div>
             <ul>${(game.team2 || []).map(playerItem).join("")}</ul>
@@ -444,45 +615,86 @@
     `;
   }
 
-  function renderUpNext(queue, sessionStatus = "active") {
-    const next = queue.slice(0, 4);
-    if (!next.length) {
-      return `<div class="plb-empty">${sessionStatus === "completed" ? "No players were waiting when the session ended." : "No players are waiting right now."}</div>`;
-    }
+  function renderUpNext(upNext, sessionStatus = "active") {
+    const groups = resolveDispatchGroups(state.snapshot?.latestRound || {}, upNext);
     return `
-      <div class="plb-next-grid">
-        ${next.map((name, index) => `
-          <div class="plb-next-player ${isMine(name) ? "is-mine" : ""}">
-            <span>${index + 1}</span>
-            <strong>${escapeHtml(name)}</strong>
-            ${isMine(name) ? "<b>YOU</b>" : ""}
-          </div>
-        `).join("")}
-        ${next.length < 4 && sessionStatus === "active" ? `
-          <p class="plb-next-waiting">${4 - next.length} more player${4 - next.length === 1 ? "" : "s"} needed for a full next group.</p>
-        ` : ""}
+      <div class="plb-next-grid plb-dispatch-grid">
+        ${groups.map(group => renderDispatchCard(group, sessionStatus)).join("")}
       </div>
     `;
   }
 
-  function renderQueue(queue) {
+  function renderQueue(queue, reservedAhead = false) {
     if (!queue.length) return `<div class="plb-empty">Everyone is currently on court.</div>`;
+    const visibleQueue = queue.slice(0, 10);
     return `
       <ol class="plb-queue-list" id="plbQueueList" tabindex="0" aria-label="Waiting players in playing order">
-        ${queue.map((name, index) => `
-          <li class="${isMine(name) ? "is-mine" : ""}">
+        ${visibleQueue.map((name, index) => `
+          <li class="${isMine(name) ? "is-mine" : ""}" style="--plb-order:${index}">
             <span class="plb-queue-number">${index + 1}</span>
-            <strong>${escapeHtml(name)}</strong>
-            ${index < 4 ? `<span class="plb-up-badge">UP NEXT</span>` : ""}
+            <span class="plb-queue-player">
+              <strong title="${escapeHtml(name)}">${escapeHtml(name)}</strong>
+              <small>${escapeHtml(playerRecord(name))}</small>
+            </span>
+            ${index < 4 ? `<span class="plb-up-badge">${reservedAhead ? "ON DECK" : "UP NEXT"}</span>` : ""}
             ${isMine(name) ? `<span class="plb-you-badge">YOU</span>` : ""}
           </li>
         `).join("")}
       </ol>
+      ${queue.length > visibleQueue.length
+        ? `<p class="plb-list-note">Showing the next 10 of ${queue.length} waiting players.</p>`
+        : ""}
     `;
   }
 
-  function renderStandings(standings) {
+  function renderPodiumPlayer(row, index) {
+    const labels = ["Champion", "Runner-up", "Third place"];
+    const games = Number(row?.games || 0);
+    const wins = Number(row?.wins || 0);
+    const winRate = games ? Math.round((wins / games) * 100) : 0;
+    return `
+      <article class="plb-podium-card is-rank-${index + 1} ${isMine(row?.name) ? "is-mine" : ""}">
+        <span class="plb-podium-rank">${index + 1}</span>
+        <span class="plb-podium-avatar" aria-hidden="true">${escapeHtml(String(row?.name || "P").trim().charAt(0).toUpperCase() || "P")}</span>
+        <small>${labels[index]}</small>
+        <strong title="${escapeHtml(row?.name || "Player")}">${escapeHtml(row?.name || "Player")}</strong>
+        <b>${wins}<span>wins</span></b>
+        <p>${games} games · ${winRate}% win rate</p>
+      </article>
+    `;
+  }
+
+  function renderStandings(standings, sessionStatus = "active") {
     if (!standings.length) return `<div class="plb-empty">Standings will appear after play begins.</div>`;
+    const topStandings = standings.slice(0, 10);
+    if (sessionStatus === "completed") {
+      const leaders = topStandings.slice(0, 3);
+      const remaining = topStandings.slice(3);
+      return `
+        <div class="plb-final-standings" id="plbStandingsTable" tabindex="0" aria-label="Player standings">
+          <div class="plb-podium">
+            ${leaders.map(renderPodiumPlayer).join("")}
+          </div>
+          ${remaining.length ? `
+            <ol class="plb-final-list" start="4">
+              ${remaining.map((row, index) => {
+                const games = Number(row.games || 0);
+                const wins = Number(row.wins || 0);
+                const winRate = games ? Math.round((wins / games) * 100) : 0;
+                return `
+                  <li class="${isMine(row.name) ? "is-mine" : ""}">
+                    <span>${index + 4}</span>
+                    <strong>${escapeHtml(row.name)}</strong>
+                    <small>${games} games · ${winRate}%</small>
+                    <b>${wins}W</b>
+                  </li>
+                `;
+              }).join("")}
+            </ol>
+          ` : ""}
+        </div>
+      `;
+    }
     return `
       <div class="plb-table-wrap" id="plbStandingsTable" tabindex="0" aria-label="Player standings">
         <table class="plb-standings">
@@ -490,8 +702,8 @@
             <tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Wins</th><th scope="col">Games</th></tr>
           </thead>
           <tbody>
-            ${standings.map((row, index) => `
-              <tr class="${isMine(row.name) ? "is-mine" : ""}">
+            ${topStandings.map((row, index) => `
+              <tr class="${isMine(row.name) ? "is-mine" : ""}" style="--plb-order:${index}">
                 <td><span>${index + 1}</span></td>
                 <th scope="row">${escapeHtml(row.name)}${isMine(row.name) ? ` <b>YOU</b>` : ""}</th>
                 <td>${Number(row.wins || 0)}</td>
@@ -502,6 +714,47 @@
         </table>
       </div>
     `;
+  }
+
+  function renderLatestResult(result) {
+    if (!result || !["A", "B"].includes(result.winner)) return "";
+    const winners = result.winner === "A" ? result.team1 : result.team2;
+    const label = result.winner === "A" ? "Team 1" : "Team 2";
+    return `
+      <aside class="plb-latest-result" aria-label="Latest result">
+        <span>Latest result</span>
+        <strong>${escapeHtml(result.courtName || "Court")} · ${escapeHtml(label)}</strong>
+        <p>${(winners?.length ? winners : [label]).map(escapeHtml).join(" &amp; ")} won</p>
+      </aside>
+    `;
+  }
+
+  function syncMobileNav() {
+    const nav = document.querySelector(".plb-mobile-nav");
+    const links = [...(nav?.querySelectorAll("a[href^='#']") || [])];
+    state.navObserver?.disconnect();
+    state.navObserver = null;
+    if (!links.length || !("IntersectionObserver" in window)) return;
+
+    const byId = new Map(links.map(link => [link.getAttribute("href").slice(1), link]));
+    const sections = [...byId.keys()].map(id => document.getElementById(id)).filter(Boolean);
+    const setCurrent = id => {
+      links.forEach(link => {
+        if (link === byId.get(id)) link.setAttribute("aria-current", "location");
+        else link.removeAttribute("aria-current");
+      });
+    };
+    setCurrent(sections[0]?.id || "");
+    state.navObserver = new IntersectionObserver(entries => {
+      const visible = entries
+        .filter(entry => entry.isIntersecting)
+        .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top);
+      if (visible[0]?.target?.id) setCurrent(visible[0].target.id);
+    }, {
+      rootMargin: "-24% 0px -62% 0px",
+      threshold: 0,
+    });
+    sections.forEach(section => state.navObserver.observe(section));
   }
 
   function renderBoard() {
@@ -527,6 +780,9 @@
       ? assignments.filter(game => Boolean(game.winner)).length
       : Number(snapshot.resultCount || 0);
     const sessionStatus = session.status || "active";
+    const upNext = sessionStatus === "completed"
+      ? { players: queue.slice(0, 4), courtName: "", reserved: false }
+      : resolveUpNext(round);
     const sessionActive = sessionStatus === "active";
     const liveCourts = assignments.filter(game => !game.winner).length;
     const readyCourts = sessionStatus !== "completed"
@@ -546,7 +802,7 @@
       ? `${liveCourts} live${readyCourts ? ` &middot; ${readyCourts} ready` : ""}`
       : `${assignments.length} shown`;
     const nextEyebrow = sessionActive
-      ? "Ready group"
+      ? upNext.reserved ? "Reserved lineup" : "Ready group"
       : sessionStatus === "paused"
         ? "Queue paused"
         : "At session end";
@@ -558,8 +814,11 @@
     const statusMessage = sessionStatus === "paused"
       ? "The manager paused this session. Court and queue positions remain visible."
       : sessionStatus === "completed"
-        ? "This session is complete. Final results remain available for 24 hours."
+        ? "This session is complete. Final standings are shown below."
         : "";
+    const dispatchMarkup = renderUpNext(upNext, sessionStatus);
+    const queueMarkup = renderQueue(queue, upNext.reserved);
+    const standingsMarkup = renderStandings(snapshot.standings || [], sessionStatus);
     const headerStats = document.getElementById("plbHeaderStats");
     if (headerStats) {
       headerStats.innerHTML = `
@@ -569,6 +828,13 @@
         <div><strong>${results}</strong><span>Results</span></div>
       `;
     }
+    const headerSession = document.getElementById("plbHeaderSession");
+    if (headerSession) {
+      headerSession.innerHTML = `
+        <strong>${escapeHtml(session.timeLabel || "Paddle Rage Open Play")}</strong>
+        <span>${escapeHtml(formatDate(session.date))} · Round ${Number(round.roundNo || session.currentRound || 0)}</span>
+      `;
+    }
 
     document.title = `Round ${Number(round.roundNo || 0)} · Paddle Rage Live`;
     element.className = "plb-board";
@@ -576,36 +842,17 @@
     element.innerHTML = `
       <section class="plb-session-hero">
         <div>
-          <span class="plb-eyebrow">${escapeHtml(statusLabel(sessionStatus))} OPEN PLAY</span>
-          <h1>${escapeHtml(formatDate(session.date))}</h1>
-          <p>Follow the live courts, playing order, and session standings.</p>
+          <span class="plb-eyebrow">${escapeHtml(statusLabel(sessionStatus))} · OPEN PLAY</span>
+          <h1>Live Match Center</h1>
+          <p>Courts, upcoming groups, queue order, and the top 10—updated automatically.</p>
         </div>
         <div class="plb-session-meta">
-          <span>${escapeHtml(session.timeLabel || "Paddle Rage Open Play")}</span>
-          <strong>Round ${Number(round.roundNo || session.currentRound || 0)}</strong>
+          <span>${escapeHtml(formatDate(session.date))}</span>
+          <strong>${escapeHtml(session.timeLabel || "Paddle Rage Open Play")} · Round ${Number(round.roundNo || session.currentRound || 0)}</strong>
         </div>
       </section>
 
       ${statusMessage ? `<div class="plb-session-banner is-${escapeHtml(sessionStatus)}">${escapeHtml(statusMessage)}</div>` : ""}
-
-      <div class="plb-player-tools">
-        <section class="plb-find-card">
-          <label for="plbFindName">
-            <span>Find my position</span>
-            <select id="plbFindName" aria-describedby="plbFindHelp">
-              <option value="">Choose your name</option>
-              ${state.selectedName && !players.includes(state.selectedName)
-                ? `<option value="${escapeHtml(state.selectedName)}" selected>${escapeHtml(state.selectedName)} (not active)</option>`
-                : ""}
-              ${players.map(name => `
-                <option value="${escapeHtml(name)}" ${name === state.selectedName ? "selected" : ""}>${escapeHtml(name)}</option>
-              `).join("")}
-            </select>
-          </label>
-          <p id="plbFindHelp">Saved only on this device. Your name will be highlighted across the live board.</p>
-        </section>
-        ${renderMyPosition(snapshot)}
-      </div>
 
       <div class="plb-connection-note ${state.failures ? "is-error" : ""}" id="plbConnectionNote" role="status" aria-live="polite">
         ${state.failures ? "Connection interrupted. Showing the last update while reconnecting." : "Live connection active. This page refreshes automatically."}
@@ -613,7 +860,7 @@
 
       <div class="plb-live-layout" id="plbLiveBoard">
         <div class="plb-live-content">
-          <section class="plb-section" aria-labelledby="plbCourtsTitle">
+          <section class="plb-section" id="plbCourts" aria-labelledby="plbCourtsTitle">
             <div class="plb-round-strip">
               <div class="plb-round-copy">
                 <span>${courtsEyebrow}</span>
@@ -628,34 +875,65 @@
               ${assignments.map((game, index) => renderCourt(game, index, sessionStatus)).join("") || `<div class="plb-empty plb-empty-large">Court assignments have not started yet.</div>`}
             </div>
           </section>
+
+          ${sessionStatus !== "completed" ? `
+            <section class="plb-panel plb-next-panel plb-dispatch-panel" id="plbDispatch" aria-labelledby="plbNextTitle">
+              <div class="plb-panel-head">
+                <div><span>${nextEyebrow}</span><h2 id="plbNextTitle">${nextTitle}</h2></div>
+                <b>3 court dispatch slots</b>
+              </div>
+              <div class="plb-panel-body">${dispatchMarkup}</div>
+            </section>
+          ` : `
+            <section class="plb-panel plb-next-panel plb-dispatch-panel is-complete" id="plbDispatch" aria-labelledby="plbNextTitle">
+              <div class="plb-panel-head">
+                <div><span>Session complete</span><h2 id="plbNextTitle">Up Next</h2></div>
+                <b>Closed</b>
+              </div>
+              <div class="plb-empty">Court dispatch closed when the session ended.</div>
+            </section>
+          `}
         </div>
 
         <aside class="plb-live-rail" aria-label="Playing order and standings">
-          <section class="plb-panel plb-next-panel" aria-labelledby="plbNextTitle">
-            <div class="plb-panel-head">
-              <div><span>${nextEyebrow}</span><h2 id="plbNextTitle">${nextTitle}</h2></div>
-              <b>${Math.min(queue.length, 4)} / 4 ready</b>
-            </div>
-            <div class="plb-panel-body">${renderUpNext(queue, sessionStatus)}</div>
-          </section>
-
-          <section class="plb-panel plb-queue-panel" aria-labelledby="plbQueueTitle">
+          <section class="plb-panel plb-queue-panel" id="plbQueue" aria-labelledby="plbQueueTitle">
             <div class="plb-panel-head">
               <div><span>Playing order</span><h2 id="plbQueueTitle">Player Queue</h2></div>
               <b>${queue.length} waiting</b>
             </div>
-            <div class="plb-panel-body">${renderQueue(queue)}</div>
+            <div class="plb-panel-body">${queueMarkup}</div>
           </section>
 
-          <section class="plb-panel plb-standings-panel" aria-labelledby="plbStandingsTitle">
+          <section class="plb-panel plb-standings-panel" id="plbStandings" aria-labelledby="plbStandingsTitle">
             <div class="plb-panel-head">
-              <div><span>Session totals</span><h2 id="plbStandingsTitle">Standings</h2></div>
-              <b>Wins · Games</b>
+              <div><span>Ranked by wins</span><h2 id="plbStandingsTitle">${sessionStatus === "completed" ? "Final Top 10" : "Top 10 Standings"}</h2></div>
+              <b>${Math.min(10, (snapshot.standings || []).length)} shown</b>
             </div>
-            <div class="plb-panel-body">${renderStandings(snapshot.standings || [])}</div>
+            <div class="plb-panel-body">${standingsMarkup}</div>
           </section>
         </aside>
       </div>
+
+      ${renderLatestResult(snapshot.latestResult)}
+
+      <section class="plb-player-tools" aria-label="Personalize this live board">
+        <section class="plb-find-card">
+          <label for="plbFindName">
+            <span>Find my position</span>
+            <select id="plbFindName" aria-describedby="plbFindHelp">
+              <option value="">Choose your name</option>
+              ${state.selectedName && !players.includes(state.selectedName)
+                ? `<option value="${escapeHtml(state.selectedName)}" selected>${escapeHtml(state.selectedName)} (not active)</option>`
+                : ""}
+              ${players.map(name => `
+                <option value="${escapeHtml(name)}" ${name === state.selectedName ? "selected" : ""}>${escapeHtml(name)}</option>
+              `).join("")}
+            </select>
+          </label>
+          <p id="plbFindHelp">Saved only on this device. Your name is highlighted on courts, in dispatch, the queue, and standings.</p>
+        </section>
+        ${renderMyPosition(snapshot)}
+      </section>
     `;
 
     Object.entries(nestedScroll).forEach(([id, top]) => {
@@ -666,6 +944,8 @@
       element.querySelector(`#${CSS.escape(focusedId)}`)?.focus({ preventScroll: true });
       window.scrollTo(scrollX, scrollY);
     }
+    document.body.classList.add("plb-board-ready");
+    syncMobileNav();
     updateHeader();
     updateClocks();
   }
@@ -673,6 +953,8 @@
   function renderUnavailable() {
     const element = root();
     if (!element) return;
+    document.body.classList.remove("plb-board-ready");
+    state.navObserver?.disconnect();
     const headerStats = document.getElementById("plbHeaderStats");
     if (headerStats) {
       headerStats.innerHTML = `
@@ -681,6 +963,10 @@
         <div><strong>–</strong><span>Waiting</span></div>
         <div><strong>–</strong><span>Results</span></div>
       `;
+    }
+    const headerSession = document.getElementById("plbHeaderSession");
+    if (headerSession) {
+      headerSession.innerHTML = `<strong>Open Play</strong><span>Link unavailable</span>`;
     }
     element.className = "plb-message-card";
     element.setAttribute("aria-busy", "false");
@@ -700,6 +986,7 @@
   function renderConnectionError() {
     const element = root();
     if (!element) return;
+    document.body.classList.remove("plb-board-ready");
     element.className = "plb-message-card";
     element.setAttribute("aria-busy", "false");
     element.innerHTML = `
@@ -781,6 +1068,55 @@
     state.pollTimer = setTimeout(fetchSnapshot, delay);
   }
 
+  function setShareFeedback(message) {
+    const label = document.querySelector("[data-plb-share-label]");
+    if (!label) return;
+    clearTimeout(state.shareFeedbackTimer);
+    label.textContent = message;
+    state.shareFeedbackTimer = setTimeout(() => {
+      label.textContent = "Share";
+    }, 2200);
+  }
+
+  async function copyBoardLink(url) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      return;
+    }
+    const input = document.createElement("textarea");
+    input.value = url;
+    input.setAttribute("readonly", "");
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    document.body.appendChild(input);
+    input.select();
+    const copied = document.execCommand("copy");
+    input.remove();
+    if (!copied) throw new Error("Copy was not available");
+  }
+
+  async function shareBoard(button) {
+    const shareData = {
+      title: "Paddle Rage Live Match Center",
+      text: "Follow the Paddle Rage live courts, queue, and standings.",
+      url: location.href,
+    };
+    button.disabled = true;
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        setShareFeedback("Shared");
+      } else {
+        await copyBoardLink(shareData.url);
+        setShareFeedback("Link copied");
+      }
+    } catch (error) {
+      if (error?.name !== "AbortError") setShareFeedback("Try again");
+    } finally {
+      button.disabled = false;
+    }
+  }
+
   async function fetchSnapshot() {
     if (state.inFlight || state.terminal || document.hidden) return;
     state.inFlight = true;
@@ -848,6 +1184,10 @@
     if (button.dataset.plbAction === "refresh") {
       clearTimeout(state.pollTimer);
       fetchSnapshot();
+      return;
+    }
+    if (button.dataset.plbAction === "share") {
+      void shareBoard(button);
     }
   }
 
@@ -860,7 +1200,7 @@
 
   function start() {
     state.selectedName = readSelectedName();
-    root()?.addEventListener("click", handleClick);
+    document.addEventListener("click", handleClick);
     root()?.addEventListener("change", handleChange);
     state.clockTimer = setInterval(updateClocks, 1000);
 

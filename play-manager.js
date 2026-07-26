@@ -19,6 +19,8 @@
     lineupTrigger: null,
     winnerCorrection: null,
     winnerCorrectionTrigger: null,
+    playerEditor: null,
+    playerEditorTrigger: null,
     shareToken: null,
     shareSessionId: null,
     shareTrigger: null,
@@ -27,6 +29,15 @@
   };
 
   const SHARE_TOKEN_STORE = "paddle_rage_play_manager_share_tokens_v1";
+  const DEFAULT_SKILL_LEVEL = 1;
+  const SKILL_LEVELS = [
+    { value: 1, label: "Beginner" },
+    { value: 2, label: "Advanced Beginner" },
+    { value: 3, label: "Intermediate" },
+    { value: 4, label: "Advanced Intermediate" },
+    { value: 5, label: "Advanced" },
+    { value: 6, label: "Expert" },
+  ];
   const root = () => document.getElementById("playManagerRoot");
   const asId = value => String(value ?? "");
   const unique = values => [...new Set(values.map(asId).filter(Boolean))];
@@ -90,6 +101,36 @@
     return state.players.find(player => asId(player.id) === asId(id)) || null;
   }
 
+  function normalizeSkillLevel(value, fallback = DEFAULT_SKILL_LEVEL) {
+    const level = Number(value);
+    return Number.isInteger(level) && level >= 1 && level <= 6 ? level : fallback;
+  }
+
+  function skillInfo(value) {
+    const level = normalizeSkillLevel(value);
+    return SKILL_LEVELS.find(item => item.value === level) || SKILL_LEVELS[DEFAULT_SKILL_LEVEL - 1];
+  }
+
+  function playerSkillLevel(playerOrId) {
+    const player = typeof playerOrId === "object" && playerOrId
+      ? playerOrId
+      : playerRecord(playerOrId);
+    return normalizeSkillLevel(player?.skill_level ?? player?.skillLevel);
+  }
+
+  function skillLabel(value) {
+    const info = skillInfo(value);
+    return `${info.value} star${info.value === 1 ? "" : "s"} · ${info.label}`;
+  }
+
+  function skillStars(value) {
+    return "★".repeat(normalizeSkillLevel(value));
+  }
+
+  function teamSkillTotal(playerIds) {
+    return (playerIds || []).reduce((sum, id) => sum + playerSkillLevel(id), 0);
+  }
+
   function activePlayers() {
     return state.players.filter(player => (player.status || "active") === "active" && player.full_name);
   }
@@ -106,6 +147,16 @@
     const readyMatch = game?.readyMatch;
     if (!readyMatch || typeof readyMatch !== "object") return [];
     return unique([...(readyMatch.teamA || []), ...(readyMatch.teamB || [])]);
+  }
+
+  function readyMatchQueueOrder(game) {
+    const playerIds = readyMatchIds(game);
+    const storedOrder = unique(game?.readyMatch?.queueOrder || []);
+    const playerSet = new Set(playerIds);
+    return storedOrder.length === playerIds.length
+      && storedOrder.every(id => playerSet.has(id))
+      ? storedOrder
+      : playerIds;
   }
 
   function hasReadyMatch(game) {
@@ -274,7 +325,7 @@
     return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
   }
 
-  function bestSplit(group, history) {
+  function bestSplit(group, history, randomizeTies = true) {
     const splits = [
       [[0, 1], [2, 3]],
       [[0, 2], [1, 3]],
@@ -291,7 +342,13 @@
       teamA.forEach(a => teamB.forEach(b => {
         opponentRepeats += history.opponent[pairKey(a.id, b.id)] || 0;
       }));
-      const score = partnerRepeats * 100 + opponentRepeats * 20 + Math.random();
+      const teamASkill = teamA.reduce((sum, player) => sum + playerSkillLevel(player.id), 0);
+      const teamBSkill = teamB.reduce((sum, player) => sum + playerSkillLevel(player.id), 0);
+      const skillGap = Math.abs(teamASkill - teamBSkill);
+      const score = partnerRepeats * 100
+        + opponentRepeats * 20
+        + skillGap * 8
+        + (randomizeTies ? Math.random() : 0);
       if (!best || score < best.score) best = { teamA, teamB, score };
     });
     return best;
@@ -605,6 +662,35 @@
     });
   }
 
+  function skillSelectorMarkup(selectedLevel = DEFAULT_SKILL_LEVEL) {
+    const selected = Number(selectedLevel);
+    const selectedInfo = SKILL_LEVELS.find(item => item.value === selected);
+    return `
+      <fieldset class="pm2-skill-field" aria-describedby="pm2SkillText pm2SkillHelp">
+        <legend>Player skill</legend>
+        <div class="pm2-skill-row">
+          <span class="pm2-skill-caption" id="pm2SkillCaption">Skill:</span>
+          <div class="pm2-skill-stars" aria-label="Choose a skill level from one to six stars">
+            ${SKILL_LEVELS.map(item => `
+              <label class="pm2-skill-star ${selected >= item.value ? "is-filled" : ""} ${selected === item.value ? "is-selected" : ""}">
+                <input
+                  type="radio"
+                  name="skillLevel"
+                  value="${item.value}"
+                  aria-label="${item.value} star${item.value === 1 ? "" : "s"}, ${escapeHtml(item.label)}"
+                  ${selected === item.value ? "checked" : ""}
+                >
+                <span aria-hidden="true">★</span>
+              </label>
+            `).join("")}
+          </div>
+          <strong class="pm2-skill-text" id="pm2SkillText">${selectedInfo ? escapeHtml(selectedInfo.label) : "Set skill"}</strong>
+        </div>
+        <small id="pm2SkillHelp">New players start at 1-star Beginner.</small>
+      </fieldset>
+    `;
+  }
+
   function renderShell(inheritedScrollSnapshot) {
     const element = root();
     if (!element) return;
@@ -614,6 +700,7 @@
     const scrollContext = scrollContextKey();
     const numbers = headerNumbers();
     const live = state.view === "live" && !!lastRound();
+    const completed = String(state.session?.status || "") === "completed";
     element.innerHTML = `
       <section
         class="pm2 ${state.displayMode ? "pm2-display" : ""}"
@@ -628,10 +715,10 @@
               <h2>Paddle Rage Play Manager</h2>
             </div>
           </div>
-          <div class="pm2-header-stats" aria-label="Live session totals">
+          <div class="pm2-header-stats" aria-label="${completed ? "Completed session totals" : "Live session totals"}">
             <div class="pm2-header-stat"><b>${numbers.courts}</b><span>Courts</span></div>
             <div class="pm2-header-stat"><b>${numbers.players}</b><span>Players</span></div>
-            <div class="pm2-header-stat"><b>${numbers.queue}</b><span>Queue</span></div>
+            <div class="pm2-header-stat"><b>${completed ? numbers.finished : numbers.queue}</b><span>${completed ? "Results" : "Queue"}</span></div>
           </div>
           <div class="pm2-header-actions">
             <button class="pm2-btn pm2-btn-dark" type="button" data-pm-action="new-session" title="Create a new session">＋ <span>New</span></button>
@@ -641,24 +728,35 @@
         <div class="pm2-workspace">
           ${state.view === "live" && lastRound() ? renderLive() : renderSetup()}
         </div>
-        <dialog class="pm2-dialog" id="pm2AddDialog" aria-labelledby="pm2AddTitle">
+        <dialog class="pm2-dialog" id="pm2AddDialog" aria-labelledby="pm2AddTitle" aria-describedby="pm2PlayerEditorIntro pm2PlayerEditorSummary">
           <form method="dialog" data-pm-form="add-player">
             <div class="pm2-dialog-head">
               <div class="pm2-dialog-heading">
-                <span class="pm2-dialog-kicker">Player queue</span>
+                <span class="pm2-dialog-kicker" id="pm2PlayerEditorKicker">Player queue</span>
                 <h3 id="pm2AddTitle">Add a player</h3>
               </div>
               <button class="pm2-icon-btn pm2-btn-light pm2-dialog-close" type="button" data-pm-action="close-dialog" aria-label="Close">×</button>
             </div>
             <div class="pm2-dialog-body">
-              <p class="pm2-dialog-intro">Add a walk-in to the end of the waiting list.</p>
+              <p class="pm2-dialog-intro" id="pm2PlayerEditorIntro">Add a walk-in to the end of the waiting list.</p>
+              <section class="pm2-player-editor-summary" id="pm2PlayerEditorSummary" hidden aria-label="Player session summary">
+                <div class="pm2-player-editor-stats">
+                  <span id="pm2PlayerEditorGames">0G played</span>
+                  <span id="pm2PlayerEditorWinRate">0% win rate</span>
+                </div>
+                <p id="pm2PlayerEditorCheckIn">Checked-in time unavailable</p>
+              </section>
               <label class="pm2-field">
-                <span class="pm2-label">Player name</span>
+                <span class="pm2-label" id="pm2PlayerNameLabel">Player name</span>
                 <input class="pm2-input" id="pm2WalkInName" name="playerName" autocomplete="off" required maxlength="90" placeholder="Enter full name">
               </label>
+              ${skillSelectorMarkup()}
+              <div class="pm2-player-editor-note" id="pm2PlayerEditorNote" hidden>
+                Name and skill changes apply to future team balancing and all court views.
+              </div>
               <div class="pm2-dialog-actions">
                 <button class="pm2-btn pm2-btn-light" type="button" data-pm-action="close-dialog">Cancel</button>
-                <button class="pm2-btn pm2-btn-primary" type="submit">Add to queue</button>
+                <button class="pm2-btn pm2-btn-primary" id="pm2PlayerEditorSubmit" type="submit">Add to queue</button>
               </div>
             </div>
           </form>
@@ -894,6 +992,13 @@
       state.shareTrigger = null;
       trigger?.focus?.();
     });
+    const playerEditorDialog = element.querySelector("#pm2AddDialog");
+    playerEditorDialog?.addEventListener("close", () => {
+      const trigger = state.playerEditorTrigger;
+      state.playerEditor = null;
+      state.playerEditorTrigger = null;
+      if (trigger?.isConnected) trigger.focus?.();
+    });
     const replacementDialog = element.querySelector("#pm2ReplaceDialog");
     replacementDialog?.addEventListener("close", () => {
       const trigger = state.replacementTrigger;
@@ -1028,9 +1133,28 @@
   function courtPlayerRow(id, courtIndex, team, slotIndex, locked) {
     const name = playerName(id);
     const actionLabel = `Replace or remove ${name}`;
+    const skillLevel = playerSkillLevel(id);
+    const skillSummary = skillLabel(skillLevel);
     return `
       <div class="pm2-player">
-        <span class="pm2-player-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+        <button
+          class="pm2-player-identity"
+          type="button"
+          data-pm-action="edit-player-skill"
+          data-player-id="${escapeHtml(id)}"
+          aria-label="Open ${escapeHtml(name)} player profile, ${escapeHtml(skillSummary)}"
+          title="Open ${escapeHtml(name)} profile"
+          ${locked ? "disabled" : ""}
+        >
+          <span class="pm2-player-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+          <span
+            class="pm2-player-skill"
+            aria-hidden="true"
+          >
+            <span class="pm2-player-skill-icon" aria-hidden="true">★</span>
+            <b aria-hidden="true">${skillLevel}</b>
+          </span>
+        </button>
         <button
           class="pm2-player-replace"
           type="button"
@@ -1112,6 +1236,8 @@
           ? "is-live"
           : "is-ended";
     const pastGames = (game.completedGames || []).length;
+    const teamASkill = teamSkillTotal(game.teamA);
+    const teamBSkill = teamSkillTotal(game.teamB);
     return `
       <article class="pm2-court-card ${cardStateClass}" data-pm-court-index="${index}">
         <div class="pm2-court-bar">
@@ -1128,7 +1254,13 @@
         </div>
         <div class="pm2-match">
           <div class="pm2-team pm2-team-a ${winner === "A" ? "is-winner" : ""}" data-pm-team="A">
-            <div class="pm2-team-title"><span>Team 1</span><b class="pm2-team-win-badge">WIN</b></div>
+            <div class="pm2-team-title">
+              <span class="pm2-team-heading">
+                <span>Team 1</span>
+                <span class="pm2-team-skill-total" aria-label="Team 1 combined skill ${teamASkill}">★ ${teamASkill}</span>
+              </span>
+              <b class="pm2-team-win-badge">WIN</b>
+            </div>
             <span class="pm2-winner-sparks" aria-hidden="true"></span>
             <div class="pm2-roster">
               ${(game.teamA || []).map((id, slotIndex) => courtPlayerRow(id, index, "A", slotIndex, replacementLocked)).join("")}
@@ -1136,7 +1268,13 @@
           </div>
           <div class="pm2-vs">VS</div>
           <div class="pm2-team pm2-team-b ${winner === "B" ? "is-winner" : ""}" data-pm-team="B">
-            <div class="pm2-team-title"><span>Team 2</span><b class="pm2-team-win-badge">WIN</b></div>
+            <div class="pm2-team-title">
+              <span class="pm2-team-heading">
+                <span>Team 2</span>
+                <span class="pm2-team-skill-total" aria-label="Team 2 combined skill ${teamBSkill}">★ ${teamBSkill}</span>
+              </span>
+              <b class="pm2-team-win-badge">WIN</b>
+            </div>
             <span class="pm2-winner-sparks" aria-hidden="true"></span>
             <div class="pm2-roster">
               ${(game.teamB || []).map((id, slotIndex) => courtPlayerRow(id, index, "B", slotIndex, replacementLocked)).join("")}
@@ -1157,17 +1295,166 @@
     `;
   }
 
-  function nextUpMarkup(queue) {
-    const group = queue.slice(0, 4);
-    if (group.length < 4) {
-      return `<div class="pm2-empty" style="min-height:90px;padding:12px">A full next group appears when four players are waiting.</div>`;
+  function dispatchSplit(playerIds, history = buildHistory()) {
+    const ids = unique(playerIds || []);
+    if (ids.length !== 4) {
+      return {
+        teamA: ids.slice(0, 2),
+        teamB: ids.slice(2, 4),
+      };
     }
+    const split = bestSplit(ids.map(id => ({ id })), history, false);
+    return {
+      teamA: split.teamA.map(player => asId(player.id)),
+      teamB: split.teamB.map(player => asId(player.id)),
+    };
+  }
+
+  function nextDispatchSlots(assignments, queue) {
+    const history = buildHistory();
+    const slotCount = Math.max(assignments.length, sessionCourtIds().length);
+    const ready = assignments
+      .map((game, courtIndex) => ({ game, courtIndex }))
+      .filter(item => hasReadyMatch(item.game))
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.game.readyMatch?.reservedAt || "");
+        const rightTime = Date.parse(right.game.readyMatch?.reservedAt || "");
+        const leftOrder = Number.isFinite(leftTime) ? leftTime : Number.MAX_SAFE_INTEGER;
+        const rightOrder = Number.isFinite(rightTime) ? rightTime : Number.MAX_SAFE_INTEGER;
+        return leftOrder - rightOrder || left.courtIndex - right.courtIndex;
+      })
+      .map(({ game, courtIndex }) => ({
+        kind: "ready",
+        courtIndex,
+        courtName: game.courtName || `Court ${courtIndex + 1}`,
+        playerIds: readyMatchQueueOrder(game),
+        teamA: (game.readyMatch?.teamA || []).map(asId),
+        teamB: (game.readyMatch?.teamB || []).map(asId),
+        reservedAt: game.readyMatch?.reservedAt || game.resultAt || "",
+      }));
+
+    const previewCount = Math.max(0, slotCount - ready.length);
+    const previews = Array.from({ length: previewCount }, (_, index) => {
+      const playerIds = queue.slice(index * 4, index * 4 + 4).map(asId);
+      const teams = dispatchSplit(playerIds, history);
+      return {
+        kind: playerIds.length === 4 ? "preview" : "waiting",
+        courtIndex: null,
+        courtName: "",
+        playerIds,
+        teamA: teams.teamA,
+        teamB: teams.teamB,
+        reservedAt: "",
+      };
+    });
+
+    return [...ready, ...previews].map((slot, index) => ({
+      ...slot,
+      order: index + 1,
+    }));
+  }
+
+  function dispatchPlayerMarkup(id) {
+    if (!id) {
+      return `<span class="pm2-dispatch-player is-empty" aria-hidden="true">Open slot</span>`;
+    }
+    const name = playerName(id);
+    const level = playerSkillLevel(id);
     return `
-      <div class="pm2-next-card">
-        <div class="pm2-next-title"><span>Next game</span><span>4 / 4 ready</span></div>
-        <div class="pm2-next-players">
-          ${group.map(id => `<div class="pm2-next-player">${escapeHtml(playerName(id))}</div>`).join("")}
+      <button
+        class="pm2-dispatch-player"
+        type="button"
+        data-pm-action="edit-player-skill"
+        data-player-id="${escapeHtml(id)}"
+        aria-label="Open ${escapeHtml(name)} player profile"
+      >
+        <span title="${escapeHtml(name)}">${escapeHtml(name)}</span>
+        <b aria-label="${level} star skill">★${level}</b>
+      </button>
+    `;
+  }
+
+  function dispatchTeamMarkup(label, playerIds) {
+    const ids = (playerIds || []).map(asId);
+    const total = ids.reduce((sum, id) => sum + playerSkillLevel(id), 0);
+    return `
+      <section class="pm2-dispatch-team" aria-label="${escapeHtml(label)}">
+        <div class="pm2-dispatch-team-head">
+          <span>${escapeHtml(label)}</span>
+          <b aria-label="${escapeHtml(label)} combined skill ${total}">★ ${total || "—"}</b>
         </div>
+        <div class="pm2-dispatch-team-players">
+          ${[ids[0], ids[1]].map(dispatchPlayerMarkup).join("")}
+        </div>
+      </section>
+    `;
+  }
+
+  function dispatchTime(value) {
+    const parsed = Date.parse(value || "");
+    return Number.isFinite(parsed)
+      ? new Date(parsed).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      : "";
+  }
+
+  function dispatchCardMarkup(slot, sessionStatus) {
+    const ready = slot.kind === "ready";
+    const complete = slot.playerIds.length === 4;
+    const missing = Math.max(0, 4 - slot.playerIds.length);
+    const statusLabel = ready ? "READY" : complete ? "AUTO" : "WAITING";
+    const eyebrow = ready ? "Open court" : complete ? `Next group ${slot.order}` : `Queue group ${slot.order}`;
+    const title = ready ? slot.courtName : complete ? "Any open court" : `Need ${missing} more`;
+    const detail = ready
+      ? `Reserved at ${dispatchTime(slot.reservedAt) || "now"}`
+      : complete
+        ? "Auto-assigns to the first court that opens"
+        : `${slot.playerIds.length} of 4 players available`;
+    return `
+      <article class="pm2-dispatch-card is-${slot.kind}" data-pm-dispatch-order="${slot.order}">
+        <header class="pm2-dispatch-card-head">
+          <span class="pm2-dispatch-order" aria-hidden="true">${slot.order}</span>
+          <div class="pm2-dispatch-card-title">
+            <span>${escapeHtml(eyebrow)}</span>
+            <strong>${escapeHtml(title)}</strong>
+          </div>
+          <span class="pm2-dispatch-status">${statusLabel}</span>
+        </header>
+        <div class="pm2-dispatch-matchup">
+          ${dispatchTeamMarkup("Team 1", slot.teamA)}
+          ${dispatchTeamMarkup("Team 2", slot.teamB)}
+        </div>
+        <footer class="pm2-dispatch-footer">
+          <span class="pm2-dispatch-detail">${escapeHtml(detail)}</span>
+          ${ready ? `
+            <div class="pm2-dispatch-actions">
+              <button
+                class="pm2-btn pm2-btn-light pm2-dispatch-change"
+                type="button"
+                data-pm-action="choose-players"
+                data-court-index="${slot.courtIndex}"
+                aria-haspopup="dialog"
+                aria-controls="pm2ChooseDialog"
+                ${sessionStatus === "active" ? "" : "disabled"}
+              >Change</button>
+              <button
+                class="pm2-btn pm2-btn-primary pm2-dispatch-start"
+                type="button"
+                data-pm-action="start-match"
+                data-court-index="${slot.courtIndex}"
+                title="Start match on ${escapeHtml(slot.courtName)}"
+                ${sessionStatus === "active" ? "" : "disabled"}
+              >Start on ${escapeHtml(slot.courtName)}</button>
+            </div>
+          ` : ""}
+        </footer>
+      </article>
+    `;
+  }
+
+  function nextDispatchMarkup(slots, sessionStatus) {
+    return `
+      <div class="pm2-dispatch-grid" aria-label="${slots.length} upcoming court slots">
+        ${slots.map(slot => dispatchCardMarkup(slot, sessionStatus)).join("")}
       </div>
     `;
   }
@@ -1177,7 +1464,7 @@
       return `<div class="pm2-empty" style="min-height:90px;padding:12px;color:#9ca3af">Everyone is on court.</div>`;
     }
     const history = buildHistory();
-    const scrollAttributes = queue.length > 8
+    const scrollAttributes = queue.length > 10
       ? `tabindex="0" aria-label="Player queue, ${queue.length} players. Scroll for more."`
       : `aria-label="Player queue, ${queue.length} players."`;
     return `<div class="pm2-queue-list pm2-scroll-region" data-pm-scroll-key="queue" role="list" ${scrollAttributes}>${queue.map((id, index) => {
@@ -1188,12 +1475,23 @@
       const winRate = games ? `${Math.round((wins / games) * 100)}%` : "—";
       const waitStartedAt = player?.queue_entered_at || "";
       const isLast = index === queue.length - 1;
+      const name = playerName(id);
+      const skillLevel = playerSkillLevel(player);
+      const skillSummary = skillLabel(skillLevel);
       return `
         <div class="pm2-queue-row" role="listitem">
           <span class="pm2-queue-no" aria-hidden="true">${index + 1}</span>
-          <div class="pm2-queue-player">
-            <strong class="pm2-queue-name">${escapeHtml(playerName(id))}</strong>
-            <div class="pm2-queue-meta">
+          <button
+            class="pm2-queue-player pm2-queue-profile-button"
+            type="button"
+            data-pm-action="edit-player-skill"
+            data-player-id="${escapeHtml(id)}"
+            aria-label="Open ${escapeHtml(name)} player profile"
+            title="Open ${escapeHtml(name)} profile"
+            ${state.session?.status === "active" ? "" : "disabled"}
+          >
+            <strong class="pm2-queue-name">${escapeHtml(name)}</strong>
+            <span class="pm2-queue-meta">
               <span>${games} ${games === 1 ? "game" : "games"}</span>
               <span aria-hidden="true">·</span>
               <span class="${games && wins / games >= .5 ? "is-positive" : ""}">${winRate} wins</span>
@@ -1202,10 +1500,23 @@
                 <span aria-hidden="true">⌛</span>
                 <span data-pm-wait-start="${escapeHtml(waitStartedAt)}">${waitStartedAt ? "0:00" : "—"}</span>
               </span>
-            </div>
-          </div>
+            </span>
+          </button>
           ${state.session?.status === "active"
-            ? `<button class="pm2-queue-skip" type="button" data-pm-action="skip-player" data-player-id="${escapeHtml(id)}" aria-label="${isLast ? `${escapeHtml(playerName(id))} is already last in the queue` : `Move ${escapeHtml(playerName(id))} to the back of the queue`}" ${isLast ? "disabled" : ""}>${isLast ? "Last" : "Skip"}</button>`
+            ? `<div class="pm2-queue-actions">
+                <button
+                  class="pm2-queue-skill"
+                  type="button"
+                  data-pm-action="edit-player-skill"
+                  data-player-id="${escapeHtml(id)}"
+                  aria-label="Open ${escapeHtml(name)} player profile, ${escapeHtml(skillSummary)}"
+                  title="${escapeHtml(skillSummary)}"
+                >
+                  <span aria-hidden="true">&#9733;</span>
+                  <b>${skillLevel}</b>
+                </button>
+                <button class="pm2-queue-skip" type="button" data-pm-action="skip-player" data-player-id="${escapeHtml(id)}" aria-label="${isLast ? `${escapeHtml(name)} is already last in the queue` : `Move ${escapeHtml(name)} to the back of the queue`}" ${isLast ? "disabled" : ""}>${isLast ? "Last" : "Skip"}</button>
+              </div>`
             : ""}
         </div>
       `;
@@ -1248,6 +1559,144 @@
         <span class="pm2-standing-score">${row.wins}W &middot; ${row.games}G</span>
       </div>
     `).join("")}</div>`;
+  }
+
+  function standingWinRate(row) {
+    return row.games ? `${Math.round((row.wins / row.games) * 100)}%` : "0%";
+  }
+
+  function playerInitials(name) {
+    return String(name || "")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map(part => part.charAt(0))
+      .join("")
+      .toUpperCase() || "PR";
+  }
+
+  function finalPodiumMarkup(rows) {
+    const places = ["Champion", "Runner-up", "Third place"];
+    const leaders = rows.slice(0, 3);
+    if (!leaders.length) {
+      return `<div class="pm2-empty pm2-final-empty">Complete at least one match to reveal the podium.</div>`;
+    }
+    return `
+      <div class="pm2-final-podium" role="list" aria-label="Top three players">
+        ${leaders.map((row, index) => {
+          const rank = index + 1;
+          return `
+            <article class="pm2-podium-card is-rank-${rank}" role="listitem">
+              <div class="pm2-podium-rank" aria-label="Rank ${rank}">${rank}</div>
+              <div class="pm2-podium-avatar" aria-hidden="true">${escapeHtml(playerInitials(row.name))}</div>
+              <span class="pm2-podium-place">${places[index]}</span>
+              <h3 title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</h3>
+              <div class="pm2-podium-record"><strong>${row.wins}</strong><span>wins</span></div>
+              <div class="pm2-podium-meta">
+                <span>${row.games} ${row.games === 1 ? "game" : "games"}</span>
+                <span>${standingWinRate(row)} win rate</span>
+              </div>
+            </article>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  function finalLeaderboardMarkup(rows) {
+    const remaining = rows.slice(3);
+    if (!remaining.length) {
+      return `<div class="pm2-empty pm2-final-empty">The podium contains the full leaderboard.</div>`;
+    }
+    return `
+      <div
+        class="pm2-final-list pm2-scroll-region"
+        data-pm-scroll-key="final-standings"
+        role="list"
+        tabindex="0"
+        aria-label="Final player rankings, positions 4 through ${rows.length}"
+      >
+        ${remaining.map((row, index) => {
+          const rank = index + 4;
+          return `
+            <div class="pm2-final-row" role="listitem">
+              <span class="pm2-final-rank" aria-label="Rank ${rank}">${rank}</span>
+              <span class="pm2-final-avatar" aria-hidden="true">${escapeHtml(playerInitials(row.name))}</span>
+              <span class="pm2-final-player">
+                <strong title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</strong>
+                <small>${row.games} ${row.games === 1 ? "game" : "games"} played</small>
+              </span>
+              <span class="pm2-final-score">
+                <strong>${row.wins}W</strong>
+                <small>${standingWinRate(row)}</small>
+              </span>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
+
+  function completedSessionMarkup(matches, standings) {
+    const rankingTitle = standings.length > 3
+      ? `Rankings #4&ndash;#${standings.length}`
+      : "Everyone made the podium";
+    return `
+      <div class="pm2-final-view">
+        <section class="pm2-final-hero" aria-labelledby="pm2FinalTitle">
+          <div class="pm2-final-hero-copy">
+            <span class="pm2-final-kicker">Session complete</span>
+            <h1 id="pm2FinalTitle">Tonight&rsquo;s champions</h1>
+            <p>${escapeHtml(sessionTitle())}</p>
+          </div>
+          <div class="pm2-final-actions">
+            <button class="pm2-btn pm2-btn-primary pm2-btn-download" type="button" data-pm-action="download-result">Download branded result</button>
+            <button class="pm2-btn pm2-btn-dark" type="button" data-pm-action="export">Export CSV</button>
+            <button class="pm2-btn pm2-btn-dark" type="button" data-pm-action="new-session">Start new session</button>
+          </div>
+          <div class="pm2-final-stats" aria-label="Completed session summary">
+            <div><strong>${matches.length}</strong><span>Matches played</span></div>
+            <div><strong>${standings.length}</strong><span>Players ranked</span></div>
+            <div><strong>${averageGameDuration()}</strong><span>Average game</span></div>
+          </div>
+        </section>
+
+        <section class="pm2-final-podium-stage" aria-labelledby="pm2PodiumTitle">
+          <div class="pm2-final-section-head">
+            <div>
+              <span>Final standings</span>
+              <h2 id="pm2PodiumTitle">Top 3 players</h2>
+            </div>
+            <p>Ranked by total wins, then games played.</p>
+          </div>
+          ${finalPodiumMarkup(standings)}
+        </section>
+
+        <div class="pm2-final-grid">
+          <section class="pm2-panel pm2-final-rankings" id="pm2FinalRankings">
+            <div class="pm2-panel-head">
+              <div class="pm2-final-panel-title">
+                <span>Full leaderboard</span>
+                <h3>${rankingTitle}</h3>
+              </div>
+              <button class="pm2-mini-action" type="button" data-pm-action="export">Export CSV</button>
+            </div>
+            <div class="pm2-panel-body">${finalLeaderboardMarkup(standings)}</div>
+          </section>
+
+          <section class="pm2-panel pm2-final-match-log" id="pm2MatchLog">
+            <div class="pm2-panel-head">
+              <div class="pm2-final-panel-title">
+                <span>Results archive</span>
+                <h3>Match log</h3>
+              </div>
+              <span>${matches.length} completed</span>
+            </div>
+            <div class="pm2-panel-body">${matchLogMarkup(matches)}</div>
+          </section>
+        </div>
+      </div>
+    `;
   }
 
   function matchTimeMarkup(value) {
@@ -1411,12 +1860,18 @@
     const round = lastRound();
     const assignments = liveAssignments(round);
     const queue = roundQueue(round);
+    const dispatchSlots = nextDispatchSlots(assignments, queue);
     const matches = completedMatches();
     const standings = standingsRows(matches);
     const sessionStatus = String(state.session?.status || "active");
+    if (sessionStatus === "completed") {
+      return completedSessionMarkup(matches, standings);
+    }
     const canShare = ["active", "paused"].includes(sessionStatus);
     const liveCourtCount = assignments.filter(isLiveGame).length;
     const readyCourtCount = assignments.filter(game => !!game.winner).length;
+    const readyDispatchCount = dispatchSlots.filter(slot => slot.kind === "ready").length;
+    const fullPreviewCount = dispatchSlots.filter(slot => slot.kind === "preview").length;
     const eyebrow = sessionStatus === "completed"
       ? "Session complete"
       : sessionStatus === "paused"
@@ -1433,69 +1888,105 @@
       </div>
       <nav class="pm2-live-jump" aria-label="Jump to live section">
         <button type="button" data-pm-action="scroll" data-target="pm2Courts">Courts <b>${assignments.length}</b></button>
-        <button type="button" data-pm-action="scroll" data-target="pm2Next">Up Next <b>${Math.min(1, Math.floor(queue.length / 4))}</b></button>
         <button type="button" data-pm-action="scroll" data-target="pm2Queue">Queue <b>${queue.length}</b></button>
+        <button type="button" data-pm-action="scroll" data-target="pm2Next">Up Next <b>${dispatchSlots.length}</b></button>
         <button type="button" data-pm-action="scroll" data-target="pm2MatchLog">Matches <b>${matches.length}</b></button>
       </nav>
-      <div class="pm2-live-layout">
-        <main class="pm2-live-main">
-          <div class="pm2-round-strip">
-            <div class="pm2-round-copy">
-              <strong>Round ${Number(round?.round_no || state.rounds.length)}</strong>
-              <span>${liveCourtCount} live · ${readyCourtCount} ready · ${headerNumbers().finished} result${headerNumbers().finished === 1 ? "" : "s"}</span>
-            </div>
-            <div class="pm2-round-actions">
-              <button class="pm2-btn pm2-btn-share" type="button" data-pm-action="share-live" ${canShare ? "" : "disabled"}>${canShare ? "Share Live" : "Sharing Ended"}</button>
-              <button class="pm2-btn pm2-btn-dark" type="button" data-pm-action="copy-text-update">Copy Text Update</button>
-            </div>
+      <div class="pm2-live-dashboard">
+        <div class="pm2-round-strip">
+          <div class="pm2-round-copy">
+            <strong>Round ${Number(round?.round_no || state.rounds.length)}</strong>
+            <span>${liveCourtCount} live · ${readyCourtCount} ready · ${headerNumbers().finished} result${headerNumbers().finished === 1 ? "" : "s"}</span>
           </div>
-          <section class="pm2-courts" id="pm2Courts" aria-label="Live courts">
+          <div class="pm2-round-actions">
+            <button class="pm2-btn pm2-btn-share" type="button" data-pm-action="share-live" ${canShare ? "" : "disabled"}>${canShare ? "Share Live" : "Sharing Ended"}</button>
+            <button class="pm2-btn pm2-btn-dark" type="button" data-pm-action="copy-text-update">Copy Text Update</button>
+            <button class="pm2-btn pm2-btn-dark pm2-session-edit" type="button" data-pm-action="edit-setup">Edit Setup</button>
+            <button
+              class="pm2-btn pm2-session-end"
+              type="button"
+              data-pm-action="end-session"
+              ${["active", "paused"].includes(sessionStatus) ? "" : "disabled"}
+            >End Session</button>
+          </div>
+        </div>
+
+        <section class="pm2-dashboard-section pm2-live-courts-section" aria-labelledby="pm2LiveCourtsTitle">
+          <header class="pm2-section-heading">
+            <div class="pm2-section-heading-copy">
+              <span class="pm2-section-kicker">Live play</span>
+              <h2 id="pm2LiveCourtsTitle">Live Courts</h2>
+            </div>
+            <span class="pm2-section-status">${assignments.length} court${assignments.length === 1 ? "" : "s"} · ${liveCourtCount} live · ${readyCourtCount} ready</span>
+          </header>
+          <div class="pm2-courts" id="pm2Courts" aria-label="Live courts">
             ${assignments.map(courtCard).join("") || `<div class="pm2-panel pm2-empty">No court assignments yet.</div>`}
-          </section>
-        </main>
-        <aside class="pm2-live-rail">
-          <section class="pm2-panel pm2-next-panel" id="pm2Next">
-            <div class="pm2-panel-head"><h3>Up Next</h3><span>Next available group</span></div>
-            <div class="pm2-panel-body">${nextUpMarkup(queue)}</div>
-          </section>
-          <section class="pm2-panel pm2-queue-panel" id="pm2Queue">
-            <div class="pm2-panel-head pm2-queue-head">
-              <div class="pm2-queue-title">
-                <h3>Player Queue</h3>
-                <span>${queue.length} waiting</span>
+          </div>
+        </section>
+
+        <section class="pm2-dashboard-section pm2-matchmaking-section" aria-labelledby="pm2MatchmakingTitle">
+          <header class="pm2-section-heading">
+            <div class="pm2-section-heading-copy">
+              <span class="pm2-section-kicker">Rotation workflow</span>
+              <h2 id="pm2MatchmakingTitle">Matchmaking</h2>
+            </div>
+            <span class="pm2-section-status">${readyDispatchCount} ready · ${fullPreviewCount} queued · ${queue.length} waiting</span>
+          </header>
+          <div class="pm2-matchmaking-layout">
+            <section class="pm2-panel pm2-queue-panel" id="pm2Queue">
+              <div class="pm2-panel-head pm2-queue-head">
+                <div class="pm2-queue-title">
+                  <h3>Player Queue</h3>
+                  <span>${queue.length} waiting</span>
+                </div>
+                <span class="pm2-queue-average">
+                  <span>Avg. game</span>
+                  <strong>${averageGameDuration()}</strong>
+                </span>
+                ${sessionStatus === "active"
+                  ? `<button class="pm2-queue-add" type="button" data-pm-action="add-player"><span aria-hidden="true">+</span> Add player</button>`
+                  : ""}
               </div>
-              <span class="pm2-queue-average">
-                <span>Avg. game</span>
-                <strong>${averageGameDuration()}</strong>
-              </span>
-              ${sessionStatus === "active"
-                ? `<button class="pm2-queue-add" type="button" data-pm-action="add-player"><span aria-hidden="true">+</span> Add player</button>`
-                : ""}
-            </div>
-            <div class="pm2-panel-body">${queueMarkup(queue)}</div>
-          </section>
-          <section class="pm2-panel pm2-match-log-panel" id="pm2MatchLog">
-            <div class="pm2-panel-head"><h3>Match Log</h3><span>${matches.length} completed</span></div>
-            <div class="pm2-panel-body">${matchLogMarkup(matches)}</div>
-          </section>
-          <section class="pm2-panel pm2-standings-panel" id="pm2Standings">
-            <div class="pm2-panel-head">
-              <h3>Standings</h3>
-              <div class="pm2-panel-head-actions">
-                <span>${standings.length > 4 ? `4 visible / ${standings.length} total` : `${standings.length} players`}</span>
-                <button class="pm2-mini-action" type="button" data-pm-action="export">Export CSV</button>
+              <div class="pm2-panel-body">${queueMarkup(queue)}</div>
+            </section>
+            <section class="pm2-panel pm2-next-panel pm2-dispatch-panel" id="pm2Next">
+              <div class="pm2-panel-head pm2-dispatch-panel-head">
+                <div>
+                  <span class="pm2-dispatch-kicker">Court dispatch</span>
+                  <h3>Up Next</h3>
+                </div>
+                <span>${readyDispatchCount} ready · ${fullPreviewCount} queued · ${dispatchSlots.length} slots</span>
               </div>
+              <div class="pm2-panel-body">${nextDispatchMarkup(dispatchSlots, sessionStatus)}</div>
+            </section>
+          </div>
+        </section>
+
+        <section class="pm2-dashboard-section pm2-session-activity-section" aria-labelledby="pm2ActivityTitle">
+          <header class="pm2-section-heading">
+            <div class="pm2-section-heading-copy">
+              <span class="pm2-section-kicker">Results and progress</span>
+              <h2 id="pm2ActivityTitle">Session Activity</h2>
             </div>
-            <div class="pm2-panel-body">${standingsMarkup(standings)}</div>
-          </section>
-          <section class="pm2-panel">
-            <div class="pm2-panel-body pm2-form-actions-right">
-              <button class="pm2-btn pm2-btn-light" type="button" data-pm-action="edit-setup">Edit Setup</button>
-              <button class="pm2-btn pm2-btn-light" type="button" data-pm-action="undo-round" ${sessionStatus === "active" ? "" : "disabled"}>Undo Round</button>
-              <button class="pm2-btn pm2-btn-danger" type="button" data-pm-action="end-session" ${["active", "paused"].includes(sessionStatus) ? "" : "disabled"}>End Session</button>
-            </div>
-          </section>
-        </aside>
+            <span class="pm2-section-status">${matches.length} completed · ${standings.length} ranked</span>
+          </header>
+          <div class="pm2-activity-layout">
+            <section class="pm2-panel pm2-match-log-panel" id="pm2MatchLog">
+              <div class="pm2-panel-head"><h3>Match Log</h3><span>${matches.length} completed</span></div>
+              <div class="pm2-panel-body">${matchLogMarkup(matches)}</div>
+            </section>
+            <section class="pm2-panel pm2-standings-panel" id="pm2Standings">
+              <div class="pm2-panel-head">
+                <h3>Standings</h3>
+                <div class="pm2-panel-head-actions">
+                  <span>${standings.length > 4 ? `4 visible / ${standings.length} total` : `${standings.length} players`}</span>
+                  <button class="pm2-mini-action" type="button" data-pm-action="export">Export CSV</button>
+                </div>
+              </div>
+              <div class="pm2-panel-body">${standingsMarkup(standings)}</div>
+            </section>
+          </div>
+        </section>
       </div>
       <div class="pm2-mobile-dock">
         <button class="pm2-btn pm2-btn-dark" type="button" data-pm-action="edit-setup">Setup</button>
@@ -1587,7 +2078,11 @@
     }
     state.players = await DB.replaceOpenPlayGamePlayers(
       state.session.id,
-      setup.names.map(name => ({ fullName: name, status: "active" }))
+      setup.names.map(name => ({
+        fullName: name,
+        status: "active",
+        skillLevel: DEFAULT_SKILL_LEVEL,
+      }))
     );
     state.rounds = [];
     state.sessions = await DB.getOpenPlayGameSessions();
@@ -1689,6 +2184,140 @@
       return `${Math.floor(seconds / 3600)}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}`;
     }
     return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  }
+
+  function updateSkillPicker(dialog, levelValue) {
+    const selected = Number(levelValue);
+    dialog?.querySelectorAll(".pm2-skill-star").forEach(label => {
+      const value = Number(label.querySelector('input[name="skillLevel"]')?.value);
+      label.classList.toggle("is-filled", selected >= value);
+      label.classList.toggle("is-selected", selected === value);
+    });
+    const text = dialog?.querySelector("#pm2SkillText");
+    const info = SKILL_LEVELS.find(item => item.value === selected);
+    if (text) text.textContent = info?.label || "Set skill";
+  }
+
+  function playerEditorStats(player) {
+    const history = buildHistory();
+    const id = asId(player?.id);
+    const games = history.playCount[id] || 0;
+    const wins = history.winCount[id] || 0;
+    const winRate = games ? Math.round((wins / games) * 100) : 0;
+    const checkedAt = Date.parse(player?.created_at || state.session?.created_at || "");
+    const hasCheckIn = Number.isFinite(checkedAt);
+    const checkedTime = hasCheckIn
+      ? new Date(checkedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+      : "";
+    const totalMinutes = hasCheckIn
+      ? Math.max(0, Math.floor((Date.now() - checkedAt) / 60000))
+      : 0;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const duration = hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+    return {
+      gamesText: `${games}G played`,
+      winRateText: `${winRate}% win rate`,
+      checkInText: hasCheckIn
+        ? `Checked-in at ${checkedTime} · ${duration} in session`
+        : "Checked-in time unavailable",
+    };
+  }
+
+  function openPlayerDialog(mode, trigger, playerId = "") {
+    const dialog = root()?.querySelector("#pm2AddDialog");
+    if (!dialog) return;
+    const editing = mode === "edit";
+    const player = editing ? playerRecord(playerId) : null;
+    if (editing && !player) {
+      notify("That player is no longer in the roster.", true);
+      return;
+    }
+
+    state.playerEditor = {
+      mode: editing ? "edit" : "add",
+      playerId: editing ? asId(player.id) : "",
+    };
+    state.playerEditorTrigger = trigger || null;
+
+    const kicker = dialog.querySelector("#pm2PlayerEditorKicker");
+    const title = dialog.querySelector("#pm2AddTitle");
+    const intro = dialog.querySelector("#pm2PlayerEditorIntro");
+    const summary = dialog.querySelector("#pm2PlayerEditorSummary");
+    const games = dialog.querySelector("#pm2PlayerEditorGames");
+    const winRate = dialog.querySelector("#pm2PlayerEditorWinRate");
+    const checkIn = dialog.querySelector("#pm2PlayerEditorCheckIn");
+    const nameLabel = dialog.querySelector("#pm2PlayerNameLabel");
+    const nameInput = dialog.querySelector("#pm2WalkInName");
+    const skillCaption = dialog.querySelector("#pm2SkillCaption");
+    const skillHelp = dialog.querySelector("#pm2SkillHelp");
+    const note = dialog.querySelector("#pm2PlayerEditorNote");
+    const submit = dialog.querySelector("#pm2PlayerEditorSubmit");
+    if (kicker) kicker.textContent = editing ? "Player profile" : "Player queue";
+    if (title) title.textContent = editing ? player.full_name || "Player" : "Add a player";
+    if (intro) {
+      intro.textContent = "Add a walk-in to the end of the waiting list.";
+      intro.hidden = editing;
+    }
+    if (summary) summary.hidden = !editing;
+    if (editing) {
+      const stats = playerEditorStats(player);
+      if (games) games.textContent = stats.gamesText;
+      if (winRate) winRate.textContent = stats.winRateText;
+      if (checkIn) checkIn.textContent = stats.checkInText;
+    }
+    if (nameLabel) nameLabel.textContent = editing ? "Name" : "Player name";
+    if (nameInput) {
+      nameInput.value = editing ? player.full_name || "" : "";
+      nameInput.readOnly = false;
+      nameInput.classList.remove("is-readonly");
+    }
+    if (skillCaption) skillCaption.textContent = editing ? "Skill level:" : "Skill:";
+    if (skillHelp) {
+      skillHelp.textContent = editing
+        ? "Used for future team balancing."
+        : "New players start at 1-star Beginner.";
+    }
+    if (note) note.hidden = !editing;
+    if (submit) submit.textContent = editing ? "Save changes" : "Add to queue";
+
+    const selectedLevel = editing ? playerSkillLevel(player) : DEFAULT_SKILL_LEVEL;
+    const selectedInput = dialog.querySelector(`input[name="skillLevel"][value="${selectedLevel}"]`);
+    dialog.querySelectorAll('input[name="skillLevel"]').forEach(input => {
+      input.checked = input === selectedInput;
+    });
+    updateSkillPicker(dialog, selectedLevel);
+    dialog.showModal();
+    setTimeout(() => {
+      nameInput?.focus();
+    }, 0);
+  }
+
+  async function savePlayerDetails(playerId, playerNameValue, skillLevel) {
+    if (state.session?.status !== "active") {
+      throw new Error("Player details can only be edited while the session is active.");
+    }
+    const player = playerRecord(playerId);
+    if (!player) throw new Error("That player is no longer in the roster.");
+    const cleanName = String(playerNameValue || "").trim();
+    if (!cleanName) throw new Error("Enter the player’s name.");
+    const duplicate = state.players.some(item =>
+      asId(item.id) !== asId(player.id) &&
+      String(item.full_name || "").trim().toLocaleLowerCase() === cleanName.toLocaleLowerCase()
+    );
+    if (duplicate) throw new Error("That player name is already in the roster.");
+    const level = normalizeSkillLevel(skillLevel);
+    const saved = await DB.updateOpenPlayGamePlayer(player.id, {
+      fullName: cleanName,
+      skillLevel: level,
+    });
+    state.players = state.players.map(item =>
+      asId(item.id) === asId(player.id)
+        ? (saved || { ...item, full_name: cleanName, skill_level: level })
+        : item
+    );
+    renderShell();
+    notify(`${cleanName} was updated to ${skillLabel(level)}.`);
   }
 
   function activeReplacementSource(dialog) {
@@ -1910,6 +2539,46 @@
     notify(`${outgoingName} was replaced by ${incomingName}. ${markOutgoingRemoved ? "Outgoing player marked as left." : "Outgoing player moved to the queue."}${queueSyncNote}`);
   }
 
+  function reserveOpenCourtLineups(assignments, queue, history, reservedAt = new Date().toISOString()) {
+    const nextAssignments = assignments.map(game => ({ ...game }));
+    let queueSnapshot = unique(queue || []);
+    const newlyReady = [];
+    const openCourts = nextAssignments
+      .map((game, courtIndex) => ({ game, courtIndex }))
+      .filter(item => item.game?.winner && !hasReadyMatch(item.game))
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.game.resultAt || "");
+        const rightTime = Date.parse(right.game.resultAt || "");
+        const leftOrder = Number.isFinite(leftTime) ? leftTime : Number.MAX_SAFE_INTEGER;
+        const rightOrder = Number.isFinite(rightTime) ? rightTime : Number.MAX_SAFE_INTEGER;
+        return leftOrder - rightOrder || left.courtIndex - right.courtIndex;
+      });
+
+    openCourts.forEach(({ game, courtIndex }) => {
+      if (queueSnapshot.length < 4) return;
+      const nextIds = queueSnapshot.slice(0, 4);
+      const split = bestSplit(nextIds.map(id => ({ id })), history, false);
+      nextAssignments[courtIndex] = {
+        ...game,
+        readyMatch: {
+          matchId: createMatchId(),
+          teamA: split.teamA.map(player => asId(player.id)),
+          teamB: split.teamB.map(player => asId(player.id)),
+          queueOrder: nextIds,
+          reservedAt: game.resultAt || reservedAt,
+        },
+      };
+      queueSnapshot = queueSnapshot.slice(4);
+      newlyReady.push({
+        courtIndex,
+        courtName: game.courtName || `Court ${courtIndex + 1}`,
+        playerIds: nextIds,
+      });
+    });
+
+    return { assignments: nextAssignments, queueSnapshot, newlyReady };
+  }
+
   function lineupPool(round, courtIndex) {
     const game = liveAssignments(round)[courtIndex];
     if (!game?.winner) return [];
@@ -1919,7 +2588,7 @@
         index === courtIndex ? [] : occupiedGameIds(assignment)
       ).map(asId)
     );
-    return unique([...readyMatchIds(game), ...roundQueue(round)])
+    return unique([...readyMatchQueueOrder(game), ...roundQueue(round)])
       .filter(id => activeIds.has(id) && !occupiedElsewhere.has(id));
   }
 
@@ -2032,8 +2701,9 @@
       throw new Error("One of those players is no longer available. Choose the lineup again.");
     }
 
-    const poolOrder = unique([...readyMatchIds(game), ...roundQueue(round)]);
+    const poolOrder = unique([...readyMatchQueueOrder(game), ...roundQueue(round)]);
     const selectedSet = new Set(selectedIds);
+    const selectedQueueOrder = poolOrder.filter(id => selectedSet.has(id));
     const queueSnapshot = poolOrder.filter(id => !selectedSet.has(id));
     const assignments = liveAssignments(round).map((assignment, index) =>
       index === selection.courtIndex
@@ -2043,6 +2713,7 @@
               matchId: assignment.readyMatch?.matchId || createMatchId(),
               teamA,
               teamB,
+              queueOrder: selectedQueueOrder,
               reservedAt: assignment.readyMatch?.reservedAt || new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             },
@@ -2129,36 +2800,24 @@
       .map(asId)
       .filter(id => activeIds.has(id));
     const nextPool = unique([...waitingBefore, ...finishedIds]);
-    const nextIds = nextPool.slice(0, 4);
-    let readyMatch = null;
-
-    if (nextIds.length === 4) {
-      const historyWithResult = buildHistory([
-        ...state.rounds.slice(0, -1),
-        {
-          ...round,
-          assignments: liveAssignments(round).map((game, gameIndex) => gameIndex === index ? completed : game),
-        },
-      ]);
-      const split = bestSplit(nextIds.map(id => ({ id })), historyWithResult);
-      readyMatch = {
-        matchId: createMatchId(),
-        teamA: split.teamA.map(player => player.id),
-        teamB: split.teamB.map(player => player.id),
-        reservedAt: resultAt,
-      };
-    }
-
-    const assignments = liveAssignments(round).map((game, gameIndex) =>
-      gameIndex === index
-        ? {
-            ...completed,
-            ...(readyMatch ? { readyMatch } : {}),
-          }
-        : game
+    const completedAssignments = liveAssignments(round).map((game, gameIndex) =>
+      gameIndex === index ? completed : game
     );
-    const reservedSet = new Set(readyMatchIds({ readyMatch }));
-    const queueSnapshot = nextPool.filter(id => !reservedSet.has(id));
+    const historyWithResult = buildHistory([
+      ...state.rounds.slice(0, -1),
+      {
+        ...round,
+        assignments: completedAssignments,
+      },
+    ]);
+    const allocation = reserveOpenCourtLineups(
+      completedAssignments,
+      nextPool,
+      historyWithResult,
+      resultAt
+    );
+    const assignments = allocation.assignments;
+    const queueSnapshot = allocation.queueSnapshot;
     const saved = await updateRoundSafely(round, {
       assignments,
       queueSnapshot,
@@ -2171,9 +2830,10 @@
     };
     await syncQueueWaitTimes(roundQueue(state.rounds[state.rounds.length - 1]));
     renderShell();
-    notify(readyMatch
-      ? `${winner === "A" ? "Team 1" : "Team 2"} won. ${current.courtName || `Court ${index + 1}`} is ready for the next match.`
-      : `${winner === "A" ? "Team 1" : "Team 2"} won. Choose four players for the next match.`
+    const readyNames = allocation.newlyReady.map(item => item.courtName);
+    notify(readyNames.length
+      ? `${winner === "A" ? "Team 1" : "Team 2"} won. ${readyNames.join(", ")} ${readyNames.length === 1 ? "is" : "are"} ready for the next match.`
+      : `${winner === "A" ? "Team 1" : "Team 2"} won. Waiting for four available players.`
     );
   }
 
@@ -2214,7 +2874,7 @@
     notify(`${unique(names).length} paid players imported.`);
   }
 
-  async function addWalkIn(name) {
+  async function addWalkIn(name, skillLevel = DEFAULT_SKILL_LEVEL) {
     if (state.session?.status !== "active") {
       throw new Error("Walk-in players can only be added while the session is active.");
     }
@@ -2229,34 +2889,37 @@
       fullName: cleanName,
       status: "active",
       seedOrder: state.players.length,
+      skillLevel: normalizeSkillLevel(skillLevel),
     });
     state.players.push(newPlayer);
     const round = lastRound();
+    let newlyReady = [];
     if (round) {
-      const queueSnapshot = unique([...roundQueue(round), asId(newPlayer.id)]);
+      const queueWithWalkIn = unique([...roundQueue(round), asId(newPlayer.id)]);
+      const allocation = reserveOpenCourtLineups(
+        liveAssignments(round),
+        queueWithWalkIn,
+        buildHistory()
+      );
+      const assignments = allocation.assignments;
+      const queueSnapshot = allocation.queueSnapshot;
+      newlyReady = allocation.newlyReady;
       const saved = await updateRoundSafely(round, {
-        assignments: liveAssignments(round),
+        assignments,
         queueSnapshot,
       });
-      state.rounds[state.rounds.length - 1] = saved || { ...round, queue_snapshot: queueSnapshot };
+      state.rounds[state.rounds.length - 1] = saved || {
+        ...round,
+        assignments,
+        queue_snapshot: queueSnapshot,
+      };
     }
     await syncQueueWaitTimes(roundQueue());
     renderShell();
-    notify(`${cleanName} was added to the queue.`);
-  }
-
-  async function undoRound() {
-    if (state.session?.status !== "active") {
-      throw new Error("Rounds can only be undone while the session is active.");
-    }
-    if (!state.session || !state.rounds.length) return;
-    const approved = window.confirm("Remove the latest round and its results?");
-    if (!approved) return;
-    await DB.deleteLatestOpenPlayGameRound(state.session.id);
-    await refreshState();
-    if (!state.rounds.length) state.view = "setup";
-    renderShell();
-    notify("Latest round removed.");
+    notify(newlyReady.length
+      ? `${cleanName} was added. ${newlyReady.map(item => item.courtName).join(", ")} ${newlyReady.length === 1 ? "is" : "are"} now ready.`
+      : `${cleanName} was added to the queue.`
+    );
   }
 
   async function endSession() {
@@ -2525,6 +3188,359 @@
     }
   }
 
+  function resultCanvasRoundRect(context, x, y, width, height, radius) {
+    const corner = Math.min(radius, width / 2, height / 2);
+    context.beginPath();
+    context.moveTo(x + corner, y);
+    context.lineTo(x + width - corner, y);
+    context.quadraticCurveTo(x + width, y, x + width, y + corner);
+    context.lineTo(x + width, y + height - corner);
+    context.quadraticCurveTo(x + width, y + height, x + width - corner, y + height);
+    context.lineTo(x + corner, y + height);
+    context.quadraticCurveTo(x, y + height, x, y + height - corner);
+    context.lineTo(x, y + corner);
+    context.quadraticCurveTo(x, y, x + corner, y);
+    context.closePath();
+  }
+
+  function resultCanvasFitText(context, value, maxWidth) {
+    const original = String(value || "");
+    if (context.measureText(original).width <= maxWidth) return original;
+    let shortened = original;
+    while (shortened.length > 1 && context.measureText(`${shortened}…`).width > maxWidth) {
+      shortened = shortened.slice(0, -1);
+    }
+    return `${shortened.trim()}…`;
+  }
+
+  function resultCanvasWrapText(context, value, maxWidth, maxLines = 2) {
+    const words = String(value || "").trim().split(/\s+/).filter(Boolean);
+    const lines = [];
+    let current = "";
+    words.forEach(word => {
+      const next = current ? `${current} ${word}` : word;
+      if (!current || context.measureText(next).width <= maxWidth) {
+        current = next;
+      } else {
+        lines.push(current);
+        current = word;
+      }
+    });
+    if (current) lines.push(current);
+    if (lines.length > maxLines) {
+      const visible = lines.slice(0, maxLines);
+      visible[maxLines - 1] = resultCanvasFitText(
+        context,
+        `${visible[maxLines - 1]} ${lines.slice(maxLines).join(" ")}`,
+        maxWidth
+      );
+      return visible;
+    }
+    return lines;
+  }
+
+  function loadResultBrandLogo() {
+    return new Promise(resolve => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => resolve(null);
+      image.src = "paddleragelogo-transparent.png";
+    });
+  }
+
+  function drawResultStat(context, x, y, width, value, label) {
+    resultCanvasRoundRect(context, x, y, width, 88, 18);
+    context.fillStyle = "rgba(255,255,255,.075)";
+    context.fill();
+    context.strokeStyle = "rgba(255,255,255,.12)";
+    context.lineWidth = 2;
+    context.stroke();
+    context.textAlign = "left";
+    context.fillStyle = "#ffffff";
+    context.font = '900 30px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(String(value), x + 18, y + 36);
+    context.fillStyle = "#9fb0c4";
+    context.font = '800 14px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(String(label).toUpperCase(), x + 18, y + 63);
+  }
+
+  function drawResultPodiumCard(context, row, rank, x, y, width, height) {
+    if (!row) return;
+    const accent = rank === 1 ? "#e9c229" : rank === 2 ? "#aeb9c8" : "#b9794e";
+    const rankFill = rank === 1 ? "#f4d45c" : rank === 2 ? "#c7d0dc" : "#c9885c";
+    const place = rank === 1 ? "CHAMPION" : rank === 2 ? "RUNNER-UP" : "THIRD PLACE";
+
+    context.save();
+    context.shadowColor = rank === 1 ? "rgba(151,111,0,.22)" : "rgba(15,23,42,.12)";
+    context.shadowBlur = rank === 1 ? 34 : 24;
+    context.shadowOffsetY = 12;
+    resultCanvasRoundRect(context, x, y, width, height, 26);
+    context.fillStyle = rank === 1 ? "#fffdf3" : "#ffffff";
+    context.fill();
+    context.shadowColor = "transparent";
+    context.strokeStyle = accent;
+    context.lineWidth = rank === 1 ? 4 : 3;
+    context.stroke();
+
+    context.beginPath();
+    context.arc(x + width / 2, y, 31, 0, Math.PI * 2);
+    context.fillStyle = rankFill;
+    context.fill();
+    context.strokeStyle = "#f4f6f9";
+    context.lineWidth = 8;
+    context.stroke();
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = rank === 1 ? "#493800" : "#273244";
+    context.font = '950 24px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(String(rank), x + width / 2, y + 1);
+
+    const isChampion = rank === 1;
+    const avatarRadius = isChampion ? 48 : 42;
+    const avatarY = y + (isChampion ? 88 : 76);
+    const placeY = avatarY + avatarRadius + 30;
+    const nameY = placeY + 40;
+    const recordY = nameY + (isChampion ? 72 : 62);
+    const metaY = y + height - 28;
+    const avatarGradient = context.createLinearGradient(
+      x + width / 2 - avatarRadius,
+      avatarY - avatarRadius,
+      x + width / 2 + avatarRadius,
+      avatarY + avatarRadius
+    );
+    avatarGradient.addColorStop(0, rank === 1 ? "#087f73" : "#4338ca");
+    avatarGradient.addColorStop(1, rank === 1 ? "#06b6d4" : "#e11d48");
+    context.beginPath();
+    context.arc(x + width / 2, avatarY, avatarRadius, 0, Math.PI * 2);
+    context.fillStyle = avatarGradient;
+    context.fill();
+    context.strokeStyle = "#ffffff";
+    context.lineWidth = 6;
+    context.stroke();
+    context.fillStyle = "#ffffff";
+    context.font = `900 ${rank === 1 ? 28 : 24}px "DM Sans", "Segoe UI", sans-serif`;
+    context.fillText(playerInitials(row.name), x + width / 2, avatarY + 1);
+
+    context.textBaseline = "alphabetic";
+    context.fillStyle = "#7b8798";
+    context.font = '900 15px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(place, x + width / 2, placeY);
+    context.fillStyle = "#172033";
+    context.font = `950 ${isChampion ? 31 : 27}px "DM Sans", "Segoe UI", sans-serif`;
+    context.fillText(
+      resultCanvasFitText(context, row.name, width - 42),
+      x + width / 2,
+      nameY
+    );
+
+    const scoreFontSize = isChampion ? 48 : 42;
+    context.font = `950 ${scoreFontSize}px "DM Sans", "Segoe UI", sans-serif`;
+    const winsText = String(row.wins);
+    const winsWidth = context.measureText(winsText).width;
+    context.font = '800 17px "DM Sans", "Segoe UI", sans-serif';
+    const winsLabelWidth = context.measureText("wins").width;
+    const scoreStart = x + (width - winsWidth - winsLabelWidth - 11) / 2;
+    context.textAlign = "left";
+    context.fillStyle = "#172033";
+    context.font = `950 ${scoreFontSize}px "DM Sans", "Segoe UI", sans-serif`;
+    context.fillText(winsText, scoreStart, recordY);
+    context.fillStyle = "#7b8798";
+    context.font = '800 17px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("wins", scoreStart + winsWidth + 11, recordY - 2);
+    context.textAlign = "center";
+    context.fillStyle = "#6b7280";
+    context.font = '750 15px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(
+      `${row.games} ${row.games === 1 ? "game" : "games"}  •  ${standingWinRate(row)} win rate`,
+      x + width / 2,
+      metaY
+    );
+    context.restore();
+  }
+
+  async function downloadBrandedResult() {
+    if (String(state.session?.status || "") !== "completed") {
+      throw new Error("End the session before downloading the final result.");
+    }
+    const matches = completedMatches();
+    const standings = standingsRows(matches);
+    const topStandings = standings.slice(0, 10);
+    const remaining = topStandings.slice(3);
+    const canvasWidth = 1440;
+    const listTop = 1016;
+    const rowHeight = 68;
+    const canvasHeight = Math.max(1500, listTop + Math.max(1, remaining.length) * rowHeight + 130);
+    const canvas = document.createElement("canvas");
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("This browser could not create the result image.");
+
+    context.fillStyle = "#f1f3f6";
+    context.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    const headerGradient = context.createLinearGradient(0, 0, canvasWidth, 420);
+    headerGradient.addColorStop(0, "#0d1728");
+    headerGradient.addColorStop(.62, "#152238");
+    headerGradient.addColorStop(1, "#10302d");
+    context.fillStyle = headerGradient;
+    context.fillRect(0, 0, canvasWidth, 420);
+
+    context.beginPath();
+    context.arc(1320, 20, 210, 0, Math.PI * 2);
+    context.strokeStyle = "rgba(201,243,29,.12)";
+    context.lineWidth = 48;
+    context.stroke();
+
+    const logo = await loadResultBrandLogo();
+    if (logo) {
+      context.drawImage(logo, 70, 46, 112, 112);
+    } else {
+      context.beginPath();
+      context.arc(126, 102, 52, 0, Math.PI * 2);
+      context.fillStyle = "#c9f31d";
+      context.fill();
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillStyle = "#111827";
+      context.font = '950 24px "DM Sans", "Segoe UI", sans-serif';
+      context.fillText("PR", 126, 103);
+    }
+
+    context.textAlign = "left";
+    context.textBaseline = "alphabetic";
+    context.fillStyle = "#ffffff";
+    context.font = '950 31px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("PADDLE RAGE PICKLEBALL", 205, 91);
+    context.fillStyle = "#c9f31d";
+    context.font = '900 15px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("OFFICIAL OPEN PLAY RESULTS", 207, 124);
+
+    drawResultStat(context, 850, 54, 150, matches.length, "Matches");
+    drawResultStat(context, 1018, 54, 150, standings.length, "Players");
+    drawResultStat(context, 1186, 54, 184, averageGameDuration(), "Avg. game");
+
+    context.fillStyle = "#ffffff";
+    context.font = '950 64px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("SESSION CHAMPIONS", 70, 241);
+    context.fillStyle = "#b8c4d5";
+    context.font = '700 25px "DM Sans", "Segoe UI", sans-serif';
+    resultCanvasWrapText(context, sessionTitle(), 1250, 2).forEach((line, index) => {
+      context.fillText(line, 72, 294 + index * 34);
+    });
+    context.fillStyle = "#dfff73";
+    context.font = '850 18px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("Final standings • Ranked by total wins, then games played", 72, 382);
+
+    context.fillStyle = "#172033";
+    context.font = '950 34px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("TOP 3 PLAYERS", 72, 486);
+    context.fillStyle = "#718096";
+    context.font = '750 17px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("Paddle Rage podium", 72, 516);
+
+    drawResultPodiumCard(context, topStandings[1], 2, 72, 600, 400, 310);
+    drawResultPodiumCard(context, topStandings[0], 1, 520, 540, 400, 370);
+    drawResultPodiumCard(context, topStandings[2], 3, 968, 600, 400, 310);
+
+    context.fillStyle = "#172033";
+    context.font = '950 32px "DM Sans", "Segoe UI", sans-serif';
+    const leaderboardTitle = `TOP ${topStandings.length} LEADERBOARD`;
+    context.fillText(
+      remaining.length ? `${leaderboardTitle} • #4–#${topStandings.length}` : leaderboardTitle,
+      72,
+      968
+    );
+    context.textAlign = "right";
+    context.fillStyle = "#718096";
+    context.font = '750 16px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(`Showing ${topStandings.length} of ${standings.length} players`, 1368, 968);
+    context.textAlign = "left";
+    context.fillStyle = "#718096";
+    context.font = '800 15px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("RANK", 86, 1007);
+    context.fillText("PLAYER", 180, 1007);
+    context.textAlign = "right";
+    context.fillText("RECORD", 1354, 1007);
+
+    if (!remaining.length) {
+      resultCanvasRoundRect(context, 72, listTop, 1296, 86, 18);
+      context.fillStyle = "#ffffff";
+      context.fill();
+      context.textAlign = "center";
+      context.fillStyle = "#718096";
+      context.font = '750 21px "DM Sans", "Segoe UI", sans-serif';
+      context.fillText("The podium contains the full leaderboard.", 720, listTop + 52);
+    } else {
+      remaining.forEach((row, index) => {
+        const rank = index + 4;
+        const y = listTop + index * rowHeight;
+        resultCanvasRoundRect(context, 72, y, 1296, 58, 14);
+        context.fillStyle = index % 2 ? "#f8fafc" : "#ffffff";
+        context.fill();
+        context.strokeStyle = "#e1e6ec";
+        context.lineWidth = 2;
+        context.stroke();
+
+        context.textAlign = "center";
+        context.fillStyle = "#516071";
+        context.font = '950 23px "DM Sans", "Segoe UI", sans-serif';
+        context.fillText(String(rank), 112, y + 37);
+
+        context.beginPath();
+        context.arc(162, y + 29, 19, 0, Math.PI * 2);
+        context.fillStyle = "#334155";
+        context.fill();
+        context.fillStyle = "#ffffff";
+        context.font = '900 12px "DM Sans", "Segoe UI", sans-serif';
+        context.textBaseline = "middle";
+        context.fillText(playerInitials(row.name), 162, y + 30);
+
+        context.textAlign = "left";
+        context.textBaseline = "alphabetic";
+        context.fillStyle = "#253044";
+        context.font = '900 22px "DM Sans", "Segoe UI", sans-serif';
+        context.fillText(resultCanvasFitText(context, row.name, 820), 200, y + 28);
+        context.fillStyle = "#8490a0";
+        context.font = '750 14px "DM Sans", "Segoe UI", sans-serif';
+        context.fillText(`${row.games} ${row.games === 1 ? "game" : "games"} played`, 200, y + 47);
+
+        context.textAlign = "right";
+        context.fillStyle = "#087f73";
+        context.font = '950 22px "DM Sans", "Segoe UI", sans-serif';
+        context.fillText(`${row.wins}W`, 1350, y + 28);
+        context.fillStyle = "#8490a0";
+        context.font = '750 14px "DM Sans", "Segoe UI", sans-serif';
+        context.fillText(`${standingWinRate(row)} win rate`, 1350, y + 47);
+      });
+    }
+
+    const footerY = canvasHeight - 84;
+    context.fillStyle = "#111827";
+    context.fillRect(0, footerY, canvasWidth, 84);
+    context.textAlign = "left";
+    context.fillStyle = "#c9f31d";
+    context.font = '900 17px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("PADDLE RAGE PICKLEBALL", 72, footerY + 36);
+    context.fillStyle = "#91a0b4";
+    context.font = '700 14px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("Official session result", 72, footerY + 59);
+    context.textAlign = "right";
+    context.fillText(formatDate(state.session?.date || localDateValue()), 1368, footerY + 49);
+
+    const resultBlob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+    if (!resultBlob) throw new Error("The result image could not be prepared.");
+    const resultUrl = URL.createObjectURL(resultBlob);
+    const link = document.createElement("a");
+    link.href = resultUrl;
+    link.download = `paddle-rage-results-${state.session?.date || localDateValue()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(resultUrl), 0);
+    notify("Branded Paddle Rage result downloaded.");
+  }
+
   function exportCsv() {
     const history = buildHistory();
     const rows = [["rank", "player", "wins", "games"]];
@@ -2639,13 +3655,16 @@
       return;
     }
     if (action === "add-player") {
-      const dialog = root()?.querySelector("#pm2AddDialog");
-      dialog?.showModal();
-      setTimeout(() => dialog?.querySelector("#pm2WalkInName")?.focus(), 0);
+      openPlayerDialog("add", button);
+      return;
+    }
+    if (action === "edit-player-skill") {
+      openPlayerDialog("edit", button, button.dataset.playerId);
       return;
     }
     if (action === "close-dialog") {
       const dialog = button.closest("dialog");
+      if (dialog?.id === "pm2AddDialog") state.playerEditor = null;
       if (dialog?.id === "pm2ReplaceDialog") state.replacement = null;
       if (dialog?.id === "pm2ChooseDialog") state.lineupSelection = null;
       dialog?.close();
@@ -2683,8 +3702,8 @@
       exportCsv();
       return;
     }
-    if (action === "undo-round") {
-      await withBusy(undoRound);
+    if (action === "download-result") {
+      await withBusy(downloadBrandedResult);
       return;
     }
     if (action === "end-session") {
@@ -2707,6 +3726,13 @@
   }
 
   async function handleChange(event) {
+    if (
+      event.target.matches('input[name="skillLevel"]') &&
+      event.target.closest("#pm2AddDialog")
+    ) {
+      updateSkillPicker(event.target.closest("#pm2AddDialog"), event.target.value);
+      return;
+    }
     if (event.target.matches("[data-pm-lineup-slot]")) {
       updateChoosePlayersDialog();
       return;
@@ -2766,10 +3792,18 @@
       return;
     }
     if (form.dataset.pmForm === "add-player") {
-      const name = new FormData(form).get("playerName");
+      const data = new FormData(form);
+      const name = data.get("playerName");
+      const skillLevel = normalizeSkillLevel(data.get("skillLevel"));
+      const editor = state.playerEditor || { mode: "add", playerId: "" };
       await withBusy(async () => {
-        await addWalkIn(name);
-        root()?.querySelector("#pm2AddDialog")?.close();
+        if (editor.mode === "edit") {
+          await savePlayerDetails(editor.playerId, name, skillLevel);
+        } else {
+          await addWalkIn(name, skillLevel);
+        }
+        state.playerEditor = null;
+        state.playerEditorTrigger = null;
       });
       return;
     }

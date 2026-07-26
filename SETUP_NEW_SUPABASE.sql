@@ -258,9 +258,12 @@ create table if not exists public.open_play_game_players (
   source_registration_id bigint,
   status text not null default 'active',
   seed_order integer not null default 0,
+  skill_level smallint not null default 1,
   created_at timestamptz not null default now(),
   constraint open_play_game_players_status_check
-    check (status in ('active','no_show','removed'))
+    check (status in ('active','no_show','removed')),
+  constraint open_play_game_players_skill_level_check
+    check (skill_level between 1 and 6)
 );
 
 create table if not exists public.open_play_game_rounds (

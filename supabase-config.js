@@ -17,6 +17,11 @@ const PB_HOST_APPLICATION_TURNSTILE_ACTION = 'host_application';
 const PB_TURNSTILE_WIDGET_TIMEOUT_MS = 60000;
 let _pbTurnstileScriptPromise = null;
 
+function normalizeOpenPlaySkillLevel(value, fallback = 1) {
+  const level = Number(value);
+  return Number.isInteger(level) && level >= 1 && level <= 6 ? level : fallback;
+}
+
 function _pbTurnstileError(message, code) {
   const error = new Error(message);
   error.code = code;
@@ -1739,9 +1744,28 @@ window.DB = {
       source_registration_id: player.sourceRegistrationId || player.source_registration_id || null,
       status: player.status || 'active',
       seed_order: Number(player.seedOrder ?? player.seed_order ?? 0),
+      skill_level: normalizeOpenPlaySkillLevel(player.skillLevel ?? player.skill_level),
     };
     const { data, error } = await _sb.from('open_play_game_players').insert(row).select('*').single();
     if (error) { console.error('addOpenPlayGamePlayer:', error); throw error; }
+    return data;
+  },
+
+  async updateOpenPlayGamePlayer(id, updates) {
+    const row = {};
+    if (updates.fullName !== undefined || updates.full_name !== undefined) {
+      row.full_name = String(updates.fullName ?? updates.full_name).trim();
+    }
+    if (updates.skillLevel !== undefined || updates.skill_level !== undefined) {
+      row.skill_level = normalizeOpenPlaySkillLevel(updates.skillLevel ?? updates.skill_level);
+    }
+    const { data, error } = await _sb
+      .from('open_play_game_players')
+      .update(row)
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) { console.error('updateOpenPlayGamePlayer:', error); throw error; }
     return data;
   },
 
@@ -1755,6 +1779,7 @@ window.DB = {
       source_registration_id: p.sourceRegistrationId || p.source_registration_id || null,
       status: p.status || 'active',
       seed_order: i,
+      skill_level: normalizeOpenPlaySkillLevel(p.skillLevel ?? p.skill_level),
     }));
     const { data, error } = await _sb.from('open_play_game_players').insert(rows).select('*').order('seed_order');
     if (error) { console.error('replaceOpenPlayGamePlayers insert:', error); throw error; }
@@ -2840,6 +2865,45 @@ window.DB = {
         .map(String)
     );
     const activeIds = new Set(activePlayers.map(player => String(player.id)));
+    const readyLineups = (latestRound?.assignments || [])
+      .map((game, courtIndex) => {
+        const teamOneIds = (game.readyMatch?.teamA || []).map(String);
+        const teamTwoIds = (game.readyMatch?.teamB || []).map(String);
+        const teamIds = [...teamOneIds, ...teamTwoIds];
+        const uniqueTeamIds = [...new Set(teamIds)];
+        if (
+          !game.winner
+          || teamOneIds.length !== 2
+          || teamTwoIds.length !== 2
+          || uniqueTeamIds.length !== 4
+          || uniqueTeamIds.some(playerId => !activeIds.has(playerId))
+        ) return null;
+
+        const storedOrder = [...new Set((game.readyMatch?.queueOrder || []).map(String))];
+        const teamSet = new Set(uniqueTeamIds);
+        const playerIds = storedOrder.length === 4
+          && storedOrder.every(playerId => teamSet.has(playerId))
+          ? storedOrder
+          : teamIds;
+        const reservedAt = game.readyMatch?.reservedAt || game.resultAt || '';
+        const parsedReservedAt = Date.parse(reservedAt);
+        return {
+          courtIndex,
+          courtName: game.courtName || `Court ${courtIndex + 1}`,
+          players: playerIds.map(playerId => playerById.get(playerId) || 'Player'),
+          team1: teamOneIds.map(playerId => playerById.get(playerId) || 'Player'),
+          team2: teamTwoIds.map(playerId => playerById.get(playerId) || 'Player'),
+          sortTime: Number.isFinite(parsedReservedAt) ? parsedReservedAt : Number.MAX_SAFE_INTEGER,
+        };
+      })
+      .filter(Boolean)
+      .sort((left, right) => left.sortTime - right.sortTime || left.courtIndex - right.courtIndex);
+    const publicUpNext = readyLineups.length ? {
+      courtName: readyLineups[0].courtName,
+      players: readyLineups[0].players,
+      team1: readyLineups[0].team1,
+      team2: readyLineups[0].team2,
+    } : null;
     const queuedIds = [];
     const queuedSet = new Set();
     (latestRound?.queue_snapshot || []).map(String).forEach(playerId => {
@@ -2946,6 +3010,7 @@ window.DB = {
           winner: game.winner || null,
           gameCount: 1 + (Array.isArray(game.completedGames) ? game.completedGames.length : 0),
         })),
+        upNext: publicUpNext,
         queue: queuedIds.map(playerId => playerById.get(playerId) || 'Player'),
       } : null,
       standings,
@@ -3544,12 +3609,34 @@ window.DB = {
           source_registration_id: player.sourceRegistrationId || player.source_registration_id || null,
           status: player.status || 'active',
           seed_order: Number(player.seedOrder ?? player.seed_order ?? 0),
+          skill_level: normalizeOpenPlaySkillLevel(player.skillLevel ?? player.skill_level),
           queue_entered_at: player.queueEnteredAt || player.queue_entered_at || null,
           created_at: nowIso(),
         };
         db.openPlayGamePlayers.push(row);
         writeDb(db);
         return row;
+      });
+    },
+    async updateOpenPlayGamePlayer(id, updates) {
+      return withLocalPlayManagerLock(async () => {
+        const db = readDb();
+        const index = db.openPlayGamePlayers.findIndex(player => String(player.id) === String(id));
+        if (index < 0) throw new Error('PLAY_MANAGER_PLAYER_NOT_FOUND');
+        const current = db.openPlayGamePlayers[index];
+        requireLocalPlayManagerSession(db, current.session_id, ['draft', 'active']);
+        const saved = {
+          ...current,
+          full_name: updates.fullName !== undefined || updates.full_name !== undefined
+            ? String(updates.fullName ?? updates.full_name).trim()
+            : current.full_name,
+          skill_level: updates.skillLevel !== undefined || updates.skill_level !== undefined
+            ? normalizeOpenPlaySkillLevel(updates.skillLevel ?? updates.skill_level)
+            : normalizeOpenPlaySkillLevel(current.skill_level),
+        };
+        db.openPlayGamePlayers[index] = saved;
+        writeDb(db);
+        return saved;
       });
     },
     async replaceOpenPlayGamePlayers(sessionId, players) {
@@ -3564,6 +3651,7 @@ window.DB = {
           source_registration_id: p.sourceRegistrationId || p.source_registration_id || null,
           status: p.status || 'active',
           seed_order: i,
+          skill_level: normalizeOpenPlaySkillLevel(p.skillLevel ?? p.skill_level),
           queue_entered_at: p.queueEnteredAt || p.queue_entered_at || null,
           created_at: nowIso(),
         }));
@@ -3748,6 +3836,9 @@ window.DB = {
           full_name: incomingName,
           source_registration_id: null,
           status: 'active',
+          skill_level: normalizeOpenPlaySkillLevel(
+            replacement.incomingPlayerSkillLevel ?? replacement.incoming_player_skill_level
+          ),
           seed_order: db.openPlayGamePlayers
             .filter(player => String(player.session_id) === String(current.session_id))
             .reduce((highest, player) => Math.max(highest, Number(player.seed_order || 0) + 1), 0),

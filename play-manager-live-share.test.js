@@ -16,7 +16,12 @@ const readyCourtMigrationPath = "supabase/migrations/20260725170000_play_manager
 const readyCourtMigration = fs.existsSync(path.join(root, readyCourtMigrationPath))
   ? read(readyCourtMigrationPath)
   : "";
+const playerSkillMigrationPath = "supabase/migrations/20260725180000_play_manager_player_skill_levels.sql";
+const playerSkillMigration = fs.existsSync(path.join(root, playerSkillMigrationPath))
+  ? read(playerSkillMigrationPath)
+  : "";
 const client = read("supabase-config.js");
+const setupSql = read("SETUP_NEW_SUPABASE.sql");
 const manager = read("play-manager.js");
 const managerCss = read("play-manager.css");
 const playerPage = read("player-live.html");
@@ -183,7 +188,7 @@ test("manager offers separate text-copy and live-sharing actions", () => {
   assert.match(manager, /data-pm-action="disable-live-link"/i);
   assert.doesNotMatch(manager, /data-pm-action="copy-update"/i);
   assert.ok(
-    admin.indexOf("qrcode.min.js?v=1.5.4") < admin.indexOf("play-manager.js?v=20260725-ready-reference-v5"),
+    admin.indexOf("qrcode.min.js?v=1.5.4") < admin.indexOf("play-manager.js?v=20260726-dispatch-equal-v23"),
     "the local QR encoder must load before the manager module"
   );
   assert.ok(fs.statSync(path.join(root, "qrcode.min.js")).size > 10000);
@@ -205,16 +210,26 @@ test("player live board uses the transparent system logo without a badge backgro
     /<img class="plb-brand-mark" src="paddleragelogo-transparent\.png" alt="" width="48" height="48" aria-hidden="true">/i
   );
   assert.doesNotMatch(playerPage, /class="plb-brand-mark"[^>]*>PR<\/span>/i);
-  assert.match(playerPage, /player-live\.css\?v=20260725-live-cyan-v2/i);
+  assert.match(playerPage, /player-live\.css\?v=20260726-match-center-v3/i);
   assert.match(
     playerCss,
     /\.plb-brand-mark\s*\{[\s\S]*?width:\s*48px[\s\S]*?height:\s*48px[\s\S]*?border:\s*0[\s\S]*?background:\s*transparent[\s\S]*?object-fit:\s*contain/i
   );
 });
 
-test("Share Live mirrors the Play Manager shell and preserves its rail scrollers", () => {
+test("Share Live is a spectator-first, responsive match center", () => {
+  const matchCenterCss = playerCss.match(
+    /\/\* Spectator-first Live Match Center \*\/([\s\S]*)$/i
+  )?.[1] || "";
+
   assert.match(playerPage, /id="plbHeaderStats"[^>]*aria-label="Session totals"/i);
+  assert.match(playerPage, /id="plbHeaderSession"[^>]*aria-label="Current session"/i);
   assert.match(playerPage, />Skip to live board</i);
+  assert.match(playerPage, /data-plb-action="share"[^>]*aria-label="Share this live match center"/i);
+  assert.match(
+    playerPage,
+    /class="plb-mobile-nav"[\s\S]*?href="#plbCourts"[\s\S]*?href="#plbDispatch"[\s\S]*?href="#plbQueue"[\s\S]*?href="#plbStandings"/i
+  );
   assert.match(playerClient, /class="plb-live-layout" id="plbLiveBoard"/i);
   assert.match(playerClient, /class="plb-live-rail" aria-label="Playing order and standings"/i);
   assert.doesNotMatch(playerClient, /<main class="plb-live-content"/i);
@@ -238,30 +253,150 @@ test("Share Live mirrors the Play Manager shell and preserves its rail scrollers
     playerClient,
     /Object\.entries\(nestedScroll\)[\s\S]*?scrollRegion\.scrollTop = top/i
   );
+  assert.ok(
+    playerClient.indexOf('id="plbCourts"') < playerClient.indexOf('id="plbDispatch"')
+    && playerClient.indexOf('id="plbDispatch"') < playerClient.indexOf('id="plbQueue"')
+    && playerClient.indexOf('id="plbQueue"') < playerClient.indexOf('id="plbStandings"'),
+    "spectator sections should render in courts, Up Next, queue, standings order"
+  );
+  assert.match(playerClient, /function resolveDispatchGroups\(round, upNext\)/i);
+  assert.match(playerClient, /while \(groups\.length < 3\)/i);
+  assert.match(playerClient, /return groups\.slice\(0, 3\)/i);
+  assert.match(playerClient, /const visibleQueue = queue\.slice\(0, 10\)/i);
+  assert.match(playerClient, /const topStandings = standings\.slice\(0, 10\)/i);
+  assert.match(playerClient, /navigator\.share\(shareData\)/i);
+  assert.match(playerClient, /navigator\.clipboard\?\.writeText/i);
   assert.match(playerCss, /--plb-navy:\s*#111827/i);
   assert.match(playerCss, /--plb-navy-2:\s*#1f2937/i);
   assert.match(playerCss, /--plb-canvas:\s*#f1f3f6/i);
   assert.match(
-    playerCss,
-    /@media \(min-width:\s*1081px\)[\s\S]*?\.plb-live-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\) minmax\(290px,\s*350px\)/i
+    matchCenterCss,
+    /\.plb-live-layout\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/i
   );
-  assert.match(playerCss, /\.plb-queue-panel\s*\{[^}]*background:\s*linear-gradient\(180deg,\s*#111c2e 0%,\s*#0f1929 100%\)/i);
-  assert.match(playerCss, /\.plb-queue-list\s*\{[^}]*max-height:\s*448px[^}]*overflow-y:\s*auto/is);
-  assert.match(playerCss, /\.plb-queue-list li\s*\{[^}]*height:\s*56px/is);
-  assert.match(playerCss, /\.plb-table-wrap\s*\{[^}]*max-height:\s*211px[^}]*overflow:\s*auto/is);
-  assert.match(playerCss, /\.plb-standings thead th\s*\{[^}]*position:\s*sticky/is);
+  assert.match(
+    matchCenterCss,
+    /\.plb-live-rail\s*\{[^}]*grid-template-columns:\s*minmax\(280px,\s*\.72fr\) minmax\(0,\s*1\.28fr\)/i
+  );
+  assert.match(
+    matchCenterCss,
+    /@media \(min-width:\s*721px\)\s*\{[\s\S]*?\.plb-courts,\s*\.plb-dispatch-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/i
+  );
+  assert.match(
+    matchCenterCss,
+    /\.plb-match\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)[^}]*grid-auto-rows:\s*auto[^}]*align-items:\s*start/i
+  );
+  assert.match(
+    matchCenterCss,
+    /\.plb-team\s*\{[^}]*display:\s*grid[^}]*grid-template-rows:\s*34px auto[^}]*min-height:\s*0/i
+  );
+  assert.match(
+    matchCenterCss,
+    /\.plb-team-label\s*\{[^}]*height:\s*34px[^}]*min-height:\s*34px/i
+  );
+  assert.match(
+    matchCenterCss,
+    /\.plb-team ul\s*\{[^}]*grid-template-rows:\s*repeat\(2,\s*48px\)[^}]*height:\s*auto[^}]*min-height:\s*0/i
+  );
+  assert.match(
+    matchCenterCss,
+    /\.plb-player\s*\{[^}]*height:\s*48px[^}]*min-height:\s*48px[^}]*overflow:\s*hidden/i
+  );
+  assert.doesNotMatch(playerClient, /<span>Court \$\{index \+ 1\}<\/span>/i);
+  assert.match(matchCenterCss, /\.plb-queue-list\s*\{[^}]*max-height:\s*none[^}]*overflow:\s*visible/is);
+  assert.match(matchCenterCss, /\.plb-table-wrap\s*\{[^}]*max-height:\s*none[^}]*overflow:\s*visible/is);
+  assert.match(
+    matchCenterCss,
+    /@media \(max-width:\s*720px\)[\s\S]*?\.plb-mobile-nav\s*\{[^}]*position:\s*fixed[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/i
+  );
+  assert.match(matchCenterCss, /bottom:\s*max\(8px,\s*env\(safe-area-inset-bottom\)\)/i);
+  assert.match(
+    matchCenterCss,
+    /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.plb-winner-reveal,[\s\S]*?display:\s*none !important/i
+  );
 });
 
 test("manager exposes clear live-session completion controls", () => {
   assert.match(manager, /data-pm-action="end-session"/i);
   assert.match(manager, /data-pm-action="choose-players"/i);
   assert.match(manager, /data-pm-action="start-match"/i);
+  assert.match(
+    manager,
+    /class="pm2-round-actions"[\s\S]*?data-pm-action="share-live"[\s\S]*?data-pm-action="copy-text-update"[\s\S]*?data-pm-action="edit-setup"[\s\S]*?data-pm-action="end-session"[\s\S]*?<\/div>/i
+  );
+  assert.doesNotMatch(manager, /data-pm-action="undo-round"|function undoRound\(/i);
   assert.doesNotMatch(manager, /data-pm-action="next-round"|Start Next Round/i);
   assert.doesNotMatch(manager, />Courts Live<\/button>/i);
   assert.match(manager, /DB\.rotateOpenPlayGamePublicShare\(state\.session\.id\)/i);
   assert.match(manager, /const newBoard = await DB\.getPublicOpenPlayGameLiveBoard\(token\)/i);
   assert.match(manager, /Results can only be recorded while the session is active/i);
-  assert.match(manager, /Rounds can only be undone while the session is active/i);
+  assert.match(
+    managerCss,
+    /\.pm2-session-end\s*\{[\s\S]*?color:\s*#f8c7ce[\s\S]*?border-color:\s*#a94b5b[\s\S]*?background:\s*#3b252d/i
+  );
+  assert.match(
+    managerCss,
+    /\.pm2-session-end:hover:not\(:disabled\)\s*\{[\s\S]*?color:\s*#fff[\s\S]*?background:\s*#c4324a/i
+  );
+});
+
+test("completed sessions show a top-three podium and rankings from fourth onward", () => {
+  const completedMarkup = manager.match(
+    /function completedSessionMarkup\(matches, standings\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function matchTimeMarkup/i
+  )?.[0] || "";
+
+  assert.match(manager, /const leaders = rows\.slice\(0, 3\)/i);
+  assert.match(manager, /const remaining = rows\.slice\(3\)/i);
+  assert.match(manager, /const rank = index \+ 4/i);
+  assert.match(completedMarkup, /Tonight&rsquo;s champions/i);
+  assert.match(completedMarkup, /Top 3 players/i);
+  assert.match(completedMarkup, /Full leaderboard/i);
+  assert.match(completedMarkup, /Rankings #4&ndash;#/i);
+  assert.match(completedMarkup, /id="pm2MatchLog"/i);
+  assert.match(
+    manager,
+    /if \(sessionStatus === "completed"\) \{\s*return completedSessionMarkup\(matches, standings\)/i
+  );
+  assert.match(
+    managerCss,
+    /\.pm2-podium-card\.is-rank-1\s*\{[^}]*order:\s*2[^}]*min-height:\s*260px/is
+  );
+  assert.match(
+    managerCss,
+    /\.pm2-final-grid\s*\{[^}]*grid-template-columns:\s*minmax\(310px,\s*\.8fr\) minmax\(0,\s*1\.2fr\)/is
+  );
+  assert.match(
+    managerCss,
+    /@media \(max-width:\s*720px\)[\s\S]*?\.pm2-podium-card\.is-rank-1\s*\{[^}]*grid-column:\s*1 \/ -1[^}]*order:\s*1/is
+  );
+});
+
+test("completed sessions download a branded Paddle Rage result image", () => {
+  const brandedDownload = manager.match(
+    /async function downloadBrandedResult\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function exportCsv/i
+  )?.[0] || "";
+
+  assert.match(manager, /data-pm-action="download-result">Download branded result/i);
+  assert.match(brandedDownload, /state\.session\?\.status[\s\S]*?completed/i);
+  assert.match(brandedDownload, /document\.createElement\("canvas"\)/i);
+  assert.match(brandedDownload, /loadResultBrandLogo\(\)/i);
+  assert.match(manager, /image\.src = "paddleragelogo-transparent\.png"/i);
+  assert.match(brandedDownload, /PADDLE RAGE PICKLEBALL/i);
+  assert.match(brandedDownload, /SESSION CHAMPIONS/i);
+  assert.match(brandedDownload, /const topStandings = standings\.slice\(0, 10\)/i);
+  assert.match(brandedDownload, /const remaining = topStandings\.slice\(3\)/i);
+  assert.match(brandedDownload, /TOP \$\{topStandings\.length\} LEADERBOARD/i);
+  assert.match(brandedDownload, /Showing \$\{topStandings\.length\} of \$\{standings\.length\} players/i);
+  assert.match(
+    manager,
+    /const placeY = avatarY \+ avatarRadius \+ 30[\s\S]*?const nameY = placeY \+ 40[\s\S]*?const recordY = nameY \+ \(isChampion \? 72 : 62\)[\s\S]*?const metaY = y \+ height - 28/i
+  );
+  assert.match(brandedDownload, /canvas\.toBlob\(resolve, "image\/png"\)/i);
+  assert.match(brandedDownload, /paddle-rage-results-\$\{state\.session\?\.date \|\| localDateValue\(\)\}\.png/i);
+  assert.match(manager, /action === "download-result"[\s\S]*?withBusy\(downloadBrandedResult\)/i);
+  assert.match(
+    managerCss,
+    /@media \(max-width:\s*720px\)[\s\S]*?\.pm2-final-actions \.pm2-btn-download\s*\{[^}]*grid-column:\s*1 \/ -1/is
+  );
 });
 
 test("player board announces changes and preserves an inactive name selection", () => {
@@ -307,12 +442,12 @@ test("new results play one contained winner reveal in the manager and shared boa
   assert.match(playerClient, /scheduleWinnerRevealEnd\(/i);
   assert.match(playerCss, /@keyframes plb-winner-reveal/i);
   assert.match(playerCss, /\.plb-winner-reveal-sparks::before/i);
-  assert.match(playerPage, /player-live\.js\?v=20260725-manager-sync-v2/i);
+  assert.match(playerPage, /player-live\.js\?v=20260726-match-center-v1/i);
 });
 
 test("Share Live keeps the completed winner visible while its court is READY", () => {
   const renderCourt = playerClient.match(
-    /function renderCourt\(game, index, sessionStatus = "active"\) \{[\s\S]*?\n  \}\n\n  function renderUpNext/i
+    /function renderCourt\(game, index, sessionStatus = "active"\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function renderUpNext/i
   )?.[0] || "";
 
   assert.match(renderCourt, /game\.winner/i);
@@ -330,7 +465,7 @@ test("Share Live reveals each newly started matchup once, never on first load or
     /function matchupRevealsForUpdate\(previousSnapshot, nextSnapshot\) \{[\s\S]*?\n  \}/i
   )?.[0] || "";
   const fetchSnapshot = playerClient.match(
-    /async function fetchSnapshot\(\) \{[\s\S]*?\n  \}\n\n  function handleClick/i
+    /async function fetchSnapshot\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function handleClick/i
   )?.[0] || "";
 
   assert.match(matchupDiff, /previousSnapshot[\s\S]*?nextSnapshot/i);
@@ -447,35 +582,123 @@ test("ready-court reservations stay out of the player queue", () => {
   );
 });
 
-test("recording a winner prepares a READY reservation without immediately starting it", () => {
+test("Up Next renders one ordered dispatch slot per court and keeps READY reservations stable", () => {
+  const queueOrder = manager.match(
+    /function readyMatchQueueOrder\(game\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function hasReadyMatch/i
+  )?.[0] || "";
+  const dispatch = manager.match(
+    /function nextDispatchSlots\(assignments, queue\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function dispatchPlayerMarkup/i
+  )?.[0] || "";
+  const renderLive = manager.match(
+    /function renderLive\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function readSetup/i
+  )?.[0] || "";
+
+  assert.match(queueOrder, /readyMatch\?\.queueOrder/i);
+  assert.match(queueOrder, /storedOrder\.every\(id => playerSet\.has\(id\)\)/i);
+  assert.match(dispatch, /const slotCount = Math\.max\(assignments\.length, sessionCourtIds\(\)\.length\)/i);
+  assert.match(dispatch, /\.filter\(item => hasReadyMatch\(item\.game\)\)/i);
+  assert.match(dispatch, /readyMatch\?\.reservedAt/i);
+  assert.match(dispatch, /playerIds:\s*readyMatchQueueOrder\(game\)/i);
+  assert.match(dispatch, /const previewCount = Math\.max\(0, slotCount - ready\.length\)/i);
+  assert.match(dispatch, /queue\.slice\(index \* 4, index \* 4 \+ 4\)/i);
+  assert.match(dispatch, /return \[\.\.\.ready, \.\.\.previews\]\.map/i);
+  assert.match(renderLive, /const dispatchSlots = nextDispatchSlots\(assignments, queue\)/i);
+  assert.match(renderLive, /data-target="pm2Next">Up Next <b>\$\{dispatchSlots\.length\}<\/b>/i);
+  assert.match(renderLive, /nextDispatchMarkup\(dispatchSlots, sessionStatus\)/i);
+  assert.ok(
+    renderLive.indexOf('id="pm2Courts"') < renderLive.indexOf('id="pm2Next"')
+      && renderLive.indexOf('id="pm2Next"') < renderLive.indexOf('id="pm2MatchLog"'),
+    "court dispatch should sit directly below the courts and above Match Log"
+  );
+  assert.match(manager, /class="pm2-btn pm2-btn-primary pm2-dispatch-start"[\s\S]*?data-pm-action="start-match"/i);
+  assert.match(manager, />Start on \$\{escapeHtml\(slot\.courtName\)\}<\/button>/i);
+  assert.match(manager, /queueOrder:\s*nextIds/i);
+  assert.match(manager, /const selectedQueueOrder = poolOrder\.filter\(id => selectedSet\.has\(id\)\)/i);
+  assert.match(manager, /queueOrder:\s*selectedQueueOrder/i);
+  assert.doesNotMatch(manager, /class="pm2-dispatch-vs"[^>]*>VS<\/span>/i);
+  assert.match(managerCss, /\.pm2-dispatch-grid\s*\{[\s\S]*?repeat\(auto-fit, minmax\(230px, 1fr\)\)/i);
+  assert.match(managerCss, /\.pm2-dispatch-grid\s*\{[^}]*grid-auto-rows:\s*320px/i);
+  assert.match(managerCss, /\.pm2-dispatch-card\s*\{[^}]*height:\s*100%;[^}]*min-height:\s*0/i);
+  assert.match(
+    managerCss,
+    /\.pm2-dispatch-matchup\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)[^}]*min-height:\s*142px/i
+  );
+  assert.match(
+    managerCss,
+    /\.pm2-dispatch-team-players\s*\{[^}]*grid-template-rows:\s*repeat\(2,\s*minmax\(36px,\s*1fr\)\)/i
+  );
+  assert.match(managerCss, /\.pm2-dispatch-card\.is-ready\s*\{[\s\S]*?border-color:\s*#93ddbd/i);
+});
+
+test("recording winners fills every open court in order without duplicating players", () => {
   const recordWinner = manager.match(
-    /async function recordWinner\(index, winner\) \{[\s\S]*?\n  \}\n\n  async function skipPlayer/i
+    /async function recordWinner\(index, winner\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  async function skipPlayer/i
+  )?.[0] || "";
+  const allocator = manager.match(
+    /function reserveOpenCourtLineups\(assignments, queue, history, reservedAt = new Date\(\)\.toISOString\(\)\) \{[\s\S]*?\r?\n  \}(?=\r?\n\r?\n  function lineupPool)/i
   )?.[0] || "";
 
   assert.match(recordWinner, /const completed = \{ \.\.\.current, winner, resultAt \}/i);
-  assert.match(recordWinner, /const nextIds = nextPool\.slice\(0, 4\)/i);
-  assert.match(
-    recordWinner,
-    /readyMatch = \{[\s\S]*?matchId:\s*createMatchId\(\)[\s\S]*?teamA:[\s\S]*?teamB:[\s\S]*?reservedAt:\s*resultAt/i
-  );
-  assert.match(
-    recordWinner,
-    /\.\.\.completed,[\s\S]*?\.\.\.\(readyMatch \? \{ readyMatch \} : \{\}\)/i
-  );
-  assert.match(recordWinner, /const reservedSet = new Set\(readyMatchIds\(\{ readyMatch \}\)\)/i);
-  assert.match(recordWinner, /const queueSnapshot = nextPool\.filter\(id => !reservedSet\.has\(id\)\)/i);
+  assert.match(recordWinner, /const completedAssignments = liveAssignments\(round\)\.map/i);
+  assert.match(recordWinner, /reserveOpenCourtLineups\(\s*completedAssignments,\s*nextPool,\s*historyWithResult,\s*resultAt/i);
+  assert.match(recordWinner, /const assignments = allocation\.assignments/i);
+  assert.match(recordWinner, /const queueSnapshot = allocation\.queueSnapshot/i);
+  assert.match(allocator, /\.filter\(item => item\.game\?\.winner && !hasReadyMatch\(item\.game\)\)/i);
+  assert.match(allocator, /Date\.parse\(left\.game\.resultAt/i);
+  assert.match(allocator, /if \(queueSnapshot\.length < 4\) return/i);
+  assert.match(allocator, /const nextIds = queueSnapshot\.slice\(0, 4\)/i);
+  assert.match(allocator, /bestSplit\(nextIds\.map\(id => \(\{ id \}\)\), history, false\)/i);
+  assert.match(allocator, /readyMatch:\s*\{[\s\S]*?queueOrder:\s*nextIds[\s\S]*?reservedAt:\s*game\.resultAt \|\| reservedAt/i);
+  assert.match(allocator, /queueSnapshot = queueSnapshot\.slice\(4\)/i);
+  assert.match(allocator, /newlyReady\.push\(/i);
+  assert.match(manager, /reserveOpenCourtLineups\(\s*liveAssignments\(round\),\s*queueWithWalkIn,\s*buildHistory\(\)/i);
   assert.doesNotMatch(recordWinner, /startReadyMatch|completedGames:\s*\[\.\.\.completedGames|startedAt\s*=\s*new Date/i);
+
+  let matchSequence = 0;
+  const reserveOpenCourts = new Function(
+    "unique",
+    "hasReadyMatch",
+    "bestSplit",
+    "createMatchId",
+    "asId",
+    `${allocator}; return reserveOpenCourtLineups;`
+  )(
+    values => [...new Set((values || []).map(String))],
+    game => (game?.readyMatch?.teamA || []).length === 2
+      && (game?.readyMatch?.teamB || []).length === 2,
+    group => ({ teamA: group.slice(0, 2), teamB: group.slice(2, 4) }),
+    () => `match-${++matchSequence}`,
+    value => String(value ?? "")
+  );
+  const allocated = reserveOpenCourts(
+    [
+      { courtName: "Court 1", winner: "A", resultAt: "2026-07-26T10:02:00Z" },
+      { courtName: "Court 2", winner: "B", resultAt: "2026-07-26T10:01:00Z" },
+      { courtName: "Court 3", teamA: ["live-1", "live-2"], teamB: ["live-3", "live-4"] },
+    ],
+    ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"],
+    {}
+  );
+  assert.deepEqual(allocated.newlyReady.map(item => item.courtName), ["Court 2", "Court 1"]);
+  assert.deepEqual(allocated.assignments[1].readyMatch.queueOrder, ["p1", "p2", "p3", "p4"]);
+  assert.deepEqual(allocated.assignments[0].readyMatch.queueOrder, ["p5", "p6", "p7", "p8"]);
+  assert.deepEqual(allocated.queueSnapshot, []);
+  assert.equal(
+    new Set(allocated.newlyReady.flatMap(item => item.playerIds)).size,
+    8,
+    "each player must be reserved to only one open court"
+  );
 });
 
 test("READY courts expose a clean per-court start and four-player chooser", () => {
   const readyCard = manager.match(
-    /function readyCourtCard\(game, index, sessionStatus\) \{[\s\S]*?\n  \}\n\n  function courtCard/i
+    /function readyCourtCard\(game, index, sessionStatus\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function courtCard/i
   )?.[0] || "";
   const chooserValidation = manager.match(
-    /function updateChoosePlayersDialog\(\) \{[\s\S]*?\n  \}\n\n  function openChoosePlayersDialog/i
+    /function updateChoosePlayersDialog\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function openChoosePlayersDialog/i
   )?.[0] || "";
   const saveLineup = manager.match(
-    /async function saveReadyLineup\(form\) \{[\s\S]*?\n  \}\n\n  async function startReadyMatch/i
+    /async function saveReadyLineup\(form\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  async function startReadyMatch/i
   )?.[0] || "";
 
   assert.match(readyCard, /pm2-live-pill is-ready">READY/i);
@@ -514,7 +737,7 @@ test("READY court card matches the compact teal and mint reference treatment", (
   assert.match(managerCss, /\.pm2-ready-choose\s*\{[^}]*background:\s*#edf1f5/is);
   assert.match(
     managerCss,
-    /@media \(max-width:\s*720px\)[\s\S]*?\.pm2-court-card\s*\{[^}]*min-block-size:\s*330px[\s\S]*?\.pm2-court-bar\.pm2-ready-bar\s*\{[^}]*min-height:\s*66px/is
+    /@media \(max-width:\s*720px\)[\s\S]*?\.pm2-court-card\s*\{[^}]*min-block-size:\s*0[\s\S]*?\.pm2-court-bar\.pm2-ready-bar\s*\{[^}]*min-height:\s*66px/is
   );
   assert.match(
     managerCss,
@@ -542,10 +765,10 @@ test("LIVE court card mirrors the READY card system with a cyan state treatment"
     managerCss,
     /\.pm2-court-card\.is-live \.pm2-result-btn\s*\{[^}]*min-height:\s*56px[^}]*border-radius:\s*11px[^}]*font-size:\s*1rem/is
   );
-  assert.match(admin, /play-manager\.css\?v=20260725-live-cyan-v7/i);
+  assert.match(admin, /play-manager\.css\?v=20260726-dispatch-equal-v23/i);
 });
 
-test("all court cards share one height and use the modern indigo-coral team palette", () => {
+test("court cards share one compact height and use the modern indigo-coral team palette", () => {
   const courtsRule = managerCss.match(/\.pm2-courts\s*\{([^}]*)\}/i)?.[1] || "";
   const cardRule = managerCss.match(/\.pm2-court-card\s*\{([^}]*)\}/i)?.[1] || "";
   const readyCourtRule = managerCss.match(/\.pm2-ready-court\s*\{([^}]*)\}/i)?.[1] || "";
@@ -554,10 +777,10 @@ test("all court cards share one height and use the modern indigo-coral team pale
   assert.match(courtsRule, /align-items:\s*stretch/i);
   assert.match(cardRule, /display:\s*flex/i);
   assert.match(cardRule, /height:\s*100%/i);
-  assert.match(cardRule, /min-block-size:\s*330px/i);
+  assert.match(cardRule, /min-block-size:\s*0/i);
   assert.match(cardRule, /flex-direction:\s*column/i);
   assert.match(readyCourtRule, /flex:\s*1 1 auto/i);
-  assert.match(managerCss, /\.pm2-result-actions\s*\{[^}]*margin-top:\s*auto/is);
+  assert.match(managerCss, /\.pm2-result-actions\s*\{[^}]*margin-top:\s*0/is);
 
   assert.match(managerCss, /--pm2-blue:\s*#4f46e5/i);
   assert.match(managerCss, /--pm2-orange:\s*#e11d48/i);
@@ -600,7 +823,7 @@ test("court states use distinct cyan LIVE and emerald READY accents", () => {
 
 test("starting a READY match archives the result once and promotes only its reserved teams", () => {
   const startReadyMatch = manager.match(
-    /async function startReadyMatch\(courtIndex\) \{[\s\S]*?\n  \}\n\n  async function recordWinner/i
+    /async function startReadyMatch\(courtIndex\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  async function recordWinner/i
   )?.[0] || "";
 
   assert.match(startReadyMatch, /!game\?\.winner \|\| !hasReadyMatch\(game\)/i);
@@ -623,7 +846,7 @@ test("starting a READY match archives the result once and promotes only its rese
 
 test("ready reservations are filtered from public queue data without being exposed", () => {
   const localBoard = client.match(
-    /function localOpenPlayLiveBoard\([\s\S]*?\n  \}\n\n  window\.DB/i
+    /function localOpenPlayLiveBoard\([\s\S]*?\r?\n  \}\r?\n\r?\n  window\.DB/i
   )?.[0] || "";
 
   assert.match(localBoard, /game\.winner[\s\S]*?game\.readyMatch\?\.teamA[\s\S]*?game\.readyMatch\?\.teamB/i);
@@ -641,20 +864,125 @@ test("ready reservations are filtered from public queue data without being expos
   );
 });
 
-test("live rail keeps every queue and standing row in bounded scroll regions", () => {
-  assert.match(manager, /queue\.length > 8[\s\S]*?tabindex="0"[\s\S]*?Player queue/i);
+test("local Share Live projects the reserved next lineup separately from the waiting queue", () => {
+  const localBoard = client.match(
+    /function localOpenPlayLiveBoard\([\s\S]*?\r?\n  \}\r?\n\r?\n  window\.DB/i
+  )?.[0] || "";
+  const resolveUpNext = playerClient.match(
+    /function resolveUpNext\(round\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function myPosition/i
+  )?.[0] || "";
+
+  assert.match(localBoard, /const readyLineups = \(latestRound\?\.assignments \|\| \[\]\)/i);
+  assert.match(localBoard, /game\.readyMatch\?\.queueOrder/i);
+  assert.match(localBoard, /const publicUpNext = readyLineups\.length/i);
+  assert.match(localBoard, /upNext:\s*publicUpNext/i);
+  assert.match(resolveUpNext, /round\?\.upNext/i);
+  assert.match(resolveUpNext, /projectedPlayers\.length === 4/i);
+  assert.match(resolveUpNext, /\(round\?\.queue \|\| \[\]\)\.slice\(0, 4\)/i);
+  assert.match(playerClient, /const reservedIndex = upNext\.reserved \? upNext\.players\.indexOf\(name\) : -1/i);
+  assert.match(playerClient, /renderUpNext\(upNext, sessionStatus\)/i);
+  assert.match(playerClient, /renderQueue\(queue, upNext\.reserved\)/i);
+  assert.match(playerClient, /reservedAhead \? "ON DECK" : "UP NEXT"/i);
+  assert.doesNotMatch(playerClient, /\breadyMatch\b/i);
+});
+
+test("admin live session groups courts, matchmaking, and activity in operational order", () => {
+  const renderLive = manager.match(
+    /function renderLive\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function readSetup/i
+  )?.[0] || "";
+  const matchmaking = renderLive.match(
+    /<section class="pm2-dashboard-section pm2-matchmaking-section"[\s\S]*?<\/section>\s*<\/div>\s*<\/section>/i
+  )?.[0] || "";
+  const activity = renderLive.match(
+    /<section class="pm2-dashboard-section pm2-session-activity-section"[\s\S]*?<\/section>\s*<\/div>\s*<\/section>/i
+  )?.[0] || "";
+
+  assert.match(renderLive, /id="pm2LiveCourtsTitle">Live Courts<\/h2>/i);
+  assert.match(renderLive, /id="pm2MatchmakingTitle">Matchmaking<\/h2>/i);
+  assert.match(renderLive, /id="pm2ActivityTitle">Session Activity<\/h2>/i);
+  assert.ok(
+    renderLive.indexOf('id="pm2LiveCourtsTitle"') < renderLive.indexOf('id="pm2MatchmakingTitle"')
+      && renderLive.indexOf('id="pm2MatchmakingTitle"') < renderLive.indexOf('id="pm2ActivityTitle"'),
+    "live courts, matchmaking, and session activity should follow the host workflow"
+  );
+  assert.match(matchmaking, /<h3>Player Queue<\/h3>[\s\S]*?Court dispatch[\s\S]*?<h3>Up Next<\/h3>/i);
+  assert.match(activity, /id="pm2MatchLog"[\s\S]*?<h3>Match Log<\/h3>[\s\S]*?id="pm2Standings"[\s\S]*?<h3>Standings<\/h3>/i);
+  assert.match(renderLive, /const standings = standingsRows\(matches\)/i);
+  assert.match(manager, /queue\.length > 10[\s\S]*?tabindex="0"[\s\S]*?Player queue/i);
   assert.match(manager, /rows\.length > 4[\s\S]*?tabindex="0"[\s\S]*?Player standings/i);
   assert.match(manager, /pm2-queue-list pm2-scroll-region/i);
   assert.match(manager, /pm2-standings-list pm2-scroll-region/i);
   assert.match(manager, /function standingsRows\(matches\)[\s\S]*?winningTeam/i);
-  assert.match(manager, /const standings = standingsRows\(matches\)/i);
   assert.match(manager, /role="listitem"/i);
   assert.match(managerCss, /\.pm2-scroll-region\s*\{[\s\S]*?overflow-y:\s*auto/i);
-  assert.match(managerCss, /\.pm2-queue-list\s*\{[\s\S]*?max-height:\s*560px/i);
+  assert.match(managerCss, /\.pm2-queue-list\s*\{[\s\S]*?max-height:\s*700px/i);
   assert.match(managerCss, /\.pm2-standings-list\s*\{\s*max-height:\s*194px/i);
   assert.match(
     managerCss,
     /\.pm2-queue-row\s*\{[\s\S]*?min-height:\s*70px/i
+  );
+  assert.match(
+    managerCss,
+    /\.pm2 \.pm2-queue-row\s*\{[^}]*height:\s*70px;[^}]*min-height:\s*70px/i
+  );
+  assert.match(
+    managerCss,
+    /\.pm2 \.pm2-queue-actions\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(44px,\s*1fr\)\)/i
+  );
+  assert.match(managerCss, /\.pm2 \.pm2-courts\s*\{[\s\S]*?repeat\(3,\s*minmax\(0,\s*1fr\)\)/i);
+  assert.match(
+    managerCss,
+    /\.pm2 \.pm2-matchmaking-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(300px,\s*350px\) minmax\(0,\s*1fr\)/i
+  );
+  assert.match(
+    managerCss,
+    /@media \(min-width:\s*721px\) and \(max-width:\s*1180px\)[\s\S]*?\.pm2 \.pm2-courts\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/i
+  );
+  assert.match(
+    managerCss,
+    /@media \(min-width:\s*721px\) and \(max-width:\s*1080px\)[\s\S]*?\.pm2 \.pm2-matchmaking-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(220px,\s*\.72fr\) minmax\(0,\s*1\.28fr\)/i
+  );
+});
+
+test("Play Manager stays fluid, touch-friendly, stacked, and motion-safe", () => {
+  const unifiedManagerCss =
+    managerCss.match(/\/\* Unified Play Manager design system \*\/([\s\S]*)$/i)?.[1] || "";
+
+  assert.match(
+    unifiedManagerCss,
+    /--pm2-page-gutter:\s*clamp\(12px,\s*2vw,\s*22px\)/i
+  );
+  assert.match(
+    unifiedManagerCss,
+    /\.pm2 \.pm2-workspace\s*\{[^}]*max-width:\s*1320px;[^}]*padding:\s*var\(--pm2-page-gutter\)/i
+  );
+  assert.match(
+    unifiedManagerCss,
+    /\.pm2 \.pm2-view-head h1,\s*\.pm2 \.pm2-final-hero h1\s*\{[^}]*font-size:\s*clamp\(1\.5rem,\s*1\.25rem \+ 1vw,\s*2rem\)/i
+  );
+  assert.match(
+    unifiedManagerCss,
+    /@media \(max-width:\s*720px\)\s*\{[\s\S]*?\.pm2 \.pm2-live-rail\s*\{[^}]*grid-template-columns:\s*1fr[^}]*\}[\s\S]*?\.pm2 \.pm2-matchmaking-layout,\s*\.pm2 \.pm2-activity-layout\s*\{[^}]*grid-template-columns:\s*1fr[^}]*\}[\s\S]*?\.pm2 \.pm2-courts,\s*\.pm2 \.pm2-dispatch-grid\s*\{[^}]*grid-template-columns:\s*1fr/i
+  );
+  assert.match(
+    unifiedManagerCss,
+    /@media \(max-width:\s*720px\)\s*\{[\s\S]*?\.pm2 \.pm2-header\s*\{[^}]*position:\s*relative;[^}]*top:\s*auto;[\s\S]*?\.pm2 \.pm2-live-jump\s*\{[^}]*top:\s*calc\(var\(--admin-topbar-h,\s*64px\) \+ 8px\)/i
+  );
+  assert.match(
+    unifiedManagerCss,
+    /@media \(pointer:\s*coarse\)\s*\{[\s\S]*?\.pm2 \.pm2-player-replace\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/i
+  );
+  assert.match(
+    unifiedManagerCss,
+    /@media \(min-width:\s*721px\) and \(max-width:\s*1080px\)\s*\{[\s\S]*?\.pm2 \.pm2-matchmaking-layout \.pm2-queue-meta\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*white-space:\s*nowrap/i
+  );
+  assert.match(
+    unifiedManagerCss,
+    /@media \(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.pm2,\s*\.pm2 \*,\s*\.pm2 \*::before,\s*\.pm2 \*::after\s*\{[^}]*scroll-behavior:\s*auto !important;[^}]*transition-duration:\s*\.01ms !important;[^}]*animation-duration:\s*\.01ms !important;[^}]*animation-delay:\s*0ms !important;[^}]*animation-iteration-count:\s*1 !important/i
+  );
+  assert.match(
+    admin,
+    /<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"\s*\/>/i
   );
 });
 
@@ -692,9 +1020,82 @@ test("manager queue matches the compact reference while retaining Skip", () => {
   assert.match(managerCss, /\.pm2-queue-meta\s*\{[\s\S]*?font-variant-numeric|\.pm2-queue-wait\s*\{[\s\S]*?font-variant-numeric/i);
 });
 
+test("Play Manager stores editable six-star player skills and uses them for balanced teams", () => {
+  assert.ok(playerSkillMigration, `${playerSkillMigrationPath} must exist`);
+  assert.match(
+    playerSkillMigration,
+    /add column if not exists skill_level smallint not null default 1/i
+  );
+  assert.match(playerSkillMigration, /check \(skill_level between 1 and 6\)/i);
+  assert.match(setupSql, /skill_level smallint not null default 1/i);
+  assert.match(setupSql, /check \(skill_level between 1 and 6\)/i);
+
+  assert.match(client, /function normalizeOpenPlaySkillLevel\(value, fallback = 1\)/i);
+  assert.equal((client.match(/async updateOpenPlayGamePlayer\(id, updates\)/g) || []).length, 2);
+  assert.match(client, /skill_level:\s*normalizeOpenPlaySkillLevel\(player\.skillLevel \?\? player\.skill_level\)/i);
+  assert.match(client, /requireLocalPlayManagerSession\(db, current\.session_id, \['draft', 'active'\]\)/i);
+
+  assert.match(manager, /const SKILL_LEVELS = \[/i);
+  assert.match(
+    manager,
+    /Beginner[\s\S]*?Advanced Beginner[\s\S]*?Intermediate[\s\S]*?Advanced Intermediate[\s\S]*?Advanced[\s\S]*?Expert/i
+  );
+  assert.match(manager, /const DEFAULT_SKILL_LEVEL = 1/i);
+  assert.match(manager, /function skillSelectorMarkup\(selectedLevel = DEFAULT_SKILL_LEVEL\)/i);
+  assert.match(manager, /name="skillLevel"/i);
+  assert.match(manager, />★<\/span>/i);
+  assert.match(manager, /Set skill/i);
+  assert.match(manager, /New players start at 1-star Beginner/i);
+  assert.match(manager, /data-pm-action="edit-player-skill"/i);
+  assert.match(manager, /class="pm2-player-identity"[\s\S]*?data-pm-action="edit-player-skill"[\s\S]*?data-player-id="\$\{escapeHtml\(id\)\}"/i);
+  assert.match(manager, /class="pm2-player-skill-icon"[^>]*>★<\/span>/i);
+  assert.match(manager, /aria-label="Open \$\{escapeHtml\(name\)\} player profile, \$\{escapeHtml\(skillSummary\)\}"/i);
+  assert.match(manager, /function teamSkillTotal\(playerIds\)/i);
+  assert.match(manager, /class="pm2-team-skill-total"[^>]*>★ \$\{teamASkill\}<\/span>/i);
+  assert.match(manager, /class="pm2-team-skill-total"[^>]*>★ \$\{teamBSkill\}<\/span>/i);
+  assert.match(manager, /function savePlayerDetails\(playerId, playerNameValue, skillLevel\)/i);
+  assert.match(manager, /await DB\.updateOpenPlayGamePlayer\(player\.id,\s*\{\s*fullName:\s*cleanName,\s*skillLevel:\s*level/i);
+  assert.match(manager, /await addWalkIn\(name, skillLevel\)/i);
+  assert.match(manager, /const skillGap = Math\.abs\(teamASkill - teamBSkill\)/i);
+  assert.match(managerCss, /\.pm2-skill-star\.is-filled\s*\{[\s\S]*?color:\s*#f5a800/i);
+  assert.match(managerCss, /\.pm2-queue-skill\s*\{/i);
+  assert.match(
+    managerCss,
+    /\.pm2-player-skill\s*\{[\s\S]*?display:\s*inline-flex[\s\S]*?width:\s*34px[\s\S]*?border-radius:\s*999px[\s\S]*?background:\s*#fff8dc/i
+  );
+  assert.match(managerCss, /\.pm2-player-identity:hover:not\(:disabled\)/i);
+  assert.match(managerCss, /\.pm2-player-identity:focus-visible/i);
+  assert.match(managerCss, /\.pm2-queue-profile-button:hover:not\(:disabled\)/i);
+  assert.match(
+    managerCss,
+    /\.pm2-team-skill-total\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?letter-spacing:\s*0/i
+  );
+  assert.match(admin, /supabase-config\.js\?v=20260726-player-profile-v5/i);
+  assert.match(admin, /play-manager\.js\?v=20260726-dispatch-equal-v23/i);
+  assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
+});
+
+test("player profile editor shows live session stats and edits both name and skill", () => {
+  assert.match(manager, /id="pm2PlayerEditorSummary"[^>]*hidden/i);
+  assert.match(manager, /id="pm2PlayerEditorGames">0G played/i);
+  assert.match(manager, /id="pm2PlayerEditorWinRate">0% win rate/i);
+  assert.match(manager, /id="pm2PlayerEditorCheckIn">Checked-in time unavailable/i);
+  assert.match(manager, /function playerEditorStats\(player\)/i);
+  assert.match(manager, /gamesText:\s*`\$\{games\}G played`/i);
+  assert.match(manager, /winRateText:\s*`\$\{winRate\}% win rate`/i);
+  assert.match(manager, /`Checked-in at \$\{checkedTime\} · \$\{duration\} in session`/i);
+  assert.match(manager, /nameInput\.readOnly = false/i);
+  assert.match(manager, /submit\.textContent = editing \? "Save changes"/i);
+  assert.match(manager, /class="pm2-queue-player pm2-queue-profile-button"[\s\S]*?data-pm-action="edit-player-skill"/i);
+  assert.match(client, /row\.full_name = String\(updates\.fullName \?\? updates\.full_name\)\.trim\(\)/i);
+  assert.match(client, /full_name:\s*updates\.fullName !== undefined \|\| updates\.full_name !== undefined/i);
+  assert.match(managerCss, /\.pm2-player-editor-summary\s*\{/i);
+  assert.match(managerCss, /\.pm2-player-editor-note\s*\{/i);
+});
+
 test("match log includes rotated and final results once, newest first", () => {
   const completedMatches = manager.match(
-    /function completedMatches\(rounds = state\.rounds\)[\s\S]*?\n  }\n\n  function bestSplit/i
+    /function completedMatches\(rounds = state\.rounds\)[\s\S]*?\r?\n  }\r?\n\r?\n  function bestSplit/i
   )?.[0] || "";
   assert.match(completedMatches, /const completedGames = Array\.isArray\(game\.completedGames\)/i);
   assert.match(completedMatches, /results\.push\(\{ result: game, completedGameIndex: null \}\)/i);
@@ -766,7 +1167,7 @@ test("all Play Manager dialogs are centered in the viewport", () => {
 
 test("Play Manager dialogs share a modern, clean visual and copy system", () => {
   assert.match(manager, /class="pm2-dialog-heading"/i);
-  assert.match(manager, /class="pm2-dialog-kicker">Player queue</i);
+  assert.match(manager, /class="pm2-dialog-kicker"[^>]*>Player queue</i);
   assert.match(manager, /<h3 id="pm2AddTitle">Add a player<\/h3>/i);
   assert.match(manager, /Add a walk-in to the end of the waiting list\./i);
   assert.match(manager, />Waiting player<\/span>/i);
