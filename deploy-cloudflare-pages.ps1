@@ -59,6 +59,7 @@ $publicFiles = @(
   "paddle-rage-word-rage.png",
   "login.html",
   "finance-core.js",
+  "open-play-rating.js",
   "play-manager.css",
   "play-manager.js",
   "player-live.css",

@@ -22,6 +22,13 @@ function normalizeOpenPlaySkillLevel(value, fallback = 1) {
   return Number.isInteger(level) && level >= 1 && level <= 6 ? level : fallback;
 }
 
+function openPlayPerformanceSeed(skillLevel) {
+  if (window.PBOpenPlayRating?.seedRating) {
+    return window.PBOpenPlayRating.seedRating(skillLevel);
+  }
+  return 1000 + (normalizeOpenPlaySkillLevel(skillLevel) - 1) * 100;
+}
+
 function _pbTurnstileError(message, code) {
   const error = new Error(message);
   error.code = code;
@@ -1711,6 +1718,10 @@ window.DB = {
       mode: session.mode || 'smart_random_mixer',
       status: session.status || 'draft',
       current_round: session.currentRound || 0,
+      performance_rating_version: 'pr-performance-v1',
+      performance_rating_k: 24,
+      performance_rating_scale: 400,
+      performance_rating_min_games: 3,
     };
     const { data, error } = await _sb.from('open_play_game_sessions').insert(row).select('*').single();
     if (error) { console.error('createOpenPlayGameSession:', error); throw error; }
@@ -1738,13 +1749,15 @@ window.DB = {
   },
 
   async addOpenPlayGamePlayer(sessionId, player) {
+    const skillLevel = normalizeOpenPlaySkillLevel(player.skillLevel ?? player.skill_level);
     const row = {
       session_id: sessionId,
       full_name: player.fullName || player.full_name,
       source_registration_id: player.sourceRegistrationId || player.source_registration_id || null,
       status: player.status || 'active',
       seed_order: Number(player.seedOrder ?? player.seed_order ?? 0),
-      skill_level: normalizeOpenPlaySkillLevel(player.skillLevel ?? player.skill_level),
+      skill_level: skillLevel,
+      performance_seed_rating: openPlayPerformanceSeed(skillLevel),
     };
     const { data, error } = await _sb.from('open_play_game_players').insert(row).select('*').single();
     if (error) { console.error('addOpenPlayGamePlayer:', error); throw error; }
@@ -1773,14 +1786,18 @@ window.DB = {
     const { error: delError } = await _sb.from('open_play_game_players').delete().eq('session_id', sessionId);
     if (delError) { console.error('replaceOpenPlayGamePlayers delete:', delError); throw delError; }
     if (!players.length) return [];
-    const rows = players.map((p, i) => ({
-      session_id: sessionId,
-      full_name: p.fullName || p.full_name,
-      source_registration_id: p.sourceRegistrationId || p.source_registration_id || null,
-      status: p.status || 'active',
-      seed_order: i,
-      skill_level: normalizeOpenPlaySkillLevel(p.skillLevel ?? p.skill_level),
-    }));
+    const rows = players.map((p, i) => {
+      const skillLevel = normalizeOpenPlaySkillLevel(p.skillLevel ?? p.skill_level);
+      return {
+        session_id: sessionId,
+        full_name: p.fullName || p.full_name,
+        source_registration_id: p.sourceRegistrationId || p.source_registration_id || null,
+        status: p.status || 'active',
+        seed_order: i,
+        skill_level: skillLevel,
+        performance_seed_rating: openPlayPerformanceSeed(skillLevel),
+      };
+    });
     const { data, error } = await _sb.from('open_play_game_players').insert(rows).select('*').order('seed_order');
     if (error) { console.error('replaceOpenPlayGamePlayers insert:', error); throw error; }
     return data || [];
@@ -2735,6 +2752,17 @@ window.DB = {
         localSeedChanged = true;
       }
     }
+    const openPlayGamePlayers = (Array.isArray(parsed.openPlayGamePlayers)
+      ? parsed.openPlayGamePlayers
+      : []
+    ).map(player => {
+      if (Number.isFinite(Number(player.performance_seed_rating))) return player;
+      localSeedChanged = true;
+      return {
+        ...player,
+        performance_seed_rating: openPlayPerformanceSeed(player.skill_level),
+      };
+    });
     const db = {
       ...freshDb(),
       ...parsed,
@@ -2745,8 +2773,17 @@ window.DB = {
       openPlayHostApplications: Array.isArray(parsed.openPlayHostApplications) ? parsed.openPlayHostApplications : [],
       openPlayHostSessions: Array.isArray(parsed.openPlayHostSessions) ? parsed.openPlayHostSessions : [],
       openPlayHostSessionRegistrations: Array.isArray(parsed.openPlayHostSessionRegistrations) ? parsed.openPlayHostSessionRegistrations : [],
-      openPlayGameSessions: Array.isArray(parsed.openPlayGameSessions) ? parsed.openPlayGameSessions : [],
-      openPlayGamePlayers: Array.isArray(parsed.openPlayGamePlayers) ? parsed.openPlayGamePlayers : [],
+      openPlayGameSessions: (Array.isArray(parsed.openPlayGameSessions)
+        ? parsed.openPlayGameSessions
+        : []
+      ).map(session => ({
+        ...session,
+        performance_rating_version: session.performance_rating_version || 'pr-performance-v1',
+        performance_rating_k: Number(session.performance_rating_k || 24),
+        performance_rating_scale: Number(session.performance_rating_scale || 400),
+        performance_rating_min_games: Number(session.performance_rating_min_games || 3),
+      })),
+      openPlayGamePlayers,
       openPlayGameRounds: Array.isArray(parsed.openPlayGameRounds) ? parsed.openPlayGameRounds : [],
       openPlayGameShares: Array.isArray(parsed.openPlayGameShares) ? parsed.openPlayGameShares : [],
       blockedDates: Array.isArray(parsed.blockedDates) ? parsed.blockedDates : [],
@@ -2815,6 +2852,24 @@ window.DB = {
       throw new Error('PLAY_MANAGER_SESSION_NOT_ACTIVE');
     }
     return session;
+  }
+
+  function localOpenPlayPlayerHasRatedGame(db, player) {
+    const playerId = String(player?.id || '');
+    if (!playerId) return false;
+    return (db.openPlayGameRounds || [])
+      .filter(round => String(round.session_id) === String(player.session_id))
+      .some(round => (round.assignments || []).some(game => {
+        const results = [
+          ...(Array.isArray(game.completedGames) ? game.completedGames : []),
+          game,
+        ];
+        return results.some(result =>
+          ['A', 'B'].includes(result?.winner) &&
+          [...(result.teamA || []), ...(result.teamB || [])]
+            .some(id => String(id) === playerId)
+        );
+      }));
   }
 
   function localOpenPlayLiveBoard(db, shareToken) {
@@ -2920,35 +2975,27 @@ window.DB = {
       }
     });
 
-    const scores = new Map(activePlayers.map(player => [
-      String(player.id),
-      { name: player.full_name || 'Player', games: 0, wins: 0 },
-    ]));
+    const ratingMatches = [];
     let resultCount = 0;
     let latestResult = null;
     let latestResultTime = -Infinity;
-    const processGame = (game, round, courtIndex) => {
+    let ratingSequence = 0;
+    const processGame = (game, round, courtIndex, completedGameIndex = null) => {
       const teamOne = (game.teamA || []).map(String);
       const teamTwo = (game.teamB || []).map(String);
-      [...teamOne, ...teamTwo].forEach(playerId => {
-        const score = scores.get(playerId);
-        if (score) score.games += 1;
-      });
-      if (game.winner === 'A') {
-        resultCount += 1;
-        teamOne.forEach(playerId => {
-          const score = scores.get(playerId);
-          if (score) score.wins += 1;
-        });
-      }
-      if (game.winner === 'B') {
-        resultCount += 1;
-        teamTwo.forEach(playerId => {
-          const score = scores.get(playerId);
-          if (score) score.wins += 1;
-        });
-      }
       if (game.winner === 'A' || game.winner === 'B') {
+        resultCount += 1;
+        ratingMatches.push({
+          matchId: game.matchId || '',
+          roundNo: Number(round?.round_no || 0),
+          courtIndex,
+          completedGameIndex,
+          teamA: teamOne,
+          teamB: teamTwo,
+          winner: game.winner,
+          resultAt: game.resultAt || '',
+          sequence: ratingSequence++,
+        });
         const resultAt = game.resultAt || null;
         const parsedResultTime = Date.parse(resultAt || '');
         const parsedRoundTime = Date.parse(round?.created_at || '');
@@ -2978,17 +3025,31 @@ window.DB = {
     };
     rounds.forEach(round => {
       (round.assignments || []).forEach((game, courtIndex) => {
-        (game.completedGames || []).forEach(completedGame => {
-          processGame(completedGame, round, courtIndex);
+        (game.completedGames || []).forEach((completedGame, completedGameIndex) => {
+          processGame(completedGame, round, courtIndex, completedGameIndex);
         });
-        processGame(game, round, courtIndex);
+        processGame(game, round, courtIndex, null);
       });
     });
-    const standings = [...scores.values()].sort((left, right) =>
-      right.wins - left.wins ||
-      left.games - right.games ||
-      left.name.localeCompare(right.name)
-    );
+    const activeIdSet = new Set(activePlayers.map(player => String(player.id)));
+    const standings = window.PBOpenPlayRating?.calculateStandings
+      ? window.PBOpenPlayRating
+          .calculateStandings(sessionPlayers, ratingMatches, {
+            minGames: Number(session.performance_rating_min_games || 3),
+          })
+          .filter(row => activeIdSet.has(String(row.id)) || row.games > 0)
+          .map(row => ({
+            name: row.name,
+            rating: row.rating,
+            points: row.points,
+            games: row.games,
+            wins: row.wins,
+            eligible: row.eligible,
+            rank: row.rank,
+            averageOpponentRating: row.averageOpponentRating,
+            bestUpset: row.bestUpset,
+          }))
+      : [];
 
     return {
       generatedAt: nowIso(),
@@ -3014,6 +3075,12 @@ window.DB = {
         queue: queuedIds.map(playerId => playerById.get(playerId) || 'Player'),
       } : null,
       standings,
+      ratingSystem: {
+        name: 'Individual Performance Rating',
+        version: session.performance_rating_version || 'pr-performance-v1',
+        minGames: Number(session.performance_rating_min_games || 3),
+        rankingMetric: 'session_points',
+      },
       resultCount,
       latestResult,
     };
@@ -3555,6 +3622,10 @@ window.DB = {
         mode: session.mode || 'smart_random_mixer',
         status: session.status || 'draft',
         current_round: session.currentRound || 0,
+        performance_rating_version: 'pr-performance-v1',
+        performance_rating_k: 24,
+        performance_rating_scale: 400,
+        performance_rating_min_games: 3,
         created_at: nowIso(),
         updated_at: nowIso(),
       };
@@ -3610,6 +3681,9 @@ window.DB = {
           status: player.status || 'active',
           seed_order: Number(player.seedOrder ?? player.seed_order ?? 0),
           skill_level: normalizeOpenPlaySkillLevel(player.skillLevel ?? player.skill_level),
+          performance_seed_rating: openPlayPerformanceSeed(
+            player.skillLevel ?? player.skill_level
+          ),
           queue_entered_at: player.queueEnteredAt || player.queue_entered_at || null,
           created_at: nowIso(),
         };
@@ -3625,14 +3699,18 @@ window.DB = {
         if (index < 0) throw new Error('PLAY_MANAGER_PLAYER_NOT_FOUND');
         const current = db.openPlayGamePlayers[index];
         requireLocalPlayManagerSession(db, current.session_id, ['draft', 'active']);
+        const nextSkillLevel = updates.skillLevel !== undefined || updates.skill_level !== undefined
+          ? normalizeOpenPlaySkillLevel(updates.skillLevel ?? updates.skill_level)
+          : normalizeOpenPlaySkillLevel(current.skill_level);
         const saved = {
           ...current,
           full_name: updates.fullName !== undefined || updates.full_name !== undefined
             ? String(updates.fullName ?? updates.full_name).trim()
             : current.full_name,
-          skill_level: updates.skillLevel !== undefined || updates.skill_level !== undefined
-            ? normalizeOpenPlaySkillLevel(updates.skillLevel ?? updates.skill_level)
-            : normalizeOpenPlaySkillLevel(current.skill_level),
+          skill_level: nextSkillLevel,
+          performance_seed_rating: localOpenPlayPlayerHasRatedGame(db, current)
+            ? Number(current.performance_seed_rating || openPlayPerformanceSeed(current.skill_level))
+            : openPlayPerformanceSeed(nextSkillLevel),
         };
         db.openPlayGamePlayers[index] = saved;
         writeDb(db);
@@ -3644,17 +3722,21 @@ window.DB = {
         const db = readDb();
         requireLocalPlayManagerSession(db, sessionId, ['draft', 'active']);
         db.openPlayGamePlayers = db.openPlayGamePlayers.filter(p => String(p.session_id) !== String(sessionId));
-        const rows = players.map((p, i) => ({
-          id: localRef('gmp'),
-          session_id: sessionId,
-          full_name: p.fullName || p.full_name,
-          source_registration_id: p.sourceRegistrationId || p.source_registration_id || null,
-          status: p.status || 'active',
-          seed_order: i,
-          skill_level: normalizeOpenPlaySkillLevel(p.skillLevel ?? p.skill_level),
-          queue_entered_at: p.queueEnteredAt || p.queue_entered_at || null,
-          created_at: nowIso(),
-        }));
+        const rows = players.map((p, i) => {
+          const skillLevel = normalizeOpenPlaySkillLevel(p.skillLevel ?? p.skill_level);
+          return {
+            id: localRef('gmp'),
+            session_id: sessionId,
+            full_name: p.fullName || p.full_name,
+            source_registration_id: p.sourceRegistrationId || p.source_registration_id || null,
+            status: p.status || 'active',
+            seed_order: i,
+            skill_level: skillLevel,
+            performance_seed_rating: openPlayPerformanceSeed(skillLevel),
+            queue_entered_at: p.queueEnteredAt || p.queue_entered_at || null,
+            created_at: nowIso(),
+          };
+        });
         db.openPlayGamePlayers.push(...rows);
         writeDb(db);
         return rows;
@@ -3837,6 +3919,9 @@ window.DB = {
           source_registration_id: null,
           status: 'active',
           skill_level: normalizeOpenPlaySkillLevel(
+            replacement.incomingPlayerSkillLevel ?? replacement.incoming_player_skill_level
+          ),
+          performance_seed_rating: openPlayPerformanceSeed(
             replacement.incomingPlayerSkillLevel ?? replacement.incoming_player_skill_level
           ),
           seed_order: db.openPlayGamePlayers

@@ -20,6 +20,11 @@ const playerSkillMigrationPath = "supabase/migrations/20260725180000_play_manage
 const playerSkillMigration = fs.existsSync(path.join(root, playerSkillMigrationPath))
   ? read(playerSkillMigrationPath)
   : "";
+const performanceRatingMigrationPath = "supabase/migrations/20260728130000_open_play_performance_rating.sql";
+const performanceRatingMigration = fs.existsSync(path.join(root, performanceRatingMigrationPath))
+  ? read(performanceRatingMigrationPath)
+  : "";
+const performanceRating = read("open-play-rating.js");
 const client = read("supabase-config.js");
 const setupSql = read("SETUP_NEW_SUPABASE.sql");
 const manager = read("play-manager.js");
@@ -428,18 +433,19 @@ test("manager exposes clear live-session completion controls", () => {
   );
 });
 
-test("completed sessions show a top-three podium and rankings from fourth onward", () => {
+test("completed sessions show an individual performance podium and full rankings", () => {
   const completedMarkup = manager.match(
     /function completedSessionMarkup\(matches, standings\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function matchTimeMarkup/i
   )?.[0] || "";
 
-  assert.match(manager, /const leaders = rows\.slice\(0, 3\)/i);
-  assert.match(manager, /const remaining = rows\.slice\(3\)/i);
-  assert.match(manager, /const rank = index \+ 4/i);
-  assert.match(completedMarkup, /Tonight&rsquo;s champions/i);
-  assert.match(completedMarkup, /Top 3 players/i);
+  assert.match(manager, /const leaders = PERFORMANCE\.podiumRows\(rows\)/i);
+  assert.match(manager, /const podiumIds = new Set\(PERFORMANCE\.podiumRows\(rows\)/i);
+  assert.match(manager, /const remaining = rows\.filter\(row => !podiumIds\.has/i);
+  assert.match(completedMarkup, /Session performance leaders/i);
+  assert.match(completedMarkup, /Performance Podium/i);
   assert.match(completedMarkup, /Full leaderboard/i);
-  assert.match(completedMarkup, /Rankings #4&ndash;#/i);
+  assert.match(completedMarkup, /Ranked by Session Points/i);
+  assert.match(completedMarkup, /wins and win rate do not determine rank/i);
   assert.match(completedMarkup, /id="pm2MatchLog"/i);
   assert.match(
     manager,
@@ -470,9 +476,11 @@ test("completed sessions download a branded Paddle Rage result image", () => {
   assert.match(brandedDownload, /loadResultBrandLogo\(\)/i);
   assert.match(manager, /image\.src = "paddleragelogo-transparent\.png"/i);
   assert.match(brandedDownload, /PADDLE RAGE PICKLEBALL/i);
-  assert.match(brandedDownload, /SESSION CHAMPIONS/i);
+  assert.match(brandedDownload, /SESSION PERFORMANCE PODIUM/i);
   assert.match(brandedDownload, /const topStandings = standings\.slice\(0, 10\)/i);
-  assert.match(brandedDownload, /const remaining = topStandings\.slice\(3\)/i);
+  assert.match(brandedDownload, /const podiumStandings = PERFORMANCE\.podiumRows\(standings\)/i);
+  assert.match(brandedDownload, /const remaining = topStandings\.filter\(row => !podiumIds\.has/i);
+  assert.match(brandedDownload, /Individual Session Points .* Opponent strength matters/i);
   assert.match(brandedDownload, /TOP \$\{topStandings\.length\} LEADERBOARD/i);
   assert.match(brandedDownload, /Showing \$\{topStandings\.length\} of \$\{standings\.length\} players/i);
   assert.match(
@@ -531,7 +539,7 @@ test("new results play one contained winner reveal in the manager and shared boa
   assert.match(playerClient, /scheduleWinnerRevealEnd\(/i);
   assert.match(playerCss, /@keyframes plb-winner-reveal/i);
   assert.match(playerCss, /\.plb-winner-reveal-sparks::before/i);
-  assert.match(playerPage, /player-live\.js\?v=20260728-smooth-live-v2/i);
+  assert.match(playerPage, /player-live\.js\?v=20260728-performance-v1/i);
 });
 
 test("Share Live keeps the completed winner visible while its court is READY", () => {
@@ -998,13 +1006,13 @@ test("admin live session groups courts, matchmaking, and activity in operational
     "live courts, matchmaking, and session activity should follow the host workflow"
   );
   assert.match(matchmaking, /<h3>Player Queue<\/h3>[\s\S]*?Court dispatch[\s\S]*?<h3>Up Next<\/h3>/i);
-  assert.match(activity, /id="pm2MatchLog"[\s\S]*?<h3>Match Log<\/h3>[\s\S]*?id="pm2Standings"[\s\S]*?<h3>Standings<\/h3>/i);
+  assert.match(activity, /id="pm2MatchLog"[\s\S]*?<h3>Match Log<\/h3>[\s\S]*?id="pm2Standings"[\s\S]*?<h3>Performance Standings<\/h3>/i);
   assert.match(renderLive, /const standings = standingsRows\(matches\)/i);
   assert.match(manager, /queue\.length > 10[\s\S]*?tabindex="0"[\s\S]*?Player queue/i);
   assert.match(manager, /rows\.length > 4[\s\S]*?tabindex="0"[\s\S]*?Player standings/i);
   assert.match(manager, /pm2-queue-list pm2-scroll-region/i);
   assert.match(manager, /pm2-standings-list pm2-scroll-region/i);
-  assert.match(manager, /function standingsRows\(matches\)[\s\S]*?winningTeam/i);
+  assert.match(manager, /function standingsRows\(matches\)[\s\S]*?PERFORMANCE[\s\S]*?calculateStandings/i);
   assert.match(manager, /role="listitem"/i);
   assert.match(managerCss, /\.pm2-scroll-region\s*\{[\s\S]*?overflow-y:\s*auto/i);
   assert.match(managerCss, /\.pm2-queue-list\s*\{[\s\S]*?max-height:\s*700px/i);
@@ -1104,9 +1112,9 @@ test("manager queue matches the compact reference while retaining Skip", () => {
   assert.match(manager, /data-pm-action="add-player"><span aria-hidden="true">[+]<\/span> Add player<\/button>/i);
   assert.match(manager, /\$\{isLast \? "Last" : "Skip"\}/i);
   assert.match(manager, /\$\{isLast \? "disabled" : ""\}/i);
-  assert.match(manager, /const winRate = games \? `\$\{Math\.round\(\(wins \/ games\) \* 100\)\}%` : "—"/i);
+  assert.match(manager, /const points = performance\?\.points \|\| 0/i);
   assert.match(manager, /\$\{games\} \$\{games === 1 \? "game" : "games"\}/i);
-  assert.match(manager, /\$\{winRate\} wins/i);
+  assert.match(manager, /formatSessionPoints\(points, "pts"\)/i);
   assert.match(managerCss, /--pm2-queue-green:\s*#08e58a/i);
   assert.match(managerCss, /\.pm2-queue-no\s*\{[\s\S]*?font-size:\s*1\.16rem/i);
   assert.match(managerCss, /\.pm2-queue-meta\s*\{[\s\S]*?font-variant-numeric|\.pm2-queue-wait\s*\{[\s\S]*?font-variant-numeric/i);
@@ -1132,7 +1140,7 @@ test("Play Manager stores editable six-star player skills and uses them for bala
     manager,
     /Beginner[\s\S]*?Advanced Beginner[\s\S]*?Intermediate[\s\S]*?Advanced Intermediate[\s\S]*?Advanced[\s\S]*?Expert/i
   );
-  assert.match(manager, /const DEFAULT_SKILL_LEVEL = 1/i);
+  assert.match(manager, /const DEFAULT_SKILL_LEVEL = 3/i);
   assert.match(manager, /function skillSelectorMarkup\(selectedLevel = DEFAULT_SKILL_LEVEL\)/i);
   assert.match(manager, /name="skillLevel"/i);
   assert.match(manager, />★<\/span>/i);
@@ -1163,18 +1171,46 @@ test("Play Manager stores editable six-star player skills and uses them for bala
     /\.pm2-team-skill-total\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?letter-spacing:\s*0/i
   );
   assert.match(admin, /supabase-config\.js\?v=20260726-player-profile-v5/i);
-  assert.match(admin, /play-manager\.js\?v=20260728-compact-mobile-v24/i);
+  assert.match(admin, /open-play-rating\.js\?v=20260728-performance-v2/i);
+  assert.match(admin, /play-manager\.js\?v=20260728-performance-v3/i);
   assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
+});
+
+test("Open Play uses one event-sourced Individual Performance Rating everywhere", () => {
+  assert.ok(performanceRatingMigration, `${performanceRatingMigrationPath} must exist`);
+  assert.match(performanceRating, /const VERSION = "pr-performance-v1"/i);
+  assert.match(performanceRating, /const K_FACTOR = 24/i);
+  assert.match(performanceRating, /function calculateStandings\(players, matches/i);
+  assert.match(performanceRating, /averageOpponentRating/i);
+  assert.match(performanceRating, /bestUpset/i);
+  assert.match(performanceRatingMigration, /add column if not exists performance_seed_rating/i);
+  assert.match(performanceRatingMigration, /PLAY_MANAGER_PERFORMANCE_SEED_IMMUTABLE/i);
+  assert.match(performanceRatingMigration, /calculate_open_play_performance_standings/i);
+  assert.match(performanceRatingMigration, /performance_rating_min_games[\s\S]*?default 3/i);
+  assert.match(performanceRatingMigration, /check \(performance_rating_k = 24\)/i);
+  assert.match(performanceRatingMigration, /check \(performance_rating_scale = 400\)/i);
+  assert.match(performanceRatingMigration, /check \(performance_rating_min_games = 3\)/i);
+  assert.match(performanceRatingMigration, /'rankingMetric', 'session_points'/i);
+  assert.match(client, /performance_rating_k:\s*24/i);
+  assert.match(client, /performance_rating_scale:\s*400/i);
+  assert.match(client, /PBOpenPlayRating[\s\S]*?calculateStandings\(sessionPlayers, ratingMatches/i);
+  assert.match(manager, /Individual Performance Rating/i);
+  assert.match(manager, /Your teammate can change every game/i);
+  assert.match(manager, /not wins or win percentage/i);
+  assert.match(manager, /Complete at least 3 rated games to qualify/i);
+  assert.match(playerClient, /Ranked by Session Points/i);
+  assert.match(playerClient, /Top 10 Performance/i);
+  assert.match(deployScript, /"open-play-rating\.js"/i);
 });
 
 test("player profile editor shows live session stats and edits both name and skill", () => {
   assert.match(manager, /id="pm2PlayerEditorSummary"[^>]*hidden/i);
   assert.match(manager, /id="pm2PlayerEditorGames">0G played/i);
-  assert.match(manager, /id="pm2PlayerEditorWinRate">0% win rate/i);
+  assert.match(manager, /id="pm2PlayerEditorPerformance">0 Session Points/i);
   assert.match(manager, /id="pm2PlayerEditorCheckIn">Checked-in time unavailable/i);
   assert.match(manager, /function playerEditorStats\(player\)/i);
   assert.match(manager, /gamesText:\s*`\$\{games\}G played`/i);
-  assert.match(manager, /winRateText:\s*`\$\{winRate\}% win rate`/i);
+  assert.match(manager, /performanceText:\s*`\$\{formatSessionPoints\(points\)\} Session Points`/i);
   assert.match(manager, /`Checked-in at \$\{checkedTime\} · \$\{duration\} in session`/i);
   assert.match(manager, /nameInput\.readOnly = false/i);
   assert.match(manager, /submit\.textContent = editing \? "Save changes"/i);

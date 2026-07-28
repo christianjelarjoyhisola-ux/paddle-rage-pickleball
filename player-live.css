@@ -2659,6 +2659,40 @@ body {
   white-space: nowrap;
 }
 
+.plb-standings tbody th small {
+  display: block;
+  overflow: hidden;
+  margin-top: 2px;
+  color: #8290a3;
+  font-size: .55rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+}
+
+.plb-standings tbody td:nth-child(3) strong {
+  font-size: .78rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+}
+
+.plb-standings .is-positive,
+.plb-final-list .is-positive,
+.plb-podium-card .is-positive {
+  color: #087f73;
+}
+
+.plb-standings .is-negative,
+.plb-final-list .is-negative,
+.plb-podium-card .is-negative {
+  color: #c2414b;
+}
+
+.plb-standings .is-neutral,
+.plb-final-list .is-neutral,
+.plb-podium-card .is-neutral {
+  color: #526071;
+}
+
 .plb-standings tbody tr.is-mine,
 .plb-final-list li.is-mine,
 .plb-podium-card.is-mine {
@@ -2750,7 +2784,7 @@ body {
 .plb-podium-card > small {
   margin-top: 4px;
   color: #7a899d;
-  font-size: .52rem;
+  font-size: .7rem;
   font-weight: 950;
   letter-spacing: .45px;
   text-transform: uppercase;
@@ -2773,13 +2807,13 @@ body {
 .plb-podium-card > b span {
   margin-left: 3px;
   color: #7a899d;
-  font-size: .52rem;
+  font-size: .7rem;
 }
 
 .plb-podium-card > p {
   margin: 2px 0 0;
   color: #7a899d;
-  font-size: .56rem;
+  font-size: .72rem;
 }
 
 .plb-final-list {
@@ -2792,7 +2826,7 @@ body {
 
 .plb-final-list li {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto 42px;
+  grid-template-columns: 32px minmax(0, 1fr) auto 64px;
   align-items: center;
   min-height: 48px;
   gap: 8px;
@@ -3164,7 +3198,7 @@ body {
   }
 
   .plb-final-list li {
-    grid-template-columns: 28px minmax(0, 1fr) 38px;
+    grid-template-columns: 28px minmax(0, 1fr) 64px;
   }
 
   .plb-final-list li > small {
