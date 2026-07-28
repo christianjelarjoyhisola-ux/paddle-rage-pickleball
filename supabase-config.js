@@ -29,6 +29,14 @@ function openPlayPerformanceSeed(skillLevel) {
   return 1000 + (normalizeOpenPlaySkillLevel(skillLevel) - 1) * 100;
 }
 
+function normalizeOpenPlayRankingMode(value) {
+  if (window.PBOpenPlayRating?.normalizeRankingMode) {
+    return window.PBOpenPlayRating.normalizeRankingMode(value);
+  }
+  if (value === 'competitive') return 'competitive';
+  return value === 'win_percentage' ? 'win_percentage' : 'performance';
+}
+
 function _pbTurnstileError(message, code) {
   const error = new Error(message);
   error.code = code;
@@ -2778,6 +2786,7 @@ window.DB = {
         : []
       ).map(session => ({
         ...session,
+        ranking_mode: normalizeOpenPlayRankingMode(session.ranking_mode),
         performance_rating_version: session.performance_rating_version || 'pr-performance-v1',
         performance_rating_k: Number(session.performance_rating_k || 24),
         performance_rating_scale: Number(session.performance_rating_scale || 400),
@@ -2885,6 +2894,7 @@ window.DB = {
     );
     if (!session) return null;
     const status = String(session.status || '');
+    const rankingMode = normalizeOpenPlayRankingMode(session.ranking_mode);
     const completedAt = Date.parse(session.updated_at || '');
     const completedIsFresh = status === 'completed'
       && Number.isFinite(completedAt)
@@ -3036,18 +3046,32 @@ window.DB = {
       ? window.PBOpenPlayRating
           .calculateStandings(sessionPlayers, ratingMatches, {
             minGames: Number(session.performance_rating_min_games || 3),
+            mode: rankingMode,
           })
           .filter(row => activeIdSet.has(String(row.id)) || row.games > 0)
           .map(row => ({
             name: row.name,
             rating: row.rating,
+            ratingExact: row.ratingExact,
             points: row.points,
+            pointsExact: row.pointsExact,
             games: row.games,
             wins: row.wins,
+            losses: row.losses,
+            winRate: row.winRate,
+            winPercentage: row.winPercentage,
+            mode: row.mode,
             eligible: row.eligible,
             rank: row.rank,
             averageOpponentRating: row.averageOpponentRating,
+            averageOpponentRatingExact: row.averageOpponentRatingExact,
             bestUpset: row.bestUpset,
+            bestUpsetExact: row.bestUpsetExact,
+            rankCriterion: row.rankCriterion,
+            rankReason: row.rankReason,
+            tieBreakReason: row.tieBreakReason,
+            requiresPodiumDecider: row.requiresPodiumDecider,
+            podiumDeciderGroupId: row.podiumDeciderGroupId,
           }))
       : [];
 
@@ -3076,10 +3100,23 @@ window.DB = {
       } : null,
       standings,
       ratingSystem: {
-        name: 'Individual Performance Rating',
-        version: session.performance_rating_version || 'pr-performance-v1',
+        mode: rankingMode,
+        name: rankingMode === 'competitive'
+          ? 'Competitive Ranking'
+          : rankingMode === 'win_percentage'
+            ? 'Individual Win Percentage'
+            : 'Individual Performance Rating',
+        version: rankingMode === 'competitive'
+          ? 'competitive-ranking-v1'
+          : rankingMode === 'win_percentage'
+            ? 'win-percentage-v1'
+            : (session.performance_rating_version || 'pr-performance-v1'),
         minGames: Number(session.performance_rating_min_games || 3),
-        rankingMetric: 'session_points',
+        rankingMetric: rankingMode === 'competitive'
+          ? 'competitive'
+          : rankingMode === 'win_percentage'
+            ? 'win_percentage'
+            : 'session_points',
       },
       resultCount,
       latestResult,
@@ -3620,6 +3657,9 @@ window.DB = {
         court_ids: session.courtIds || [],
         court_names: session.courtNames || [],
         mode: session.mode || 'smart_random_mixer',
+        ranking_mode: normalizeOpenPlayRankingMode(
+          session.rankingMode ?? session.ranking_mode
+        ),
         status: session.status || 'draft',
         current_round: session.currentRound || 0,
         performance_rating_version: 'pr-performance-v1',
@@ -3653,6 +3693,9 @@ window.DB = {
             court_ids: updates.courtIds !== undefined ? updates.courtIds : s.court_ids,
             court_names: updates.courtNames !== undefined ? updates.courtNames : s.court_names,
             mode: updates.mode !== undefined ? updates.mode : s.mode,
+            ranking_mode: updates.rankingMode !== undefined || updates.ranking_mode !== undefined
+              ? normalizeOpenPlayRankingMode(updates.rankingMode ?? updates.ranking_mode)
+              : normalizeOpenPlayRankingMode(s.ranking_mode),
             status: nextStatus,
             current_round: updates.currentRound !== undefined ? updates.currentRound : s.current_round,
             updated_at: nowIso(),

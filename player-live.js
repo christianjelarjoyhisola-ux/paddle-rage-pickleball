@@ -133,16 +133,144 @@
     return suffix ? `${signed} ${suffix}` : signed;
   }
 
+  function formatCompetitivePoints(row, suffix = "") {
+    const points = Number(row?.pointsExact ?? row?.points ?? 0);
+    const absolute = Math.abs(points).toFixed(2).replace(/\.?0+$/, "");
+    const signed = points > 0 ? `+${absolute}` : points < 0 ? `−${absolute}` : "0";
+    return suffix ? `${signed} ${suffix}` : signed;
+  }
+
   function performanceTone(value) {
     const points = Number(value || 0);
     return points > 0 ? "is-positive" : points < 0 ? "is-negative" : "is-neutral";
+  }
+
+  function rankingMode(snapshot = state.snapshot) {
+    if (!window.PB_USE_LOCAL_DATA) return "performance";
+    const mode = String(snapshot?.ratingSystem?.mode || "");
+    const metric = String(snapshot?.ratingSystem?.rankingMetric || "");
+    if (mode === "competitive" || metric === "competitive") return "competitive";
+    return mode === "win_percentage" || metric === "win_percentage"
+      ? "win_percentage"
+      : "performance";
+  }
+
+  function isWinPercentageMode(snapshot = state.snapshot) {
+    return rankingMode(snapshot) === "win_percentage";
+  }
+
+  function isCompetitiveMode(snapshot = state.snapshot) {
+    return rankingMode(snapshot) === "competitive";
+  }
+
+  function winPercentage(row) {
+    if (Number.isFinite(Number(row?.winPercentage))) return Number(row.winPercentage);
+    const games = Number(row?.games || 0);
+    return games ? Math.round((Number(row?.wins || 0) / games) * 1000) / 10 : 0;
+  }
+
+  function standingDisplay(row, snapshot = state.snapshot) {
+    if (isCompetitiveMode(snapshot)) {
+      const wins = Number(row?.wins || 0);
+      const games = Number(row?.games || 0);
+      const losses = Number(row?.losses ?? Math.max(0, games - wins));
+      const percentage = `${winPercentage(row).toFixed(1).replace(/\.0$/, "")}%`;
+      return {
+        score: formatCompetitivePoints(row),
+        compactScore: formatCompetitivePoints(row, "pts"),
+        aria: `${formatCompetitivePoints(row, "exact Performance Points")}, ${percentage} win percentage`,
+        label: "PTS",
+        meta: `${percentage} · ${wins}W-${losses}L`,
+        detail: `Opponent strength ${Math.round(Number(row?.averageOpponentRating || 0))}`,
+        tone: performanceTone(row?.pointsExact ?? row?.points),
+      };
+    }
+    if (isWinPercentageMode(snapshot)) {
+      const wins = Number(row?.wins || 0);
+      const games = Number(row?.games || 0);
+      const losses = Number(row?.losses ?? Math.max(0, games - wins));
+      const percentage = `${winPercentage(row).toFixed(1).replace(/\.0$/, "")}%`;
+      return {
+        score: percentage,
+        compactScore: percentage,
+        aria: `${percentage} win percentage`,
+        label: "WIN %",
+        meta: `${wins}W-${losses}L`,
+        tone: games === 0
+          ? "is-neutral"
+          : winPercentage(row) >= 50
+            ? "is-positive"
+            : "is-negative",
+      };
+    }
+    return {
+      score: formatSessionPoints(row?.points),
+      compactScore: formatSessionPoints(row?.points, "pts"),
+      aria: formatSessionPoints(row?.points, "Session Points"),
+      label: "POINTS",
+      meta: `PR ${Math.round(Number(row?.rating || 0))}`,
+      tone: performanceTone(row?.points),
+    };
+  }
+
+  function rankingCopy(snapshot = state.snapshot) {
+    if (isCompetitiveMode(snapshot)) {
+      return {
+        hero: "Courts, queue order, and decisive individual competitive rankings—updated automatically.",
+        complete: "This session is complete. Final Competitive standings and any required podium decider are shown below.",
+        eyebrow: "Performance + record + strength",
+        title: "Competitive Top 10",
+        finalTitle: "Final Competitive Leaders",
+        podium: "Competitive podium",
+      };
+    }
+    if (isWinPercentageMode(snapshot)) {
+      return {
+        hero: "Courts, queue order, and each player's win percentage—updated automatically.",
+        complete: "This session is complete. Final Win Percentage standings are shown below.",
+        eyebrow: "Ranked by win percentage",
+        title: "Win Percentage Top 10",
+        finalTitle: "Final Win Percentage Leaders",
+        podium: "Win Percentage podium",
+      };
+    }
+    return {
+      hero: "Courts, queue order, and individual opponent-adjusted Session Points—updated automatically.",
+      complete: "This session is complete. Final Individual Performance standings are shown below.",
+      eyebrow: "Ranked by Session Points",
+      title: "Top 10 Performance",
+      finalTitle: "Final Performance Leaders",
+      podium: "Performance podium",
+    };
+  }
+
+  function requiresPodiumDecider(row) {
+    return Boolean(row?.requiresPodiumDecider);
+  }
+
+  function rankLabel(row) {
+    if (!row?.eligible) return "P";
+    if (requiresPodiumDecider(row)) return "TBD";
+    return row?.rank || "—";
+  }
+
+  function rankDescription(row) {
+    if (!row?.eligible) return "Provisional";
+    if (requiresPodiumDecider(row)) return "Podium decider required";
+    return `Rank ${row?.rank}`;
+  }
+
+  function rankingReason(row) {
+    if (requiresPodiumDecider(row)) return "Identical competitive results · decider required";
+    return String(row?.rankReason || row?.tieBreakReason || "").trim();
   }
 
   function playerRecord(name) {
     const standing = playerStanding(name);
     if (!standing) return "No games yet";
     const games = Number(standing.games || 0);
-    return `${formatSessionPoints(standing.points, "pts")} · ${games}G`;
+    const display = standingDisplay(standing);
+    return `${display.compactScore} · ${games}G`;
   }
 
   function nameFitClass(name) {
@@ -351,12 +479,13 @@
 
     if (sessionStatus === "completed") {
       const standing = playerStanding(name);
+      const display = standingDisplay(standing, snapshot);
       return {
         eyebrow: "Session complete",
         title: "Final results are posted",
         detail: standing
-          ? `${formatSessionPoints(standing.points, "Session Points")} · ${standing.eligible ? `Final rank #${standing.rank}` : "Provisional"}`
-          : "See the final Individual Performance standings below.",
+          ? `${display.aria} · ${display.meta} · ${requiresPodiumDecider(standing) ? "Podium decider required" : standing.eligible ? `Final rank #${standing.rank}` : "Provisional"}`
+          : `See the final ${isCompetitiveMode(snapshot) ? "Competitive" : isWinPercentageMode(snapshot) ? "Win Percentage" : "Individual Performance"} standings below.`,
         tone: "finished",
       };
     }
@@ -665,42 +794,71 @@
     const labels = ["Champion", "Runner-up", "Third place"];
     const games = Number(row?.games || 0);
     const rank = Number(row?.rank || index + 1);
+    const display = standingDisplay(row);
+    const decider = requiresPodiumDecider(row);
+    const reason = rankingReason(row);
     return `
-      <article class="plb-podium-card is-rank-${rank} ${isMine(row?.name) ? "is-mine" : ""}" role="listitem">
-        <span class="plb-podium-rank">${rank}</span>
+      <article class="plb-podium-card is-rank-${Math.min(rank, 3)} ${decider ? "is-decider" : ""} ${isMine(row?.name) ? "is-mine" : ""}" role="listitem">
+        <span class="plb-podium-rank" aria-label="${escapeHtml(rankDescription(row))}">${rankLabel(row)}</span>
         <span class="plb-podium-avatar" aria-hidden="true">${escapeHtml(String(row?.name || "P").trim().charAt(0).toUpperCase() || "P")}</span>
-        <small>${labels[Math.min(rank, 3) - 1]}</small>
+        <small>${decider ? "Podium decider" : labels[Math.min(rank, 3) - 1]}</small>
         <strong title="${escapeHtml(row?.name || "Player")}">${escapeHtml(row?.name || "Player")}</strong>
-        <b class="${performanceTone(row?.points)}" aria-label="${formatSessionPoints(row?.points, "Session Points")}">${formatSessionPoints(row?.points)}<span>session pts</span></b>
-        <p>${games} games · PR ${Math.round(Number(row?.rating || 0))}</p>
+        <b class="${display.tone}" aria-label="${display.aria}">${display.score}<span>${display.label.toLowerCase()}</span></b>
+        <p>${games} games · ${display.meta}</p>
+        ${reason ? `<p class="plb-podium-reason">${escapeHtml(reason)}</p>` : ""}
       </article>
+    `;
+  }
+
+  function renderPodiumDeciderNotice(rows) {
+    const deciderRows = (Array.isArray(rows) ? rows : []).filter(requiresPodiumDecider);
+    if (!deciderRows.length) return "";
+    const groups = new Map();
+    deciderRows.forEach(row => {
+      const groupId = String(row?.podiumDeciderGroupId || `rank-${row?.rank || "podium"}`);
+      const names = groups.get(groupId) || [];
+      names.push(String(row?.name || "Player"));
+      groups.set(groupId, names);
+    });
+    const message = [...groups.values()]
+      .map(names => `${names.join(", ")} have identical competitive results`)
+      .join("; ");
+    return `
+      <div class="plb-decider-notice" role="status">
+        <strong>Podium Decider Required</strong>
+        <span>${escapeHtml(message)}. Official places remain TBD until one separating result is recorded.</span>
+      </div>
     `;
   }
 
   function renderStandings(standings, sessionStatus = "active") {
     if (!standings.length) return `<div class="plb-empty">Standings will appear after play begins.</div>`;
     const topStandings = standings.slice(0, 10);
+    const scoring = rankingCopy();
     if (sessionStatus === "completed") {
-      const leaders = topStandings.filter(row => row?.eligible).slice(0, 3);
+      const leaders = standings.filter(row => row?.eligible && Number(row.rank) <= 3);
+      const deciderRows = leaders.filter(requiresPodiumDecider);
       const leaderRows = new Set(leaders);
       const remaining = topStandings.filter(row => !leaderRows.has(row));
       return `
         <div class="plb-final-standings" id="plbStandingsTable" tabindex="0" aria-label="Player standings">
+          ${renderPodiumDeciderNotice(deciderRows)}
           ${leaders.length ? `
-            <div class="plb-podium" role="list" aria-label="Performance podium">
+            <div class="plb-podium" role="list" aria-label="${scoring.podium}">
               ${leaders.map(renderPodiumPlayer).join("")}
             </div>
-          ` : `<div class="plb-empty">No player completed the 3 rated games required for the podium.</div>`}
+          ` : `<div class="plb-empty">No player completed the 3 games required for the podium.</div>`}
           ${remaining.length ? `
             <ol class="plb-final-list">
               ${remaining.map(row => {
                 const games = Number(row.games || 0);
+                const display = standingDisplay(row);
                 return `
                   <li class="${isMine(row.name) ? "is-mine" : ""}">
-                    <span aria-label="${row.eligible ? `Rank ${row.rank}` : "Provisional"}">${row.eligible ? row.rank : "P"}</span>
+                    <span aria-label="${escapeHtml(rankDescription(row))}">${rankLabel(row)}</span>
                     <strong>${escapeHtml(row.name)}</strong>
-                    <small>${row.eligible ? "Qualified" : "Provisional"} · ${games} games · PR ${Math.round(Number(row.rating || 0))}</small>
-                    <b class="${performanceTone(row.points)}">${formatSessionPoints(row.points, "pts")}</b>
+                    <small>${requiresPodiumDecider(row) ? "Decider required" : row.eligible ? "Qualified" : "Provisional"} · ${games} games · ${display.meta}</small>
+                    <b class="${display.tone}">${display.compactScore}</b>
                   </li>
                 `;
               }).join("")}
@@ -710,20 +868,24 @@
       `;
     }
     return `
+      ${renderPodiumDeciderNotice(topStandings)}
       <div class="plb-table-wrap" id="plbStandingsTable" tabindex="0" aria-label="Player standings">
         <table class="plb-standings">
           <thead>
-            <tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Points</th><th scope="col">Games</th></tr>
+            <tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">${isWinPercentageMode() ? "Win %" : "Points"}</th><th scope="col">Games</th></tr>
           </thead>
           <tbody>
-            ${topStandings.map((row, index) => `
-              <tr class="${isMine(row.name) ? "is-mine" : ""}" style="--plb-order:${index}">
-                <td><span aria-label="${row.eligible ? `Rank ${row.rank}` : "Provisional"}">${row.eligible ? row.rank : "P"}</span></td>
-                <th scope="row">${escapeHtml(row.name)}${isMine(row.name) ? ` <b>YOU</b>` : ""}<small>${row.eligible ? "Qualified" : `${Number(row.games || 0)} of 3 games`}</small></th>
-                <td class="${performanceTone(row.points)}"><strong>${formatSessionPoints(row.points)}</strong></td>
-                <td>${Number(row.games || 0)}</td>
-              </tr>
-            `).join("")}
+            ${topStandings.map((row, index) => {
+              const display = standingDisplay(row);
+              return `
+                <tr class="${isMine(row.name) ? "is-mine" : ""}" style="--plb-order:${index}">
+                  <td><span aria-label="${escapeHtml(rankDescription(row))}">${rankLabel(row)}</span></td>
+                  <th scope="row">${escapeHtml(row.name)}${isMine(row.name) ? ` <b>YOU</b>` : ""}<small>${requiresPodiumDecider(row) ? `Decider required · ${display.meta}` : row.eligible ? `${display.meta}${rankingReason(row) ? ` · ${escapeHtml(rankingReason(row))}` : ""}` : `${Number(row.games || 0)} of 3 games · ${display.meta}`}</small></th>
+                  <td class="${display.tone}"><strong>${display.score}</strong></td>
+                  <td>${Number(row.games || 0)}</td>
+                </tr>
+              `;
+            }).join("")}
           </tbody>
         </table>
       </div>
@@ -790,6 +952,7 @@
       if (scrollRegion) nestedScroll[id] = scrollRegion.scrollTop;
     });
     const players = snapshot.players || [];
+    const scoring = rankingCopy(snapshot);
 
     const session = snapshot.session || {};
     const round = snapshot.latestRound || { assignments: [], queue: [], roundNo: session.currentRound || 0 };
@@ -799,6 +962,13 @@
       ? assignments.filter(game => Boolean(game.winner)).length
       : Number(snapshot.resultCount || 0);
     const sessionStatus = session.status || "active";
+    const standings = snapshot.standings || [];
+    const standingsShown = sessionStatus === "completed"
+      ? new Set([
+          ...standings.slice(0, 10),
+          ...standings.filter(row => row?.eligible && Number(row.rank) <= 3),
+        ]).size
+      : Math.min(10, standings.length);
     const upNext = sessionStatus === "completed"
       ? { players: queue.slice(0, 4), courtName: "", reserved: false }
       : resolveUpNext(round);
@@ -833,11 +1003,11 @@
     const statusMessage = sessionStatus === "paused"
       ? "The manager paused this session. Court and queue positions remain visible."
       : sessionStatus === "completed"
-        ? "This session is complete. Final Individual Performance standings are shown below."
+        ? scoring.complete
         : "";
     const dispatchMarkup = renderUpNext(upNext, sessionStatus);
     const queueMarkup = renderQueue(queue, upNext.reserved);
-    const standingsMarkup = renderStandings(snapshot.standings || [], sessionStatus);
+    const standingsMarkup = renderStandings(standings, sessionStatus);
     const headerStats = document.getElementById("plbHeaderStats");
     if (headerStats) {
       headerStats.innerHTML = `
@@ -863,7 +1033,7 @@
         <div>
           <span class="plb-eyebrow">${escapeHtml(statusLabel(sessionStatus))} · OPEN PLAY</span>
           <h1>Live Match Center</h1>
-          <p>Courts, queue order, and individual opponent-adjusted Session Points—updated automatically.</p>
+          <p>${escapeHtml(scoring.hero)}</p>
         </div>
         <div class="plb-session-meta">
           <span>${escapeHtml(formatDate(session.date))}</span>
@@ -925,8 +1095,8 @@
 
           <section class="plb-panel plb-standings-panel" id="plbStandings" aria-labelledby="plbStandingsTitle">
             <div class="plb-panel-head">
-              <div><span>Ranked by Session Points</span><h2 id="plbStandingsTitle">${sessionStatus === "completed" ? "Final Performance Top 10" : "Top 10 Performance"}</h2></div>
-              <b>${Math.min(10, (snapshot.standings || []).length)} shown</b>
+              <div><span>${scoring.eyebrow}</span><h2 id="plbStandingsTitle">${sessionStatus === "completed" ? scoring.finalTitle : scoring.title}</h2></div>
+              <b>${standingsShown} shown</b>
             </div>
             <div class="plb-panel-body">${standingsMarkup}</div>
           </section>
@@ -1065,16 +1235,29 @@
         ? snapshot.standings.map(row => ({
             name: String(row?.name || ""),
             wins: Number(row?.wins || 0),
+            losses: Number(row?.losses || 0),
             games: Number(row?.games || 0),
+            winPercentage: Number(row?.winPercentage || 0),
+            mode: String(row?.mode || ""),
             rating: Number(row?.rating || 0),
+            ratingExact: Number(row?.ratingExact || 0),
             points: Number(row?.points || 0),
+            pointsExact: Number(row?.pointsExact || 0),
             eligible: Boolean(row?.eligible),
             rank: row?.rank == null ? null : Number(row.rank),
             averageOpponentRating: Number(row?.averageOpponentRating || 0),
+            averageOpponentRatingExact: Number(row?.averageOpponentRatingExact || 0),
             bestUpset: Number(row?.bestUpset || 0),
+            bestUpsetExact: Number(row?.bestUpsetExact || 0),
+            rankCriterion: String(row?.rankCriterion || ""),
+            rankReason: String(row?.rankReason || ""),
+            tieBreakReason: String(row?.tieBreakReason || ""),
+            requiresPodiumDecider: Boolean(row?.requiresPodiumDecider),
+            podiumDeciderGroupId: String(row?.podiumDeciderGroupId || ""),
           }))
         : [],
       ratingSystem: snapshot.ratingSystem ? {
+        mode: String(snapshot.ratingSystem.mode || ""),
         name: String(snapshot.ratingSystem.name || ""),
         version: String(snapshot.ratingSystem.version || ""),
         minGames: Number(snapshot.ratingSystem.minGames || 3),
@@ -1109,7 +1292,7 @@
       ? (snapshot.standings || []).find(row => String(row?.name || "") === state.selectedName)
       : null;
     const performanceUpdate = selectedStanding
-      ? ` Your performance is ${formatSessionPoints(selectedStanding.points, "Session Points")}; ${selectedStanding.eligible ? `rank ${selectedStanding.rank}` : "provisional"}.`
+      ? ` Your score is ${standingDisplay(selectedStanding, snapshot).aria}, ${standingDisplay(selectedStanding, snapshot).meta}; ${requiresPodiumDecider(selectedStanding) ? "podium decider required" : selectedStanding.eligible ? `rank ${selectedStanding.rank}` : "provisional"}.`
       : "";
     const reveal = state.winnerReveal;
     const winnerUpdate = reveal

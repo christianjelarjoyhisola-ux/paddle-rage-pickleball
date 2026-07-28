@@ -31,6 +31,9 @@
   const SHARE_TOKEN_STORE = "paddle_rage_play_manager_share_tokens_v1";
   const DEFAULT_SKILL_LEVEL = 3;
   const PERFORMANCE = window.PBOpenPlayRating;
+  const RANKING_MODE_PERFORMANCE = PERFORMANCE?.RANKING_MODE_PERFORMANCE || "performance";
+  const RANKING_MODE_WIN_PERCENTAGE = PERFORMANCE?.RANKING_MODE_WIN_PERCENTAGE || "win_percentage";
+  const RANKING_MODE_COMPETITIVE = PERFORMANCE?.RANKING_MODE_COMPETITIVE || "competitive";
   const SKILL_LEVELS = [
     { value: 1, label: "Beginner" },
     { value: 2, label: "Advanced Beginner" },
@@ -54,6 +57,165 @@
   function performanceTone(value) {
     const points = Number(value || 0);
     return points > 0 ? "is-positive" : points < 0 ? "is-negative" : "is-neutral";
+  }
+
+  function normalizeRankingMode(value) {
+    return PERFORMANCE?.normalizeRankingMode
+      ? PERFORMANCE.normalizeRankingMode(value)
+      : (value === RANKING_MODE_COMPETITIVE
+          ? RANKING_MODE_COMPETITIVE
+          : value === RANKING_MODE_WIN_PERCENTAGE
+          ? RANKING_MODE_WIN_PERCENTAGE
+          : RANKING_MODE_PERFORMANCE);
+  }
+
+  function sessionRankingMode(session = state.session) {
+    if (!window.PB_USE_LOCAL_DATA) return RANKING_MODE_PERFORMANCE;
+    return normalizeRankingMode(session?.ranking_mode ?? session?.rankingMode);
+  }
+
+  function isWinPercentageMode(mode = sessionRankingMode()) {
+    if (!window.PB_USE_LOCAL_DATA) return false;
+    return normalizeRankingMode(mode) === RANKING_MODE_WIN_PERCENTAGE;
+  }
+
+  function isCompetitiveMode(mode = sessionRankingMode()) {
+    if (!window.PB_USE_LOCAL_DATA) return false;
+    return normalizeRankingMode(mode) === RANKING_MODE_COMPETITIVE;
+  }
+
+  function formatWinPercentage(value) {
+    const percentage = Number(value || 0);
+    return `${percentage.toFixed(1).replace(/\.0$/, "")}%`;
+  }
+
+  function formatCompetitivePoints(row, suffix = "") {
+    const points = Number(row?.pointsExact ?? row?.points ?? 0);
+    const absolute = Math.abs(points).toFixed(2).replace(/\.?0+$/, "");
+    const signed = points > 0 ? `+${absolute}` : points < 0 ? `−${absolute}` : "0";
+    return suffix ? `${signed} ${suffix}` : signed;
+  }
+
+  function standingDisplay(row) {
+    if (isCompetitiveMode(row?.mode)) {
+      const wins = Number(row?.wins || 0);
+      const losses = Number(row?.losses ?? Math.max(0, Number(row?.games || 0) - wins));
+      return {
+        score: formatCompetitivePoints(row),
+        compactScore: formatCompetitivePoints(row, "pts"),
+        aria: `${formatCompetitivePoints(row, "exact Performance Points")}, ${formatWinPercentage(row?.winPercentage)} win percentage`,
+        label: "PTS",
+        meta: `${formatWinPercentage(row?.winPercentage)} · ${wins}W-${losses}L`,
+        detail: `Opponent strength ${Math.round(Number(row?.averageOpponentRating || 0))}`,
+        tone: performanceTone(row?.pointsExact ?? row?.points),
+      };
+    }
+    if (isWinPercentageMode(row?.mode)) {
+      const wins = Number(row?.wins || 0);
+      const losses = Number(row?.losses ?? Math.max(0, Number(row?.games || 0) - wins));
+      const percentage = formatWinPercentage(row?.winPercentage);
+      return {
+        score: percentage,
+        compactScore: percentage,
+        aria: `${percentage} win percentage`,
+        label: "WIN %",
+        meta: `${wins}W-${losses}L`,
+        tone: Number(row?.games || 0) === 0
+          ? "is-neutral"
+          : Number(row?.winPercentage || 0) >= 50
+            ? "is-positive"
+            : "is-negative",
+      };
+    }
+    return {
+      score: formatSessionPoints(row?.points),
+      compactScore: formatSessionPoints(row?.points, "pts"),
+      aria: formatSessionPoints(row?.points, "Session Points"),
+      label: "PTS",
+      meta: `PR ${Math.round(Number(row?.rating || 0))}`,
+      tone: performanceTone(row?.points),
+    };
+  }
+
+  function requiresPodiumDecider(row) {
+    return Boolean(row?.requiresPodiumDecider);
+  }
+
+  function standingRankLabel(row) {
+    if (!row?.eligible) return "P";
+    if (requiresPodiumDecider(row)) return "TBD";
+    return row?.rank || "—";
+  }
+
+  function standingRankDescription(row) {
+    if (!row?.eligible) return "Provisional";
+    if (requiresPodiumDecider(row)) return "Podium decider required";
+    return `Rank ${row?.rank}`;
+  }
+
+  function standingRankingReason(row) {
+    if (requiresPodiumDecider(row)) {
+      return "Identical competitive results · decider required";
+    }
+    return String(row?.tieBreakReason || row?.rankReason || "").trim();
+  }
+
+  function podiumDeciderNotice(rows) {
+    const deciderRows = (Array.isArray(rows) ? rows : []).filter(requiresPodiumDecider);
+    if (!deciderRows.length) return "";
+    const groups = new Map();
+    deciderRows.forEach(row => {
+      const groupId = String(row?.podiumDeciderGroupId || `rank-${row?.rank || "podium"}`);
+      const group = groups.get(groupId) || [];
+      group.push(String(row?.name || "Player"));
+      groups.set(groupId, group);
+    });
+    const groupCopy = [...groups.values()]
+      .map(names => `${names.join(", ")} have identical competitive results`)
+      .join("; ");
+    return `
+      <div class="pm2-decider-notice" role="status">
+        <strong>Podium Decider Required</strong>
+        <span>${escapeHtml(groupCopy)}. Record one separating result; official podium places stay TBD until then.</span>
+      </div>
+    `;
+  }
+
+  function rankingCopy(mode = sessionRankingMode()) {
+    if (isCompetitiveMode(mode)) {
+      return {
+        name: "Competitive Ranking",
+        badge: "Recommended",
+        eyebrow: "Performance + record + strength",
+        standings: "Competitive Standings",
+        podium: "Competitive Podium",
+        summary: "Competitive Ranking",
+        liveDescription: "Rank every player by exact Performance Points, then win percentage, wins, opponent strength, and best upset.",
+        completedDescription: "Performance leads the ranking. Win percentage, wins, opponent strength, and best upset resolve close podium places.",
+      };
+    }
+    if (isWinPercentageMode(mode)) {
+      return {
+        name: "Win Percentage",
+        badge: "Simple scoring",
+        eyebrow: "Ranked by win percentage",
+        standings: "Win Percentage Standings",
+        podium: "Win Percentage Podium",
+        summary: "Win Percentage",
+        liveDescription: "Record each winner, rotate teammates fairly, and follow every player's individual win percentage.",
+        completedDescription: "Ranked by wins divided by games. Every win counts equally.",
+      };
+    }
+    return {
+      name: "Performance Rating",
+      badge: "Recommended",
+      eyebrow: "Ranked by Session Points",
+      standings: "Performance Standings",
+      podium: "Performance Podium",
+      summary: "Performance Points",
+      liveDescription: "Record each winner, rotate teammates fairly, and follow each player's opponent-adjusted Session Points.",
+      completedDescription: "Ranked by Session Points. Opponent strength matters; wins and win rate do not determine rank.",
+    };
   }
 
   function readShareTokens() {
@@ -756,7 +918,7 @@
               <section class="pm2-player-editor-summary" id="pm2PlayerEditorSummary" hidden aria-label="Player session summary">
                 <div class="pm2-player-editor-stats">
                   <span id="pm2PlayerEditorGames">0G played</span>
-                  <span id="pm2PlayerEditorPerformance">0 Session Points</span>
+                  <span id="pm2PlayerEditorPerformance">No results yet</span>
                 </div>
                 <p id="pm2PlayerEditorCheckIn">Checked-in time unavailable</p>
               </section>
@@ -766,7 +928,7 @@
               </label>
               ${skillSelectorMarkup()}
               <div class="pm2-player-editor-note" id="pm2PlayerEditorNote" hidden>
-                Skill changes apply to future team balancing. Starting PR strength can change only before this player&rsquo;s first rated result.
+                Skill changes apply to future team balancing.
               </div>
               <div class="pm2-dialog-actions">
                 <button class="pm2-btn pm2-btn-light" type="button" data-pm-action="close-dialog">Cancel</button>
@@ -1039,6 +1201,106 @@
     restoreRenderScroll(element, scrollContext, scrollSnapshot);
   }
 
+  function rankingExplainerMarkup(mode) {
+    if (isCompetitiveMode(mode)) {
+      return `
+        <div class="pm2-rating-explainer-head">
+          <div>
+            <span class="pm2-rating-kicker">Official podium &middot; Individual</span>
+            <h3 id="pm2RatingTitle">Competitive Ranking</h3>
+            <p>Your teammate can change every game. The ranking follows your own results and the strength of the competition you faced.</p>
+          </div>
+          <span class="pm2-rating-badge">Recommended</span>
+        </div>
+        <div class="pm2-rating-principles">
+          <div>
+            <span aria-hidden="true">01</span>
+            <strong>Performance first</strong>
+            <p>Exact, unrounded Performance Points determine the initial order.</p>
+          </div>
+          <div>
+            <span aria-hidden="true">02</span>
+            <strong>Clear tiebreaks</strong>
+            <p>Win percentage, more wins, opponent strength, then best upset are checked in order.</p>
+          </div>
+          <div>
+            <span aria-hidden="true">03</span>
+            <strong>No artificial winner</strong>
+            <p>If every competitive result is identical, the podium shows Decider Required instead of inventing a winner.</p>
+          </div>
+        </div>
+        <div class="pm2-rating-rule">
+          <strong>Complete at least 3 games to qualify.</strong>
+          <span>Use varied partners and opponents. Exact podium ties require one separating result.</span>
+        </div>
+      `;
+    }
+    if (isWinPercentageMode(mode)) {
+      return `
+        <div class="pm2-rating-explainer-head">
+          <div>
+            <span class="pm2-rating-kicker">Podium scoring &middot; Individual</span>
+            <h3 id="pm2RatingTitle">Individual Win Percentage</h3>
+            <p>Your teammate can change every game. Your win-loss record always belongs to you.</p>
+          </div>
+          <span class="pm2-rating-badge is-simple">Simple &amp; familiar</span>
+        </div>
+        <div class="pm2-rating-principles">
+          <div>
+            <span aria-hidden="true">01</span>
+            <strong>Wins divided by games</strong>
+            <p>A 3-1 record is 75%. Both winning teammates receive one personal win.</p>
+          </div>
+          <div>
+            <span aria-hidden="true">02</span>
+            <strong>Every win is equal</strong>
+            <p>Opponent strength and margin do not change the value of a result.</p>
+          </div>
+          <div>
+            <span aria-hidden="true">03</span>
+            <strong>Easy to explain</strong>
+            <p>The highest qualified win percentage leads the podium.</p>
+          </div>
+        </div>
+        <div class="pm2-rating-rule">
+          <strong>Complete at least 3 games to qualify.</strong>
+          <span>If percentages tie, more wins ranks first. Equal percentages with equal wins share a rank.</span>
+        </div>
+      `;
+    }
+    return `
+      <div class="pm2-rating-explainer-head">
+        <div>
+          <span class="pm2-rating-kicker">Podium scoring &middot; Individual</span>
+          <h3 id="pm2RatingTitle">Individual Performance Rating</h3>
+          <p>Your teammate can change every game. Your rating always belongs to you.</p>
+        </div>
+        <span class="pm2-rating-badge">${window.PB_USE_LOCAL_DATA ? "Opponent adjusted" : "Recommended"}</span>
+      </div>
+      <div class="pm2-rating-principles">
+        <div>
+          <span aria-hidden="true">01</span>
+          <strong>Personal score</strong>
+          <p>Every result updates each player&rsquo;s own Session Points.</p>
+        </div>
+        <div>
+          <span aria-hidden="true">02</span>
+          <strong>Strength adjusted</strong>
+          <p>Beating a stronger team earns more. An expected win earns less.</p>
+        </div>
+        <div>
+          <span aria-hidden="true">03</span>
+          <strong>Fairest podium</strong>
+          <p>Session Points reward the quality of results, not just the quantity of wins.</p>
+        </div>
+      </div>
+      <div class="pm2-rating-rule">
+        <strong>Everyone starts at 0 Session Points.</strong>
+        <span>Ratings adapt after every result. Complete at least 3 rated games to qualify.</span>
+      </div>
+    `;
+  }
+
   function renderSetup() {
     const selectedIds = state.prefill?.courtIds?.length
       ? state.prefill.courtIds.map(asId)
@@ -1047,6 +1309,10 @@
     const date = state.prefill?.date || state.session?.date || localDateValue();
     const timeLabel = state.session?.time_label || "6PM–10PM";
     const mode = state.session?.mode || "smart_random_mixer";
+    const rankingMode = state.session
+      ? sessionRankingMode(state.session)
+      : (window.PB_USE_LOCAL_DATA ? RANKING_MODE_COMPETITIVE : RANKING_MODE_PERFORMANCE);
+    const scoring = rankingCopy(rankingMode);
     const names = state.players.map(player => player.full_name).filter(Boolean);
     const isRestart = !!state.rounds.length;
     const sessionOptions = state.sessions.map(session => `
@@ -1111,37 +1377,50 @@
                 </label>
               </div>
             </fieldset>
-            <section class="pm2-rating-explainer pm2-field-wide" id="pm2RatingExplainer" aria-labelledby="pm2RatingTitle">
-              <div class="pm2-rating-explainer-head">
-                <div>
-                  <span class="pm2-rating-kicker">Podium scoring &middot; Individual</span>
-                  <h3 id="pm2RatingTitle">Individual Performance Rating</h3>
-                  <p>Your teammate can change every game. Your rating always belongs to you.</p>
-                </div>
-                <span class="pm2-rating-badge">PR Performance</span>
+            ${window.PB_USE_LOCAL_DATA ? `
+            <fieldset class="pm2-field pm2-field-wide pm2-ranking-field">
+              <legend class="pm2-label">Choose how the podium is ranked</legend>
+              <div class="pm2-ranking-options">
+                <label class="pm2-ranking-option">
+                  <input type="radio" name="rankingMode" value="${RANKING_MODE_COMPETITIVE}" ${rankingMode === RANKING_MODE_COMPETITIVE ? "checked" : ""}>
+                  <span class="pm2-ranking-option-copy">
+                    <span class="pm2-ranking-option-title">
+                      <strong>Competitive Ranking</strong>
+                      <em>Recommended</em>
+                    </span>
+                    <small>Performance first, with Win %, wins, opponent strength, and best upset as clear tiebreaks.</small>
+                    <b>Best for a decisive official podium</b>
+                  </span>
+                </label>
+                <label class="pm2-ranking-option">
+                  <input type="radio" name="rankingMode" value="${RANKING_MODE_PERFORMANCE}" ${rankingMode === RANKING_MODE_PERFORMANCE ? "checked" : ""}>
+                  <span class="pm2-ranking-option-copy">
+                    <span class="pm2-ranking-option-title">
+                      <strong>Performance Rating (Elo)</strong>
+                    </span>
+                    <small>Opponent-adjusted Session Points. Strong upsets earn more; expected wins earn less.</small>
+                    <b>Best for the fairest competitive podium</b>
+                  </span>
+                </label>
+                <label class="pm2-ranking-option">
+                  <input type="radio" name="rankingMode" value="${RANKING_MODE_WIN_PERCENTAGE}" ${rankingMode === RANKING_MODE_WIN_PERCENTAGE ? "checked" : ""}>
+                  <span class="pm2-ranking-option-copy">
+                    <span class="pm2-ranking-option-title">
+                      <strong>Win Percentage</strong>
+                    </span>
+                    <small>Wins divided by games played. Every win has the same value, regardless of opponent.</small>
+                    <b>Best when players want the simplest rule</b>
+                  </span>
+                </label>
               </div>
-              <div class="pm2-rating-principles">
-                <div>
-                  <span aria-hidden="true">01</span>
-                  <strong>Personal score</strong>
-                  <p>Every result updates each player&rsquo;s own Session Points.</p>
-                </div>
-                <div>
-                  <span aria-hidden="true">02</span>
-                  <strong>Strength adjusted</strong>
-                  <p>Beating a stronger team earns more. An expected win earns less.</p>
-                </div>
-                <div>
-                  <span aria-hidden="true">03</span>
-                  <strong>Performance podium</strong>
-                  <p>The top three are ranked by Session Points&mdash;not wins or win percentage.</p>
-                </div>
-              </div>
-              <div class="pm2-rating-rule">
-                <strong>Everyone starts at 0 Session Points and neutral strength.</strong>
-                <span>Ratings adapt after every result. Complete at least 3 rated games to qualify.</span>
-              </div>
-            </section>
+            </fieldset>
+            ` : ""}
+            <section
+              class="pm2-rating-explainer pm2-field-wide"
+              id="pm2RatingExplainer"
+              data-ranking-mode="${rankingMode}"
+              aria-labelledby="pm2RatingTitle"
+            >${rankingExplainerMarkup(rankingMode)}</section>
             <label class="pm2-field pm2-field-wide">
               <span class="pm2-label">Checked-in players · one name per line</span>
               <textarea class="pm2-textarea" id="pm2Names" name="names" placeholder="Alex Santos&#10;Bea Reyes&#10;Carlo Mendoza&#10;Dana Cruz">${escapeHtml(names.join("\n"))}</textarea>
@@ -1168,7 +1447,7 @@
             <div class="pm2-summary-row"><span>Courts</span><b id="pm2SummaryCourts">${selectedIds.length}</b></div>
             <div class="pm2-summary-row"><span>Players</span><b id="pm2SummaryPlayers">${names.length}</b></div>
             <div class="pm2-summary-row"><span>Matches now</span><b id="pm2SummaryMatches">${Math.min(selectedIds.length, Math.floor(names.length / 4))}</b></div>
-            <div class="pm2-summary-row"><span>Podium</span><b>Performance Points</b></div>
+            <div class="pm2-summary-row"><span>Podium</span><b id="pm2SummaryRanking">${scoring.summary}</b></div>
           </div>
           <div class="pm2-ready-note is-warn" id="pm2ReadyNote">Choose at least one court and enter four players.</div>
         </aside>
@@ -1520,7 +1799,7 @@
       const playerId = asId(id);
       const performance = performanceById[playerId];
       const games = performance?.games || 0;
-      const points = performance?.points || 0;
+      const display = standingDisplay(performance);
       const waitStartedAt = player?.queue_entered_at || "";
       const isLast = index === queue.length - 1;
       const name = playerName(id);
@@ -1542,7 +1821,7 @@
             <span class="pm2-queue-meta">
               <span>${games} ${games === 1 ? "game" : "games"}</span>
               <span aria-hidden="true">·</span>
-              <span class="${performanceTone(points)}">${formatSessionPoints(points, "pts")}</span>
+              <span class="${display.tone}">${display.compactScore}</span>
               <span aria-hidden="true">·</span>
               <span class="pm2-queue-wait" aria-label="Waiting time">
                 <span aria-hidden="true">⌛</span>
@@ -1573,12 +1852,13 @@
 
   function standingsRows(matches) {
     if (!PERFORMANCE?.calculateStandings) {
-      throw new Error("The Individual Performance Rating engine did not load.");
+      throw new Error("The Open Play ranking engine did not load.");
     }
     const activeIds = new Set(activePlayers().map(player => asId(player.id)));
     return PERFORMANCE
       .calculateStandings(state.players, matches, {
         minGames: PERFORMANCE.MIN_PODIUM_GAMES,
+        mode: sessionRankingMode(),
       })
       .filter(row => activeIds.has(asId(row.id)) || row.games > 0);
   }
@@ -1590,19 +1870,24 @@
     const scrollAttributes = rows.length > 4
       ? `tabindex="0" aria-label="Player standings, ${rows.length} players. Scroll for more."`
       : `aria-label="Player standings, ${rows.length} players."`;
-    return `<div class="pm2-standings-list pm2-scroll-region" data-pm-scroll-key="standings" role="list" ${scrollAttributes}>${rows.map((row, index) => `
-      <div class="pm2-standing-row ${row.eligible ? "is-qualified" : "is-provisional"}" role="listitem">
-        <span class="pm2-standing-no" aria-label="${row.eligible ? `Rank ${row.rank}` : "Provisional"}">${row.eligible ? row.rank : "P"}</span>
-        <span class="pm2-standing-name">
-          <strong>${escapeHtml(row.name)}</strong>
-          <small>${row.eligible ? "Qualified" : `${row.games} of ${PERFORMANCE.MIN_PODIUM_GAMES} games`}</small>
-        </span>
-        <span class="pm2-standing-score ${performanceTone(row.points)}">
-          <strong aria-label="${formatSessionPoints(row.points, "Session Points")}">${formatSessionPoints(row.points)}</strong>
-          <small>PTS &middot; PR ${Math.round(row.rating)}</small>
-        </span>
-      </div>
-    `).join("")}</div>`;
+    return `${podiumDeciderNotice(rows)}<div class="pm2-standings-list pm2-scroll-region" data-pm-scroll-key="standings" role="list" ${scrollAttributes}>${rows.map(row => {
+      const display = standingDisplay(row);
+      const reason = standingRankingReason(row);
+      const decider = requiresPodiumDecider(row);
+      return `
+        <div class="pm2-standing-row ${row.eligible ? "is-qualified" : "is-provisional"} ${decider ? "is-decider" : ""}" role="listitem">
+          <span class="pm2-standing-no" aria-label="${escapeHtml(standingRankDescription(row))}">${standingRankLabel(row)}</span>
+          <span class="pm2-standing-name">
+            <strong>${escapeHtml(row.name)}</strong>
+            <small>${decider ? "Decider required" : row.eligible ? "Qualified" : `${row.games} of ${PERFORMANCE.MIN_PODIUM_GAMES} games`}${reason ? ` &middot; ${escapeHtml(reason)}` : ""}</small>
+          </span>
+          <span class="pm2-standing-score ${display.tone}">
+            <strong aria-label="${display.aria}">${display.score}</strong>
+            <small>${display.label} &middot; ${display.meta}</small>
+          </span>
+        </div>
+      `;
+    }).join("")}</div>`;
   }
 
   function playerInitials(name) {
@@ -1619,26 +1904,30 @@
     const places = ["Champion", "Runner-up", "Third place"];
     const leaders = PERFORMANCE.podiumRows(rows);
     if (!leaders.length) {
-      return `<div class="pm2-empty pm2-final-empty">No player completed the required ${PERFORMANCE.MIN_PODIUM_GAMES} rated games. The provisional standings are preserved below.</div>`;
+      return `<div class="pm2-empty pm2-final-empty">No player completed the required ${PERFORMANCE.MIN_PODIUM_GAMES} games. The provisional standings are preserved below.</div>`;
     }
     return `
-      <div class="pm2-final-podium" role="list" aria-label="Top three players">
+      <div class="pm2-final-podium" role="list" aria-label="Podium players">
         ${leaders.map((row, index) => {
           const rank = Number(row.rank || index + 1);
+          const display = standingDisplay(row);
+          const decider = requiresPodiumDecider(row);
+          const reason = standingRankingReason(row);
           return `
-            <article class="pm2-podium-card is-rank-${rank}" role="listitem">
-              <div class="pm2-podium-rank" aria-label="Rank ${rank}">${rank}</div>
+            <article class="pm2-podium-card is-rank-${Math.min(rank, 3)} ${decider ? "is-decider" : ""}" role="listitem">
+              <div class="pm2-podium-rank" aria-label="${escapeHtml(standingRankDescription(row))}">${standingRankLabel(row)}</div>
               <div class="pm2-podium-avatar" aria-hidden="true">${escapeHtml(playerInitials(row.name))}</div>
-              <span class="pm2-podium-place">${places[Math.min(rank, 3) - 1]}</span>
+              <span class="pm2-podium-place">${decider ? "Podium decider" : places[Math.min(rank, 3) - 1]}</span>
               <h3 title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</h3>
-              <div class="pm2-podium-record ${performanceTone(row.points)}">
-                <strong aria-label="${formatSessionPoints(row.points, "Session Points")}">${formatSessionPoints(row.points)}</strong>
-                <span>session pts</span>
+              <div class="pm2-podium-record ${display.tone}">
+                <strong aria-label="${display.aria}">${display.score}</strong>
+                <span>${display.label.toLowerCase()}</span>
               </div>
               <div class="pm2-podium-meta">
                 <span>${row.games} ${row.games === 1 ? "game" : "games"}</span>
-                <span>PR ${Math.round(row.rating)}</span>
+                <span>${display.meta}</span>
               </div>
+              ${reason ? `<p class="pm2-podium-reason">${escapeHtml(reason)}</p>` : ""}
             </article>
           `;
         }).join("")}
@@ -1658,21 +1947,23 @@
         data-pm-scroll-key="final-standings"
         role="list"
         tabindex="0"
-        aria-label="Full individual performance standings"
+        aria-label="Full individual standings"
       >
         ${remaining.map(row => {
-          const rank = row.rank || "—";
+          const display = standingDisplay(row);
+          const decider = requiresPodiumDecider(row);
+          const reason = standingRankingReason(row);
           return `
-            <div class="pm2-final-row ${row.eligible ? "is-qualified" : "is-provisional"}" role="listitem">
-              <span class="pm2-final-rank" aria-label="${row.eligible ? `Rank ${rank}` : "Provisional"}">${rank}</span>
+            <div class="pm2-final-row ${row.eligible ? "is-qualified" : "is-provisional"} ${decider ? "is-decider" : ""}" role="listitem">
+              <span class="pm2-final-rank" aria-label="${escapeHtml(standingRankDescription(row))}">${standingRankLabel(row)}</span>
               <span class="pm2-final-avatar" aria-hidden="true">${escapeHtml(playerInitials(row.name))}</span>
               <span class="pm2-final-player">
                 <strong title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</strong>
-                <small>${row.eligible ? "Qualified" : "Provisional"} &middot; ${row.games} ${row.games === 1 ? "game" : "games"}</small>
+                <small>${decider ? "Decider required" : row.eligible ? "Qualified" : "Provisional"} &middot; ${row.games} ${row.games === 1 ? "game" : "games"}${reason ? ` &middot; ${escapeHtml(reason)}` : ""}</small>
               </span>
-              <span class="pm2-final-score ${performanceTone(row.points)}">
-                <strong>${formatSessionPoints(row.points, "pts")}</strong>
-                <small>PR ${Math.round(row.rating)}</small>
+              <span class="pm2-final-score ${display.tone}">
+                <strong>${display.compactScore}</strong>
+                <small>${display.meta}</small>
               </span>
             </div>
           `;
@@ -1683,6 +1974,7 @@
 
   function completedSessionMarkup(matches, standings) {
     const qualifiedCount = standings.filter(row => row.eligible).length;
+    const scoring = rankingCopy();
     const rankingTitle = standings.length > PERFORMANCE.podiumRows(standings).length
       ? "Complete rankings"
       : "Everyone qualified for the podium";
@@ -1691,7 +1983,7 @@
         <section class="pm2-final-hero" aria-labelledby="pm2FinalTitle">
           <div class="pm2-final-hero-copy">
             <span class="pm2-final-kicker">Session complete</span>
-            <h1 id="pm2FinalTitle">Session performance leaders</h1>
+            <h1 id="pm2FinalTitle">Session leaders</h1>
             <p>${escapeHtml(sessionTitle())}</p>
           </div>
           <div class="pm2-final-actions">
@@ -1710,11 +2002,12 @@
         <section class="pm2-final-podium-stage" aria-labelledby="pm2PodiumTitle">
           <div class="pm2-final-section-head">
             <div>
-              <span>Individual rating</span>
-              <h2 id="pm2PodiumTitle">Performance Podium</h2>
+              <span>Individual scoring &middot; ${scoring.badge}</span>
+              <h2 id="pm2PodiumTitle">${scoring.podium}</h2>
             </div>
-            <p>Ranked by Session Points. Opponent strength matters; wins and win rate do not determine rank.</p>
+            <p>${scoring.completedDescription}</p>
           </div>
+          ${podiumDeciderNotice(standings)}
           ${finalPodiumMarkup(standings)}
         </section>
 
@@ -1899,7 +2192,7 @@
     state.rounds[roundIndex] = saved;
     root()?.querySelector("#pm2WinnerDialog")?.close();
     renderShell();
-    notify(`${correction.teamLabel} is now the winner. Performance standings updated.`);
+    notify(`${correction.teamLabel} is now the winner. ${rankingCopy().name} standings updated.`);
   }
 
   function renderLive() {
@@ -1909,6 +2202,7 @@
     const dispatchSlots = nextDispatchSlots(assignments, queue);
     const matches = completedMatches();
     const standings = standingsRows(matches);
+    const scoring = rankingCopy();
     const sessionStatus = String(state.session?.status || "active");
     if (sessionStatus === "completed") {
       return completedSessionMarkup(matches, standings);
@@ -1928,7 +2222,7 @@
         <div>
           <span class="pm2-eyebrow">${eyebrow}</span>
           <h1>${escapeHtml(sessionTitle())}</h1>
-          <p>Record each winner, rotate teammates fairly, and follow each player&rsquo;s opponent-adjusted Session Points.</p>
+          <p>${scoring.liveDescription}</p>
         </div>
         <div class="pm2-session-meta">Round ${Number(round?.round_no || state.rounds.length)} · <span data-pm-clock>--:--</span></div>
       </div>
@@ -2038,8 +2332,8 @@
             <section class="pm2-panel pm2-standings-panel" id="pm2Standings">
               <div class="pm2-panel-head">
                 <div class="pm2-final-panel-title">
-                  <span>Ranked by Session Points</span>
-                  <h3>Performance Standings</h3>
+                  <span>${scoring.eyebrow}</span>
+                  <h3>${scoring.standings}</h3>
                 </div>
                 <div class="pm2-panel-head-actions">
                   <span>${standings.length > 4 ? `4 visible / ${standings.length} total` : `${standings.length} players`}</span>
@@ -2065,6 +2359,11 @@
       date: element?.querySelector("#pm2Date")?.value || localDateValue(),
       timeLabel: element?.querySelector("#pm2Time")?.value.trim() || "Open Play",
       mode: element?.querySelector('input[name="mode"]:checked')?.value || "smart_random_mixer",
+      rankingMode: window.PB_USE_LOCAL_DATA
+        ? normalizeRankingMode(
+            element?.querySelector('input[name="rankingMode"]:checked')?.value
+          )
+        : RANKING_MODE_PERFORMANCE,
       courtIds,
       names,
     };
@@ -2079,11 +2378,18 @@
     const courts = element.querySelector("#pm2SummaryCourts");
     const players = element.querySelector("#pm2SummaryPlayers");
     const matches = element.querySelector("#pm2SummaryMatches");
+    const ranking = element.querySelector("#pm2SummaryRanking");
+    const explainer = element.querySelector("#pm2RatingExplainer");
     const note = element.querySelector("#pm2ReadyNote");
     if (date) date.textContent = formatDate(setup.date);
     if (courts) courts.textContent = setup.courtIds.length;
     if (players) players.textContent = setup.names.length;
     if (matches) matches.textContent = games;
+    if (ranking) ranking.textContent = rankingCopy(setup.rankingMode).summary;
+    if (explainer && explainer.dataset.rankingMode !== setup.rankingMode) {
+      explainer.dataset.rankingMode = setup.rankingMode;
+      explainer.innerHTML = rankingExplainerMarkup(setup.rankingMode);
+    }
     if (note) {
       const ready = setup.courtIds.length > 0 && setup.names.length >= 4;
       note.classList.toggle("is-warn", !ready);
@@ -2116,6 +2422,7 @@
       courtIds: setup.courtIds,
       courtNames: courtRows.map(court => court.name),
       mode: setup.mode,
+      rankingMode: setup.rankingMode,
       status: "draft",
       currentRound: 0,
     };
@@ -2260,7 +2567,7 @@
     const id = asId(player?.id);
     const performance = standingsRows(completedMatches()).find(row => asId(row.id) === id);
     const games = performance?.games || 0;
-    const points = performance?.points || 0;
+    const display = standingDisplay(performance);
     const checkedAt = Date.parse(player?.created_at || state.session?.created_at || "");
     const hasCheckIn = Number.isFinite(checkedAt);
     const checkedTime = hasCheckIn
@@ -2274,7 +2581,11 @@
     const duration = hours ? `${hours}h ${minutes}m` : `${minutes}m`;
     return {
       gamesText: `${games}G played`,
-      performanceText: `${formatSessionPoints(points)} Session Points`,
+      performanceText: isCompetitiveMode()
+        ? `${display.score} exact Performance Points · ${display.meta}${standingRankingReason(performance) ? ` · ${standingRankingReason(performance)}` : ""}`
+        : isWinPercentageMode()
+          ? `${display.score} win percentage · ${display.meta}`
+          : `${display.score} Session Points`,
       checkInText: hasCheckIn
         ? `Checked-in at ${checkedTime} · ${duration} in session`
         : "Checked-in time unavailable",
@@ -2333,9 +2644,16 @@
     if (skillHelp) {
       skillHelp.textContent = editing
         ? "Used for future team balancing."
-        : "New players start at 1-star Beginner.";
+        : "New players start at 3-star Intermediate.";
     }
-    if (note) note.hidden = !editing;
+    if (note) {
+      note.hidden = !editing;
+      note.textContent = isCompetitiveMode()
+        ? "Competitive Ranking uses completed results only. Skill changes apply to future balancing; starting strength can change only before this player's first rated result."
+        : isWinPercentageMode()
+          ? "Skill changes apply only to future team balancing. Win percentage is calculated only from completed results."
+          : "Skill changes apply to future team balancing. Starting PR strength can change only before this player's first rated result.";
+    }
     if (submit) submit.textContent = editing ? "Save changes" : "Add to queue";
 
     const selectedLevel = editing ? playerSkillLevel(player) : DEFAULT_SKILL_LEVEL;
@@ -2981,6 +3299,15 @@
 
   async function endSession() {
     if (!state.session || !["active", "paused"].includes(String(state.session.status || ""))) return;
+    const unresolvedPodium = isCompetitiveMode()
+      ? standingsRows(completedMatches()).filter(requiresPodiumDecider)
+      : [];
+    if (unresolvedPodium.length) {
+      const names = unresolvedPodium.map(row => row.name).join(", ");
+      throw new Error(
+        `Podium decider required before ending. ${names} have identical competitive results—record one separating match first.`
+      );
+    }
     const approved = window.confirm(
       "End this session? No more matches can be started. The player link will show final results for up to 24 hours."
     );
@@ -2991,7 +3318,7 @@
     }) || { ...state.session, status: "completed" };
     state.sessions = await DB.getOpenPlayGameSessions();
     renderShell();
-    notify("Session ended. Final performance results remain shareable for up to 24 hours.");
+    notify(`Session ended. Final ${rankingCopy().name} results remain shareable for up to 24 hours.`);
   }
 
   function playerLiveUrl(token = state.shareToken) {
@@ -3139,7 +3466,7 @@
         await drawShareQr(url);
         setShareStatus(
           state.session?.status === "completed"
-            ? "Ready. Final performance results remain available for up to 24 hours."
+            ? `Ready. Final ${rankingCopy().name} results remain available for up to 24 hours.`
             : "Ready. The player board refreshes automatically while this session is live."
         );
       } catch (qrError) {
@@ -3182,7 +3509,7 @@
     if (parts.title) parts.title.textContent = completed ? "Share final results" : "Share live board";
     if (parts.description) {
       parts.description.textContent = completed
-        ? "Anyone with this private link can view the final Individual Performance standings. The board is view-only and expires automatically."
+        ? `Anyone with this private link can view the final ${rankingCopy().name} standings. The board is view-only and expires automatically.`
         : "Anyone with this private link can follow live courts, the player queue, and standings. The board is view-only.";
     }
     if (parts.localNote) parts.localNote.hidden = !window.PB_USE_LOCAL_DATA;
@@ -3315,7 +3642,7 @@
   }
 
   function drawResultStat(context, x, y, width, value, label) {
-    resultCanvasRoundRect(context, x, y, width, 88, 18);
+    resultCanvasRoundRect(context, x, y, width, 96, 18);
     context.fillStyle = "rgba(255,255,255,.075)";
     context.fill();
     context.strokeStyle = "rgba(255,255,255,.12)";
@@ -3323,18 +3650,20 @@
     context.stroke();
     context.textAlign = "left";
     context.fillStyle = "#ffffff";
-    context.font = '900 30px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(String(value), x + 18, y + 36);
+    context.font = '900 36px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(String(value), x + 18, y + 41);
     context.fillStyle = "#9fb0c4";
-    context.font = '800 14px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(String(label).toUpperCase(), x + 18, y + 63);
+    context.font = '800 18px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(String(label).toUpperCase(), x + 18, y + 73);
   }
 
   function drawResultPodiumCard(context, row, rank, x, y, width, height) {
     if (!row) return;
-    const accent = rank === 1 ? "#e9c229" : rank === 2 ? "#aeb9c8" : "#b9794e";
-    const rankFill = rank === 1 ? "#f4d45c" : rank === 2 ? "#c7d0dc" : "#c9885c";
-    const place = rank === 1 ? "CHAMPION" : rank === 2 ? "RUNNER-UP" : "THIRD PLACE";
+    const display = standingDisplay(row);
+    const decider = requiresPodiumDecider(row);
+    const accent = decider ? "#f59e0b" : rank === 1 ? "#e9c229" : rank === 2 ? "#aeb9c8" : "#b9794e";
+    const rankFill = decider ? "#fff3cd" : rank === 1 ? "#f4d45c" : rank === 2 ? "#c7d0dc" : "#c9885c";
+    const place = decider ? "PODIUM DECIDER" : rank === 1 ? "CHAMPION" : rank === 2 ? "RUNNER-UP" : "THIRD PLACE";
 
     context.save();
     context.shadowColor = rank === 1 ? "rgba(151,111,0,.22)" : "rgba(15,23,42,.12)";
@@ -3348,8 +3677,12 @@
     context.lineWidth = rank === 1 ? 4 : 3;
     context.stroke();
 
-    context.beginPath();
-    context.arc(x + width / 2, y, 31, 0, Math.PI * 2);
+    if (decider) {
+      resultCanvasRoundRect(context, x + width / 2 - 44, y - 24, 88, 48, 24);
+    } else {
+      context.beginPath();
+      context.arc(x + width / 2, y, 31, 0, Math.PI * 2);
+    }
     context.fillStyle = rankFill;
     context.fill();
     context.strokeStyle = "#f4f6f9";
@@ -3357,17 +3690,17 @@
     context.stroke();
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.fillStyle = rank === 1 ? "#493800" : "#273244";
-    context.font = '950 24px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(String(rank), x + width / 2, y + 1);
+    context.fillStyle = decider || rank === 1 ? "#493800" : "#273244";
+    context.font = `950 ${decider ? 18 : 24}px "DM Sans", "Segoe UI", sans-serif`;
+    context.fillText(String(standingRankLabel(row)), x + width / 2, y + 1);
 
-    const isChampion = rank === 1;
-    const avatarRadius = isChampion ? 48 : 42;
-    const avatarY = y + (isChampion ? 88 : 76);
+    const isPrimaryCard = height >= 350;
+    const avatarRadius = isPrimaryCard ? 48 : 42;
+    const avatarY = y + (isPrimaryCard ? 88 : 76);
     const placeY = avatarY + avatarRadius + 30;
     const nameY = placeY + 40;
-    const recordY = nameY + (isChampion ? 72 : 62);
-    const metaY = y + height - 28;
+    const recordY = nameY + (isPrimaryCard ? 72 : 62);
+    const metaY = y + height - (isPrimaryCard ? 28 : 18);
     const avatarGradient = context.createLinearGradient(
       x + width / 2 - avatarRadius,
       avatarY - avatarRadius,
@@ -3384,43 +3717,41 @@
     context.lineWidth = 6;
     context.stroke();
     context.fillStyle = "#ffffff";
-    context.font = `900 ${rank === 1 ? 28 : 24}px "DM Sans", "Segoe UI", sans-serif`;
+    context.font = `900 ${rank === 1 ? 31 : 27}px "DM Sans", "Segoe UI", sans-serif`;
     context.fillText(playerInitials(row.name), x + width / 2, avatarY + 1);
 
     context.textBaseline = "alphabetic";
     context.fillStyle = "#7b8798";
-    context.font = '900 15px "DM Sans", "Segoe UI", sans-serif';
+    context.font = '900 20px "DM Sans", "Segoe UI", sans-serif';
     context.fillText(place, x + width / 2, placeY);
     context.fillStyle = "#172033";
-    context.font = `950 ${isChampion ? 31 : 27}px "DM Sans", "Segoe UI", sans-serif`;
+    context.font = `950 ${isPrimaryCard ? 35 : 31}px "DM Sans", "Segoe UI", sans-serif`;
     context.fillText(
       resultCanvasFitText(context, row.name, width - 42),
       x + width / 2,
       nameY
     );
 
-    const scoreFontSize = isChampion ? 48 : 42;
+    const scoreFontSize = isPrimaryCard ? 54 : 48;
     context.font = `950 ${scoreFontSize}px "DM Sans", "Segoe UI", sans-serif`;
-    const pointsText = formatSessionPoints(row.points);
+    const pointsText = display.score;
     const pointsWidth = context.measureText(pointsText).width;
-    context.font = '800 17px "DM Sans", "Segoe UI", sans-serif';
-    const pointsLabelWidth = context.measureText("session pts").width;
+    context.font = '800 20px "DM Sans", "Segoe UI", sans-serif';
+    const pointsLabel = display.label.toLowerCase();
+    const pointsLabelWidth = context.measureText(pointsLabel).width;
     const scoreStart = x + (width - pointsWidth - pointsLabelWidth - 11) / 2;
     context.textAlign = "left";
     context.fillStyle = "#172033";
     context.font = `950 ${scoreFontSize}px "DM Sans", "Segoe UI", sans-serif`;
     context.fillText(pointsText, scoreStart, recordY);
     context.fillStyle = "#7b8798";
-    context.font = '800 17px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("session pts", scoreStart + pointsWidth + 11, recordY - 2);
+    context.font = '800 20px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(pointsLabel, scoreStart + pointsWidth + 11, recordY - 2);
     context.textAlign = "center";
     context.fillStyle = "#6b7280";
-    context.font = '750 15px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(
-      `${row.games} ${row.games === 1 ? "game" : "games"}  •  PR ${Math.round(row.rating)}`,
-      x + width / 2,
-      metaY
-    );
+    context.font = '750 20px "DM Sans", "Segoe UI", sans-serif';
+    const podiumMeta = `${row.games} ${row.games === 1 ? "game" : "games"} • ${display.meta}`;
+    context.fillText(resultCanvasFitText(context, podiumMeta, width - 36), x + width / 2, metaY);
     context.restore();
   }
 
@@ -3428,16 +3759,29 @@
     if (String(state.session?.status || "") !== "completed") {
       throw new Error("End the session before downloading the final result.");
     }
+    try {
+      await document.fonts?.ready;
+    } catch (_) {}
     const matches = completedMatches();
     const standings = standingsRows(matches);
+    const scoring = rankingCopy();
     const topStandings = standings.slice(0, 10);
     const podiumStandings = PERFORMANCE.podiumRows(standings);
+    const hasPodiumDecider = podiumStandings.some(requiresPodiumDecider);
+    const featuredPodium = podiumStandings.slice(0, 3);
+    const featuredPodiumIds = new Set(featuredPodium.map(row => asId(row.id)));
     const podiumIds = new Set(podiumStandings.map(row => asId(row.id)));
-    const remaining = topStandings.filter(row => !podiumIds.has(asId(row.id)));
+    const displayedStandings = [
+      ...podiumStandings,
+      ...topStandings.filter(row => !podiumIds.has(asId(row.id))),
+    ];
+    const remaining = displayedStandings.filter(row => !featuredPodiumIds.has(asId(row.id)));
     const canvasWidth = 1440;
-    const listTop = 1016;
-    const rowHeight = 68;
-    const canvasHeight = Math.max(1500, listTop + Math.max(1, remaining.length) * rowHeight + 130);
+    const listTop = 964;
+    const rowHeight = 90;
+    const footerHeight = 96;
+    const listHeight = remaining.length ? remaining.length * rowHeight : 104;
+    const canvasHeight = Math.max(1480, listTop + listHeight + footerHeight + 48);
     const canvas = document.createElement("canvas");
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
@@ -3481,7 +3825,7 @@
     context.font = '950 31px "DM Sans", "Segoe UI", sans-serif';
     context.fillText("PADDLE RAGE PICKLEBALL", 205, 91);
     context.fillStyle = "#c9f31d";
-    context.font = '900 15px "DM Sans", "Segoe UI", sans-serif';
+    context.font = '900 20px "DM Sans", "Segoe UI", sans-serif';
     context.fillText("OFFICIAL OPEN PLAY RESULTS", 207, 124);
 
     drawResultStat(context, 850, 54, 150, matches.length, "Matches");
@@ -3490,46 +3834,64 @@
 
     context.fillStyle = "#ffffff";
     context.font = '950 64px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("SESSION PERFORMANCE PODIUM", 70, 241);
+    context.fillText(
+      isCompetitiveMode()
+        ? "SESSION COMPETITIVE PODIUM"
+        : isWinPercentageMode()
+          ? "SESSION WIN % PODIUM"
+          : "SESSION PERFORMANCE PODIUM",
+      70,
+      241
+    );
     context.fillStyle = "#b8c4d5";
-    context.font = '700 25px "DM Sans", "Segoe UI", sans-serif';
+    context.font = '700 27px "DM Sans", "Segoe UI", sans-serif';
     resultCanvasWrapText(context, sessionTitle(), 1250, 2).forEach((line, index) => {
       context.fillText(line, 72, 294 + index * 34);
     });
     context.fillStyle = "#dfff73";
-    context.font = '850 18px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("Individual Session Points • Opponent strength matters", 72, 382);
+    context.font = '850 24px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(
+      isCompetitiveMode()
+        ? "Exact performance • Win % • Wins • Opponent strength • Best upset"
+        : isWinPercentageMode()
+          ? "Individual Win Percentage • Every win counts equally"
+          : "Individual Session Points • Opponent strength matters",
+      72,
+      382
+    );
 
     context.fillStyle = "#172033";
     context.font = '950 34px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("TOP 3 PLAYERS", 72, 486);
+    context.fillText(hasPodiumDecider ? "PODIUM DECIDER REQUIRED" : "PODIUM LEADERS", 72, 450);
     context.fillStyle = "#718096";
-    context.font = '750 17px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("Paddle Rage podium", 72, 516);
+    context.font = '750 21px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(
+      hasPodiumDecider ? "Official places remain TBD until one separating result is recorded." : "Paddle Rage podium",
+      72,
+      480
+    );
 
-    drawResultPodiumCard(context, podiumStandings[1], podiumStandings[1]?.rank || 2, 72, 600, 400, 310);
-    drawResultPodiumCard(context, podiumStandings[0], podiumStandings[0]?.rank || 1, 520, 540, 400, 370);
-    drawResultPodiumCard(context, podiumStandings[2], podiumStandings[2]?.rank || 3, 968, 600, 400, 310);
+    drawResultPodiumCard(context, featuredPodium[1], featuredPodium[1]?.rank || 2, 72, 560, 400, 300);
+    drawResultPodiumCard(context, featuredPodium[0], featuredPodium[0]?.rank || 1, 520, 510, 400, 350);
+    drawResultPodiumCard(context, featuredPodium[2], featuredPodium[2]?.rank || 3, 968, 560, 400, 300);
 
     context.fillStyle = "#172033";
-    context.font = '950 32px "DM Sans", "Segoe UI", sans-serif';
-    const leaderboardTitle = `TOP ${topStandings.length} LEADERBOARD`;
-    context.fillText(
-      remaining.length ? `${leaderboardTitle} • #4–#${topStandings.length}` : leaderboardTitle,
-      72,
-      968
-    );
+    context.font = '950 34px "DM Sans", "Segoe UI", sans-serif';
+    const leaderboardTitle = displayedStandings.length > 10
+      ? "TOP 10 + PODIUM TIES"
+      : `TOP ${displayedStandings.length} LEADERBOARD`;
+    context.fillText(leaderboardTitle, 72, 900);
     context.textAlign = "right";
     context.fillStyle = "#718096";
-    context.font = '750 16px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(`Showing ${topStandings.length} of ${standings.length} players`, 1368, 968);
+    context.font = '750 21px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(`Showing ${displayedStandings.length} of ${standings.length} players`, 1368, 900);
     context.textAlign = "left";
     context.fillStyle = "#718096";
-    context.font = '800 15px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("RANK", 86, 1007);
-    context.fillText("PLAYER", 180, 1007);
+    context.font = '800 20px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("RANK", 86, 950);
+    context.fillText("PLAYER", 180, 950);
     context.textAlign = "right";
-    context.fillText("PERFORMANCE", 1354, 1007);
+    context.fillText(scoring.summary.toUpperCase(), 1354, 950);
 
     if (!remaining.length) {
       resultCanvasRoundRect(context, 72, listTop, 1296, 86, 18);
@@ -3537,13 +3899,14 @@
       context.fill();
       context.textAlign = "center";
       context.fillStyle = "#718096";
-      context.font = '750 21px "DM Sans", "Segoe UI", sans-serif';
-      context.fillText("The podium contains the full leaderboard.", 720, listTop + 52);
+      context.font = '750 24px "DM Sans", "Segoe UI", sans-serif';
+      context.fillText("The podium contains the full leaderboard.", 720, listTop + 59);
     } else {
       remaining.forEach((row, index) => {
-        const rank = row.rank || "—";
+        const rank = standingRankLabel(row);
+        const display = standingDisplay(row);
         const y = listTop + index * rowHeight;
-        resultCanvasRoundRect(context, 72, y, 1296, 58, 14);
+        resultCanvasRoundRect(context, 72, y, 1296, 80, 14);
         context.fillStyle = index % 2 ? "#f8fafc" : "#ffffff";
         context.fill();
         context.strokeStyle = "#e1e6ec";
@@ -3552,49 +3915,61 @@
 
         context.textAlign = "center";
         context.fillStyle = "#516071";
-        context.font = '950 23px "DM Sans", "Segoe UI", sans-serif';
-        context.fillText(String(rank), 112, y + 37);
+        const rankText = String(rank);
+        context.font = `950 ${rankText.length > 2 ? 22 : 32}px "DM Sans", "Segoe UI", sans-serif`;
+        context.fillText(rankText, 112, y + 53);
 
         context.beginPath();
-        context.arc(162, y + 29, 19, 0, Math.PI * 2);
+        context.arc(162, y + 42, 24, 0, Math.PI * 2);
         context.fillStyle = "#334155";
         context.fill();
         context.fillStyle = "#ffffff";
-        context.font = '900 12px "DM Sans", "Segoe UI", sans-serif';
+        context.font = '900 15px "DM Sans", "Segoe UI", sans-serif';
         context.textBaseline = "middle";
-        context.fillText(playerInitials(row.name), 162, y + 30);
+        context.fillText(playerInitials(row.name), 162, y + 43);
 
         context.textAlign = "left";
         context.textBaseline = "alphabetic";
         context.fillStyle = "#253044";
-        context.font = '900 22px "DM Sans", "Segoe UI", sans-serif';
-        context.fillText(resultCanvasFitText(context, row.name, 820), 200, y + 28);
+        context.font = '900 32px "DM Sans", "Segoe UI", sans-serif';
+        context.fillText(resultCanvasFitText(context, row.name, 760), 200, y + 38);
         context.fillStyle = "#8490a0";
-        context.font = '750 14px "DM Sans", "Segoe UI", sans-serif';
-        context.fillText(`${row.games} ${row.games === 1 ? "game" : "games"} played`, 200, y + 47);
+        context.font = '750 22px "DM Sans", "Segoe UI", sans-serif';
+        context.fillText(`${row.games} ${row.games === 1 ? "game" : "games"} played`, 200, y + 68);
 
         context.textAlign = "right";
         context.fillStyle = "#087f73";
-        context.font = '950 22px "DM Sans", "Segoe UI", sans-serif';
-        context.fillText(formatSessionPoints(row.points, "pts"), 1350, y + 28);
+        context.font = '950 32px "DM Sans", "Segoe UI", sans-serif';
+        context.fillText(display.compactScore, 1350, y + 38);
         context.fillStyle = "#8490a0";
-        context.font = '750 14px "DM Sans", "Segoe UI", sans-serif';
-        context.fillText(`${row.eligible ? "Qualified" : "Provisional"} • PR ${Math.round(row.rating)}`, 1350, y + 47);
+        context.font = '750 22px "DM Sans", "Segoe UI", sans-serif';
+        const rowStatus = requiresPodiumDecider(row)
+          ? "DECIDER REQUIRED"
+          : row.eligible
+            ? "Qualified"
+            : "Provisional";
+        context.fillText(`${rowStatus} • ${display.meta}`, 1350, y + 68);
       });
     }
 
-    const footerY = canvasHeight - 84;
+    const footerY = canvasHeight - footerHeight;
     context.fillStyle = "#111827";
-    context.fillRect(0, footerY, canvasWidth, 84);
+    context.fillRect(0, footerY, canvasWidth, footerHeight);
     context.textAlign = "left";
     context.fillStyle = "#c9f31d";
-    context.font = '900 17px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("PADDLE RAGE PICKLEBALL", 72, footerY + 36);
+    context.font = '900 22px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("PADDLE RAGE PICKLEBALL", 72, footerY + 40);
     context.fillStyle = "#91a0b4";
-    context.font = '700 14px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("Official session result", 72, footerY + 59);
+    context.font = '700 20px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(hasPodiumDecider ? "Podium pending • Decider required" : "Official session result", 72, footerY + 68);
+    context.textAlign = "center";
+    context.fillStyle = "#b8c4d5";
+    context.font = '700 18px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("Powered by Paddle Rage", canvasWidth / 2, footerY + 56);
     context.textAlign = "right";
-    context.fillText(formatDate(state.session?.date || localDateValue()), 1368, footerY + 49);
+    context.fillStyle = "#91a0b4";
+    context.font = '700 20px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(formatDate(state.session?.date || localDateValue()), 1368, footerY + 54);
 
     const resultBlob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
     if (!resultBlob) throw new Error("The result image could not be prepared.");
@@ -3614,25 +3989,55 @@
     const rows = [[
       "rank",
       "player",
+      "ranking_mode",
+      "ranking_score",
       "session_points",
       "performance_rating",
+      "wins",
+      "losses",
+      "win_percentage",
       "games",
       "qualified",
       "average_opponent_rating",
       "best_upset",
-      "wins_audit_only",
+      "exact_session_points",
+      "exact_performance_rating",
+      "average_opponent_rating_exact",
+      "best_upset_exact",
+      "rank_criterion",
+      "rank_reason",
+      "tiebreak_reason",
+      "podium_decider_required",
+      "podium_decider_group_id",
     ]];
-    standings.forEach(row => rows.push([
-      row.rank || "",
-      row.name,
-      row.points,
-      row.rating,
-      row.games,
-      row.eligible ? "yes" : "no",
-      row.averageOpponentRating,
-      row.bestUpset,
-      row.wins,
-    ]));
+    standings.forEach(row => {
+      const display = standingDisplay(row);
+      const winPercentageMode = isWinPercentageMode(row.mode);
+      rows.push([
+        requiresPodiumDecider(row) ? "TBD" : row.rank || "",
+        row.name,
+        sessionRankingMode(),
+        display.score,
+        winPercentageMode ? "" : row.points,
+        winPercentageMode ? "" : row.rating,
+        row.wins,
+        row.losses,
+        row.winPercentage,
+        row.games,
+        row.eligible ? "yes" : "no",
+        winPercentageMode ? "" : row.averageOpponentRating,
+        winPercentageMode ? "" : row.bestUpset,
+        winPercentageMode ? "" : row.pointsExact,
+        winPercentageMode ? "" : row.ratingExact,
+        winPercentageMode ? "" : row.averageOpponentRatingExact,
+        winPercentageMode ? "" : row.bestUpsetExact,
+        row.rankCriterion || "",
+        row.rankReason || "",
+        row.tieBreakReason || "",
+        requiresPodiumDecider(row) ? "yes" : "no",
+        row.podiumDeciderGroupId || "",
+      ]);
+    });
     const csv = rows.map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const link = document.createElement("a");

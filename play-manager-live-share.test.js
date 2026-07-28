@@ -107,6 +107,120 @@ test("production and local adapters expose the same sharing API", () => {
   assert.match(client, /resultCount/i);
 });
 
+test("local Competitive live boards publish exact ranking evidence without player-id decider lists", () => {
+  const normalizerSource = client.match(
+    /function normalizeOpenPlayRankingMode\(value\) \{[\s\S]*?\r?\n\}/i
+  )?.[0] || "";
+  const localBoardStart = client.indexOf("  function localOpenPlayLiveBoard(");
+  const localBoardEnd = client.indexOf("\n\n  window.DB", localBoardStart);
+  assert.ok(normalizerSource, "the local ranking-mode normalizer must be extractable");
+  assert.ok(
+    localBoardStart >= 0 && localBoardEnd > localBoardStart,
+    "the local live-board projection must be extractable"
+  );
+  const localBoardSource = client.slice(localBoardStart, localBoardEnd);
+  assert.doesNotMatch(localBoardSource, /podiumDeciderPlayerIds\s*:/i);
+
+  const projectedStanding = {
+    id: "player-private-id",
+    name: "Alex",
+    rating: 1012.3,
+    ratingExact: 1012.3456789,
+    points: 12.3,
+    pointsExact: 12.3456789,
+    games: 3,
+    wins: 2,
+    losses: 1,
+    winRate: 2 / 3,
+    winPercentage: 66.7,
+    mode: "competitive",
+    eligible: true,
+    rank: 1,
+    averageOpponentRating: 1044.4,
+    averageOpponentRatingExact: 1044.4444444,
+    bestUpset: 38.9,
+    bestUpsetExact: 38.8888888,
+    rankCriterion: "opponent_strength",
+    rankReason: "Opponent strength tiebreak",
+    tieBreakReason: "Opponent strength tiebreak",
+    requiresPodiumDecider: true,
+    podiumDeciderGroupId: "podium-decider-rank-1",
+    podiumDeciderPlayerIds: ["player-private-id", "other-private-id"],
+  };
+  let ratingOptions = null;
+  const ratingEngine = require("./open-play-rating.js");
+  const localBoard = new Function(
+    "window",
+    `${normalizerSource}
+const nowIso = () => new Date().toISOString();
+${localBoardSource}
+return localOpenPlayLiveBoard;`
+  )({
+    PBOpenPlayRating: {
+      normalizeRankingMode: ratingEngine.normalizeRankingMode,
+      calculateStandings(_players, _matches, options) {
+        ratingOptions = options;
+        return [projectedStanding];
+      },
+    },
+  });
+  const token = "a".repeat(64);
+  const board = localBoard({
+    openPlayGameShares: [{
+      token,
+      session_id: "session-1",
+      expires_at: "2999-01-01T00:00:00.000Z",
+    }],
+    openPlayGameSessions: [{
+      id: "session-1",
+      date: "2026-07-28",
+      time_label: "6PM-10PM",
+      court_names: ["Court 1"],
+      status: "active",
+      current_round: 0,
+      ranking_mode: "competitive",
+      performance_rating_min_games: 3,
+    }],
+    openPlayGamePlayers: [{
+      id: "player-private-id",
+      session_id: "session-1",
+      full_name: "Alex",
+      status: "active",
+      seed_order: 0,
+    }],
+    openPlayGameRounds: [],
+  }, token);
+
+  assert.equal(ratingOptions?.mode, "competitive");
+  assert.deepEqual(board.ratingSystem, {
+    mode: "competitive",
+    name: "Competitive Ranking",
+    version: "competitive-ranking-v1",
+    minGames: 3,
+    rankingMetric: "competitive",
+  });
+  [
+    "ratingExact",
+    "pointsExact",
+    "averageOpponentRatingExact",
+    "bestUpsetExact",
+    "rankCriterion",
+    "rankReason",
+    "tieBreakReason",
+    "requiresPodiumDecider",
+    "podiumDeciderGroupId",
+  ].forEach(field => {
+    assert.equal(
+      board.standings[0][field],
+      projectedStanding[field],
+      `${field} must survive the public projection`
+    );
+  });
+  assert.equal(Object.hasOwn(board.standings[0], "id"), false);
+  assert.equal(Object.hasOwn(board.standings[0], "podiumDeciderPlayerIds"), false);
+  assert.doesNotMatch(JSON.stringify(board), /podiumDeciderPlayerIds|other-private-id/i);
+});
+
 test("share lifecycle supports independent links, explicit rotation, and absolute expiry", () => {
   assert.match(lifecycleMigration, /add column if not exists id uuid default gen_random_uuid\(\)/i);
   assert.match(
@@ -219,7 +333,7 @@ test("player live board uses the transparent system logo without a badge backgro
     /<img class="plb-brand-mark" src="paddleragelogo-transparent\.png" alt="" width="48" height="48" aria-hidden="true">/i
   );
   assert.doesNotMatch(playerPage, /class="plb-brand-mark"[^>]*>PR<\/span>/i);
-  assert.match(playerPage, /player-live\.css\?v=20260728-smooth-live-v4/i);
+  assert.match(playerPage, /player-live\.css\?v=20260728-competitive-v1/i);
   assert.match(
     playerCss,
     /\.plb-brand-mark\s*\{[\s\S]*?width:\s*48px[\s\S]*?height:\s*48px[\s\S]*?border:\s*0[\s\S]*?background:\s*transparent[\s\S]*?object-fit:\s*contain/i
@@ -389,7 +503,36 @@ test("Share Live updates smoothly without recurring blink animations", () => {
       }],
       queue: ["A", "B", "C", "D"],
     },
-    standings: [{ name: "A", wins: 0, games: 1 }],
+    standings: [{
+      name: "A",
+      wins: 0,
+      losses: 1,
+      games: 1,
+      winPercentage: 0,
+      mode: "competitive",
+      rating: 988,
+      ratingExact: 987.654321,
+      points: -12,
+      pointsExact: -12.345679,
+      eligible: true,
+      rank: 1,
+      averageOpponentRating: 1012,
+      averageOpponentRatingExact: 1012.345679,
+      bestUpset: 0,
+      bestUpsetExact: 0,
+      rankCriterion: "opponent_strength",
+      rankReason: "Opponent strength tiebreak",
+      tieBreakReason: "Opponent strength tiebreak",
+      requiresPodiumDecider: false,
+      podiumDeciderGroupId: "",
+    }],
+    ratingSystem: {
+      mode: "competitive",
+      name: "Competitive Ranking",
+      version: "competitive-ranking-v1",
+      minGames: 3,
+      rankingMetric: "competitive",
+    },
     resultCount: 0,
     latestResult: null,
   };
@@ -407,6 +550,29 @@ test("Share Live updates smoothly without recurring blink animations", () => {
   const changedSnapshot = structuredClone(baseSnapshot);
   changedSnapshot.latestRound.queue = ["B", "A", "C", "D"];
   assert.notEqual(signature(baseSnapshot), signature(changedSnapshot));
+
+  const signatureMutations = [
+    ["competitive mode", snapshot => { snapshot.ratingSystem.mode = "performance"; }],
+    ["competitive metric", snapshot => { snapshot.ratingSystem.rankingMetric = "session_points"; }],
+    ["exact rating", snapshot => { snapshot.standings[0].ratingExact += 0.000001; }],
+    ["exact points", snapshot => { snapshot.standings[0].pointsExact += 0.000001; }],
+    ["exact opponent strength", snapshot => { snapshot.standings[0].averageOpponentRatingExact += 0.000001; }],
+    ["exact best upset", snapshot => { snapshot.standings[0].bestUpsetExact += 0.000001; }],
+    ["rank criterion", snapshot => { snapshot.standings[0].rankCriterion = "quality_win"; }],
+    ["rank reason", snapshot => { snapshot.standings[0].rankReason = "Best upset tiebreak"; }],
+    ["tiebreak reason", snapshot => { snapshot.standings[0].tieBreakReason = "Best upset tiebreak"; }],
+    ["decider flag", snapshot => { snapshot.standings[0].requiresPodiumDecider = true; }],
+    ["decider group", snapshot => { snapshot.standings[0].podiumDeciderGroupId = "podium-decider-rank-1"; }],
+  ];
+  signatureMutations.forEach(([label, mutate]) => {
+    const candidate = structuredClone(baseSnapshot);
+    mutate(candidate);
+    assert.notEqual(
+      signature(baseSnapshot),
+      signature(candidate),
+      `${label} must invalidate the rendered-content signature`
+    );
+  });
 });
 
 test("manager exposes clear live-session completion controls", () => {
@@ -433,7 +599,7 @@ test("manager exposes clear live-session completion controls", () => {
   );
 });
 
-test("completed sessions show an individual performance podium and full rankings", () => {
+test("completed sessions show a mode-aware individual podium and full rankings", () => {
   const completedMarkup = manager.match(
     /function completedSessionMarkup\(matches, standings\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function matchTimeMarkup/i
   )?.[0] || "";
@@ -441,11 +607,14 @@ test("completed sessions show an individual performance podium and full rankings
   assert.match(manager, /const leaders = PERFORMANCE\.podiumRows\(rows\)/i);
   assert.match(manager, /const podiumIds = new Set\(PERFORMANCE\.podiumRows\(rows\)/i);
   assert.match(manager, /const remaining = rows\.filter\(row => !podiumIds\.has/i);
-  assert.match(completedMarkup, /Session performance leaders/i);
-  assert.match(completedMarkup, /Performance Podium/i);
+  assert.match(completedMarkup, /const scoring = rankingCopy\(\)/i);
+  assert.match(completedMarkup, /Session leaders/i);
+  assert.match(completedMarkup, /\$\{scoring\.podium\}/i);
+  assert.match(completedMarkup, /\$\{scoring\.completedDescription\}/i);
   assert.match(completedMarkup, /Full leaderboard/i);
-  assert.match(completedMarkup, /Ranked by Session Points/i);
-  assert.match(completedMarkup, /wins and win rate do not determine rank/i);
+  assert.match(manager, /function finalPodiumMarkup\(rows\)[\s\S]*?const display = standingDisplay\(row\)/i);
+  assert.match(manager, /podium:\s*"Performance Podium"/i);
+  assert.match(manager, /podium:\s*"Win Percentage Podium"/i);
   assert.match(completedMarkup, /id="pm2MatchLog"/i);
   assert.match(
     manager,
@@ -465,6 +634,129 @@ test("completed sessions show an individual performance podium and full rankings
   );
 });
 
+test("Competitive podium ties stay TBD in both views and prevent session completion", async () => {
+  const managerRankStart = manager.indexOf("  function requiresPodiumDecider(");
+  const managerRankEnd = manager.indexOf("  function standingRankDescription(", managerRankStart);
+  const playerRankStart = playerClient.indexOf("  function requiresPodiumDecider(");
+  const playerRankEnd = playerClient.indexOf("  function rankDescription(", playerRankStart);
+  assert.ok(managerRankStart >= 0 && managerRankEnd > managerRankStart);
+  assert.ok(playerRankStart >= 0 && playerRankEnd > playerRankStart);
+  const managerRankLabel = new Function(
+    `${manager.slice(managerRankStart, managerRankEnd)}\nreturn standingRankLabel;`
+  )();
+  const playerRankLabel = new Function(
+    `${playerClient.slice(playerRankStart, playerRankEnd)}\nreturn rankLabel;`
+  )();
+  const deciderRow = { eligible: true, rank: 1, requiresPodiumDecider: true };
+  assert.equal(managerRankLabel(deciderRow), "TBD");
+  assert.equal(playerRankLabel(deciderRow), "TBD");
+  assert.equal(managerRankLabel({ eligible: true, rank: 2 }), 2);
+  assert.equal(playerRankLabel({ eligible: false, rank: null }), "P");
+
+  assert.match(
+    manager,
+    /function podiumDeciderNotice\(rows\)[\s\S]*?Podium Decider Required[\s\S]*?official podium places (?:remain|stay) TBD/i
+  );
+  assert.match(
+    manager,
+    /function standingsMarkup\(rows\)[\s\S]*?podiumDeciderNotice\(rows\)[\s\S]*?standingRankLabel\(row\)/i
+  );
+  assert.match(
+    manager,
+    /function finalPodiumMarkup\(rows\)[\s\S]*?is-decider[\s\S]*?standingRankLabel\(row\)[\s\S]*?Podium decider/i
+  );
+  assert.match(
+    manager,
+    /function completedSessionMarkup\(matches, standings\)[\s\S]*?podiumDeciderNotice\(standings\)[\s\S]*?finalPodiumMarkup\(standings\)/i
+  );
+
+  assert.match(
+    playerClient,
+    /function renderPodiumDeciderNotice\(rows\)[\s\S]*?Podium Decider Required[\s\S]*?Official places remain TBD/i
+  );
+  assert.match(
+    playerClient,
+    /function renderPodiumPlayer\(row, index\)[\s\S]*?is-decider[\s\S]*?rankLabel\(row\)[\s\S]*?Podium decider/i
+  );
+  assert.match(
+    playerClient,
+    /function renderStandings\(standings, sessionStatus = "active"\)[\s\S]*?renderPodiumDeciderNotice\(deciderRows\)[\s\S]*?leaders\.map\(renderPodiumPlayer\)/i
+  );
+
+  const endSession = manager.match(
+    /async function endSession\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function playerLiveUrl/i
+  )?.[0] || "";
+  assert.match(
+    endSession,
+    /const unresolvedPodium = isCompetitiveMode\(\)[\s\S]*?standingsRows\(completedMatches\(\)\)\.filter\(requiresPodiumDecider\)/i
+  );
+  assert.match(
+    endSession,
+    /if \(unresolvedPodium\.length\)[\s\S]*?Podium decider required before ending[\s\S]*?record one separating match first/i
+  );
+  assert.ok(
+    endSession.indexOf("if (unresolvedPodium.length)") < endSession.indexOf("window.confirm("),
+    "the unresolved-decider guard must run before the destructive completion confirmation"
+  );
+  const endSessionStart = manager.indexOf("  async function endSession()");
+  const endSessionEnd = manager.indexOf("  function playerLiveUrl(", endSessionStart);
+  const guardedEndSession = new Function(
+    "state",
+    "isCompetitiveMode",
+    "standingsRows",
+    "completedMatches",
+    "requiresPodiumDecider",
+    `${manager.slice(endSessionStart, endSessionEnd)}
+return endSession;`
+  )(
+    { session: { id: "session-1", status: "active" } },
+    () => true,
+    () => [{
+      name: "Alex",
+      eligible: true,
+      rank: 1,
+      requiresPodiumDecider: true,
+    }],
+    () => [],
+    row => Boolean(row?.requiresPodiumDecider)
+  );
+  await assert.rejects(
+    guardedEndSession,
+    /Podium decider required before ending[\s\S]*?Alex[\s\S]*?record one separating match first/i
+  );
+});
+
+test("Competitive decider notices, rows, and podium cards have dedicated visual states", () => {
+  [
+    ".pm2-decider-notice",
+    ".pm2-standing-row.is-decider",
+    ".pm2-final-row.is-decider",
+    ".pm2-standing-row.is-decider .pm2-standing-no",
+    ".pm2-final-row.is-decider .pm2-final-rank",
+    ".pm2-podium-card.is-decider",
+    ".pm2-podium-card.is-decider .pm2-podium-rank",
+    ".pm2-podium-reason",
+  ].forEach(selector => {
+    assert.match(
+      managerCss,
+      new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:,|\\{)`, "i"),
+      `${selector} must have a manager decider style`
+    );
+  });
+  [
+    ".plb-decider-notice",
+    ".plb-podium-card.is-decider",
+    ".plb-podium-card.is-decider .plb-podium-rank",
+    ".plb-podium-reason",
+  ].forEach(selector => {
+    assert.match(
+      playerCss,
+      new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(?:,|\\{)`, "i"),
+      `${selector} must have a player-board decider style`
+    );
+  });
+});
+
 test("completed sessions download a branded Paddle Rage result image", () => {
   const brandedDownload = manager.match(
     /async function downloadBrandedResult\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function exportCsv/i
@@ -476,16 +768,35 @@ test("completed sessions download a branded Paddle Rage result image", () => {
   assert.match(brandedDownload, /loadResultBrandLogo\(\)/i);
   assert.match(manager, /image\.src = "paddleragelogo-transparent\.png"/i);
   assert.match(brandedDownload, /PADDLE RAGE PICKLEBALL/i);
-  assert.match(brandedDownload, /SESSION PERFORMANCE PODIUM/i);
+  assert.match(
+    brandedDownload,
+    /SESSION COMPETITIVE PODIUM[\s\S]*?SESSION WIN % PODIUM[\s\S]*?SESSION PERFORMANCE PODIUM/i
+  );
+  assert.match(brandedDownload, /SESSION WIN % PODIUM[\s\S]*?SESSION PERFORMANCE PODIUM/i);
+  assert.match(
+    brandedDownload,
+    /Exact performance[\s\S]*?Win %[\s\S]*?Wins[\s\S]*?Opponent strength[\s\S]*?Best upset/i
+  );
+  assert.match(brandedDownload, /const hasPodiumDecider = podiumStandings\.some\(requiresPodiumDecider\)/i);
+  assert.match(
+    brandedDownload,
+    /hasPodiumDecider \? "PODIUM DECIDER REQUIRED"[\s\S]*?Official places remain TBD until one separating result is recorded/i
+  );
+  assert.match(manager, /function drawResultPodiumCard[\s\S]*?PODIUM DECIDER[\s\S]*?standingRankLabel\(row\)/i);
   assert.match(brandedDownload, /const topStandings = standings\.slice\(0, 10\)/i);
   assert.match(brandedDownload, /const podiumStandings = PERFORMANCE\.podiumRows\(standings\)/i);
-  assert.match(brandedDownload, /const remaining = topStandings\.filter\(row => !podiumIds\.has/i);
-  assert.match(brandedDownload, /Individual Session Points .* Opponent strength matters/i);
-  assert.match(brandedDownload, /TOP \$\{topStandings\.length\} LEADERBOARD/i);
-  assert.match(brandedDownload, /Showing \$\{topStandings\.length\} of \$\{standings\.length\} players/i);
+  assert.match(brandedDownload, /const featuredPodiumIds = new Set\(featuredPodium\.map/i);
+  assert.match(brandedDownload, /const podiumIds = new Set\(podiumStandings\.map/i);
+  assert.match(brandedDownload, /const displayedStandings = \[[\s\S]*?\.\.\.podiumStandings[\s\S]*?\.\.\.topStandings\.filter/i);
+  assert.match(brandedDownload, /const remaining = displayedStandings\.filter\(row => !featuredPodiumIds\.has/i);
+  assert.match(brandedDownload, /Individual Win Percentage[\s\S]*?Every win counts equally/i);
+  assert.match(brandedDownload, /Individual Session Points[\s\S]*?Opponent strength matters/i);
+  assert.match(brandedDownload, /const display = standingDisplay\(row\)/i);
+  assert.match(brandedDownload, /TOP 10 \+ PODIUM TIES/i);
+  assert.match(brandedDownload, /Showing \$\{displayedStandings\.length\} of \$\{standings\.length\} players/i);
   assert.match(
     manager,
-    /const placeY = avatarY \+ avatarRadius \+ 30[\s\S]*?const nameY = placeY \+ 40[\s\S]*?const recordY = nameY \+ \(isChampion \? 72 : 62\)[\s\S]*?const metaY = y \+ height - 28/i
+    /const isPrimaryCard = height >= 350[\s\S]*?const placeY = avatarY \+ avatarRadius \+ 30[\s\S]*?const nameY = placeY \+ 40[\s\S]*?const recordY = nameY \+ \(isPrimaryCard \? 72 : 62\)[\s\S]*?const metaY = y \+ height - \(isPrimaryCard \? 28 : 18\)/i
   );
   assert.match(brandedDownload, /canvas\.toBlob\(resolve, "image\/png"\)/i);
   assert.match(brandedDownload, /paddle-rage-results-\$\{state\.session\?\.date \|\| localDateValue\(\)\}\.png/i);
@@ -493,6 +804,75 @@ test("completed sessions download a branded Paddle Rage result image", () => {
   assert.match(
     managerCss,
     /@media \(max-width:\s*720px\)[\s\S]*?\.pm2-final-actions \.pm2-btn-download\s*\{[^}]*grid-column:\s*1 \/ -1/is
+  );
+});
+
+test("saved branded-results PNG keeps enlarged type readable in a compact dynamic layout", () => {
+  const statPainter = manager.match(
+    /function drawResultStat\([\s\S]*?\r?\n  \}\r?\n\r?\n  function drawResultPodiumCard/i
+  )?.[0] || "";
+  const podiumPainter = manager.match(
+    /function drawResultPodiumCard\([\s\S]*?\r?\n  \}\r?\n\r?\n  async function downloadBrandedResult/i
+  )?.[0] || "";
+  const brandedDownload = manager.match(
+    /async function downloadBrandedResult\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function exportCsv/i
+  )?.[0] || "";
+
+  assert.match(brandedDownload, /await document\.fonts\?\.ready/i);
+  assert.match(
+    brandedDownload,
+    /const listTop = 964;[\s\S]*?const rowHeight = 90;[\s\S]*?const footerHeight = 96;[\s\S]*?const listHeight = remaining\.length \? remaining\.length \* rowHeight : 104;[\s\S]*?const canvasHeight = Math\.max\(1480, listTop \+ listHeight \+ footerHeight \+ 48\);[\s\S]*?canvas\.height = canvasHeight/i
+  );
+
+  assert.match(
+    brandedDownload,
+    /resultCanvasRoundRect\(context, 72, y, 1296, 80, 14\)/i
+  );
+  assert.match(
+    brandedDownload,
+    /PODIUM LEADERS", 72, 450\)[\s\S]*?72,\s*480[\s\S]*?featuredPodium\[1\][\s\S]*?72, 560, 400, 300\)[\s\S]*?featuredPodium\[0\][\s\S]*?520, 510, 400, 350\)[\s\S]*?leaderboardTitle, 72, 900\)/i
+  );
+  assert.match(
+    brandedDownload,
+    /const rankText = String\(rank\);\s*context\.font = `950 \$\{rankText\.length > 2 \? 22 : 32\}px "DM Sans", "Segoe UI", sans-serif`/i
+  );
+  assert.match(
+    brandedDownload,
+    /context\.font = '900 32px "DM Sans", "Segoe UI", sans-serif';\s*context\.fillText\(resultCanvasFitText\(context, row\.name/i
+  );
+  assert.match(
+    brandedDownload,
+    /context\.font = '950 32px "DM Sans", "Segoe UI", sans-serif';\s*context\.fillText\(display\.compactScore/i
+  );
+  assert.match(
+    brandedDownload,
+    /context\.font = '750 22px "DM Sans", "Segoe UI", sans-serif';\s*context\.fillText\(`\$\{row\.games\}[\s\S]*?context\.font = '750 22px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?context\.fillText\(`\$\{rowStatus\}/i
+  );
+
+  assert.match(
+    podiumPainter,
+    /const metaY = y \+ height - \(isPrimaryCard \? 28 : 18\)/i
+  );
+  assert.match(
+    podiumPainter,
+    /context\.font = `950 \$\{isPrimaryCard \? 35 : 31\}px "DM Sans", "Segoe UI", sans-serif`/i
+  );
+  assert.match(
+    podiumPainter,
+    /const scoreFontSize = isPrimaryCard \? 54 : 48;[\s\S]*?context\.font = `950 \$\{scoreFontSize\}px "DM Sans", "Segoe UI", sans-serif`/i
+  );
+  assert.match(
+    podiumPainter,
+    /context\.font = '750 20px "DM Sans", "Segoe UI", sans-serif';\s*const podiumMeta =/i
+  );
+
+  assert.match(
+    statPainter,
+    /context\.font = '900 36px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?context\.font = '800 18px "DM Sans", "Segoe UI", sans-serif'/i
+  );
+  assert.match(
+    brandedDownload,
+    /const footerY = canvasHeight - footerHeight;[\s\S]*?context\.font = '900 22px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?footerY \+ 40[\s\S]*?context\.font = '700 20px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?footerY \+ 68[\s\S]*?context\.textAlign = "center";[\s\S]*?context\.font = '700 18px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?context\.fillText\("Powered by Paddle Rage", canvasWidth \/ 2, footerY \+ 56\);[\s\S]*?footerY \+ 54/i
   );
 });
 
@@ -539,7 +919,7 @@ test("new results play one contained winner reveal in the manager and shared boa
   assert.match(playerClient, /scheduleWinnerRevealEnd\(/i);
   assert.match(playerCss, /@keyframes plb-winner-reveal/i);
   assert.match(playerCss, /\.plb-winner-reveal-sparks::before/i);
-  assert.match(playerPage, /player-live\.js\?v=20260728-performance-v1/i);
+  assert.match(playerPage, /player-live\.js\?v=20260728-competitive-v1/i);
 });
 
 test("Share Live keeps the completed winner visible while its court is READY", () => {
@@ -865,7 +1245,7 @@ test("LIVE court card mirrors the READY card system with a cyan state treatment"
     managerCss,
     /\.pm2-court-card\.is-live \.pm2-result-btn\s*\{[^}]*min-height:\s*56px[^}]*border-radius:\s*11px[^}]*font-size:\s*1rem/is
   );
-  assert.match(admin, /play-manager\.css\?v=20260728-compact-mobile-v24/i);
+  assert.match(admin, /play-manager\.css\?v=20260728-competitive-v1/i);
 });
 
 test("court cards share one compact height and use the modern indigo-coral team palette", () => {
@@ -1006,7 +1386,7 @@ test("admin live session groups courts, matchmaking, and activity in operational
     "live courts, matchmaking, and session activity should follow the host workflow"
   );
   assert.match(matchmaking, /<h3>Player Queue<\/h3>[\s\S]*?Court dispatch[\s\S]*?<h3>Up Next<\/h3>/i);
-  assert.match(activity, /id="pm2MatchLog"[\s\S]*?<h3>Match Log<\/h3>[\s\S]*?id="pm2Standings"[\s\S]*?<h3>Performance Standings<\/h3>/i);
+  assert.match(activity, /id="pm2MatchLog"[\s\S]*?<h3>Match Log<\/h3>[\s\S]*?id="pm2Standings"[\s\S]*?<h3>\$\{scoring\.standings\}<\/h3>/i);
   assert.match(renderLive, /const standings = standingsRows\(matches\)/i);
   assert.match(manager, /queue\.length > 10[\s\S]*?tabindex="0"[\s\S]*?Player queue/i);
   assert.match(manager, /rows\.length > 4[\s\S]*?tabindex="0"[\s\S]*?Player standings/i);
@@ -1112,9 +1492,9 @@ test("manager queue matches the compact reference while retaining Skip", () => {
   assert.match(manager, /data-pm-action="add-player"><span aria-hidden="true">[+]<\/span> Add player<\/button>/i);
   assert.match(manager, /\$\{isLast \? "Last" : "Skip"\}/i);
   assert.match(manager, /\$\{isLast \? "disabled" : ""\}/i);
-  assert.match(manager, /const points = performance\?\.points \|\| 0/i);
+  assert.match(manager, /const display = standingDisplay\(performance\)/i);
   assert.match(manager, /\$\{games\} \$\{games === 1 \? "game" : "games"\}/i);
-  assert.match(manager, /formatSessionPoints\(points, "pts"\)/i);
+  assert.match(manager, /\$\{display\.compactScore\}/i);
   assert.match(managerCss, /--pm2-queue-green:\s*#08e58a/i);
   assert.match(managerCss, /\.pm2-queue-no\s*\{[\s\S]*?font-size:\s*1\.16rem/i);
   assert.match(managerCss, /\.pm2-queue-meta\s*\{[\s\S]*?font-variant-numeric|\.pm2-queue-wait\s*\{[\s\S]*?font-variant-numeric/i);
@@ -1170,17 +1550,32 @@ test("Play Manager stores editable six-star player skills and uses them for bala
     managerCss,
     /\.pm2-team-skill-total\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?letter-spacing:\s*0/i
   );
-  assert.match(admin, /supabase-config\.js\?v=20260726-player-profile-v5/i);
-  assert.match(admin, /open-play-rating\.js\?v=20260728-performance-v2/i);
-  assert.match(admin, /play-manager\.js\?v=20260728-performance-v3/i);
+  assert.match(admin, /supabase-config\.js\?v=20260728-competitive-v1/i);
+  assert.match(admin, /open-play-rating\.js\?v=20260728-competitive-v1/i);
+  assert.match(admin, /play-manager\.js\?v=20260728-competitive-v4/i);
   assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
 });
 
-test("Open Play uses one event-sourced Individual Performance Rating everywhere", () => {
+test("local Open Play offers three ranking modes with Competitive as the local default", () => {
   assert.ok(performanceRatingMigration, `${performanceRatingMigrationPath} must exist`);
   assert.match(performanceRating, /const VERSION = "pr-performance-v1"/i);
+  assert.match(performanceRating, /const RANKING_MODE_PERFORMANCE = "performance"/i);
+  assert.match(performanceRating, /const RANKING_MODE_WIN_PERCENTAGE = "win_percentage"/i);
+  assert.match(performanceRating, /const RANKING_MODE_COMPETITIVE = "competitive"/i);
+  assert.match(
+    performanceRating,
+    /function normalizeRankingMode\(value\)[\s\S]*?RANKING_MODE_COMPETITIVE[\s\S]*?return RANKING_MODE_PERFORMANCE/i
+  );
   assert.match(performanceRating, /const K_FACTOR = 24/i);
   assert.match(performanceRating, /function calculateStandings\(players, matches/i);
+  assert.match(performanceRating, /const mode = normalizeRankingMode\(options\.mode\)/i);
+  assert.match(performanceRating, /mode === RANKING_MODE_WIN_PERCENTAGE/i);
+  assert.match(
+    performanceRating,
+    /function compareWinRates\(left, right\)[\s\S]*?numeric\(right\?\.wins\) \* Math\.max\(1, numeric\(left\?\.games\)\)[\s\S]*?numeric\(left\?\.wins\) \* Math\.max\(1, numeric\(right\?\.games\)\)/i
+  );
+  assert.match(performanceRating, /winRatioKey\(record\.wins, record\.games\)/i);
+  assert.match(performanceRating, /row\?\.eligible && Number\(row\.rank\) <=/i);
   assert.match(performanceRating, /averageOpponentRating/i);
   assert.match(performanceRating, /bestUpset/i);
   assert.match(performanceRatingMigration, /add column if not exists performance_seed_rating/i);
@@ -1194,23 +1589,131 @@ test("Open Play uses one event-sourced Individual Performance Rating everywhere"
   assert.match(client, /performance_rating_k:\s*24/i);
   assert.match(client, /performance_rating_scale:\s*400/i);
   assert.match(client, /PBOpenPlayRating[\s\S]*?calculateStandings\(sessionPlayers, ratingMatches/i);
+  assert.match(
+    client,
+    /function normalizeOpenPlayRankingMode\(value\)[\s\S]*?value === 'competitive'[\s\S]*?'win_percentage'[\s\S]*?'performance'/i
+  );
+  assert.match(client, /ranking_mode:\s*normalizeOpenPlayRankingMode/i);
+  assert.match(client, /mode:\s*normalizeOpenPlayRankingMode\(session\.ranking_mode\)/i);
+  assert.match(
+    client,
+    /rankingMetric:\s*rankingMode === 'competitive'[\s\S]*?rankingMode === 'win_percentage'[\s\S]*?'session_points'/i
+  );
+  const productionCreateSession = client.slice(
+    client.indexOf("async createOpenPlayGameSession(session)"),
+    client.indexOf("async updateOpenPlayGameSession(id, updates)")
+  );
+  assert.doesNotMatch(productionCreateSession, /ranking_mode|rankingMode/i);
+  assert.match(manager, /if \(!window\.PB_USE_LOCAL_DATA\) return RANKING_MODE_PERFORMANCE/i);
+  assert.match(manager, /function isWinPercentageMode[\s\S]*?if \(!window\.PB_USE_LOCAL_DATA\) return false/i);
+  assert.match(manager, /function isCompetitiveMode[\s\S]*?if \(!window\.PB_USE_LOCAL_DATA\) return false/i);
+  assert.match(
+    manager,
+    /const rankingMode = state\.session[\s\S]*?window\.PB_USE_LOCAL_DATA \? RANKING_MODE_COMPETITIVE : RANKING_MODE_PERFORMANCE/i
+  );
+  assert.match(manager, /\$\{window\.PB_USE_LOCAL_DATA \? `[\s\S]*?name="rankingMode"/i);
+  assert.match(
+    manager,
+    /name="rankingMode" value="\$\{RANKING_MODE_COMPETITIVE\}"[\s\S]*?<strong>Competitive Ranking<\/strong>/i
+  );
+  assert.match(manager, /Performance Rating \(Elo\)/i);
+  assert.match(manager, /<strong>Win Percentage<\/strong>/i);
+  const rankingInputs = manager.match(/<input type="radio" name="rankingMode"/g) || [];
+  assert.equal(rankingInputs.length, 3, "local setup must render exactly three ranking choices");
+  assert.ok(
+    manager.indexOf('value="${RANKING_MODE_COMPETITIVE}"')
+      < manager.indexOf('value="${RANKING_MODE_PERFORMANCE}"'),
+    "Competitive Ranking should be the first local setup choice"
+  );
+  assert.match(manager, /id="pm2RatingTitle">Competitive Ranking<\/h3>/i);
+  assert.match(manager, /Exact, unrounded Performance Points determine the initial order/i);
+  assert.match(manager, /Win percentage, more wins, opponent strength, then best upset/i);
   assert.match(manager, /Individual Performance Rating/i);
+  assert.match(manager, /Individual Win Percentage/i);
   assert.match(manager, /Your teammate can change every game/i);
-  assert.match(manager, /not wins or win percentage/i);
   assert.match(manager, /Complete at least 3 rated games to qualify/i);
+  assert.match(manager, /Complete at least 3 games to qualify/i);
+  assert.match(manager, /If percentages tie, more wins ranks first/i);
+  assert.match(manager, /mode:\s*sessionRankingMode\(\)/i);
+  assert.match(manager, /rankingMode:\s*window\.PB_USE_LOCAL_DATA[\s\S]*?: RANKING_MODE_PERFORMANCE/i);
+  assert.match(manager, /rankingMode:\s*setup\.rankingMode/i);
   assert.match(playerClient, /Ranked by Session Points/i);
   assert.match(playerClient, /Top 10 Performance/i);
+  assert.match(playerClient, /Ranked by win percentage/i);
+  assert.match(playerClient, /Win Percentage Top 10/i);
+  assert.match(playerClient, /Final Win Percentage Leaders/i);
+  assert.match(playerClient, /Final Performance Leaders/i);
+  assert.match(playerClient, /Competitive Top 10/i);
+  assert.match(playerClient, /Final Competitive Leaders/i);
+  assert.match(playerClient, /const standingsShown = sessionStatus === "completed"[\s\S]*?Number\(row\.rank\) <= 3/i);
+  assert.match(playerClient, /<b>\$\{standingsShown\} shown<\/b>/i);
+  assert.match(playerClient, /function standingDisplay\(row, snapshot = state\.snapshot\)/i);
+  assert.match(playerClient, /function rankingMode[\s\S]*?if \(!window\.PB_USE_LOCAL_DATA\) return "performance"/i);
+  assert.match(
+    playerClient,
+    /mode === "competitive" \|\| metric === "competitive"[\s\S]*?return "competitive"/i
+  );
+  const playerRankingStart = playerClient.indexOf("  function rankingMode(");
+  const playerRankingEnd = playerClient.indexOf("  function isWinPercentageMode(", playerRankingStart);
+  assert.ok(playerRankingStart >= 0 && playerRankingEnd > playerRankingStart);
+  const makePlayerRankingMode = useLocalData => new Function(
+    "window",
+    `const state = { snapshot: null };
+${playerClient.slice(playerRankingStart, playerRankingEnd)}
+return rankingMode;`
+  )({ PB_USE_LOCAL_DATA: useLocalData });
+  const competitiveMetadata = {
+    ratingSystem: { mode: "competitive", rankingMetric: "competitive" },
+  };
+  assert.equal(makePlayerRankingMode(true)(competitiveMetadata), "competitive");
+  assert.equal(
+    makePlayerRankingMode(false)(competitiveMetadata),
+    "performance",
+    "production player views must ignore local-only Competitive metadata"
+  );
+  assert.match(playerClient, /ratingSystem:\s*snapshot\.ratingSystem/i);
+  const csvExport = manager.match(
+    /function exportCsv\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function updateTimers/i
+  )?.[0] || "";
+  assert.match(csvExport, /"ranking_mode"[\s\S]*?"ranking_score"[\s\S]*?"win_percentage"/i);
+  assert.match(
+    csvExport,
+    /"exact_session_points"[\s\S]*?"exact_performance_rating"[\s\S]*?"average_opponent_rating_exact"[\s\S]*?"best_upset_exact"/i
+  );
+  assert.match(
+    csvExport,
+    /"rank_criterion"[\s\S]*?"rank_reason"[\s\S]*?"tiebreak_reason"[\s\S]*?"podium_decider_required"[\s\S]*?"podium_decider_group_id"/i
+  );
+  assert.match(csvExport, /requiresPodiumDecider\(row\) \? "TBD" : row\.rank \|\| ""/i);
+  assert.match(
+    csvExport,
+    /row\.pointsExact[\s\S]*?row\.ratingExact[\s\S]*?row\.averageOpponentRatingExact[\s\S]*?row\.bestUpsetExact/i
+  );
+  assert.match(
+    csvExport,
+    /row\.rankCriterion \|\| ""[\s\S]*?row\.rankReason \|\| ""[\s\S]*?row\.tieBreakReason \|\| ""[\s\S]*?requiresPodiumDecider\(row\) \? "yes" : "no"[\s\S]*?row\.podiumDeciderGroupId \|\| ""/i
+  );
+  assert.doesNotMatch(csvExport, /podiumDeciderPlayerIds/i);
+  assert.match(csvExport, /const winPercentageMode = isWinPercentageMode\(row\.mode\)/i);
+  assert.match(csvExport, /winPercentageMode \? "" : row\.points/i);
+  assert.match(csvExport, /winPercentageMode \? "" : row\.averageOpponentRating/i);
   assert.match(deployScript, /"open-play-rating\.js"/i);
 });
 
 test("player profile editor shows live session stats and edits both name and skill", () => {
   assert.match(manager, /id="pm2PlayerEditorSummary"[^>]*hidden/i);
   assert.match(manager, /id="pm2PlayerEditorGames">0G played/i);
-  assert.match(manager, /id="pm2PlayerEditorPerformance">0 Session Points/i);
+  assert.match(manager, /id="pm2PlayerEditorPerformance">No results yet/i);
   assert.match(manager, /id="pm2PlayerEditorCheckIn">Checked-in time unavailable/i);
   assert.match(manager, /function playerEditorStats\(player\)/i);
   assert.match(manager, /gamesText:\s*`\$\{games\}G played`/i);
-  assert.match(manager, /performanceText:\s*`\$\{formatSessionPoints\(points\)\} Session Points`/i);
+  assert.match(
+    manager,
+    /performanceText:\s*isCompetitiveMode\(\)[\s\S]*?: isWinPercentageMode\(\)/i
+  );
+  assert.match(manager, /exact Performance Points[\s\S]*?standingRankingReason\(performance\)/i);
+  assert.match(manager, /\? `\$\{display\.score\} win percentage/i);
+  assert.match(manager, /: `\$\{display\.score\} Session Points`/i);
   assert.match(manager, /`Checked-in at \$\{checkedTime\} · \$\{duration\} in session`/i);
   assert.match(manager, /nameInput\.readOnly = false/i);
   assert.match(manager, /submit\.textContent = editing \? "Save changes"/i);

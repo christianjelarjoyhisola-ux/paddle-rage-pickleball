@@ -12,6 +12,9 @@
   "use strict";
 
   const VERSION = "pr-performance-v1";
+  const RANKING_MODE_PERFORMANCE = "performance";
+  const RANKING_MODE_WIN_PERCENTAGE = "win_percentage";
+  const RANKING_MODE_COMPETITIVE = "competitive";
   const K_FACTOR = 24;
   const RATING_SCALE = 400;
   const MIN_PODIUM_GAMES = 3;
@@ -25,6 +28,26 @@
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
   };
+
+  function normalizeRankingMode(value) {
+    if (value === RANKING_MODE_WIN_PERCENTAGE) return RANKING_MODE_WIN_PERCENTAGE;
+    if (value === RANKING_MODE_COMPETITIVE) return RANKING_MODE_COMPETITIVE;
+    return RANKING_MODE_PERFORMANCE;
+  }
+
+  function winRatioKey(wins, games) {
+    const safeWins = Math.max(0, Math.floor(numeric(wins)));
+    const safeGames = Math.max(0, Math.floor(numeric(games)));
+    if (!safeGames || !safeWins) return safeWins ? `${safeWins}/0` : "0/1";
+    let left = safeWins;
+    let right = safeGames;
+    while (right) {
+      const remainder = left % right;
+      left = right;
+      right = remainder;
+    }
+    return `${safeWins / left}/${safeGames / left}`;
+  }
 
   function normalizeSkillLevel(value) {
     const level = Number(value);
@@ -46,6 +69,59 @@
     if (!raw) return 0;
     const magnitude = Math.min(K_FACTOR - 1, Math.max(1, Math.round(Math.abs(raw))));
     return raw > 0 ? magnitude : -magnitude;
+  }
+
+  function exactMatchDelta(teamRating, opponentRating, won) {
+    return K_FACTOR * ((won ? 1 : 0) - expectedScore(teamRating, opponentRating));
+  }
+
+  function compareWinRates(left, right) {
+    return (
+      numeric(right?.wins) * Math.max(1, numeric(left?.games)) -
+      numeric(left?.wins) * Math.max(1, numeric(right?.games))
+    );
+  }
+
+  function competitiveCriterion(left, right) {
+    if (numeric(left?.pointsExact) !== numeric(right?.pointsExact)) {
+      return "performance_points";
+    }
+    if (compareWinRates(left, right)) return "win_percentage";
+    if (numeric(left?.wins) !== numeric(right?.wins)) return "wins";
+    if (
+      numeric(left?.averageOpponentRatingExact) !==
+      numeric(right?.averageOpponentRatingExact)
+    ) return "opponent_strength";
+    if (numeric(left?.bestUpsetExact) !== numeric(right?.bestUpsetExact)) {
+      return "quality_win";
+    }
+    return null;
+  }
+
+  function competitiveReason(criterion) {
+    return ({
+      performance_points: "Exact Performance Points",
+      win_percentage: "Win percentage tiebreak",
+      wins: "Wins tiebreak",
+      opponent_strength: "Opponent strength tiebreak",
+      quality_win: "Best upset tiebreak",
+      podium_decider: "Podium decider required",
+    })[criterion] || "";
+  }
+
+  function compareCompetitive(left, right) {
+    return (
+      numeric(right?.pointsExact) - numeric(left?.pointsExact) ||
+      compareWinRates(left, right) ||
+      numeric(right?.wins) - numeric(left?.wins) ||
+      numeric(right?.averageOpponentRatingExact) -
+        numeric(left?.averageOpponentRatingExact) ||
+      numeric(right?.bestUpsetExact) - numeric(left?.bestUpsetExact)
+    );
+  }
+
+  function sameCompetitiveEvidence(left, right) {
+    return compareCompetitive(left, right) === 0;
   }
 
   function matchSortValue(match) {
@@ -95,6 +171,7 @@
 
   function calculateStandings(players, matches, options = {}) {
     const minGames = Math.max(1, Math.floor(numeric(options.minGames, MIN_PODIUM_GAMES)));
+    const mode = normalizeRankingMode(options.mode);
     const records = new Map();
 
     (Array.isArray(players) ? players : []).forEach((player, index) => {
@@ -110,6 +187,7 @@
       records.set(id, {
         id,
         name: String(player?.full_name ?? player?.name ?? "Player"),
+        seedOrder: numeric(player?.seed_order ?? player?.seedOrder, index),
         skillLevel: normalizeSkillLevel(player?.skill_level ?? player?.skillLevel),
         seedRating: startingRating,
         ratingExact: startingRating,
@@ -134,10 +212,21 @@
       const teamARating = (teamA[0].ratingExact + teamA[1].ratingExact) / 2;
       const teamBRating = (teamB[0].ratingExact + teamB[1].ratingExact) / 2;
       const aWon = match.winner === "A";
-      const deltaA = matchDelta(teamARating, teamBRating, aWon);
-      const deltaB = roundOne(-deltaA);
-      const upsetA = aWon ? Math.max(0, teamBRating - teamARating) : 0;
-      const upsetB = !aWon ? Math.max(0, teamARating - teamBRating) : 0;
+      const deltaA = mode === RANKING_MODE_COMPETITIVE
+        ? exactMatchDelta(teamARating, teamBRating, aWon)
+        : mode === RANKING_MODE_PERFORMANCE
+          ? matchDelta(teamARating, teamBRating, aWon)
+          : 0;
+      const deltaB = mode === RANKING_MODE_COMPETITIVE
+        ? -deltaA
+        : roundOne(-deltaA);
+      const tracksPerformance = mode !== RANKING_MODE_WIN_PERCENTAGE;
+      const upsetA = tracksPerformance && aWon
+        ? Math.max(0, teamBRating - teamARating)
+        : 0;
+      const upsetB = tracksPerformance && !aWon
+        ? Math.max(0, teamARating - teamBRating)
+        : 0;
 
       teamA.forEach(record => {
         record.games += 1;
@@ -162,72 +251,208 @@
       .map(record => {
         const points = roundOne(record.pointsExact);
         const rating = roundOne(record.ratingExact);
-        const averageOpponentRating = record.games
-          ? roundOne(record.opponentRatingTotal / record.games)
+        const winRate = record.games ? record.wins / record.games : 0;
+        const winPercentage = roundOne(winRate * 100);
+        const averageOpponentRatingExact = record.games
+          ? record.opponentRatingTotal / record.games
           : 0;
+        const averageOpponentRating = roundOne(averageOpponentRatingExact);
+        const bestUpsetExact = record.bestUpset;
         const bestUpset = roundOne(record.bestUpset);
         return {
           id: record.id,
           name: record.name,
+          seedOrder: record.seedOrder,
           skillLevel: record.skillLevel,
           seedRating: record.seedRating,
           rating,
+          ratingExact: record.ratingExact,
           points,
+          pointsExact: record.pointsExact,
+          mode,
           games: record.games,
           wins: record.wins,
+          losses: Math.max(0, record.games - record.wins),
+          winRate,
+          winPercentage,
           averageOpponentRating,
+          averageOpponentRatingExact,
           bestUpset,
+          bestUpsetExact,
           eligible: record.games >= minGames,
           gamesNeeded: Math.max(0, minGames - record.games),
         };
       })
-      .sort((left, right) =>
-        Number(right.eligible) - Number(left.eligible) ||
-        right.points - left.points ||
-        right.averageOpponentRating - left.averageOpponentRating ||
-        right.bestUpset - left.bestUpset ||
-        left.name.localeCompare(right.name)
-      );
+      .sort((left, right) => {
+        const eligibility = Number(right.eligible) - Number(left.eligible);
+        if (eligibility) return eligibility;
+        if (mode === RANKING_MODE_COMPETITIVE) {
+          return (
+            compareCompetitive(left, right) ||
+            left.seedOrder - right.seedOrder ||
+            left.id.localeCompare(right.id)
+          );
+        }
+        if (mode === RANKING_MODE_WIN_PERCENTAGE) {
+          return (
+            compareWinRates(left, right) ||
+            right.wins - left.wins ||
+            left.seedOrder - right.seedOrder ||
+            left.id.localeCompare(right.id)
+          );
+        }
+        return (
+          right.points - left.points ||
+          right.averageOpponentRating - left.averageOpponentRating ||
+          right.bestUpset - left.bestUpset ||
+          left.seedOrder - right.seedOrder ||
+          left.id.localeCompare(right.id)
+        );
+      });
     let qualifiedPosition = 0;
     let previousPerformanceKey = "";
+    let previousCompetitiveRecord = null;
     let previousRank = null;
-    return sorted.map((record, index) => ({
-      ...record,
-      position: index + 1,
-      rank: (() => {
+    const ranked = sorted.map((record, index) => {
+      const rank = (() => {
         if (!record.eligible) return null;
         qualifiedPosition += 1;
-        const performanceKey = [
-          record.points,
-          record.averageOpponentRating,
-          record.bestUpset,
-        ].join("|");
+        if (mode === RANKING_MODE_COMPETITIVE) {
+          if (
+            !previousCompetitiveRecord ||
+            !sameCompetitiveEvidence(record, previousCompetitiveRecord)
+          ) {
+            previousRank = qualifiedPosition;
+          }
+          previousCompetitiveRecord = record;
+          return previousRank;
+        }
+        const performanceKey = mode === RANKING_MODE_WIN_PERCENTAGE
+          ? [
+              winRatioKey(record.wins, record.games),
+              record.wins,
+            ].join("|")
+          : [
+              record.points,
+              record.averageOpponentRating,
+              record.bestUpset,
+            ].join("|");
         if (performanceKey !== previousPerformanceKey) {
           previousRank = qualifiedPosition;
           previousPerformanceKey = performanceKey;
         }
         return previousRank;
-      })(),
-    }));
+      })();
+      return {
+        ...record,
+        position: index + 1,
+        rank,
+      };
+    });
+
+    if (mode !== RANKING_MODE_COMPETITIVE) return ranked;
+
+    const eligibleRows = ranked.filter(record => record.eligible);
+    const identicalGroups = new Map();
+    eligibleRows.forEach(record => {
+      const group = identicalGroups.get(record.rank) || [];
+      group.push(record);
+      identicalGroups.set(record.rank, group);
+    });
+
+    return ranked.map(record => {
+      if (!record.eligible) {
+        return {
+          ...record,
+          rankCriterion: null,
+          rankReason: "",
+          tieBreakReason: null,
+          requiresPodiumDecider: false,
+          podiumDeciderGroupId: null,
+          podiumDeciderPlayerIds: [],
+        };
+      }
+
+      const identicalGroup = identicalGroups.get(record.rank) || [record];
+      const isIdenticalTie = identicalGroup.length > 1;
+      const requiresPodiumDecider = isIdenticalTie && Number(record.rank) <= 3;
+      const deciderGroupId = requiresPodiumDecider
+        ? `podium-decider-rank-${record.rank}`
+        : null;
+
+      if (isIdenticalTie) {
+        const criterion = requiresPodiumDecider
+          ? "podium_decider"
+          : "identical_record";
+        return {
+          ...record,
+          rankCriterion: criterion,
+          rankReason: requiresPodiumDecider
+            ? competitiveReason(criterion)
+            : "Identical competitive record",
+          tieBreakReason: requiresPodiumDecider
+            ? competitiveReason(criterion)
+            : null,
+          requiresPodiumDecider,
+          podiumDeciderGroupId: deciderGroupId,
+          podiumDeciderPlayerIds: requiresPodiumDecider
+            ? identicalGroup.map(player => player.id)
+            : [],
+        };
+      }
+
+      const eligibleIndex = eligibleRows.findIndex(player => player.id === record.id);
+      const previous = eligibleRows[eligibleIndex - 1] || null;
+      const next = eligibleRows[eligibleIndex + 1] || null;
+      const samePointsPeer = previous?.pointsExact === record.pointsExact
+        ? previous
+        : next?.pointsExact === record.pointsExact
+          ? next
+          : null;
+      const criterion = samePointsPeer
+        ? competitiveCriterion(record, samePointsPeer)
+        : "performance_points";
+      const reason = competitiveReason(criterion);
+
+      return {
+        ...record,
+        rankCriterion: criterion,
+        rankReason: reason,
+        tieBreakReason: criterion && criterion !== "performance_points"
+          ? reason
+          : null,
+        requiresPodiumDecider: false,
+        podiumDeciderGroupId: null,
+        podiumDeciderPlayerIds: [],
+      };
+    });
   }
 
   function podiumRows(rows, limit = 3) {
     return (Array.isArray(rows) ? rows : [])
-      .filter(row => row?.eligible)
-      .slice(0, Math.max(0, Number(limit) || 0));
+      .filter(row => row?.eligible && Number(row.rank) <= Math.max(0, Number(limit) || 0));
   }
 
   return Object.freeze({
     VERSION,
+    RANKING_MODE_PERFORMANCE,
+    RANKING_MODE_WIN_PERCENTAGE,
+    RANKING_MODE_COMPETITIVE,
     K_FACTOR,
     RATING_SCALE,
     MIN_PODIUM_GAMES,
     BASE_RATING,
     SKILL_STEP,
     normalizeSkillLevel,
+    normalizeRankingMode,
+    winRatioKey,
     seedRating,
     expectedScore,
     matchDelta,
+    exactMatchDelta,
+    compareWinRates,
+    competitiveCriterion,
+    compareCompetitive,
     chronologicalMatches,
     calculateStandings,
     podiumRows,
