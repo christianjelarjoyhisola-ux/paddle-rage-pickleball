@@ -12,12 +12,13 @@
 //     -> returns a short-lived signed URL to view the stored receipt image.
 //
 // Decision lanes:
-//   auto_approved : zero hard flags, zero soft flags, OCR confident
-//   manual_review : soft flag(s) or unreadable fields or low confidence
-//   rejected      : any hard flag (duplicate / wrong number / underpay / stale)
+//   auto_approved : a persisted GCash booking passes every dedicated check
+//   manual_review : any uncertain or mismatched GCash evidence
+//   rejected      : a proven reused GCash reference, or legacy provider hard flag
 //
-// Rejections auto-cancel the booking and release its slot. Uncertain OCR fields
-// must therefore route to manual review instead of becoming hard flags.
+// A GCash manual-review result always keeps the booking pending and its slot
+// held. Only a payment reference already claimed by another booking is allowed
+// to cancel a GCash booking automatically.
 // ----------------------------------------------------------------------------
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -25,10 +26,17 @@ import { Image } from "https://deno.land/x/imagescript@1.2.17/mod.ts";
 import {
   calculateCourtPayment,
   chooseExpectedDue,
+  classifyStoredSessionPayment,
   closeMoney,
   roundMoney,
   toNumber,
 } from "../_shared/booking-payment.ts";
+import {
+  compareGcashRecipient,
+  type GcashReceiptParse,
+  type GcashRecipientComparison,
+  parseGcashReceipt,
+} from "../_shared/gcash-receipt.ts";
 import {
   detectReceiptImageContentType,
   googleVisionOcr,
@@ -61,7 +69,8 @@ const corsHeaders = {
 
 // Payment must happen within this many minutes after the booking/session join
 // is started.
-const PAYMENT_WINDOW_MINUTES = 10;
+// Keep this aligned with the customer-facing reservation countdown.
+const PAYMENT_WINDOW_MINUTES = 15;
 // OCR usually reads only minute-level timestamps. A receipt paid during the
 // same minute as the hold can look a few seconds "before" the booking.
 const PAYMENT_EARLY_TOLERANCE_MINUTES = 2;
@@ -92,6 +101,7 @@ type OcrProvider = "google_vision" | "none";
 type OcrResult = {
   text: string;
   confidence: number;
+  confidenceSource: "native" | "heuristic" | "none";
   provider: OcrProvider;
   primaryProvider?: OcrProvider;
   fallbackProvider?: OcrProvider;
@@ -126,7 +136,7 @@ function publicReceiptMessage(
     flagSet.has("TIME_EXPIRED") || flagSet.has("TIME_FUTURE") ||
     flagSet.has("DATE_NOT_TODAY")
   ) {
-    return "Payment was sent outside the allowed 10-minute window. Please create a new booking.";
+    return `Payment was sent outside the allowed ${PAYMENT_WINDOW_MINUTES}-minute window. Please create a new booking.`;
   }
   if (flagSet.has("IMAGE_UNREADABLE") || flagSet.has("OCR_UNAVAILABLE")) {
     return "Receipt image is unreadable. Please upload a clearer screenshot.";
@@ -276,6 +286,11 @@ function formatPhDateTime12(d: Date | null): string | null {
   return `${year}-${month}-${day} ${hour}:${minute} ${ampm} PH`;
 }
 
+function formatPhInstantDateTime12(d: Date | null): string | null {
+  if (!d) return null;
+  return formatPhDateTime12(toPhWallClockDate(d.toISOString()));
+}
+
 const MONTHS: Record<string, number> = {
   jan: 0,
   feb: 1,
@@ -365,11 +380,6 @@ function isBpiConfirmationNo(value: string): boolean {
 
 function flexibleDigitPattern(digits: string): RegExp {
   return new RegExp(digits.split("").join("[^0-9]*"));
-}
-
-function maskedDigitPattern(digits: string): RegExp {
-  const mask = "[\\s\\-.*xX#\\u2022\\u2023\\u25E6\\u2043\\u2219]*";
-  return new RegExp(digits.split("").join(mask));
 }
 
 // Extract candidate 13-digit GCash reference numbers from OCR text.
@@ -595,16 +605,6 @@ function extractAmount(text: string): number | null {
   return any ? parseFloat(any[1].replace(/,/g, "")) : null;
 }
 
-// Normalize a PH mobile number to its 10 significant digits (drop 0/63 prefix).
-function normalizeMobile(d: string): string {
-  let x = digitsOnly(d);
-  if (x.startsWith("63")) x = x.slice(2);
-  if (x.startsWith("0")) x = x.slice(1);
-  return x; // expect 10 digits: 9XXXXXXXXX
-}
-
-type NumberCheck = "match" | "wrong" | "unreadable";
-
 function normalizedProvider(raw: string): PaymentProvider {
   const provider = raw.toLowerCase();
   if (
@@ -760,10 +760,9 @@ async function loadBookingGroup(
   let query = db
     .from("bookings")
     .select(
-      "ref, booking_group_ref, court_id, slots, total, downpayment, host_booking, gcash_ref, payment_method, date, payment_status, status, full_name, created_at",
+      "ref, booking_group_ref, court_id, court_name, slots, total, downpayment, host_booking, gcash_ref, payment_method, date, start_time, end_time, payment_status, status, full_name, created_at",
     )
-    .eq("booking_group_ref", groupRef)
-    .neq("status", "cancelled");
+    .eq("booking_group_ref", groupRef);
   if (scope.customerAccessTokenHash) {
     query = query.eq(
       "customer_access_token_hash",
@@ -837,61 +836,6 @@ function bookingUpdateQuery(
   return query;
 }
 
-function checkReceiverNumber(text: string, expectedRaw: string): NumberCheck {
-  const expected = normalizeMobile(expectedRaw);
-  if (expected.length < 10) return "unreadable"; // no configured number to compare
-  const last4 = expected.slice(-4);
-
-  // Full mobile numbers in the receipt (handles +63 / 0 / 9 forms).
-  const fullMatches =
-    text.match(/(?:\+?63|0)?9\d{2}[\s\-•*x.]*\d{2,3}[\s\-•*x.]*\d{2,4}/gi) ||
-    [];
-  let sawFull = false;
-  for (const fm of fullMatches) {
-    const norm = normalizeMobile(fm);
-    if (norm.length >= 10) {
-      sawFull = true;
-      if (norm === expected) return "match";
-    }
-  }
-  // Masked receipts often reveal only the last 4 digits.
-  if (maskedDigitPattern(last4).test(text)) return "match";
-  if (new RegExp(`(?:[•*xX#\\s\\-]{2,}|\\d)${last4}\\b`).test(text)) {
-    return "match";
-  }
-  if (text.includes(last4)) return "match";
-
-  // We positively saw a complete, different mobile number → confidently wrong.
-  if (sawFull) return "wrong";
-  return "unreadable";
-}
-
-// Loose masked-name match (e.g. "CO**TY**D P*CKL*B*LL" vs "PADDLE RAGE PICKLEBALL").
-function checkReceiverName(
-  text: string,
-  expectedName: string,
-): "match" | "mismatch" | "unreadable" {
-  const expected = (expectedName || "").toUpperCase().replace(/[^A-Z]/g, "");
-  if (expected.length < 3) return "unreadable";
-  const upper = text.toUpperCase();
-  // Compare on the alphabetic skeleton. Masked or incomplete names are neutral:
-  // GCash commonly shows names like "AN*****A A.", which should not block a
-  // valid receipt when number/ref/amount/date/time are correct.
-  const tokens = expected.match(/.{1,4}/g) || [];
-  let hits = 0;
-  for (const t of tokens) {
-    if (upper.replace(/[^A-Z]/g, "").includes(t)) hits++;
-  }
-  if (hits === 0) {
-    // try first 3 visible letters
-    if (upper.replace(/[^A-Z]/g, "").includes(expected.slice(0, 3))) {
-      return "match";
-    }
-    return "unreadable";
-  }
-  return hits >= Math.ceil(tokens.length / 2) ? "match" : "unreadable";
-}
-
 // Best-effort "looks like a real GCash receipt" heuristic (soft signal only).
 function looksLikeGcashReceipt(text: string): boolean {
   const t = text.toLowerCase();
@@ -925,6 +869,21 @@ function ocrCriticalGaps(
   typedRef: string,
 ): string[] {
   if (!text) return ["text"];
+  if (provider === "gcash") {
+    const parsed = parseGcashReceipt(text, { typedReference: typedRef });
+    const gaps: string[] = [];
+    if (
+      !parsed.reference.value ||
+      parsed.reference.source !== "ref_label" ||
+      parsed.reference.typedMatch !== "match"
+    ) gaps.push("reference");
+    if (
+      parsed.amount.amount == null || !parsed.amount.reliable ||
+      parsed.amount.ambiguous || parsed.amount.conflictingPrimaryAmounts
+    ) gaps.push("amount");
+    if (parsed.timestamp.completeness !== "date_time") gaps.push("date");
+    return gaps;
+  }
   const gaps: string[] = [];
   if (!extractReference(text, provider, typedRef)) gaps.push("reference");
   const mayaAmount = provider === "maya"
@@ -976,13 +935,97 @@ async function runOCR(
       return {
         text: "",
         confidence: 0,
+        confidenceSource: "none",
         provider: "none",
         primaryProvider: "google_vision",
         error: errMsg(e),
       };
     }
   }
-  return { text: "", confidence: 0, provider: "none" };
+  return {
+    text: "",
+    confidence: 0,
+    confidenceSource: "none",
+    provider: "none",
+  };
+}
+
+function telegramAdminUrl(): string {
+  return Deno.env.get("APP_ADMIN_URL") ||
+    "https://paddleragecdo.ph/admin.html";
+}
+
+function shortTelegramFlags(flags: string[]): string {
+  const shown = flags.slice(0, 2);
+  const remaining = Math.max(0, flags.length - shown.length);
+  return `${shown.join(", ") || "REVIEW_REQUIRED"}${
+    remaining ? ` +${remaining}` : ""
+  }`;
+}
+
+function telegramPeso(value: unknown): string {
+  return `₱${
+    Number(value || 0).toLocaleString("en-PH", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })
+  }`;
+}
+
+function telegramDate(value: unknown): string {
+  const raw = String(value || "").slice(0, 10);
+  const date = new Date(`${raw}T00:00:00+08:00`);
+  if (!raw || Number.isNaN(date.getTime())) return raw || "—";
+  return date.toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "Asia/Manila",
+  });
+}
+
+function telegramDateTime(value: unknown): string {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) return "—";
+  const datePart = date.toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "Asia/Manila",
+  });
+  const timePart = date.toLocaleTimeString("en-PH", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Manila",
+  });
+  return `${datePart} · ${timePart}`;
+}
+
+function telegramTimeMinutes(value: unknown): number | null {
+  const match = String(value || "").trim().match(
+    /^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i,
+  );
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || 0);
+  const meridiem = String(match[3] || "").toUpperCase();
+  if (minute > 59 || hour > (meridiem ? 12 : 23)) return null;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  if (meridiem === "PM" && hour !== 12) hour += 12;
+  return hour * 60 + minute;
+}
+
+function telegramCourtHours(row: Record<string, unknown>): number {
+  if (Array.isArray(row.slots) && row.slots.length) return row.slots.length;
+  const start = telegramTimeMinutes(row.start_time);
+  const end = telegramTimeMinutes(row.end_time);
+  if (start == null || end == null) return 0;
+  return Math.max(0, (end - start) / 60);
+}
+
+function telegramHours(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 async function sendTelegram(message: string) {
@@ -1292,8 +1335,10 @@ Deno.serve(async (req) => {
       const persistedStatus = String(booking.status || "");
       const persistedPaymentStatus = String(booking.payment_status || "");
       const terminal =
-        ["confirmed", "cancelled", "completed"].includes(persistedStatus) ||
-        ["paid", "downpayment_paid", "rejected"].includes(
+        ["confirmed", "cancelled", "completed", "forfeited"].includes(
+          persistedStatus,
+        ) ||
+        ["paid", "downpayment_paid", "deposit_retained", "rejected"].includes(
           persistedPaymentStatus,
         );
       if (terminal) {
@@ -1320,6 +1365,8 @@ Deno.serve(async (req) => {
           receiptImageHash: booking.receipt_image_hash || null,
           receiptPhash: booking.receipt_phash || null,
           receiptVerifiedAt: booking.receipt_verified_at || null,
+          paymentStatus: persistedPaymentStatus || null,
+          bookingStatus: persistedStatus || null,
           message: "This booking has already been processed.",
         });
       }
@@ -1533,7 +1580,10 @@ Deno.serve(async (req) => {
           receipt_flags: [],
         },
         bookingMutationScope,
-      ).in("status", ["verifying", "pending"]).select("ref");
+      )
+        .in("status", ["verifying", "pending"])
+        .in("payment_status", ["unpaid", "pending", "for_verification"])
+        .select("ref");
       if (safeStateErr || !safeRows?.length) {
         console.error(
           "receipt safe-state update failed:",
@@ -1572,13 +1622,17 @@ Deno.serve(async (req) => {
     const expectedName = expectedMerchant.name;
     let pricingError = "";
     let expectedAmount = 0;
+    let expectedTotal = 0;
+    let autoPaymentStatus: "paid" | "downpayment_paid" | null = null;
     let bookingGroup: Array<Record<string, unknown>> = [booking];
     try {
       if (inlinePricingKind === "host_session") {
         const amounts = await expectedHostSessionAmounts(db, booking);
+        expectedTotal = amounts.total;
         expectedAmount = amounts.due;
       } else if (inlinePricingKind === "open_play") {
         const amounts = expectedOpenPlayAmounts(booking, settings);
+        expectedTotal = amounts.total;
         expectedAmount = amounts.due;
       } else {
         bookingGroup = await loadBookingGroup(
@@ -1591,7 +1645,18 @@ Deno.serve(async (req) => {
           bookingGroup,
           settings,
         );
+        expectedTotal = amounts.total;
         expectedAmount = amounts.due;
+      }
+      if (hasPersistedBooking) {
+        autoPaymentStatus = classifyStoredSessionPayment(
+          expectedAmount,
+          uniqueBookingRows(bookingGroup).map((row) => ({
+            total: row.total,
+            downpayment: row.downpayment,
+            hostBooking: row.host_booking === true,
+          })),
+        );
       }
     } catch (err) {
       pricingError = errMsg(err);
@@ -1635,6 +1700,14 @@ Deno.serve(async (req) => {
       // for approval or cancellation. Keep the receipt for an owner review.
       flags.push("MERCHANT_CONFIG_MISSING");
     }
+    if (
+      provider === "gcash" && !expectedNumber &&
+      !flags.includes("MERCHANT_CONFIG_MISSING")
+    ) {
+      // A QR image alone cannot prove which recipient the screenshot paid.
+      // GCash auto-approval requires a configured full mobile number.
+      flags.push("MERCHANT_CONFIG_MISSING");
+    }
     if (provider === "gotyme" || provider === "pnb") {
       // These providers currently have only generic OCR extraction. Until
       // recipient/method/date/time rules are provider-specific, never
@@ -1654,6 +1727,7 @@ Deno.serve(async (req) => {
     );
     let ocrText = "";
     let ocrConfidence = 0;
+    let ocrConfidenceSource: OcrResult["confidenceSource"] = "none";
     let ocrProvider: OcrResult["provider"] = "none";
     let ocrPrimaryProvider: OcrResult["primaryProvider"] = "none";
     let ocrFallbackProvider: OcrResult["fallbackProvider"] | null = null;
@@ -1663,6 +1737,7 @@ Deno.serve(async (req) => {
       const ocr = await runOCR(visionKey, imageBase64, provider, typedRef);
       ocrText = ocr.text;
       ocrConfidence = ocr.confidence;
+      ocrConfidenceSource = ocr.confidenceSource;
       ocrProvider = ocr.provider;
       ocrPrimaryProvider = ocr.primaryProvider || ocr.provider;
       ocrFallbackProvider = ocr.fallbackProvider || null;
@@ -1686,7 +1761,18 @@ Deno.serve(async (req) => {
     }
 
     // ── field extraction ────────────────────────────────────────────────────
-    const extractedRef = extractReference(ocrText, provider, typedRef);
+    const gcashParse: GcashReceiptParse | null = provider === "gcash"
+      ? parseGcashReceipt(ocrText, { typedReference: typedRef })
+      : null;
+    const gcashRecipient: GcashRecipientComparison | null = gcashParse
+      ? compareGcashRecipient(gcashParse.receiver, {
+        phone: expectedNumber,
+        name: expectedName,
+      })
+      : null;
+    const extractedRef = provider === "gcash"
+      ? gcashParse?.reference.value || null
+      : extractReference(ocrText, provider, typedRef);
     const extractedInvoice = provider === "bdopay"
       ? extractBdoInvoiceNumber(ocrText)
       : null;
@@ -1696,7 +1782,9 @@ Deno.serve(async (req) => {
     const extractedBpiTransactionRefNo = provider === "bpi"
       ? extractBpiTransactionRefNo(ocrText)
       : null;
-    const amountExtraction = provider === "maya"
+    const amountExtraction = provider === "gcash"
+      ? gcashParse?.amount || null
+      : provider === "maya"
       ? extractReceiptAmount(ocrText, { provider })
       : null;
     // A weak or ambiguous Maya read is never evidence of underpayment. It is
@@ -1704,13 +1792,29 @@ Deno.serve(async (req) => {
     const extractedAmount = amountExtraction
       ? (amountExtraction.reliable ? amountExtraction.amount : null)
       : extractAmount(ocrText);
-    const { date: receiptDate, shifted: receiptDateTime } =
-      parseReceiptDateTime(ocrText);
-    const bookingStartedAt = toPhWallClockDate(
+    const genericReceiptTimestamp = parseReceiptDateTime(ocrText);
+    const receiptDate = provider === "gcash"
+      ? gcashParse?.timestamp.date || null
+      : genericReceiptTimestamp.date;
+    const receiptDateTime = provider === "gcash"
+      ? (gcashParse?.timestamp.instant
+        ? new Date(gcashParse.timestamp.instant)
+        : null)
+      : genericReceiptTimestamp.shifted;
+    const bookingStartedWallClock = toPhWallClockDate(
       booking.created_at || booking.createdAt,
     );
-    const bookingStartedDate = bookingStartedAt
-      ? bookingStartedAt.toISOString().slice(0, 10)
+    const bookingStartedInstant = (() => {
+      const parsed = new Date(
+        String(booking.created_at || booking.createdAt || ""),
+      );
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    })();
+    const bookingStartedAt = provider === "gcash"
+      ? bookingStartedInstant
+      : bookingStartedWallClock;
+    const bookingStartedDate = bookingStartedWallClock
+      ? bookingStartedWallClock.toISOString().slice(0, 10)
       : null;
     const receiptAgeMinutes = bookingStartedAt && receiptDateTime
       ? (receiptDateTime.getTime() - bookingStartedAt.getTime()) / 60000
@@ -1735,18 +1839,29 @@ Deno.serve(async (req) => {
       }
 
       if (provider === "gcash") {
-        // GCash-to-GCash focused path. The receipt layout is consistent but OCR
-        // can miss the small right-aligned timestamp, so unreadable date/time is
-        // not a failure for GCash. Parsed dates/times are still enforced.
-        if (!extractedRef && !flags.includes("REF_FORMAT_INVALID")) {
+        // Dedicated GCash parser. OCR observations stay independent from the
+        // customer-typed reference and from configured recipient values.
+        if (!gcashParse || !gcashRecipient) {
+          flags.push("GCASH_RECEIPT_UNREADABLE");
+        } else if (!extractedRef && !flags.includes("REF_FORMAT_INVALID")) {
           flags.push("REF_UNREADABLE");
-        } else if (typedRef && extractedRef && extractedRef !== typedRef) {
+        } else if (gcashParse.reference.typedMatch === "mismatch") {
           flags.push("REF_MISMATCH");
+        } else if (
+          gcashParse.reference.source !== "ref_label" ||
+          gcashParse.reference.confidence !== "high"
+        ) {
+          flags.push("REF_LABEL_UNREADABLE");
         }
 
         if (pricingError) flags.push("PRICING_UNAVAILABLE");
-        else if (extractedAmount == null) flags.push("AMOUNT_UNREADABLE");
-        else if (extractedAmount < expectedAmount - PESO_TOLERANCE) {
+        else if (
+          extractedAmount == null || !gcashParse?.amount.reliable ||
+          gcashParse?.amount.ambiguous
+        ) flags.push("AMOUNT_UNREADABLE");
+        else if (gcashParse?.amount.conflictingPrimaryAmounts) {
+          flags.push("AMOUNT_REVIEW");
+        } else if (!closeMoney(extractedAmount, expectedAmount)) {
           flags.push("AMOUNT_MISMATCH");
         }
 
@@ -1765,20 +1880,46 @@ Deno.serve(async (req) => {
           }
         }
 
-        if (!isGcashToGcashReceipt(ocrText)) {
+        if (
+          gcashParse?.indicators.classification !== "gcash" ||
+          !gcashParse?.indicators.sentViaGcash ||
+          !gcashParse?.indicators.totalAmountSent ||
+          !gcashParse?.indicators.referenceLabel ||
+          !gcashParse?.indicators.amountLabel
+        ) {
           flags.push("GCASH_RECEIPT_UNREADABLE");
         }
 
-        const numCheck = checkReceiverNumber(ocrText, expectedNumber);
-        if (numCheck === "wrong") flags.push("WRONG_GCASH_NUMBER");
-        else if (numCheck === "unreadable" && expectedNumber) {
+        if (gcashRecipient?.phone === "mismatch") {
+          flags.push("WRONG_GCASH_NUMBER");
+        } else if (gcashRecipient?.phone !== "exact") {
           flags.push("NUMBER_UNREADABLE");
         }
 
-        const nameCheck = checkReceiverName(ocrText, expectedName);
-        if (nameCheck === "mismatch") flags.push("RECEIVER_NAME_MISMATCH");
-        else if (nameCheck === "unreadable" && expectedName) {
+        if (gcashRecipient?.name === "mismatch") {
+          flags.push("RECEIVER_NAME_MISMATCH");
+        } else if (
+          expectedName && gcashRecipient?.phone !== "exact" &&
+          gcashRecipient?.name !== "exact" &&
+          gcashRecipient?.name !== "masked_compatible"
+        ) {
           flags.push("RECEIVER_NAME_UNREADABLE");
+        }
+
+        const groupPaymentConsistent = bookingGroup.length > 0 &&
+          bookingGroup.every((row) =>
+            paymentMethodProvider(row.payment_method) === "gcash" &&
+            normalizeReferenceForProvider(
+                String(row.gcash_ref || ""),
+                "gcash",
+              ) === typedRef &&
+            ["verifying", "pending"].includes(String(row.status || "")) &&
+            ["pending", "for_verification", "unpaid"].includes(
+              String(row.payment_status || ""),
+            )
+          );
+        if (!groupPaymentConsistent || !autoPaymentStatus) {
+          flags.push("BOOKING_GROUP_PAYMENT_MISMATCH");
         }
       } else if (provider === "bdopay") {
         // BDO Pay focused path: do not require GCash/GXI/Maya evidence here.
@@ -1900,18 +2041,53 @@ Deno.serve(async (req) => {
 
       // This heuristic is not proof of fraud. OCR can miss labels on a real
       // screenshot, so flag it for an owner instead of auto-cancelling.
-      if (!looksLikeGcashReceipt(ocrText)) flags.push("SUSPECTED_FAKE");
+      if (provider !== "gcash" && !looksLikeGcashReceipt(ocrText)) {
+        flags.push("SUSPECTED_FAKE");
+      }
     }
     if (editedBySoftware(bytes)) flags.push("EDITED_METADATA");
 
-    // Low OCR confidence → soft review signal.
-    if (ocrText && ocrConfidence < 0.55) flags.push("LOW_OCR_CONFIDENCE");
+    // Auto-verifying GCash requires a high-quality OCR read.
+    const minimumOcrConfidence = provider === "gcash" ? 0.9 : 0.55;
+    if (
+      ocrText &&
+      (
+        ocrConfidence < minimumOcrConfidence ||
+        (provider === "gcash" && ocrConfidenceSource !== "native")
+      )
+    ) {
+      flags.push("LOW_OCR_CONFIDENCE");
+    }
 
     // ── reference reuse / replay guard ──────────────────────────────────────
-    // Use the OCR-extracted ref when available, else the customer-typed ref.
+    // For GCash, a duplicate is terminal only when a high-confidence labeled
+    // OCR reference independently matches the customer's stored reference.
+    // A typed-only collision may be a typo, so it remains a soft possible
+    // duplicate for owner review. Other providers retain their existing
+    // extracted-reference behavior.
     // GCash refs are stored as digits only; other providers are namespaced so
     // same-looking references from different banks do not collide.
-    const rawRefForDedupe = extractedRef || typedRef || null;
+    const gcashReferenceProven = provider === "gcash" &&
+      // A collision is terminal only when it is the sole failed check on an
+      // otherwise auto-verifiable GCash receipt. Low-confidence, conflicting,
+      // or incomplete evidence must stay pending for an owner.
+      flags.length === 0 &&
+      ocrProvider === "google_vision" &&
+      ocrConfidenceSource === "native" &&
+      ocrConfidence >= minimumOcrConfidence &&
+      /^\d{13}$/.test(typedRef) &&
+      gcashParse?.reference.value === typedRef &&
+      gcashParse.reference.source === "ref_label" &&
+      gcashParse.reference.confidence === "high" &&
+      gcashParse.reference.typedMatch === "match" &&
+      gcashParse.indicators.classification === "gcash" &&
+      gcashParse.indicators.sentViaGcash &&
+      gcashParse.indicators.totalAmountSent &&
+      gcashParse.indicators.referenceLabel &&
+      gcashParse.indicators.amountLabel;
+    const rawRefForDedupe = provider === "gcash"
+      ? (/^\d{13}$/.test(typedRef) ? typedRef : null)
+      : extractedRef || typedRef || null;
     const refForDedupe = rawRefForDedupe
       ? provider === "gcash"
         ? rawRefForDedupe
@@ -1924,7 +2100,9 @@ Deno.serve(async (req) => {
       dedupeKeys.push({
         key: refForDedupe,
         providerKey: provider,
-        duplicateFlag: "DUPLICATE_REF",
+        duplicateFlag: provider === "gcash" && !gcashReferenceProven
+          ? "POSSIBLE_DUPLICATE_REF"
+          : "DUPLICATE_REF",
       });
     }
     if (provider === "bdopay" && extractedInvoice) {
@@ -1962,15 +2140,33 @@ Deno.serve(async (req) => {
 
     // ── decision routing ────────────────────────────────────────────────────
     const hasHard = flags.some((f) => HARD_FLAGS.has(f));
-    // OCR is evidence extraction, not payment authentication. A synthetic
-    // image can contain every phrase, amount, timestamp, and reference that
-    // Vision expects, so even a clean parse must wait for an owner or a
-    // provider-signed webhook/API before money or a booking is settled.
-    const result: "manual_review" | "rejected" = hasHard
-      ? "rejected"
-      : "manual_review";
+    const hasProvenDuplicate = flags.some((flag) =>
+      [
+        "DUPLICATE_REF",
+        "DUPLICATE_INVOICE",
+        "DUPLICATE_INSTAPAY_REF",
+        "DUPLICATE_BPI_TRANSACTION_REF",
+      ].includes(flag)
+    );
+    const gcashCanAutoApprove = provider === "gcash" &&
+      hasPersistedBooking &&
+      autoPaymentStatus !== null &&
+      flags.length === 0;
+    let result: "auto_approved" | "manual_review" | "rejected" =
+      gcashCanAutoApprove ? "auto_approved" : provider === "gcash"
+        // GCash OCR mismatches are preserved for an owner instead of releasing
+        // a possibly paid customer's slot. Only a proven reused reference is
+        // terminal.
+        ? (hasProvenDuplicate ? "rejected" : "manual_review")
+        : hasHard
+        ? "rejected"
+        : "manual_review";
 
-    const confidence = result === "manual_review" ? 0.5 : 0.1;
+    let confidence = result === "auto_approved"
+      ? ocrConfidence
+      : result === "manual_review"
+      ? 0.5
+      : 0.1;
 
     const extracted = {
       ref: extractedRef,
@@ -1992,22 +2188,48 @@ Deno.serve(async (req) => {
       })) || [],
       date: receiptDate,
       time: receiptDateTime ? receiptDateTime.toISOString() : null,
-      timePh12: formatPhDateTime12(receiptDateTime),
+      timePh12: provider === "gcash"
+        ? formatPhInstantDateTime12(receiptDateTime)
+        : formatPhDateTime12(receiptDateTime),
       bookingStartedAt: bookingStartedAt
         ? bookingStartedAt.toISOString()
         : null,
-      bookingStartedAtPh12: formatPhDateTime12(bookingStartedAt),
+      bookingStartedAtPh12: provider === "gcash"
+        ? formatPhInstantDateTime12(bookingStartedAt)
+        : formatPhDateTime12(bookingStartedAt),
       bookingStartedDate,
       receiptAgeMinutes,
       allowedPaymentWindowMinutes: PAYMENT_WINDOW_MINUTES,
       allowedPaymentEarlyToleranceMinutes: PAYMENT_EARLY_TOLERANCE_MINUTES,
       expectedAmount,
+      expectedTotal,
+      autoPaymentStatus,
       provider,
+      parserVersion: gcashParse ? "gcash_v1" : "legacy",
+      gcash: gcashParse
+        ? {
+          reference: gcashParse.reference,
+          amount: {
+            value: gcashParse.amount.amount,
+            reliable: gcashParse.amount.reliable,
+            ambiguous: gcashParse.amount.ambiguous,
+            reason: gcashParse.amount.reason,
+            conflictingPrimaryAmounts:
+              gcashParse.amount.conflictingPrimaryAmounts,
+          },
+          timestamp: gcashParse.timestamp,
+          receiver: gcashParse.receiver,
+          recipientComparison: gcashRecipient,
+          indicators: gcashParse.indicators,
+          issues: gcashParse.issues,
+        }
+        : null,
       ocrProvider,
       ocrPrimaryProvider,
       ocrFallbackProvider,
       ocrFallbackReason,
       ocrConfidence,
+      ocrConfidenceSource,
       ocrTextLength: ocrText.length,
       expectedReceiverNumber:
         provider === "bdopay" || provider === "maya" || provider === "bpi"
@@ -2017,156 +2239,370 @@ Deno.serve(async (req) => {
     };
 
     // ── persist outcome on the booking ──────────────────────────────────────
+    const receiptVerifiedAt = new Date().toISOString();
     const statusUpdate: Record<string, unknown> = {};
-    if (result === "manual_review") {
-      statusUpdate.payment_status = "for_verification";
-      if (booking.status !== "completed" && booking.status !== "cancelled") {
-        statusUpdate.status = "pending";
-      }
-    } else if (result === "rejected") {
-      // Cancel the booking immediately — invalid/fake receipt → slot must be freed.
-      statusUpdate.status = "cancelled";
-      statusUpdate.payment_status = "rejected";
-    }
-
     const metadataUpdate: Record<string, unknown> = {
       receipt_image_url: objectPath,
       receipt_image_hash: imageHash,
       receipt_phash: phash,
-      receipt_status: result,
-      receipt_flags: flags,
       receipt_extracted: extracted,
-      receipt_confidence: confidence,
-      receipt_verified_at: new Date().toISOString(),
+      receipt_verified_at: receiptVerifiedAt,
     };
+    const refreshOutcomeUpdates = () => {
+      delete statusUpdate.status;
+      delete statusUpdate.payment_status;
+      delete statusUpdate.paid_at;
+      if (result === "auto_approved") {
+        statusUpdate.status = "confirmed";
+        statusUpdate.payment_status = autoPaymentStatus;
+        statusUpdate.paid_at = receiptVerifiedAt;
+      } else if (result === "manual_review") {
+        statusUpdate.status = "pending";
+        statusUpdate.payment_status = "for_verification";
+      } else {
+        statusUpdate.status = "cancelled";
+        statusUpdate.payment_status = "rejected";
+      }
+      metadataUpdate.receipt_status = result;
+      metadataUpdate.receipt_flags = flags;
+      metadataUpdate.receipt_confidence = confidence;
+    };
+    refreshOutcomeUpdates();
 
     let finalUpdateError: string | null = null;
+    let auditPersisted = false;
+    let finalPaymentStatus = String(statusUpdate.payment_status || "");
+    let finalBookingStatus = String(statusUpdate.status || "");
 
     // Skip DB update when booking hasn't been saved yet (pre-save verification flow).
     if (hasPersistedBooking) {
-      // Metadata and final status must be one conditional update. This acts as
-      // a compare-and-set: one concurrent verifier can finalize a row, while a
-      // later verifier cannot overwrite that terminal outcome or its evidence.
-      const finalUpdate = { ...metadataUpdate, ...statusUpdate };
-      const { data: updatedRows, error: updateErr } = await bookingUpdateQuery(
-        db,
-        booking,
-        finalUpdate,
-        bookingMutationScope,
-      )
-        .in("status", ["verifying", "pending"])
-        .select("ref, status, payment_status");
-      if (updateErr) {
-        finalUpdateError = errMsg(updateErr);
-        console.error("booking FINAL update failed:", finalUpdateError);
-      } else if (!updatedRows || updatedRows.length === 0) {
-        // A zero-row CAS commonly means a concurrent request already finalized
-        // the booking. Confirm that before reporting a persistence failure.
-        const { data: currentRow } = await db.from("bookings")
-          .select(
-            "status,payment_status,receipt_status,receipt_flags,receipt_extracted,receipt_confidence,receipt_image_url,receipt_image_hash,receipt_phash,receipt_verified_at",
-          )
-          .eq("ref", bookingRef)
-          .maybeSingle();
-        const currentStatus = String(currentRow?.status || "");
-        const currentPayment = String(currentRow?.payment_status || "");
-        const concurrentlyFinalized =
-          ["confirmed", "cancelled", "completed"].includes(currentStatus) ||
-          ["paid", "downpayment_paid", "rejected"].includes(currentPayment);
-        if (concurrentlyFinalized) {
-          const persistedReceiptStatus = String(
-            currentRow?.receipt_status || "",
+      if (result === "auto_approved") {
+        const { data: finalizedRows, error: finalizeError } = await db.rpc(
+          "finalize_gcash_receipt_auto_approval",
+          {
+            p_booking_ref: bookingRef,
+            p_booking_refs: [...bookingGroupRefs].sort(),
+            p_lease_key: receiptLeaseKey,
+            p_lease_token: receiptLeaseToken,
+            p_gcash_reference: extractedRef,
+            p_payment_status: autoPaymentStatus,
+            p_receipt_image_url: objectPath,
+            p_receipt_image_hash: imageHash,
+            p_receipt_phash: phash,
+            p_receipt_flags: flags,
+            p_receipt_extracted: extracted,
+            p_receipt_confidence: confidence,
+            p_receipt_verified_at: receiptVerifiedAt,
+            p_raw_ocr_text: ocrText || null,
+          },
+        );
+        if (finalizeError) {
+          const finalizeMessage = errMsg(finalizeError);
+          // The ledger raises this exact message after confirming that another
+          // payment owns the reference. A generic 23505 can come from an
+          // unrelated unique constraint and must remain manual review.
+          const duplicateReference = /already been used for another payment/i
+            .test(finalizeMessage);
+          if (duplicateReference) {
+            if (!flags.includes("DUPLICATE_REF")) flags.push("DUPLICATE_REF");
+            result = "rejected";
+            confidence = 0.1;
+          } else {
+            flags.push("AUTO_APPROVAL_FAILED");
+            result = "manual_review";
+            confidence = 0.5;
+          }
+          refreshOutcomeUpdates();
+          finalPaymentStatus = String(statusUpdate.payment_status || "");
+          finalBookingStatus = String(statusUpdate.status || "");
+          console.error(
+            "GCash auto-approval finalization failed:",
+            finalizeMessage,
           );
-          const persistedResult = persistedReceiptStatus === "rejected" ||
-              currentStatus === "cancelled" || currentPayment === "rejected"
-            ? "rejected"
-            : persistedReceiptStatus === "manual_review"
-            ? "manual_review"
-            : "auto_approved";
-          return json({
-            ok: true,
-            status: persistedResult,
-            flags: [],
-            publicReason: publicReceiptMessage(
-              persistedResult,
-              Array.isArray(currentRow?.receipt_flags)
-                ? currentRow.receipt_flags
-                : [],
-            ),
-            extracted: currentRow?.receipt_extracted || null,
-            confidence: currentRow?.receipt_confidence ?? null,
-            receiptImageUrl: currentRow?.receipt_image_url || null,
-            receiptImageHash: currentRow?.receipt_image_hash || null,
-            receiptPhash: currentRow?.receipt_phash || null,
-            receiptVerifiedAt: currentRow?.receipt_verified_at || null,
-            message:
-              "This booking was already processed by another verification request.",
-          });
         } else {
-          finalUpdateError = `No non-terminal row matched ref=${bookingRef}`;
-          console.error(finalUpdateError);
+          auditPersisted = true;
+          const finalized = Array.isArray(finalizedRows)
+            ? finalizedRows.find((row) =>
+              String(row.booking_ref) === bookingRef
+            ) ||
+              finalizedRows[0]
+            : finalizedRows;
+          finalPaymentStatus = String(
+            finalized?.booking_payment_status || autoPaymentStatus || "",
+          );
+          finalBookingStatus = String(
+            finalized?.booking_status || "confirmed",
+          );
         }
       }
 
-      // Last-resort fallback: if a rejected receipt's atomic update failed, try
-      // more with just the cancel field. The slot MUST be freed on a rejected
-      // receipt — no exceptions.
-      if (finalUpdateError && result === "rejected") {
-        const { data: fallbackRows, error: fallbackErr } =
+      if (provider === "gcash" && result !== "auto_approved") {
+        const finalizeReview = async (
+          reviewResult: "manual_review" | "rejected",
+        ) =>
+          await db.rpc("finalize_gcash_receipt_review", {
+            p_booking_ref: bookingRef,
+            p_booking_refs: [...bookingGroupRefs].sort(),
+            p_lease_key: receiptLeaseKey,
+            p_lease_token: receiptLeaseToken,
+            p_gcash_reference: typedRef,
+            p_result: reviewResult,
+            p_receipt_image_url: objectPath,
+            p_receipt_image_hash: imageHash,
+            p_receipt_phash: phash,
+            p_receipt_flags: flags,
+            p_receipt_extracted: extracted,
+            p_receipt_confidence: confidence,
+            p_receipt_verified_at: receiptVerifiedAt,
+            p_raw_ocr_text: ocrText || null,
+          });
+
+        let reviewResponse = await finalizeReview(result);
+        if (reviewResponse.error && result === "rejected") {
+          // Cancellation is allowed only when the transaction independently
+          // proves the duplicate. Any race or validation failure falls back to
+          // a held slot and owner review.
+          flags.push("REJECTION_FINALIZATION_FAILED");
+          result = "manual_review";
+          confidence = 0.5;
+          refreshOutcomeUpdates();
+          reviewResponse = await finalizeReview("manual_review");
+        }
+
+        if (reviewResponse.error) {
+          finalUpdateError = errMsg(reviewResponse.error);
+          console.error(
+            "GCash review finalization failed:",
+            finalUpdateError,
+          );
+
+          // A stale lease commonly means a newer verifier or administrator
+          // already completed the booking. Return that canonical terminal
+          // state so the browser never downgrades it to pending.
+          const { data: currentRow } = await db.from("bookings")
+            .select(
+              "status,payment_status,receipt_status,receipt_flags,receipt_extracted,receipt_confidence,receipt_image_url,receipt_image_hash,receipt_phash,receipt_verified_at",
+            )
+            .eq("ref", bookingRef)
+            .maybeSingle();
+          const currentStatus = String(currentRow?.status || "");
+          const currentPayment = String(currentRow?.payment_status || "");
+          const terminalRejected = currentStatus === "cancelled" ||
+            currentPayment === "rejected";
+          const terminalApproved =
+            ["confirmed", "completed", "forfeited"].includes(currentStatus) ||
+            ["paid", "downpayment_paid", "deposit_retained"].includes(
+              currentPayment,
+            );
+          if (terminalRejected || terminalApproved) {
+            const persistedResult = terminalRejected
+              ? "rejected"
+              : "auto_approved";
+            return json({
+              ok: true,
+              status: persistedResult,
+              flags: [],
+              publicReason: publicReceiptMessage(
+                persistedResult,
+                Array.isArray(currentRow?.receipt_flags)
+                  ? currentRow.receipt_flags
+                  : [],
+              ),
+              extracted: currentRow?.receipt_extracted || null,
+              confidence: currentRow?.receipt_confidence ?? null,
+              receiptImageUrl: currentRow?.receipt_image_url || null,
+              receiptImageHash: currentRow?.receipt_image_hash || null,
+              receiptPhash: currentRow?.receipt_phash || null,
+              receiptVerifiedAt: currentRow?.receipt_verified_at || null,
+              paymentStatus: currentPayment || null,
+              bookingStatus: currentStatus || null,
+              message:
+                "This booking was already processed by another verification request.",
+            });
+          }
+        } else {
+          auditPersisted = true;
+          const reviewRows = reviewResponse.data;
+          const finalized = Array.isArray(reviewRows)
+            ? reviewRows.find((row) =>
+              String(row.booking_ref) === bookingRef
+            ) || reviewRows[0]
+            : reviewRows;
+          finalPaymentStatus = String(
+            finalized?.booking_payment_status ||
+              statusUpdate.payment_status ||
+              "",
+          );
+          finalBookingStatus = String(
+            finalized?.booking_status || statusUpdate.status || "",
+          );
+        }
+      }
+
+      if (provider !== "gcash" && result !== "auto_approved") {
+        // Metadata and final status must be one conditional update. This acts as
+        // a compare-and-set: one concurrent verifier can finalize a row, while a
+        // later verifier cannot overwrite that terminal outcome or its evidence.
+        const finalUpdate = { ...metadataUpdate, ...statusUpdate };
+        const { data: updatedRows, error: updateErr } =
           await bookingUpdateQuery(
             db,
             booking,
-            {
-              status: "cancelled",
-              payment_status: "rejected",
-            },
+            finalUpdate,
             bookingMutationScope,
-          ).in("status", ["verifying", "pending"]).select("ref");
-        if (fallbackErr || !fallbackRows || fallbackRows.length === 0) {
-          console.error("FALLBACK cancel also failed:", errMsg(fallbackErr));
+          )
+            .in("status", ["verifying", "pending"])
+            .in("payment_status", ["unpaid", "pending", "for_verification"])
+            .eq("receipt_image_hash", imageHash)
+            .select("ref, status, payment_status");
+        if (updateErr) {
+          finalUpdateError = errMsg(updateErr);
+          console.error("booking FINAL update failed:", finalUpdateError);
+        } else if (!updatedRows || updatedRows.length === 0) {
+          // A zero-row CAS commonly means a concurrent request already finalized
+          // the booking. Confirm that before reporting a persistence failure.
+          const { data: currentRow } = await db.from("bookings")
+            .select(
+              "status,payment_status,receipt_status,receipt_flags,receipt_extracted,receipt_confidence,receipt_image_url,receipt_image_hash,receipt_phash,receipt_verified_at",
+            )
+            .eq("ref", bookingRef)
+            .maybeSingle();
+          const currentStatus = String(currentRow?.status || "");
+          const currentPayment = String(currentRow?.payment_status || "");
+          const concurrentlyFinalized =
+            ["confirmed", "cancelled", "completed", "forfeited"].includes(
+              currentStatus,
+            ) ||
+            ["paid", "downpayment_paid", "deposit_retained", "rejected"]
+              .includes(
+                currentPayment,
+              );
+          if (concurrentlyFinalized) {
+            const persistedReceiptStatus = String(
+              currentRow?.receipt_status || "",
+            );
+            const persistedResult = persistedReceiptStatus === "rejected" ||
+                currentStatus === "cancelled" || currentPayment === "rejected"
+              ? "rejected"
+              : persistedReceiptStatus === "manual_review"
+              ? "manual_review"
+              : "auto_approved";
+            return json({
+              ok: true,
+              status: persistedResult,
+              flags: [],
+              publicReason: publicReceiptMessage(
+                persistedResult,
+                Array.isArray(currentRow?.receipt_flags)
+                  ? currentRow.receipt_flags
+                  : [],
+              ),
+              extracted: currentRow?.receipt_extracted || null,
+              confidence: currentRow?.receipt_confidence ?? null,
+              receiptImageUrl: currentRow?.receipt_image_url || null,
+              receiptImageHash: currentRow?.receipt_image_hash || null,
+              receiptPhash: currentRow?.receipt_phash || null,
+              receiptVerifiedAt: currentRow?.receipt_verified_at || null,
+              paymentStatus: currentPayment || null,
+              bookingStatus: currentStatus || null,
+              message:
+                "This booking was already processed by another verification request.",
+            });
+          } else {
+            finalUpdateError = `No non-terminal row matched ref=${bookingRef}`;
+            console.error(finalUpdateError);
+          }
         } else {
-          console.error(
-            "FALLBACK cancel succeeded after status update failure",
+          const updated = updatedRows.find((row: Record<string, unknown>) =>
+            String(row.ref || "") === bookingRef
+          ) || updatedRows[0];
+          finalPaymentStatus = String(
+            updated?.payment_status || statusUpdate.payment_status || "",
           );
-          finalUpdateError = null;
+          finalBookingStatus = String(
+            updated?.status || statusUpdate.status || "",
+          );
         }
       }
     }
 
     // ── audit trail (immutable) ─────────────────────────────────────────────
-    await db.from("receipt_verifications").insert({
-      booking_ref: bookingRef,
-      result,
-      flags,
-      extracted,
-      confidence,
-      image_hash: imageHash,
-      phash,
-      raw_ocr_text: ocrText || null,
-    });
+    if (!auditPersisted) {
+      const { error: auditError } = await db.from("receipt_verifications")
+        .insert({
+          booking_ref: bookingRef,
+          result,
+          flags,
+          extracted,
+          confidence,
+          image_hash: imageHash,
+          phash,
+          raw_ocr_text: ocrText || null,
+        });
+      if (auditError) {
+        console.error(
+          "receipt verification audit insert failed:",
+          errMsg(auditError),
+        );
+      }
+    }
 
     // ── alert admin on anything needing a human ─────────────────────────────
-    {
-      const icon = result === "rejected" ? "❌" : "⚠️";
-      const head = result === "rejected"
-        ? "RECEIPT REJECTED — BOOKING CANCELLED"
-        : "RECEIPT NEEDS REVIEW";
+    if (result === "manual_review" && hasPersistedBooking) {
+      const paymentLabel = String(booking.payment_method || "digital")
+        .toUpperCase();
+      const displayRef = String(
+        booking.booking_group_ref || bookingRef,
+      );
+      const alertCourts = uniqueBookingRows(bookingGroup).sort((a, b) =>
+        String(a.court_name || "").localeCompare(
+          String(b.court_name || ""),
+          "en",
+          { numeric: true },
+        )
+      );
+      const totalHours = alertCourts.reduce(
+        (sum, row) => sum + telegramCourtHours(row),
+        0,
+      );
+      const dates = [
+        ...new Set(alertCourts.map((row) => String(row.date || ""))),
+      ].filter(Boolean);
+      const sharedDate = dates.length === 1 ? dates[0] : "";
+      const courtLines = alertCourts.map((row, index) => {
+        const courtName = String(row.court_name || `Court ${index + 1}`);
+        const datePrefix = sharedDate ? "" : `${telegramDate(row.date)} · `;
+        return `🎾 ${escapeTelegramHtml(courtName)} · ${
+          escapeTelegramHtml(datePrefix)
+        }${escapeTelegramHtml(row.start_time || "")}–${
+          escapeTelegramHtml(row.end_time || "")
+        } · ${telegramPeso(row.total)}`;
+      }).join("\n");
+      const courtCountLabel = `${alertCourts.length} ${
+        alertCourts.length === 1 ? "court" : "courts"
+      } · ${telegramHours(totalHours)} ${
+        alertCourts.length === 1 ? "hours" : "court-hours"
+      }`;
+      const totalPayment = expectedTotal || expectedAmount;
       await sendTelegram(
-        `${icon} <b>${head}</b>\n` +
-          `━━━━━━━━━━━━━━━━━━\n` +
-          `📋 Ref: <code>${escapeTelegramHtml(bookingRef)}</code>\n` +
-          `👤 ${escapeTelegramHtml(booking.full_name || "—")}\n` +
-          `💰 Expected: ₱${expectedAmount.toFixed(2)}` +
-          (extractedAmount != null
-            ? ` · Seen: ₱${extractedAmount.toFixed(2)}`
-            : "") +
-          `\n` +
-          `🚩 Flags: <code>${
-            escapeTelegramHtml(flags.join(", ") || "none")
-          }</code>\n` +
-          (result === "rejected"
-            ? `🗑 Booking auto-cancelled. Slot is now free.`
-            : `👉 Open admin panel to review the receipt.`),
+        `⚠️ <b>PAYMENT REVIEW</b>\n` +
+          `👤 Player: ${
+            escapeTelegramHtml(booking.full_name || "Player")
+          }\n` +
+          `📋 Ref: <code>${escapeTelegramHtml(displayRef)}</code>\n` +
+          `💳 Payment: ${escapeTelegramHtml(paymentLabel)}\n` +
+          `🕒 Submitted: ${
+            escapeTelegramHtml(telegramDateTime(booking.created_at))
+          }\n` +
+          `🚩 Issue: ${
+            escapeTelegramHtml(shortTelegramFlags(flags))
+          }\n\n` +
+          `🏟️ <b>COURT SCHEDULE</b>\n` +
+          `${courtCountLabel}\n` +
+          (sharedDate ? `📅 ${telegramDate(sharedDate)}\n` : "") +
+          `${courtLines}\n` +
+          `💰 <b>TOTAL PAYMENT: ${telegramPeso(totalPayment)}</b>\n\n` +
+          `🔗 <a href="${telegramAdminUrl()}">Open the Paddle Rage dashboard</a>`,
       );
     }
 
@@ -2218,10 +2654,14 @@ Deno.serve(async (req) => {
       receiptImageHash: imageHash,
       receiptPhash: phash,
       receiptVerifiedAt: metadataUpdate.receipt_verified_at,
+      paymentStatus: hasPersistedBooking ? finalPaymentStatus || null : null,
+      bookingStatus: hasPersistedBooking ? finalBookingStatus || null : null,
       ...(finalUpdateError
         ? { warning: `booking update failed: ${finalUpdateError}` }
         : {}),
-      message: result === "manual_review"
+      message: result === "auto_approved"
+        ? "Payment verified. Your booking is confirmed."
+        : result === "manual_review"
         ? "Received — the owner will verify your payment shortly."
         : "Your receipt could not be verified. Your booking has been cancelled — please try again with a valid receipt.",
     });

@@ -15,7 +15,44 @@ or host session. A client-side host hint never grants authorization.
 
 Pre-save Open Play and host-session OCR is advisory: a clean scan is returned
 as `manual_review` and does not reserve a payment-ledger reference. Only a
-persisted court booking can auto-approve and claim a payment reference.
+persisted court booking paid through GCash can auto-approve and claim a payment
+reference.
+
+That saved-booking path is intentionally strict. Automatic approval requires
+all of the following:
+
+- the saved payment method is GCash, and the complete booking group still has
+  the same 13-digit reference and an unsettled `verifying`/`pending` state;
+- the dedicated GCash parser finds a high-confidence labeled reference that
+  exactly matches the customer-entered reference;
+- the principal amount is reliable, unambiguous, internally consistent, and
+  matches the canonical amount due to the centavo;
+- the receipt date matches the booking-start date, and its timestamp is no more
+  than two minutes early or 15 minutes after the hold began;
+- the GCash layout indicators and full configured recipient mobile number
+  match, with no competing payment-provider evidence;
+- Google Vision supplies a native OCR confidence score of at least 90%,
+  merchant settings and canonical pricing are available, and no review flag
+  remains.
+
+GCash masks recipient names by design. A masked name such as
+`J•• KE••••H M.` is only supporting evidence; the exact full recipient mobile
+number remains mandatory for automatic approval. Missing, partial, conflicting,
+low-confidence, stale, or otherwise uncertain GCash evidence keeps the booking
+`pending` with payment `for_verification`. It does not cancel a possibly paid
+customer. Only a payment reference proven to be claimed by another payment is
+terminally rejected.
+
+Successful approval is not assembled through browser writes. The Edge Function
+calls a service-role-only database finalizer that locks and re-checks the entire
+booking scope, confirms the stored reference and amount, claims the payment
+reference through the settled-payment trigger, confirms every booking row, and
+writes the OCR audit entry in one transaction. A non-duplicate finalizer error
+falls back to manual review.
+
+This is strict OCR-based verification, not provider-authenticated settlement.
+Screenshots can be forged; true independent proof requires a provider-signed
+transaction lookup or webhook.
 
 ## 1. Create the widget
 
@@ -81,6 +118,11 @@ actions unless the same value is changed in both the client and Edge Functions.
    own row/session, and another host still needs a valid challenge.
 7. Check the integration dashboard: receipt OCR is ready only when both
    `GOOGLE_VISION_API_KEY` and `TURNSTILE_SECRET_KEY` exist.
+8. For saved-booking GCash testing, confirm a clean 90%+ scan inside the
+   15-minute window returns the canonical confirmed/paid state, while an
+   unreadable or mismatched scan remains pending for review.
+9. Re-submit a reference already settled for another payment and confirm that
+   it is the only GCash uncertainty that becomes a terminal rejection.
 
 Do not proxy, cache, or self-host Cloudflare's API script. The client loads the
 exact `https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit`

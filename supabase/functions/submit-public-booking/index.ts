@@ -281,13 +281,14 @@ Deno.serve(async (req) => {
       )
       .in("ref", refs)
       .order("created_at", { ascending: true });
-    const notification = savedRowsError || !savedRows?.length
-      ? {
-        ok: false,
-        skipped: true,
-        reason: "Saved booking could not be loaded",
-      }
-      : await notifyNewBooking(db, savedRows);
+    // Review-only Telegram mode: a newly created hold is not itself an
+    // actionable review item. Receipt verification sends the canonical alert
+    // later if the payment is routed to manual review.
+    const notification = {
+      ok: true,
+      skipped: true,
+      reason: "Telegram alerts are limited to payment review",
+    };
 
     return json({ ok: true, refs, notification });
   } catch (error) {

@@ -2420,7 +2420,7 @@ body.gm-display-open { overflow:hidden; }
 
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260716-paddle-rage-v1">
-<link rel="stylesheet" href="play-manager.css?v=20260726-dispatch-equal-v23">
+<link rel="stylesheet" href="play-manager.css?v=20260728-compact-mobile-v24">
 <style id="admin-modern-refresh">
 /* Modern admin shell — visual-only refresh; dashboard features and data stay unchanged. */
 :root {
@@ -3754,7 +3754,7 @@ body.admin-booting .admin-boot-splash {
       <div class="pr-stat-grid">
         <div class="pr-stat"><div class="pr-stat-label">Needs Review</div><div class="pr-stat-value" id="prNeedsReview">0</div><div class="pr-stat-icon">&#128269;</div></div>
         <div class="pr-stat"><div class="pr-stat-label">Pending</div><div class="pr-stat-value" id="prPending">0</div><div class="pr-stat-icon">&#9203;</div></div>
-        <div class="pr-stat"><div class="pr-stat-label">Auto-Verified</div><div class="pr-stat-value" id="prAuto">0</div><div class="pr-stat-icon">&#10003;</div></div>
+        <div class="pr-stat"><div class="pr-stat-label">Resolved</div><div class="pr-stat-value" id="prAuto">0</div><div class="pr-stat-icon">&#10003;</div></div>
         <div class="pr-stat"><div class="pr-stat-label">Rejected</div><div class="pr-stat-value" id="prRejected">0</div><div class="pr-stat-icon">&#9888;</div></div>
       </div>
 
@@ -3780,6 +3780,7 @@ body.admin-booting .admin-boot-splash {
               <option value="auto_approved">Auto-Verified</option>
               <option value="rejected">Rejected</option>
               <option value="paid">Paid</option>
+              <option value="retained">Deposit Retained</option>
             </select>
           </div>
         </div>
@@ -4927,13 +4928,14 @@ body.admin-booting .admin-boot-splash {
         </a>
         <div id="vmReceiptNoImg" style="display:none;font-size:.76rem;color:var(--muted)">No receipt image was uploaded for this booking.</div>
       </div>
-      <p style="font-size:.78rem;color:var(--muted);text-align:center;margin-top:12px;line-height:1.6">
+      <p id="vmReviewHint" style="font-size:.78rem;color:var(--muted);text-align:center;margin-top:12px;line-height:1.6">
         Open your GCash inbox and match the reference above, then mark as received to confirm the booking and send an email to the customer.
       </p>
     </div>
     <div class="m-foot">
-      <button class="btn btn-d" onclick="rejectPayment()">❌ Not Received</button>
-      <button class="btn btn-p" onclick="verifyAndConfirm()">✅ Received — Confirm</button>
+      <button class="btn btn-d" id="vmRejectBtn" onclick="rejectPayment()">❌ Not Received</button>
+      <button class="btn btn-p" id="vmConfirmBtn" onclick="verifyAndConfirm()">✅ Received — Confirm</button>
+      <button class="btn btn-g" id="vmResolvedClose" style="display:none" onclick="closeVerifyModal()">Close</button>
     </div>
   </div>
 </div>
@@ -4965,6 +4967,7 @@ body.admin-booting .admin-boot-splash {
         <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Auto-Verification</div>
         <div id="ovReceiptStatus" style="font-size:.82rem;font-weight:700;border-radius:8px;padding:8px 10px;margin-bottom:8px"></div>
         <div id="ovReceiptFlags" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px"></div>
+        <div id="ovReceiptDetails" class="receipt-detail-grid" style="display:none"></div>
         <a id="ovReceiptLink" href="#" target="_blank" rel="noopener" style="display:none">
           <img id="ovReceiptImg" alt="Receipt" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px;border:1px solid var(--border);background:#fff"/>
         </a>
@@ -5640,15 +5643,15 @@ function shortDateTime(v){
   return `${d.toLocaleDateString('en-PH',{month:'short',day:'numeric'})}<div style="font-size:.72rem;color:var(--muted);font-weight:600">${d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true})}</div>`;
 }
 const RECEIPT_FLAG_LABELS = {
-  DUPLICATE_REF:'Ref already used', DUPLICATE_INVOICE:'Invoice already used', DUPLICATE_INSTAPAY_REF:'InstaPay ref already used', DUPLICATE_BPI_TRANSACTION_REF:'BPI transaction ref already used', WRONG_GCASH_NUMBER:'Wrong receiver number',
-  AMOUNT_MISMATCH:'Amount too low', DATE_NOT_TODAY:'Wrong payment date', TIME_EXPIRED:'Paid after 15 min',
+  DUPLICATE_REF:'Ref already used', POSSIBLE_DUPLICATE_REF:'Typed ref may already be used', DUPLICATE_INVOICE:'Invoice already used', DUPLICATE_INSTAPAY_REF:'InstaPay ref already used', DUPLICATE_BPI_TRANSACTION_REF:'BPI transaction ref already used', WRONG_GCASH_NUMBER:'Wrong receiver number',
+  AMOUNT_MISMATCH:'Amount does not match', DATE_NOT_TODAY:'Wrong payment date', TIME_EXPIRED:'Paid after 15 min',
   TIME_STALE:'Stale time', TIME_FUTURE:'Receipt before booking', RECEIVER_NAME_MISMATCH:'Receiver name mismatch',
   METHOD_MISMATCH:'Wrong payment method selected', GCASH_RECEIPT_UNREADABLE:'GCash receipt unreadable',
   EDITED_METADATA:'Edited image metadata', SUSPECTED_FAKE:'Not a receipt', REF_FORMAT_INVALID:'Bad reference format',
   REF_UNREADABLE:'Reference unreadable', INVOICE_UNREADABLE:'Invoice unreadable', LOW_OCR_CONFIDENCE:'Blurry / low OCR', OCR_UNAVAILABLE:'OCR unavailable', AMOUNT_UNREADABLE:'Amount unreadable',
   AMOUNT_REVIEW:'Amount needs owner review',
-  DATE_UNREADABLE:'Date unreadable', TIME_UNREADABLE:'Time unreadable', NUMBER_UNREADABLE:'Receiver number unreadable',
-  BDO_PAY_UNREADABLE:'BDO Pay/InstaPay unreadable', MAYA_UNREADABLE:'Maya unreadable', BPI_UNREADABLE:'BPI success unreadable', BPI_CONFIRMATION_UNREADABLE:'BPI confirmation unreadable', BPI_TRANSACTION_UNREADABLE:'BPI transaction ref unreadable', INSTAPAY_QRPH_UNREADABLE:'InstaPay/QRPh unreadable', GXI_DESTINATION_UNREADABLE:'GXI/GCash destination unreadable', RECEIVER_NAME_UNREADABLE:'Receiver name unreadable',
+  DATE_UNREADABLE:'Date unreadable', TIME_UNREADABLE:'Time unreadable', NUMBER_UNREADABLE:'Receiver number unreadable', REF_LABEL_UNREADABLE:'Reference label unreadable',
+  BDO_PAY_UNREADABLE:'BDO Pay/InstaPay unreadable', MAYA_UNREADABLE:'Maya unreadable', BPI_UNREADABLE:'BPI success unreadable', BPI_CONFIRMATION_UNREADABLE:'BPI confirmation unreadable', BPI_TRANSACTION_UNREADABLE:'BPI transaction ref unreadable', INSTAPAY_QRPH_UNREADABLE:'InstaPay/QRPh unreadable', GXI_DESTINATION_UNREADABLE:'GXI/GCash destination unreadable', RECEIVER_NAME_UNREADABLE:'Receiver name unreadable', MERCHANT_CONFIG_MISSING:'GCash recipient number not configured', BOOKING_GROUP_PAYMENT_MISMATCH:'Booking payment details need review', AUTO_APPROVAL_FAILED:'Auto-verification could not finalize', REJECTION_FINALIZATION_FAILED:'Duplicate rejection could not finalize',
 };
 function receiptReasonText(flags){
   if (!flags || !flags.length) return 'No specific reason saved';
@@ -5744,15 +5747,49 @@ function receiptReceiverValue(extracted){
   const parts = [extracted.expectedReceiverName, extracted.expectedReceiverNumber].filter(Boolean);
   return parts.length ? esc(parts.join(' / ')) : '--';
 }
+function gcashPhoneCheckLabel(value){
+  return ({
+    exact:'Exact number matched',
+    last4_only:'Only last 4 digits matched',
+    mismatch:'Number mismatch',
+    missing:'Number not read',
+    not_configured:'Recipient number not configured',
+  })[value] || '--';
+}
+function gcashNameCheckLabel(value, raw){
+  const label = ({
+    exact:'Exact name matched',
+    masked_compatible:'Masked name anchors matched',
+    mismatch:'Visible name mismatch',
+    inconclusive:'Masked name inconclusive',
+    missing:'Name not read',
+    not_configured:'Recipient name not configured',
+  })[value] || '--';
+  return raw ? `${label} · ${raw}` : label;
+}
 function receiptDetailsHtml(b){
   const ex = b.receiptExtracted || {};
+  const gcash = ex.gcash || null;
+  const recipientCheck = gcash?.recipientComparison || {};
   const displayFlags = receiptFlagsForDisplay(b);
-  const reason = displayFlags.length ? receiptReasonText(displayFlags) : 'All visible checks passed';
+  const paymentState = String(b.paymentStatus || '').toLowerCase();
+  const bookingState = String(b.status || '').toLowerCase();
+  const canonicallyResolved = ['paid','downpayment_paid','deposit_retained'].includes(paymentState) ||
+    ['completed','forfeited'].includes(bookingState);
+  const reason = displayFlags.length
+    ? receiptReasonText(displayFlags)
+    : b.receiptStatus === 'auto_approved'
+      ? 'All dedicated GCash checks passed'
+      : canonicallyResolved
+        ? 'Parser review completed — payment was resolved by staff'
+      : 'No hard mismatch found — owner confirmation required';
   const ocrConfidenceNumber = Number(ex.ocrConfidence);
   const ocrConfidence = ex.ocrConfidence != null && Number.isFinite(ocrConfidenceNumber)
     ? `${Math.round(ocrConfidenceNumber * 100)}%`
     : '--';
-  const amountParse = ex.amountReason === 'legacy_parser'
+  const amountParse = ex.parserVersion === 'gcash_v1'
+    ? (ex.amountReliable === true ? 'Dedicated GCash parser · reliable' : 'Dedicated GCash parser · review')
+    : ex.amountReason === 'legacy_parser'
     ? 'Legacy parser result'
     : ex.amountReliable === true
       ? 'Anchored Maya amount'
@@ -5769,7 +5806,13 @@ function receiptDetailsHtml(b){
     ['Booking Started', receiptDetailValue(ex.bookingStartedAtPh12)],
     ['Window', ex.allowedPaymentWindowMinutes ? `${esc(ex.allowedPaymentWindowMinutes)} min` : '--'],
     ['OCR Engine', receiptOcrProviderLabel(ex.ocrProvider)],
-    ['Receiver', receiptReceiverValue(ex), true],
+    ...(ex.parserVersion === 'gcash_v1' ? [['Parser', 'Dedicated GCash v1']] : []),
+    ...(gcash ? [
+      ['Recipient Phone', receiptDetailValue(gcashPhoneCheckLabel(recipientCheck.phone)), true],
+      ['Recipient Name', receiptDetailValue(gcashNameCheckLabel(recipientCheck.name, gcash.receiver?.name?.raw)), true],
+      ['Receipt Type', receiptDetailValue(gcash.indicators?.classification === 'gcash' ? 'GCash Send Money receipt' : 'Needs review'), true],
+    ] : []),
+    ['Configured Recipient', receiptReceiverValue(ex), true],
     ...(ex.ocrFallbackReason ? [['OCR Fallback', receiptDetailValue(ex.ocrFallbackReason), true]] : []),
     ...(ex.amountReliable !== undefined ? [['Amount Parse', receiptDetailValue(amountParse), true]] : []),
     ['Reason', receiptDetailValue(reason), true],
@@ -6733,20 +6776,29 @@ function receivedAccountLabel(b) {
 }
 
 function bookingReviewStatus(b) {
+  if (b.paymentStatus === 'rejected' || b.status === 'cancelled') return 'rejected';
+  if (b.paymentStatus === 'deposit_retained' || b.status === 'forfeited') return 'retained';
+  if (b.paymentStatus === 'paid' || b.paymentStatus === 'downpayment_paid') {
+    return b.receiptStatus === 'auto_approved' ? 'auto_approved' : 'paid';
+  }
   if (b.receiptStatus === 'manual_review') return 'manual_review';
-  if (b.receiptStatus === 'rejected' || b.paymentStatus === 'rejected') return 'rejected';
-  if (b.receiptStatus === 'auto_approved') return 'auto_approved';
-  if (b.paymentStatus === 'for_verification' || b.status === 'verifying') return 'pending';
-  if (b.paymentStatus === 'paid' || b.paymentStatus === 'downpayment_paid') return 'paid';
+  if (
+    b.paymentStatus === 'for_verification' ||
+    b.status === 'verifying' ||
+    b.status === 'confirmed' ||
+    b.status === 'completed' ||
+    b.receiptStatus === 'auto_approved'
+  ) return 'pending';
+  if (b.receiptStatus === 'rejected') return 'rejected';
   if (isDigitalPayment(b.paymentMethod) && b.gcashRef && b.status === 'pending') return 'pending';
   return b.paymentStatus || 'unpaid';
 }
 
 function openPlayReviewStatus(r) {
+  if (r.payment_status === 'rejected') return 'rejected';
+  if (r.payment_status === 'paid') return r.receipt_status === 'auto_approved' ? 'auto_approved' : 'paid';
   if (r.receipt_status === 'manual_review') return 'manual_review';
-  if (r.receipt_status === 'rejected' || r.payment_status === 'rejected') return 'rejected';
-  if (r.receipt_status === 'auto_approved') return 'auto_approved';
-  if (r.payment_status === 'paid') return 'paid';
+  if (r.receipt_status === 'rejected') return 'rejected';
   return 'pending';
 }
 
@@ -6756,6 +6808,7 @@ function statusPill(status) {
     pending: ['#b87e00', 'rgba(184,126,0,.15)', 'Pending'],
     auto_approved: ['var(--green)', 'rgba(var(--green-rgb),.15)', 'Auto-verified'],
     paid: ['var(--green)', 'rgba(var(--green-rgb),.15)', 'Paid'],
+    retained: ['#e67e22', 'rgba(230,126,34,.14)', 'Deposit retained'],
     rejected: ['#e53935', 'rgba(229,57,53,.12)', 'Rejected'],
     unpaid: ['var(--muted)', 'var(--input)', 'Unpaid'],
   };
@@ -6772,7 +6825,11 @@ function paymentReviewWhenText(v) {
 
 function paymentReviewAction(item) {
   if (item.type === 'booking') {
-    return `<button class="btn btn-sm" style="background:rgba(200,160,96,.15);color:var(--yellow);border:1px solid rgba(200,160,96,.35);font-weight:700" onclick="openVerifyModal('${jsArg(item.id)}')">Review</button>`;
+    if (item.status === 'retained') {
+      return '<span style="color:var(--muted);font-size:.78rem;font-weight:800">Resolved</span>';
+    }
+    const label = ['manual_review', 'pending'].includes(item.status) ? 'Review' : 'Details';
+    return `<button class="btn btn-sm" style="background:rgba(200,160,96,.15);color:var(--yellow);border:1px solid rgba(200,160,96,.35);font-weight:700" onclick="openVerifyModal('${jsArg(item.id)}')">${label}</button>`;
   }
   if (item.type === 'open_play' && item.status !== 'paid') {
     return `<button class="btn btn-sm" style="background:rgba(56,189,248,.12);color:#38bdf8;border:1px solid rgba(56,189,248,.35);font-weight:700" onclick="openOpVerifyModal('${jsArg(item.id)}')">Review</button>`;
@@ -6878,7 +6935,7 @@ async function renderPaymentReview() {
   const counts = {
     needsReview: items.filter(i => i.status === 'manual_review').length,
     pending: items.filter(i => i.status === 'pending').length,
-    auto: items.filter(i => i.status === 'auto_approved' || i.status === 'paid').length,
+    auto: items.filter(i => ['auto_approved', 'paid', 'retained'].includes(i.status)).length,
     rejected: items.filter(i => i.status === 'rejected').length,
   };
   if ($('prNeedsReview')) $('prNeedsReview').textContent = counts.needsReview;
@@ -7312,6 +7369,13 @@ async function updateStatus(ref, status) {
 
 let _verifyModalLastFocus = null;
 
+function bookingPaymentIsResolved(b) {
+  const paymentState = String(b?.paymentStatus || '').toLowerCase();
+  const bookingState = String(b?.status || '').toLowerCase();
+  return ['paid', 'downpayment_paid', 'deposit_retained', 'rejected'].includes(paymentState) ||
+    ['forfeited', 'cancelled'].includes(bookingState);
+}
+
 async function openVerifyModal(ref, { returnFocus = null } = {}) {
   _verifyModalLastFocus = returnFocus || document.activeElement;
   const b = await getBookingGroupByRef(ref);
@@ -7331,8 +7395,18 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
     breakdown.innerHTML = b.isGroup ? bookingGroupBreakdownHtml(b.items) : '';
   }
   await vmPopulateReceipt(b);
+  const readOnly = bookingPaymentIsResolved(b);
+  if ($('vmRejectBtn')) $('vmRejectBtn').style.display = readOnly ? 'none' : '';
+  if ($('vmConfirmBtn')) $('vmConfirmBtn').style.display = readOnly ? 'none' : '';
+  if ($('vmResolvedClose')) $('vmResolvedClose').style.display = readOnly ? '' : 'none';
+  if ($('vmReviewHint')) {
+    $('vmReviewHint').textContent = readOnly
+      ? 'This payment is already resolved. Receipt evidence remains available for audit.'
+      : 'Open your GCash inbox and match the reference above, then mark as received to confirm the booking and send an email to the customer.';
+  }
   $('verifyModal').dataset.ref = ref;
   $('verifyModal').dataset.refs = JSON.stringify(b.refs || [ref]);
+  $('verifyModal').dataset.readonly = readOnly ? '1' : '0';
   const overlay = $('verifyModal');
   overlay.hidden = false;
   overlay.inert = false;
@@ -7381,6 +7455,8 @@ function verifyPaymentModalKeydown(event) {
 async function vmPopulateReceipt(b){
   const wrap = $('vmReceiptWrap');
   const s = b.receiptStatus || 'none';
+  const paymentState = String(b.paymentStatus || '').toLowerCase();
+  const bookingState = String(b.status || '').toLowerCase();
   const displayFlags = receiptFlagsForDisplay(b);
   if (s === 'none' && !b.receiptImageUrl) { if (wrap) wrap.style.display = 'none'; return; }
   if (wrap) wrap.style.display = '';
@@ -7392,8 +7468,19 @@ async function vmPopulateReceipt(b){
     none:          ['#888','var(--input)','No automated result'],
   };
   let [c,bg,lbl] = map[s] || map.none;
-  if (s === 'rejected') lbl = displayFlags.length ? `Rejected: ${receiptReasonText(displayFlags)}` : 'Flagged earlier — details parsed correctly; review manually';
-  if (s === 'manual_review' && displayFlags.length) lbl = `Needs review: ${receiptReasonText(displayFlags)}`;
+  if (paymentState === 'deposit_retained' || bookingState === 'forfeited') {
+    [c,bg,lbl] = ['#e67e22','rgba(230,126,34,.14)','Resolved — deposit retained and slot released'];
+  } else if (paymentState === 'paid' || paymentState === 'downpayment_paid') {
+    [c,bg,lbl] = s === 'auto_approved'
+      ? map.auto_approved
+      : ['var(--green)','rgba(var(--green-rgb),.12)','Payment confirmed by staff · parser result kept for audit'];
+  } else if (paymentState === 'rejected' || bookingState === 'cancelled') {
+    [c,bg,lbl] = ['#e53935','rgba(229,57,53,.1)','Payment rejected · booking slot released'];
+  } else if (s === 'rejected') {
+    lbl = displayFlags.length ? `Rejected: ${receiptReasonText(displayFlags)}` : 'Flagged earlier — details parsed correctly; review manually';
+  } else if (s === 'manual_review' && displayFlags.length) {
+    lbl = `Needs review: ${receiptReasonText(displayFlags)}`;
+  }
   if (st) { st.style.color = c; st.style.background = bg; st.textContent = lbl; }
   $('vmReceiptFlags').innerHTML = receiptFlagChips(displayFlags);
   const detailBox = $('vmReceiptDetails');
@@ -7422,6 +7509,14 @@ async function verifyAndConfirm() {
   if (!ref) return;
   try {
     const bkForPay = await getBookingGroupByRef(ref);
+    if (!bkForPay) {
+      toast('Booking not found.', 'err');
+      return;
+    }
+    if (bookingPaymentIsResolved(bkForPay)) {
+      toast('This payment is already resolved and cannot be changed here.', 'inf');
+      return;
+    }
     if (isDigitalPayment(bkForPay?.paymentMethod) && !bkForPay?.receiptImageUrl) {
       toast('Cannot confirm: no receipt image is attached to this digital payment.', 'err');
       return;
@@ -7467,8 +7562,17 @@ async function resendConfirmationEmail(ref) {
 async function rejectPayment() {
   const ref = $('verifyModal').dataset.ref;
   if (!ref) return;
-  if (!confirm(`Cancel booking ${ref}? This cannot be undone.`)) return;
   try {
+    const bkForPay = await getBookingGroupByRef(ref);
+    if (!bkForPay) {
+      toast('Booking not found.', 'err');
+      return;
+    }
+    if (bookingPaymentIsResolved(bkForPay)) {
+      toast('This payment is already resolved and cannot be changed here.', 'inf');
+      return;
+    }
+    if (!confirm(`Cancel booking ${ref}? This cannot be undone.`)) return;
     await updateBookingGroupByRef(ref, { status: 'cancelled', paymentStatus: 'rejected' });
     closeVerifyModal();
     toast('Booking cancelled — payment not verified.', 'err');
@@ -11452,6 +11556,10 @@ async function openHostSessionVerifyModal(id) {
     receipt_status: registration.receiptStatus,
     receipt_image_url: registration.receiptImageUrl,
     receipt_flags: registration.receiptFlags,
+    receipt_extracted: registration.receiptExtracted,
+    receipt_confidence: registration.receiptConfidence,
+    receipt_verified_at: registration.receiptVerifiedAt,
+    payment_status: registration.paymentStatus,
   };
   $('ovMethod').textContent = paymentMethodLabel(registration.paymentMethod);
   $('ovGcashRef').textContent = registration.gcashRef || '—';
@@ -11469,6 +11577,7 @@ async function openHostSessionVerifyModal(id) {
 async function ovPopulateReceipt(r, receiptType = 'open_play') {
   const wrap = $('ovReceiptWrap');
   const s = r.receipt_status || 'none';
+  const paymentState = String(r.payment_status || r.paymentStatus || '').toLowerCase();
   if (s === 'none' && !r.receipt_image_url) { if (wrap) wrap.style.display = 'none'; return; }
   if (wrap) wrap.style.display = '';
   const st = $('ovReceiptStatus');
@@ -11478,9 +11587,28 @@ async function ovPopulateReceipt(r, receiptType = 'open_play') {
     rejected:      ['#e53935','rgba(229,57,53,.1)','Flagged - review carefully before confirming'],
     none:          ['#888','var(--input)','No automated result'],
   };
-  const [c,bg,lbl] = map[s] || map.none;
+  let [c,bg,lbl] = map[s] || map.none;
+  if (paymentState === 'paid') {
+    [c,bg,lbl] = s === 'auto_approved'
+      ? map.auto_approved
+      : ['var(--green)','rgba(var(--green-rgb),.12)','Payment confirmed by staff · parser result kept for audit'];
+  } else if (paymentState === 'rejected') {
+    [c,bg,lbl] = ['#e53935','rgba(229,57,53,.1)','Payment rejected'];
+  }
   if (st) { st.style.color = c; st.style.background = bg; st.textContent = lbl; }
   if ($('ovReceiptFlags')) $('ovReceiptFlags').innerHTML = receiptFlagChips(r.receipt_flags);
+  const detailBox = $('ovReceiptDetails');
+  if (detailBox) {
+    detailBox.innerHTML = receiptDetailsHtml({
+      receiptExtracted: r.receipt_extracted || r.receiptExtracted || null,
+      receiptStatus: s,
+      receiptFlags: r.receipt_flags || r.receiptFlags || [],
+      receiptConfidence: r.receipt_confidence ?? r.receiptConfidence ?? null,
+      receiptVerifiedAt: r.receipt_verified_at || r.receiptVerifiedAt || null,
+      paymentStatus: paymentState,
+    });
+    detailBox.style.display = '';
+  }
   const link = $('ovReceiptLink'), img = $('ovReceiptImg'), noImg = $('ovReceiptNoImg');
   if (link) link.style.display = 'none';
   if (noImg) noImg.style.display = 'none';
@@ -13211,6 +13339,6 @@ async function checkAgreementGate(session) {
 <script src="supabase.min.js"></script>
 <script src="supabase-config.js?v=20260726-player-profile-v5"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
-<script src="play-manager.js?v=20260726-dispatch-equal-v23"></script>
+<script src="play-manager.js?v=20260728-compact-mobile-v24"></script>
 </body>
 </html>

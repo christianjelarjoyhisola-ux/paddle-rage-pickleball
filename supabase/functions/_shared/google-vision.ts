@@ -6,6 +6,7 @@ export type ReceiptImageContentType =
 export type GoogleVisionOcrResult = {
   text: string;
   confidence: number;
+  confidenceSource: "native" | "heuristic" | "none";
 };
 
 export type ReceiptImageDimensions = {
@@ -176,7 +177,23 @@ export function googleVisionConfidence(
   annotation: Record<string, unknown> | null,
   text: string,
 ): number {
-  if (!annotation) return text.length > 40 ? 0.9 : text.length > 0 ? 0.5 : 0;
+  return googleVisionConfidenceDetails(annotation, text).confidence;
+}
+
+export function googleVisionConfidenceDetails(
+  annotation: Record<string, unknown> | null,
+  text: string,
+): {
+  confidence: number;
+  source: GoogleVisionOcrResult["confidenceSource"];
+} {
+  if (!annotation) {
+    return text.length > 40
+      ? { confidence: 0.9, source: "heuristic" }
+      : text.length > 0
+      ? { confidence: 0.5, source: "heuristic" }
+      : { confidence: 0, source: "none" };
+  }
   const pages = Array.isArray(annotation.pages)
     ? annotation.pages as Array<Record<string, unknown>>
     : [];
@@ -184,7 +201,7 @@ export function googleVisionConfidence(
     pages.length && typeof pages[0].confidence === "number" &&
     pages[0].confidence > 0
   ) {
-    return pages[0].confidence;
+    return { confidence: pages[0].confidence, source: "native" };
   }
 
   let total = 0;
@@ -202,8 +219,14 @@ export function googleVisionConfidence(
     }
   };
   pages.forEach(visit);
-  if (count > 0) return total / count;
-  return text.length > 40 ? 0.9 : text.length > 0 ? 0.5 : 0;
+  if (count > 0) {
+    return { confidence: total / count, source: "native" };
+  }
+  return text.length > 40
+    ? { confidence: 0.9, source: "heuristic" }
+    : text.length > 0
+    ? { confidence: 0.5, source: "heuristic" }
+    : { confidence: 0, source: "none" };
 }
 
 type GoogleVisionOcrOptions = {
@@ -289,8 +312,10 @@ export async function googleVisionOcr(
     ? textAnnotations[0].description
     : "";
 
+  const confidence = googleVisionConfidenceDetails(fullText, text);
   return {
     text,
-    confidence: googleVisionConfidence(fullText, text),
+    confidence: confidence.confidence,
+    confidenceSource: confidence.source,
   };
 }

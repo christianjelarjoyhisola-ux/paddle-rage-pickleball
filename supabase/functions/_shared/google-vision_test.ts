@@ -1,6 +1,7 @@
 import {
   detectReceiptImageContentType,
   googleVisionConfidence,
+  googleVisionConfidenceDetails,
   googleVisionOcr,
   receiptImageDimensions,
   receiptImageSafeToDecode,
@@ -134,6 +135,7 @@ Deno.test("sends the Vision key in a header and builds one OCR request", async (
   assertEquals(requestBody.requests[0].image.content, "QUJD", "base64 content");
   assertEquals(result.text, "Paddle Rage receipt", "OCR text");
   assertEquals(result.confidence, 0.97, "OCR confidence");
+  assertEquals(result.confidenceSource, "native", "OCR confidence source");
 });
 
 Deno.test("surfaces a bounded Google Vision API error", async () => {
@@ -167,4 +169,13 @@ Deno.test("averages nested OCR confidence when page confidence is absent", () =>
     }],
   }, "receipt");
   assertEquals(confidence, 0.7, "nested confidence average");
+});
+
+Deno.test("marks text-length confidence as heuristic, never native", () => {
+  const result = googleVisionConfidenceDetails(
+    { pages: [], text: "unused" },
+    "A readable receipt-shaped OCR response longer than forty characters",
+  );
+  assertEquals(result.confidence, 0.9, "heuristic confidence");
+  assertEquals(result.source, "heuristic", "heuristic provenance");
 });

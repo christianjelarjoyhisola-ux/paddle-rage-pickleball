@@ -46,6 +46,38 @@ non-sensitive sample receipt before accepting live bookings. An unavailable,
 disabled, quota-limited, or misconfigured Vision API routes the receipt to
 manual review rather than treating provider failure as proof of fraud.
 
+## GCash verification threshold and routing
+
+GCash uses a dedicated line-aware parser for the labeled 13-digit reference,
+principal amount, Philippine date/time, recipient mobile number, masked name,
+and receipt-layout indicators. Customer-entered values and configured merchant
+values are comparisons only; they are never substituted for text that Vision
+did not read.
+
+A persisted GCash court booking is eligible for automatic approval only when
+Google Vision supplies a native confidence score of at least **90%**, the
+dedicated parser produces complete and unambiguous evidence, the exact
+configured recipient mobile number matches, the canonical amount matches to
+the centavo, and the payment falls within the booking's **15-minute** window.
+The Edge Function also requires the complete saved booking group and payment
+state to remain unchanged.
+
+Pre-save Open Play and host-session scans never auto-approve. Any uncertain
+GCash result—including a provider error, confidence below 90%, incomplete
+timestamp, masked/partial mobile number, conflicting amount, or failed atomic
+finalization—remains pending for owner review. A masked recipient name is
+supporting evidence only and does not replace the full mobile-number match.
+Only a reference proven to belong to another payment is automatically rejected.
+
+The OCR percentage measures text-recognition quality, not independent proof
+that money moved. Successful saved-booking approval therefore finishes through
+the service-role-only `finalize_gcash_receipt_auto_approval` transaction, which
+locks and revalidates canonical booking rows, claims the unique payment
+reference, confirms the booking scope, and writes the audit record atomically.
+A forged screenshot can still contain internally consistent OCR evidence.
+Provider-signed transaction lookup or webhook confirmation is required before
+describing this workflow as independently authenticated proof of payment.
+
 ## Cost and abuse controls
 
 - Lower the project-level **requests per minute** and **text detection requests

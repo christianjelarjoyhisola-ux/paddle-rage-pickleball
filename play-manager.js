@@ -1887,10 +1887,18 @@
         <div class="pm2-session-meta">Round ${Number(round?.round_no || state.rounds.length)} · <span data-pm-clock>--:--</span></div>
       </div>
       <nav class="pm2-live-jump" aria-label="Jump to live section">
-        <button type="button" data-pm-action="scroll" data-target="pm2Courts">Courts <b>${assignments.length}</b></button>
-        <button type="button" data-pm-action="scroll" data-target="pm2Queue">Queue <b>${queue.length}</b></button>
-        <button type="button" data-pm-action="scroll" data-target="pm2Next">Up Next <b>${dispatchSlots.length}</b></button>
-        <button type="button" data-pm-action="scroll" data-target="pm2MatchLog">Matches <b>${matches.length}</b></button>
+        <button type="button" data-pm-action="scroll" data-target="pm2Courts" aria-label="Courts, ${assignments.length}">
+          <span>Courts</span><b aria-hidden="true">${assignments.length}</b>
+        </button>
+        <button type="button" data-pm-action="scroll" data-target="pm2Queue" aria-label="Queue, ${queue.length}">
+          <span>Queue</span><b aria-hidden="true">${queue.length}</b>
+        </button>
+        <button type="button" data-pm-action="scroll" data-target="pm2Next" aria-label="Up Next, ${dispatchSlots.length}">
+          <span>Up Next</span><b aria-hidden="true">${dispatchSlots.length}</b>
+        </button>
+        <button type="button" data-pm-action="scroll" data-target="pm2MatchLog" aria-label="Matches, ${matches.length}">
+          <span>Matches</span><b aria-hidden="true">${matches.length}</b>
+        </button>
       </nav>
       <div class="pm2-live-dashboard">
         <div class="pm2-round-strip">
@@ -1917,7 +1925,13 @@
               <span class="pm2-section-kicker">Live play</span>
               <h2 id="pm2LiveCourtsTitle">Live Courts</h2>
             </div>
-            <span class="pm2-section-status">${assignments.length} court${assignments.length === 1 ? "" : "s"} · ${liveCourtCount} live · ${readyCourtCount} ready</span>
+            <div class="pm2-live-court-tools">
+              <span class="pm2-section-status">${assignments.length} court${assignments.length === 1 ? "" : "s"} · ${liveCourtCount} live · ${readyCourtCount} ready</span>
+              <div class="pm2-live-court-actions" aria-label="Live court actions">
+                <button class="pm2-compact-action" type="button" data-pm-action="edit-setup">Setup</button>
+                <button class="pm2-compact-action is-share" type="button" data-pm-action="share-live" ${canShare ? "" : "disabled"}>${canShare ? "Share" : "Ended"}</button>
+              </div>
+            </div>
           </header>
           <div class="pm2-courts" id="pm2Courts" aria-label="Live courts">
             ${assignments.map(courtCard).join("") || `<div class="pm2-panel pm2-empty">No court assignments yet.</div>`}
@@ -1987,11 +2001,6 @@
             </section>
           </div>
         </section>
-      </div>
-      <div class="pm2-mobile-dock">
-        <button class="pm2-btn pm2-btn-dark" type="button" data-pm-action="edit-setup">Setup</button>
-        <button class="pm2-btn pm2-btn-share" type="button" data-pm-action="share-live" ${canShare ? "" : "disabled"}>${canShare ? "Share Live" : "Sharing Ended"}</button>
-        <button class="pm2-btn pm2-btn-primary pm2-mobile-next" type="button" data-pm-action="scroll" data-target="pm2Courts">Courts</button>
       </div>
     `;
   }

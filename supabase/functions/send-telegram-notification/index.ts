@@ -7,17 +7,9 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const ALLOWED_EVENTS = new Set([
-  "new_booking",
-  "booking_confirmed",
-  "booking_rescheduled",
-  "booking_cancelled",
-  "booking_forfeited",
-  "payment_verified",
-  "payment_rejected",
-  "payment_review_needed",
-  "admin_booking_created",
-]);
+// Telegram is intentionally reserved for work that needs an admin decision.
+// Routine booking lifecycle events continue through the dashboard/email flows.
+const ALLOWED_EVENTS = new Set(["payment_review_needed"]);
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -43,7 +35,7 @@ function esc(value: unknown): string {
 }
 
 function fmtPHP(value: unknown): string {
-  return `PHP ${
+  return `₱${
     Number(value || 0).toLocaleString("en-PH", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
@@ -56,12 +48,55 @@ function fmtDate(value: unknown): string {
   const date = new Date(`${raw}T00:00:00+08:00`);
   if (!raw || Number.isNaN(date.getTime())) return raw || "—";
   return date.toLocaleDateString("en-PH", {
-    weekday: "short",
     year: "numeric",
     month: "short",
     day: "numeric",
     timeZone: "Asia/Manila",
   });
+}
+
+function fmtDateTime(value: unknown): string {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) return "—";
+  const datePart = date.toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "Asia/Manila",
+  });
+  const timePart = date.toLocaleTimeString("en-PH", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Manila",
+  });
+  return `${datePart} · ${timePart}`;
+}
+
+function timeMinutes(value: unknown): number | null {
+  const match = String(value || "").trim().match(
+    /^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i,
+  );
+  if (!match) return null;
+  let hour = Number(match[1]);
+  const minute = Number(match[2] || 0);
+  const meridiem = String(match[3] || "").toUpperCase();
+  if (minute > 59 || hour > (meridiem ? 12 : 23)) return null;
+  if (meridiem === "AM" && hour === 12) hour = 0;
+  if (meridiem === "PM" && hour !== 12) hour += 12;
+  return hour * 60 + minute;
+}
+
+function courtHours(row: Record<string, unknown>): number {
+  if (Array.isArray(row.slots) && row.slots.length) return row.slots.length;
+  const start = timeMinutes(row.start_time);
+  const end = timeMinutes(row.end_time);
+  if (start == null || end == null) return 0;
+  return Math.max(0, (end - start) / 60);
+}
+
+function formatHours(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function eventLabel(event: string): string {
@@ -82,44 +117,18 @@ function eventLabel(event: string): string {
 function eventMatchesCanonicalState(
   event: string,
   rows: Record<string, unknown>[],
-  privileged: boolean,
 ): boolean {
-  if (!rows.length) return false;
-  if (privileged) return true;
-
-  const everyStatus = (...allowed: string[]) =>
-    rows.every((row) => allowed.includes(text(row.status, 30).toLowerCase()));
-  const everyPayment = (...allowed: string[]) =>
-    rows.every((row) =>
-      allowed.includes(text(row.payment_status, 30).toLowerCase())
-    );
-
-  switch (event) {
-    case "new_booking":
-      return everyStatus("verifying", "pending", "confirmed", "completed") &&
-        !rows.some((row) =>
-          text(row.payment_status, 30).toLowerCase() === "rejected"
-        );
-    case "booking_confirmed":
-      return everyStatus("confirmed", "completed");
-    case "booking_cancelled":
-      return everyStatus("cancelled");
-    case "booking_forfeited":
-      return everyStatus("forfeited");
-    case "payment_verified":
-      return everyPayment("paid", "downpayment_paid", "deposit_retained");
-    case "payment_rejected":
-      return everyPayment("rejected") || everyStatus("cancelled");
-    case "payment_review_needed":
-      return everyPayment("pending", "for_verification");
-    // Reschedule provenance and admin-created provenance cannot be established
-    // from the current booking row, so only a trusted dashboard role may emit
-    // these event types.
-    case "booking_rescheduled":
-    case "admin_booking_created":
-    default:
-      return false;
-  }
+  if (event !== "payment_review_needed" || !rows.length) return false;
+  return rows.every((row) => {
+    const method = text(row.payment_method, 30).toLowerCase();
+    const receipt = text(row.receipt_status, 30).toLowerCase();
+    const status = text(row.status, 30).toLowerCase();
+    const payment = text(row.payment_status, 30).toLowerCase();
+    return method !== "cash" &&
+      receipt !== "manual_review" &&
+      status === "pending" &&
+      payment === "for_verification";
+  });
 }
 
 function adminUrl(): string {
@@ -133,39 +142,44 @@ function bookingMessage(
 ): string {
   const primary = rows[0] || {};
   const total = rows.reduce((sum, row) => sum + Number(row.total || 0), 0);
-  const paid = rows.reduce(
-    (sum, row) =>
-      sum +
-      Number(row.payment_status === "paid" ? row.total : row.downpayment || 0),
-    0,
-  );
-  const courts = [
-    ...new Set(rows.map((row) => text(row.court_name, 150)).filter(Boolean)),
-  ]
-    .join(", ");
   const displayRef = text(primary.booking_group_ref, 100) ||
     text(primary.ref, 100);
-  const method = text(primary.payment_method || "cash", 30).toUpperCase();
-  const paymentRef = text(primary.gcash_ref, 100);
+  const method = text(primary.payment_method, 30).toUpperCase();
+  const courts = [...rows].sort((a, b) =>
+    text(a.court_name, 150).localeCompare(text(b.court_name, 150), "en", {
+      numeric: true,
+    })
+  );
+  const totalHours = courts.reduce((sum, row) => sum + courtHours(row), 0);
+  const dates = [...new Set(courts.map((row) => text(row.date, 10)))]
+    .filter(Boolean);
+  const sharedDate = dates.length === 1 ? dates[0] : "";
+  const courtLines = courts.map((row, index) => {
+    const name = text(row.court_name, 150) || `Court ${index + 1}`;
+    const datePrefix = sharedDate ? "" : `${fmtDate(row.date)} · `;
+    return `🎾 ${esc(name)} · ${esc(datePrefix)}${
+      esc(row.start_time)
+    }–${esc(row.end_time)} · ${fmtPHP(row.total)}`;
+  }).join("\n");
+  const countLabel = `${courts.length} ${
+    courts.length === 1 ? "court" : "courts"
+  } · ${formatHours(totalHours)} ${
+    courts.length === 1 ? "hours" : "court-hours"
+  }`;
 
   return (
-    `<b>${esc(eventLabel(event))}</b>\n` +
-    `------------------\n` +
-    `<b>${esc(primary.full_name)}</b>\n` +
-    `${esc(primary.contact_number || "")}\n\n` +
-    `<b>${esc(courts || primary.court_name)}</b>\n` +
-    `${esc(fmtDate(primary.date))}\n` +
-    `${esc(primary.start_time)} - ${esc(primary.end_time)}` +
-    (rows.length > 1 ? ` · ${rows.length} reservations` : "") +
-    `\n\nPayment: <b>${esc(method)}</b>` +
-    (paymentRef ? `\nPayment ref: <code>${esc(paymentRef)}</code>` : "") +
-    `\nTotal: ${fmtPHP(total)}` +
-    `\nPaid / DP: <b>${fmtPHP(paid)}</b>` +
-    `\nPayment status: <b>${esc(primary.payment_status)}</b>` +
-    `\nBooking status: <b>${esc(primary.status)}</b>` +
-    `\n\nBooking ref: <code>${esc(displayRef)}</code>\n` +
-    `------------------\n` +
-    `<a href="${adminUrl()}">Open the Paddle Rage dashboard.</a>`
+    `⚠️ <b>${esc(eventLabel(event))}</b>\n` +
+    `👤 Player: ${esc(primary.full_name)}\n` +
+    `📋 Ref: <code>${esc(displayRef)}</code>\n` +
+    `💳 Payment: ${esc(method)}\n` +
+    `🕒 Submitted: ${esc(fmtDateTime(primary.created_at))}\n` +
+    `🚩 Issue: REVIEW_REQUIRED\n\n` +
+    `🏟️ <b>COURT SCHEDULE</b>\n` +
+    `${countLabel}\n` +
+    (sharedDate ? `📅 ${esc(fmtDate(sharedDate))}\n` : "") +
+    `${courtLines}\n` +
+    `💰 <b>TOTAL PAYMENT: ${fmtPHP(total)}</b>\n\n` +
+    `🔗 <a href="${adminUrl()}">Open the Paddle Rage dashboard</a>`
   );
 }
 
@@ -257,7 +271,7 @@ Deno.serve(async (req) => {
     const { data: primary, error: bookingError } = await db
       .from("bookings")
       .select(
-        "ref,booking_group_ref,full_name,contact_number,court_name,date,start_time,end_time,total,downpayment,payment_method,payment_status,status,gcash_ref,host_user_id,created_by_user_id",
+        "ref,booking_group_ref,full_name,contact_number,court_name,date,slots,start_time,end_time,total,downpayment,payment_method,payment_status,receipt_status,status,gcash_ref,host_user_id,created_by_user_id,created_at",
       )
       .eq("ref", bookingRef)
       .maybeSingle();
@@ -282,7 +296,7 @@ Deno.serve(async (req) => {
       const { data: groupRows, error: groupError } = await db
         .from("bookings")
         .select(
-          "ref,booking_group_ref,full_name,contact_number,court_name,date,start_time,end_time,total,downpayment,payment_method,payment_status,status,gcash_ref,host_user_id,created_by_user_id",
+          "ref,booking_group_ref,full_name,contact_number,court_name,date,slots,start_time,end_time,total,downpayment,payment_method,payment_status,receipt_status,status,gcash_ref,host_user_id,created_by_user_id,created_at",
         )
         .eq("booking_group_ref", primary.booking_group_ref)
         .order("created_at", { ascending: true });
@@ -306,7 +320,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!eventMatchesCanonicalState(event, rows, privileged)) {
+    if (!eventMatchesCanonicalState(event, rows)) {
       return json({
         ok: false,
         error: "This notification does not match the saved booking state",

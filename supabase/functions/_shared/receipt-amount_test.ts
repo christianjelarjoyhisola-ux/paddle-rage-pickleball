@@ -197,6 +197,25 @@ Deno.test("explicit amount label works without a currency marker", () => {
   assert(result.evidence.includes("total_label"), "total evidence");
 });
 
+Deno.test("amount labels apply to a bare value on the next OCR line", () => {
+  const result = extractReceiptAmount(
+    "Amount\n12.00\nTotal Amount Sent\n12.00",
+    { provider: "gcash" },
+  );
+  assertEquals(result.amount, 12, "cross-line GCash amount");
+  assertEquals(result.reliable, true, "cross-line amount reliability");
+  assertEquals(result.ambiguous, false, "equivalent cross-line amounts");
+  assert(result.evidence.includes("total_label"), "cross-line total evidence");
+});
+
+Deno.test("a bare decimal remains untrusted without a preceding label", () => {
+  const result = extractReceiptAmount("untrusted OCR fragment\n12.00", {
+    provider: "gcash",
+  });
+  assertEquals(result.amount, null, "unlabeled bare decimal");
+  assertEquals(result.reason, "no_candidates", "unlabeled decimal reason");
+});
+
 Deno.test("fee reference date and account candidates are excluded", () => {
   const result = extractReceiptAmount(
     `

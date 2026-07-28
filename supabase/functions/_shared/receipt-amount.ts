@@ -86,6 +86,11 @@ const MONEY_TOKEN_RE = new RegExp(
   "u",
 );
 
+const BARE_MONEY_RE = new RegExp(
+  String.raw`(?<![\d,])(?<amount>${MONEY_SOURCE})(?![\d,.])`,
+  "gu",
+);
+
 const EXCLUDED_CONTEXTS: Array<{ reason: string; pattern: RegExp }> = [
   { reason: "transfer_fee", pattern: /\btransfer\s+fee\b/i },
   {
@@ -339,6 +344,25 @@ function collectCandidates(
         match,
         TOTAL_LABEL_RE.test(label) ? ["total_label"] : ["amount_label"],
       );
+    }
+
+    // Vision commonly keeps a label and its bare value on separate lines:
+    //
+    //   Total Amount Sent
+    //   1,080.00
+    //
+    // A bare decimal is still untrusted everywhere else. Only collect it when
+    // the immediately preceding non-empty line is an amount/total label with
+    // no monetary value of its own.
+    const previous = previousNonEmptyLine(lines, lineIndex);
+    if (
+      previous && !lineHasMoneyAmount(previous) &&
+      (AMOUNT_LABEL_RE.test(previous) || TOTAL_LABEL_RE.test(previous))
+    ) {
+      BARE_MONEY_RE.lastIndex = 0;
+      for (const match of line.matchAll(BARE_MONEY_RE)) {
+        addMatch(line, lineIndex, match);
+      }
     }
   });
 

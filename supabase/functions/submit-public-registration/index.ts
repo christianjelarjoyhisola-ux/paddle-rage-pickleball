@@ -62,9 +62,32 @@ function fmtDate(value: unknown): string {
   });
 }
 
+function fmtDateTime(value: unknown): string {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Manila",
+  });
+}
+
 function adminUrl(): string {
   return Deno.env.get("APP_ADMIN_URL") ||
     "https://paddleragecdo.ph/admin.html";
+}
+
+function registrationNeedsReview(row: Record<string, unknown>): boolean {
+  const method = text(row.payment_method, 30).toLowerCase();
+  const receipt = text(row.receipt_status, 30).toLowerCase();
+  const payment = text(row.payment_status, 30).toLowerCase();
+  return method !== "cash" &&
+    (receipt === "manual_review" ||
+      ["pending", "for_verification"].includes(payment));
 }
 
 async function sendCanonicalTelegram(
@@ -142,17 +165,14 @@ async function sendCanonicalTelegram(
 
 function openPlayMessage(row: Record<string, unknown>): string {
   return (
-    `<b>OPEN PLAY SIGN-UP</b>\n` +
-    `------------------\n` +
-    `<b>${esc(row.full_name)}</b>\n\n` +
-    `<b>${esc(row.court_name)}</b>\n` +
-    `${esc(fmtDate(row.date))}\n` +
-    `${esc(row.time_label)}\n\n` +
-    `Payment: <b>${esc(row.payment_type)}</b> - ${fmtPHP(row.amount)}\n` +
-    `Method: <b>${esc(row.payment_method)}</b>\n` +
-    `Status: <b>${esc(row.payment_status)}</b>\n` +
-    `------------------\n` +
-    `<a href="${adminUrl()}">View Open Play registrations.</a>`
+    `⚠️ <b>PAYMENT REVIEW</b>\n` +
+    `👤 ${esc(row.full_name)} · ${fmtPHP(row.amount)}\n` +
+    `🏓 Open Play · #${esc(row.id)}\n` +
+    `💳 ${esc(text(row.payment_method, 30).toUpperCase())} · Booked ${
+      esc(fmtDateTime(row.created_at))
+    }\n` +
+    `📅 Starts ${esc(fmtDate(row.date))} · ${esc(row.time_label)}\n` +
+    `<a href="${adminUrl()}">Open the Paddle Rage dashboard</a>`
   );
 }
 
@@ -161,18 +181,18 @@ function hostSessionMessage(
   session: Record<string, unknown>,
 ): string {
   return (
-    `<b>HOST SESSION SIGN-UP</b>\n` +
-    `------------------\n` +
-    `<b>${esc(registration.full_name)}</b>\n` +
-    `${esc(registration.contact_number || "")}\n\n` +
-    `<b>${esc(session.title || "Open Play Session")}</b>\n` +
-    `${esc(fmtDate(session.date))}\n` +
-    `${esc(session.start_hour)}:00 - ${esc(session.end_hour)}:00\n\n` +
-    `Amount: <b>${fmtPHP(registration.amount)}</b>\n` +
-    `Method: <b>${esc(registration.payment_method)}</b>\n` +
-    `Status: <b>${esc(registration.payment_status)}</b>\n` +
-    `------------------\n` +
-    `<a href="${adminUrl()}">Open the Host Center.</a>`
+    `⚠️ <b>PAYMENT REVIEW</b>\n` +
+    `👤 ${esc(registration.full_name)} · ${fmtPHP(registration.amount)}\n` +
+    `🏓 ${esc(session.title || "Host session")} · #${
+      esc(registration.id)
+    }\n` +
+    `💳 ${
+      esc(text(registration.payment_method, 30).toUpperCase())
+    } · Booked ${esc(fmtDateTime(registration.created_at))}\n` +
+    `📅 Starts ${esc(fmtDate(session.date))} · ${
+      esc(`${session.start_hour}:00`)
+    }\n` +
+    `<a href="${adminUrl()}">Open the Paddle Rage dashboard</a>`
   );
 }
 
@@ -281,12 +301,18 @@ Deno.serve(async (req) => {
         }, 500);
       }
 
-      const notification = await sendCanonicalTelegram(db, {
-        key: `registration:open_play:${row.id}`,
-        type: "open_play_registration",
-        subjectId: String(row.id),
-        message: openPlayMessage(row),
-      });
+      const notification = registrationNeedsReview(row)
+        ? await sendCanonicalTelegram(db, {
+          key: `telegram:payment_review_needed:open_play:${row.id}`,
+          type: "open_play_registration",
+          subjectId: String(row.id),
+          message: openPlayMessage(row),
+        })
+        : {
+          ok: true,
+          skipped: true,
+          reason: "Registration does not need payment review",
+        };
       return json({ ok: true, registration: row, notification });
     }
 
@@ -333,12 +359,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    const notification = await sendCanonicalTelegram(db, {
-      key: `registration:host_session:${registration.id}`,
-      type: "host_session_registration",
-      subjectId: String(registration.id),
-      message: hostSessionMessage(registration, session),
-    });
+    const notification = registrationNeedsReview(registration)
+      ? await sendCanonicalTelegram(db, {
+        key:
+          `telegram:payment_review_needed:host_session:${registration.id}`,
+        type: "host_session_registration",
+        subjectId: String(registration.id),
+        message: hostSessionMessage(registration, session),
+      })
+      : {
+        ok: true,
+        skipped: true,
+        reason: "Registration does not need payment review",
+      };
     return json({ ok: true, registration, session, notification });
   } catch (error) {
     console.error("submit-public-registration failed", error);

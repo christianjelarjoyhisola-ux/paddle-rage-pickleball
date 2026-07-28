@@ -2800,10 +2800,6 @@
   font-weight: 750;
 }
 
-.pm2-mobile-dock {
-  display: none;
-}
-
 .pm2-dialog {
   position: fixed;
   inset: 0;
@@ -3791,7 +3787,7 @@
 @media (max-width: 720px) {
   #sec-gamemgr {
     margin: -4px;
-    padding-bottom: 126px;
+    padding-bottom: calc(68px + env(safe-area-inset-bottom));
   }
 
   .pm2 {
@@ -4023,39 +4019,63 @@
   .pm2-live-jump {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    position: sticky;
-    top: 107px;
-    z-index: 60;
-    gap: 5px;
-    margin-bottom: 10px;
-    padding: 6px;
+    position: fixed;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    z-index: 120;
+    gap: 2px;
+    margin: 0;
+    padding: 4px;
     border: 1px solid #d7dde5;
-    border-radius: 11px;
-    background: rgba(255, 255, 255, .94);
-    box-shadow: 0 9px 25px rgba(15, 23, 42, .1);
-    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, .97);
+    box-shadow: 0 10px 28px rgba(15, 23, 42, .16);
+    backdrop-filter: blur(14px);
   }
 
   .pm2-live-jump button {
-    min-height: 37px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 44px;
+    gap: 5px;
+    padding: 4px 5px;
     border: 0;
-    border-radius: 8px;
+    border-radius: 11px;
     color: #4b5563;
-    background: #f2f4f7;
-    font-size: .55rem;
-    font-weight: 900;
+    background: transparent;
+    font-size: .64rem;
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+    touch-action: manipulation;
+  }
+
+  .pm2-live-jump button:focus-visible {
+    outline: 2px solid #0f766e;
+    outline-offset: -2px;
+    color: #0f766e;
+    background: #ecfdf8;
+  }
+
+  .pm2-live-jump button:active {
+    color: #0f766e;
+    background: #ecfdf8;
   }
 
   .pm2-live-jump b {
     display: inline-grid;
     place-items: center;
-    min-width: 19px;
-    height: 19px;
-    margin-left: 3px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
     border-radius: 50%;
     color: #fff;
     background: #273244;
-    font-size: .52rem;
+    font-size: .5rem;
+    line-height: 1;
   }
 
   .pm2-round-strip {
@@ -4149,31 +4169,6 @@
   .pm2-court-card.is-live .pm2-result-btn {
     min-height: 56px;
     font-size: 1rem;
-  }
-
-  .pm2-mobile-dock {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    position: fixed;
-    right: 12px;
-    bottom: calc(10px + env(safe-area-inset-bottom));
-    left: 12px;
-    z-index: 120;
-    gap: 7px;
-    padding: 7px;
-    border: 1px solid rgba(201, 243, 29, .22);
-    border-radius: 14px;
-    background: rgba(17, 24, 39, .94);
-    box-shadow: 0 18px 42px rgba(0, 0, 0, .3);
-    backdrop-filter: blur(12px);
-  }
-
-  .pm2-mobile-dock .pm2-btn {
-    min-height: 46px;
-  }
-
-  .pm2-mobile-dock .pm2-mobile-next {
-    grid-column: 1 / -1;
   }
 
   .pm2-share-dialog {
@@ -4637,6 +4632,52 @@
   font-weight: 600;
   line-height: 1.25;
   white-space: nowrap;
+}
+
+.pm2 .pm2-live-court-tools {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.pm2 .pm2-live-court-actions {
+  display: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.pm2 .pm2-compact-action {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--pm2-line);
+  border-radius: 999px;
+  color: var(--pm2-ink);
+  background: #fff;
+  font: inherit;
+  font-size: .75rem;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.pm2 .pm2-compact-action.is-share {
+  border-color: #0f766e;
+  color: #fff;
+  background: #0f766e;
+}
+
+.pm2 .pm2-compact-action:focus-visible {
+  outline: 3px solid rgba(13, 148, 136, .25);
+  outline-offset: 2px;
+}
+
+.pm2 .pm2-compact-action:disabled {
+  cursor: not-allowed;
+  opacity: .55;
 }
 
 .pm2 .pm2-courts {
@@ -5235,7 +5276,7 @@
 @media (max-width: 720px) {
   #sec-gamemgr {
     margin-inline: -4px;
-    padding-bottom: 126px;
+    padding-bottom: calc(68px + env(safe-area-inset-bottom));
   }
 
   .pm2 {
@@ -5283,17 +5324,24 @@
   }
 
   .pm2 .pm2-live-jump {
-    top: calc(var(--admin-topbar-h, 64px) + 8px);
-    z-index: 90;
-    gap: 6px;
-    padding: 7px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    position: fixed;
+    top: auto;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    z-index: 120;
+    gap: 2px;
+    margin: 0;
+    padding: 4px;
   }
 
   .pm2 .pm2-live-jump button {
-    min-height: 40px;
-    padding: 6px 4px;
-    font-size: .6875rem;
-    font-weight: 700;
+    min-height: 44px;
+    padding: 4px 5px;
+    font-size: .64rem;
+    font-weight: 800;
   }
 
   .pm2 .pm2-round-strip {
@@ -5305,7 +5353,14 @@
   }
 
   .pm2 .pm2-dashboard-section {
-    scroll-margin-top: calc(var(--admin-topbar-h, 64px) + 74px);
+    scroll-margin-top: calc(var(--admin-topbar-h, 64px) + 12px);
+  }
+
+  .pm2 .pm2-courts,
+  .pm2 .pm2-queue-panel,
+  .pm2 .pm2-next-panel,
+  .pm2 .pm2-match-log-panel {
+    scroll-margin-top: calc(var(--admin-topbar-h, 64px) + 12px);
   }
 
   .pm2 .pm2-section-heading {
@@ -5320,6 +5375,19 @@
     font-size: .6875rem;
   }
 
+  .pm2 .pm2-live-courts-section .pm2-section-status {
+    display: none;
+  }
+
+  .pm2 .pm2-live-court-actions {
+    display: flex;
+  }
+
+  .pm2 .pm2-round-actions .pm2-btn-share,
+  .pm2 .pm2-round-actions .pm2-session-edit {
+    display: none;
+  }
+
   .pm2 .pm2-round-copy strong {
     font-size: .875rem;
   }
@@ -5332,8 +5400,7 @@
     gap: 8px;
   }
 
-  .pm2 .pm2-round-actions .pm2-btn,
-  .pm2 .pm2-mobile-dock .pm2-btn {
+  .pm2 .pm2-round-actions .pm2-btn {
     min-width: 0;
     min-height: 46px;
     padding-inline: 10px;
@@ -5415,13 +5482,11 @@
     min-height: 108px;
   }
 
-  .pm2 .pm2-mobile-dock {
-    right: 10px;
-    bottom: calc(10px + env(safe-area-inset-bottom));
-    left: 10px;
-    gap: 8px;
-    padding: 8px;
-    border-radius: 16px;
+  .pm2 .pm2-toast {
+    right: 12px;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    left: 12px;
+    max-width: none;
   }
 
   .pm2 .pm2-dialog {
@@ -5460,6 +5525,17 @@
     align-items: flex-start;
     flex-direction: column;
     gap: 7px;
+  }
+
+  .pm2 .pm2-live-courts-section .pm2-section-heading {
+    align-items: center;
+    flex-direction: row;
+    min-height: 44px;
+    gap: 8px;
+  }
+
+  .pm2 .pm2-live-courts-section .pm2-section-kicker {
+    display: none;
   }
 
   .pm2 .pm2-section-status {
@@ -5514,7 +5590,8 @@
   .pm2 .pm2-ready-start,
   .pm2 .pm2-ready-choose,
   .pm2 .pm2-mini-action,
-  .pm2 .pm2-live-jump button {
+  .pm2 .pm2-live-jump button,
+  .pm2 .pm2-compact-action {
     min-height: 44px;
   }
 

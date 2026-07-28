@@ -187,8 +187,12 @@ test("manager offers separate text-copy and live-sharing actions", () => {
   assert.match(manager, /data-pm-action="rotate-live-link"/i);
   assert.match(manager, /data-pm-action="disable-live-link"/i);
   assert.doesNotMatch(manager, /data-pm-action="copy-update"/i);
+  assert.match(manager, /class="pm2-live-court-actions"[\s\S]*?data-pm-action="edit-setup"[\s\S]*?data-pm-action="share-live"/i);
+  assert.doesNotMatch(manager, /class="pm2-mobile-dock"/i);
+  const qrScriptIndex = admin.indexOf("qrcode.min.js?v=1.5.4");
+  const managerScriptIndex = admin.search(/play-manager\.js\?v=[^"']+/i);
   assert.ok(
-    admin.indexOf("qrcode.min.js?v=1.5.4") < admin.indexOf("play-manager.js?v=20260726-dispatch-equal-v23"),
+    qrScriptIndex >= 0 && managerScriptIndex > qrScriptIndex,
     "the local QR encoder must load before the manager module"
   );
   assert.ok(fs.statSync(path.join(root, "qrcode.min.js")).size > 10000);
@@ -688,7 +692,10 @@ test("Up Next renders one ordered dispatch slot per court and keeps READY reserv
   assert.match(dispatch, /queue\.slice\(index \* 4, index \* 4 \+ 4\)/i);
   assert.match(dispatch, /return \[\.\.\.ready, \.\.\.previews\]\.map/i);
   assert.match(renderLive, /const dispatchSlots = nextDispatchSlots\(assignments, queue\)/i);
-  assert.match(renderLive, /data-target="pm2Next">Up Next <b>\$\{dispatchSlots\.length\}<\/b>/i);
+  assert.match(
+    renderLive,
+    /data-target="pm2Next" aria-label="Up Next, \$\{dispatchSlots\.length\}"[\s\S]*?<span>Up Next<\/span><b aria-hidden="true">\$\{dispatchSlots\.length\}<\/b>/i
+  );
   assert.match(renderLive, /nextDispatchMarkup\(dispatchSlots, sessionStatus\)/i);
   assert.ok(
     renderLive.indexOf('id="pm2Courts"') < renderLive.indexOf('id="pm2Next"')
@@ -850,7 +857,7 @@ test("LIVE court card mirrors the READY card system with a cyan state treatment"
     managerCss,
     /\.pm2-court-card\.is-live \.pm2-result-btn\s*\{[^}]*min-height:\s*56px[^}]*border-radius:\s*11px[^}]*font-size:\s*1rem/is
   );
-  assert.match(admin, /play-manager\.css\?v=20260726-dispatch-equal-v23/i);
+  assert.match(admin, /play-manager\.css\?v=20260728-compact-mobile-v24/i);
 });
 
 test("court cards share one compact height and use the modern indigo-coral team palette", () => {
@@ -1051,7 +1058,7 @@ test("Play Manager stays fluid, touch-friendly, stacked, and motion-safe", () =>
   );
   assert.match(
     unifiedManagerCss,
-    /@media \(max-width:\s*720px\)\s*\{[\s\S]*?\.pm2 \.pm2-header\s*\{[^}]*position:\s*relative;[^}]*top:\s*auto;[\s\S]*?\.pm2 \.pm2-live-jump\s*\{[^}]*top:\s*calc\(var\(--admin-topbar-h,\s*64px\) \+ 8px\)/i
+    /@media \(max-width:\s*720px\)\s*\{[\s\S]*?\.pm2 \.pm2-header\s*\{[^}]*position:\s*relative;[^}]*top:\s*auto;[\s\S]*?\.pm2 \.pm2-live-jump\s*\{[^}]*position:\s*fixed;[^}]*top:\s*auto;[^}]*bottom:\s*max\(8px,\s*env\(safe-area-inset-bottom\)\)/i
   );
   assert.match(
     unifiedManagerCss,
@@ -1156,7 +1163,7 @@ test("Play Manager stores editable six-star player skills and uses them for bala
     /\.pm2-team-skill-total\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?letter-spacing:\s*0/i
   );
   assert.match(admin, /supabase-config\.js\?v=20260726-player-profile-v5/i);
-  assert.match(admin, /play-manager\.js\?v=20260726-dispatch-equal-v23/i);
+  assert.match(admin, /play-manager\.js\?v=20260728-compact-mobile-v24/i);
   assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
 });
 

@@ -40,14 +40,18 @@ html { scroll-behavior: smooth; -webkit-text-size-adjust:100%; text-size-adjust:
   --dark-text: #f8faf6; --dark-muted: #aec0cf;
   --red: var(--court-red); --yellow: #b88b24; --yellow-rgb: 184,139,36;
   --lime: var(--pickle-lime); --lime-rgb: 201,207,67; --lime-ink: #70771e;
-  --slot-selected: #f97316; --slot-selected-dark: #ea580c; --slot-selected-rgb: 249,115,22;
+  --slot-available: #7fa9cc; --slot-available-rgb: 127,169,204;
+  --slot-selected: #c2410c; --slot-selected-dark: #9a3412; --slot-selected-rgb: 194,65,12;
   --slot-processing: #22c55e; --slot-processing-dark: #16a34a; --slot-processing-rgb: 34,197,94;
+  --slot-processing-ink: #86efac;
+  --slot-booked: #f87171; --slot-booked-rgb: 248,113,113; --slot-booked-ink: #fca5a5;
+  --slot-done: #94a3b8; --slot-done-rgb: 148,163,184;
   --r-sm: 8px; --r: 12px; --r-lg: 18px; --pill: 999px;
 }
 body.light { --bg:#f4f7f8; --card:#ffffff; --border:#d7e0e6; --text:#0f2438; --muted:#657486; --input:#eef3f6; --dark-text:#f8faf6; --dark-muted:#aec0cf; }
 body.dark { --bg:#091521; --card:#12283b; --border:#29475f; --text:#f8faf6; --muted:#aec0cf; --input:#0f2234; --accent:#7fa9cc; --accent-dark:#143d63; --glow:rgba(127,169,204,.18); --ac:127,169,204; --dark-text:#f8faf6; --dark-muted:#aec0cf; --lime:#dce768; --lime-rgb:220,231,104; --lime-ink:#dce768; }
 body { font-family:'Outfit',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; transition:background .3s,color .3s; touch-action:manipulation; }
-button, input, select, textarea, label, a, [role="button"], .btn, .cc-slot-btn, .court-tab, .wiz-court-card, .pay-opt, .time-chip {
+button, input, select, textarea, label, a, [role="button"], .btn, .cc-slot-btn, .wiz-court-card, .pay-opt, .time-chip {
   touch-action: manipulation;
 }
 h1,h2,h3 { font-family:'Bebas Neue',sans-serif; letter-spacing:1px; }
@@ -407,9 +411,22 @@ body.dark .shared-date-display {
 }
 .cc-times-title {
   font-family:'Bebas Neue',sans-serif; font-size:1.15rem;
-  letter-spacing:1px; display:flex; align-items:center; gap:6px;
+  letter-spacing:1px; display:flex; align-items:center; flex-wrap:wrap; gap:5px;
 }
 .cc-times-sub { font-size:.74rem; color:var(--muted); margin-top:1px; }
+.court-heading-icon {
+  width:18px; height:12px; flex:0 0 auto; position:relative;
+  display:inline-block; border:1.5px solid currentColor; border-radius:2px;
+  color:var(--accent); opacity:.95;
+}
+.court-heading-icon::before,
+.court-heading-icon::after {
+  content:''; position:absolute; background:currentColor; opacity:.75;
+}
+.court-heading-icon::before { top:-1px; bottom:-1px; left:50%; width:1px; transform:translateX(-50%); }
+.court-heading-icon::after { left:0; right:0; top:50%; height:1px; transform:translateY(-50%); }
+.court-heading-sep { color:var(--muted); font-family:'Outfit',sans-serif; font-weight:800; }
+.court-heading-label { color:var(--muted); }
 
 /* DATE BANNER — prominent tappable date selector */
 .cc-date-banner {
@@ -475,10 +492,10 @@ body.dark .shared-date-display {
 .csl-time .t-compact { display:none; }
 @media(max-width:900px){ .cc-slots-grid{ grid-template-columns:repeat(4,minmax(0,1fr)); } }
 @media(max-width:700px){
-  .cc { flex-direction:column; display:none; }
-  .cc.active-mobile { display:flex; }
+  .cc { flex-direction:column; display:flex; }
   .cc-photo { display:none; }
   .cc-times { padding:10px 12px 12px; }
+  .cc-times-head { display:none; }
   .cc-times-sub { display:none; }
   .cc-slots-grid{ grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
   .cc-slot-btn { padding:6px 4px; min-height:auto; }
@@ -553,39 +570,7 @@ body.dark .shared-date-display {
 }
 .cc-slots-empty .pb-loader.mini { padding:4px 0; }
 
-/* ── MOBILE COURT TABS ── */
-.court-tabs {
-  display:none;
-  overflow-x:auto; -webkit-overflow-scrolling:touch;
-  gap:8px; padding:4px 0 12px; margin-bottom:4px;
-  scrollbar-width:none;
-}
-.court-tabs::-webkit-scrollbar { display:none; }
-.court-tab {
-  flex-shrink:0;
-  display:inline-flex; align-items:center; gap:6px;
-  padding:8px 16px; border-radius:20px;
-  border:1.5px solid var(--border);
-  background:var(--input); color:var(--muted);
-  font-family:'Outfit',sans-serif; font-size:.82rem; font-weight:600;
-  cursor:pointer; transition:all .18s; white-space:nowrap;
-  -webkit-tap-highlight-color:transparent;
-}
-.court-tab.active {
-  border-color:var(--accent);
-  background:rgba(var(--ac),.14);
-  color:var(--accent);
-}
-.tab-dot {
-  width:7px; height:7px; border-radius:50%; flex-shrink:0;
-}
-.tab-dot-av   { background:var(--accent); }
-.tab-dot-full { background:var(--red); }
-.tab-dot-mnt  { background:var(--muted); }
-.tab-dot-all  { background:linear-gradient(135deg,var(--accent) 0 45%,var(--lime) 45% 72%,var(--red) 72%); }
-@media(max-width:700px) { .court-tabs { display:flex; } }
-
-/* ── ACTIVE COURT MOBILE HEADER ── */
+/* ── COMPACT COURT MOBILE HEADER ── */
 .cc-mobile-hd {
   display:none;
 }
@@ -602,7 +587,9 @@ body.dark .shared-date-display {
     color:var(--accent); font-weight:900;
   }
   .cc-mobile-name {
-    font-size:.9rem; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    display:flex; align-items:center; gap:5px;
+    font-family:'Bebas Neue',sans-serif; font-size:1rem; letter-spacing:.6px;
+    line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   .cc-mobile-meta {
     color:var(--muted); font-size:.7rem; font-weight:700; line-height:1.2;
@@ -633,22 +620,22 @@ body.dark .shared-date-display {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-/* ── AVAILABLE ── dark card, blue tint border, neutral price (selected state carries the emphasis) */
-.cc-slot-btn:not(.taken):not(.past-slot):not(.open-play):not(.maintenance) {
-  background: #0d1b2e;
-  border: 1.5px solid rgba(var(--ac),.34);
-  color: var(--dark-text);
+/* ── AVAILABLE ── blue */
+.cc-slot-btn:not(.taken):not(.past-slot):not(.open-play):not(.maintenance):not(.processing) {
+  background: rgba(var(--slot-available-rgb),.10);
+  border: 1.5px solid rgba(var(--slot-available-rgb),.58);
+  color: var(--text);
 }
-.cc-slot-btn:not(.taken):not(.past-slot):not(.open-play):not(.maintenance) .csl-price {
-  color: var(--dark-text);
+.cc-slot-btn:not(.taken):not(.past-slot):not(.open-play):not(.maintenance):not(.processing) .csl-price {
+  color: var(--text);
   font-weight: 800;
 }
 /* desktop hover only */
 @media (hover: hover) {
-  .cc-slot-btn:not(.taken):not(.past-slot):not(.open-play):not(.maintenance):hover {
-    background: #0f2040;
-    border-color: #4b5563;
-    box-shadow: 0 0 0 3px rgba(75,85,99,.15);
+  .cc-slot-btn:not(.taken):not(.past-slot):not(.open-play):not(.maintenance):not(.processing):hover {
+    background: rgba(var(--slot-available-rgb),.17);
+    border-color: var(--slot-available);
+    box-shadow: 0 0 0 3px rgba(var(--slot-available-rgb),.14);
   }
 }
 /* ── SELECTED ── orange */
@@ -668,8 +655,8 @@ body.dark .shared-date-display {
   cursor: not-allowed;
   animation: pulse-slot-processing 1.8s ease-in-out infinite;
 }
-.cc-slot-btn.processing .csl-time { color: #86efac; font-size: .62rem; }
-.cc-slot-btn.processing .csl-tag  { color: #86efac; font-size: .55rem; font-weight: 700; letter-spacing: .3px; }
+.cc-slot-btn.processing .csl-time { color: var(--slot-processing-ink); font-size: .62rem; }
+.cc-slot-btn.processing .csl-tag  { color: var(--slot-processing-ink); font-size: .55rem; font-weight: 700; letter-spacing: .3px; }
 .cc-slot-btn.processing:hover { transform: none; box-shadow: none; }
 @keyframes pulse-slot-processing {
   0%,100% { border-color: rgba(var(--slot-processing-rgb),.55); box-shadow: none; }
@@ -681,13 +668,13 @@ body.dark .shared-date-display {
 }
 /* ── BOOKED ── muted red with strikethrough */
 .cc-slot-btn.taken {
-  background: #1c0a0a;
-  border: 1.5px solid rgba(220,38,38,.3);
-  color: var(--dark-muted);
+  background: rgba(var(--slot-booked-rgb),.10);
+  border: 1.5px solid rgba(var(--slot-booked-rgb),.48);
+  color: var(--muted);
   cursor: not-allowed;
 }
-.cc-slot-btn.taken .csl-time { text-decoration: line-through; color: #f87171; opacity: .7; }
-.cc-slot-btn.taken .csl-name { color: #f87171; opacity: .75; font-size: .6rem; }
+.cc-slot-btn.taken .csl-time { text-decoration: line-through; color: var(--slot-booked-ink); opacity: .82; }
+.cc-slot-btn.taken .csl-name { color: var(--slot-booked-ink); opacity: .86; font-size: .6rem; }
 .cc-slot-btn.taken:hover { transform: none; box-shadow: none; }
 /* ── OPEN PLAY ── lime accent */
 .cc-slot-btn.open-play {
@@ -703,22 +690,22 @@ body.dark .shared-date-display {
 }
 /* ── MAINTENANCE ── very dim */
 .cc-slot-btn.maintenance {
-  background: rgba(255,255,255,.02);
-  border: 1px solid var(--dark-border);
-  color: var(--dark-muted);
+  background: rgba(var(--slot-done-rgb),.06);
+  border: 1px solid rgba(var(--slot-done-rgb),.22);
+  color: var(--muted);
   cursor: not-allowed;
   opacity: .5;
 }
-.cc-slot-btn.maintenance .csl-time { color: var(--dark-muted); }
+.cc-slot-btn.maintenance .csl-time { color: var(--muted); }
 .cc-slot-btn.maintenance .csl-tag { background:none; color:var(--lime-ink); font-size:.56rem; font-weight:700; letter-spacing:.3px; }
 .cc-slot-btn.maintenance:hover { transform:none; box-shadow:none; }
 /* ── PAST ── ghosted out, clearly unclickable */
 .cc-slot-btn.past-slot {
-  background: rgba(255,255,255,.02);
-  border: 1px solid rgba(255,255,255,.06);
-  color: var(--dark-muted);
+  background: rgba(var(--slot-done-rgb),.08);
+  border: 1px solid rgba(var(--slot-done-rgb),.24);
+  color: var(--muted);
   cursor: not-allowed;
-  opacity: .38;
+  opacity: .58;
 }
 .cc-slot-btn.past-slot:hover { transform:none; box-shadow:none; }
 
@@ -749,14 +736,14 @@ body.dark .shared-date-display {
 .cc-slot-legend span { display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
 .cc-dot {
   width:9px; height:9px; border-radius:50%; flex:0 0 9px;
-  border:1px solid rgba(255,255,255,.34);
-  box-shadow:0 0 0 2px rgba(0,0,0,.04);
+  border:1px solid var(--slot-dot-outline, rgba(255,255,255,.34));
+  box-shadow:0 0 0 2px var(--slot-dot-ring, rgba(0,0,0,.04));
 }
-.cc-dot.available { background:var(--navy); }
+.cc-dot.available { background:var(--slot-available); border-color:rgba(var(--slot-available-rgb),.82); box-shadow:0 0 0 2px rgba(var(--slot-available-rgb),.16); }
 .cc-dot.selected { background:var(--slot-selected); border-color:rgba(var(--slot-selected-rgb),.75); box-shadow:0 0 0 2px rgba(var(--slot-selected-rgb),.18); }
-.cc-dot.booked { background:var(--red); }
+.cc-dot.booked { background:var(--slot-booked); border-color:rgba(var(--slot-booked-rgb),.82); box-shadow:0 0 0 2px rgba(var(--slot-booked-rgb),.16); }
 .cc-dot.processing { background:var(--slot-processing); border-color:rgba(var(--slot-processing-rgb),.78); box-shadow:0 0 0 2px rgba(var(--slot-processing-rgb),.18); }
-.cc-dot.done { background:#94a3b8; }
+.cc-dot.done { background:var(--slot-done); border-color:rgba(var(--slot-done-rgb),.82); box-shadow:0 0 0 2px rgba(var(--slot-done-rgb),.16); }
 .cc-dot.maintenance { background:#6b7280; }
 /* MOBILE STICKY BOOK BAR */
 .mobile-book-bar {
@@ -1098,13 +1085,13 @@ select.fi option { background:var(--card); }
 .bpay-ref-row { display:flex; gap:6px; align-items:center; }
 .bpay-ref-row .fi { margin:0; font-family:monospace; letter-spacing:.8px; font-size:.78rem; padding:7px 9px; }
 .bpay-help { font-size:.6rem; color:var(--muted); margin-top:4px; line-height:1.35; }
-.bpay-window {
+.bpay-upload-prompt {
   display:flex; align-items:flex-start; gap:6px; margin-bottom:7px; padding:7px 9px;
   border-radius:8px; background:rgba(var(--lime-rgb),.09); border:1px solid rgba(var(--lime-rgb),.28);
   color:var(--text); font-size:.68rem; line-height:1.35;
 }
-.bpay-window strong { color:var(--lime-ink); font-weight:900; }
-.bpay-window span:first-child { flex-shrink:0; }
+.bpay-upload-prompt strong { color:var(--lime-ink); font-weight:900; }
+.bpay-upload-prompt span:first-child { flex-shrink:0; }
 .bpay-receipt { border-top:1px solid rgba(var(--ac),.2); margin-top:8px; padding-top:8px; }
 .bpay-receipt-drop {
   display:flex; align-items:center; justify-content:center; gap:7px; padding:8px 9px; background:var(--card);
@@ -1506,8 +1493,8 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
 }
 @keyframes invPop { from { transform:scale(0); opacity:0; } to { transform:scale(1); opacity:1; } }
 .inv-check-icon { font-size:2rem; color:#fff; line-height:1; }
-.inv-hero-title { font-family:'Bebas Neue',sans-serif; font-size:1.7rem; letter-spacing:2px; position:relative; z-index:1; }
-.inv-hero-sub { font-size:.82rem; color:var(--muted); margin-top:4px; position:relative; z-index:1; }
+.inv-hero-title { font-family:'Bebas Neue',sans-serif; font-size:1.7rem; letter-spacing:2px; color:#fff; position:relative; z-index:1; }
+.inv-hero-sub { font-size:.82rem; color:#c6cec3; margin-top:4px; position:relative; z-index:1; }
 .inv-status-bdg { display:inline-block; margin-top:10px; padding:4px 14px; border-radius:20px; font-size:.75rem; font-weight:600; letter-spacing:.5px; position:relative; z-index:1; }
 .inv-status-pending { background:rgba(200,160,96,.15); color:var(--yellow); border:1px solid rgba(200,160,96,.35); }
 .inv-status-confirmed { background:rgba(var(--ac),.15); color:var(--accent); border:1px solid rgba(var(--ac),.35); }
@@ -1546,7 +1533,7 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
 .inv-perf::after { right:-10px; }
 
 .inv-body { padding:18px 24px 0; }
-.i-row { display:flex; justify-content:space-between; align-items:flex-start; padding:7px 0; font-size:.86rem; border-bottom:1px solid rgba(255,255,255,.04); }
+.i-row { display:flex; justify-content:space-between; align-items:flex-start; padding:7px 0; font-size:.86rem; border-bottom:1px solid var(--border); }
 .i-row:last-child { border-bottom:none; }
 .i-row .lb { color:var(--muted); flex-shrink:0; }
 .i-row .vl { font-weight:600; text-align:right; max-width:60%; }
@@ -1577,7 +1564,7 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
 
 .inv-timeline {
   margin:12px 24px 0;
-  background:rgba(255,255,255,.025); border:1px solid var(--border);
+  background:var(--surface2); border:1px solid var(--border);
   border-radius:var(--r); padding:12px 14px;
 }
 .inv-timeline-title { font-size:.68rem; font-weight:800; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:9px; }
@@ -2610,9 +2597,18 @@ body.host-mode .courts { padding-bottom:140px; }
 }
 
 </style>
-<link rel="stylesheet" href="brand-theme.css?v=20260717-rage-beat-v27">
+<link rel="stylesheet" href="brand-theme.css?v=20260728-light-slots-v29">
 </head>
 <body class="dark">
+<script>
+try {
+  const savedPublicTheme = localStorage.getItem('pb_template_theme') === 'light' ? 'light' : 'dark';
+  document.body.classList.toggle('dark', savedPublicTheme === 'dark');
+  document.body.classList.toggle('light', savedPublicTheme === 'light');
+  document.body.dataset.theme = savedPublicTheme;
+  document.documentElement.style.colorScheme = savedPublicTheme;
+} catch (_) {}
+</script>
 
 <div class="toasts" id="toasts"></div>
 
@@ -2827,7 +2823,7 @@ body.host-mode .courts { padding-bottom:140px; }
   <div class="nav-r">
     <div class="sw-wrap">
       <span>☀️</span>
-      <label class="sw"><input type="checkbox" id="darkTog" checked><span class="sw-tr"></span></label>
+      <label class="sw"><input type="checkbox" id="darkTog" checked aria-label="Use light theme"><span class="sw-tr"></span></label>
       <span>🌙</span>
     </div>
   </div>
@@ -2849,7 +2845,6 @@ body.host-mode .courts { padding-bottom:140px; }
   <div class="shared-date-entry">
     <div class="shared-date-title">
       <strong>Booking date</strong>
-      <span>All courts</span>
     </div>
     <div class="shared-date-control">
       <button class="shared-date-nav" type="button" onclick="shiftSharedCourtDate(-1)" aria-label="Previous day">‹</button>
@@ -2859,7 +2854,6 @@ body.host-mode .courts { padding-bottom:140px; }
       <input class="shared-date-native" type="date" id="courtSharedDate" onchange="onSharedCourtDate(this.value)" aria-label="Booking date" />
     </div>
   </div>
-  <div id="courtTabs" class="court-tabs"></div>
   <div class="courts" id="courtsGrid">
     <div class="pb-loader">
       <div class="pb-ball" aria-hidden="true"></div>
@@ -3210,9 +3204,9 @@ body.host-mode .courts { padding-bottom:140px; }
           <!-- GCash / GoTyme Reference Number -->
           <div id="gcashRefWrap" style="display:none;">
             <div class="bpay-ref-card">
-              <div class="bpay-window" id="bPayWindow" style="display:none">
-                <span>⏳</span>
-                <div><strong>Payment window:</strong> <span>pay between</span> <strong id="bPayWindowStart">--</strong> and <strong id="bPayWindowEnd">--</strong> PH.</div>
+              <div class="bpay-upload-prompt" role="note">
+                <span aria-hidden="true">📸</span>
+                <strong>Upload your proof of payment below.</strong>
               </div>
               <div class="bpay-ref-head">
                 <label class="bpay-ref-label">
@@ -3233,7 +3227,7 @@ body.host-mode .courts { padding-bottom:140px; }
               <!-- Receipt screenshot upload (auto-verification) -->
               <div class="bpay-receipt">
                 <label class="bpay-ref-label" style="display:block;margin-bottom:6px">
-                  📸 Upload Receipt <span style="color:#e53935;font-size:.8rem">*</span>
+                  Proof of Payment <span style="color:#e53935;font-size:.8rem">*</span>
                 </label>
                 <label id="bReceiptDrop" class="bpay-receipt-drop"
                   onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -3247,7 +3241,7 @@ body.host-mode .courts { padding-bottom:140px; }
                 </div>
                 <div id="bReceiptStatus" style="display:none;margin-top:8px;font-size:.78rem;font-weight:700;border-radius:8px;padding:8px 10px;line-height:1.5"></div>
                 <div id="bReceiptRequired" class="bpay-help">
-                  Privacy: your receipt image and extracted text are securely processed by Google Cloud Vision for payment verification and fraud prevention. The private audit record is retained only as long as needed for disputes, fraud prevention, accounting, and legal requirements. Contact bookings@paddleragecdo.ph for privacy requests.
+                  GCash to GCash only.<br>BDO Pay/InstaPay receipts will be rejected.<br>Please choose the correct payment method before paying.
                 </div>
               </div>
             </div>
@@ -3922,8 +3916,9 @@ async function verifyHostSessionReceipt(ref, method, inlineData) {
     authenticatedHostFlow: !!activeHostSession() &&
       String(activeHostSession().id || '') === String(_hostSessionCurrent?.hostUserId || ''),
   });
-  // Vision extracts evidence but never authenticates payment. Only an explicit
-  // rejection stays terminal; every other OCR response requires owner review.
+  // Host-session joins are verified before their registration row exists.
+  // Until a trusted server transaction can create and settle that row
+  // atomically, every non-rejected receipt remains pending for owner review.
   const status = res?.status === 'rejected' ? 'rejected' : 'manual_review';
   const msg = res?.publicReason || res?.message || 'Receipt received.';
   if (st) {
@@ -3940,6 +3935,8 @@ async function verifyHostSessionReceipt(ref, method, inlineData) {
     receiptImageHash: res?.receiptImageHash || null,
     receiptPhash: res?.receiptPhash || null,
     receiptVerifiedAt: res?.receiptVerifiedAt || new Date().toISOString(),
+    paymentStatus: res?.paymentStatus || null,
+    bookingStatus: res?.bookingStatus || null,
   };
 }
 
@@ -3986,8 +3983,7 @@ async function submitHostSessionJoin() {
         full_name: name,
         created_at: _hostSessionStartedAt || new Date().toISOString(),
       });
-      if (receiptResult.status === 'rejected') paymentStatus = 'rejected';
-      else paymentStatus = 'pending';
+      paymentStatus = receiptResult.status === 'rejected' ? 'rejected' : 'pending';
     }
     const savedRegistration = await DB.addOpenPlayHostSessionRegistration({
       sessionId: session.id,
@@ -4786,14 +4782,21 @@ function qrZoomBackdrop(event) {
    ============================================= */
 function initDark() {
   const tog = $('darkTog');
-  const isDark = localStorage.getItem('pb_template_theme') !== 'light';
-  document.body.classList.toggle('dark', isDark);
-  document.body.classList.toggle('light', !isDark);
-  tog.checked = isDark;
+  const isDark = document.body.dataset.theme !== 'light';
+  const applyTheme = dark => {
+    document.body.classList.toggle('dark', dark);
+    document.body.classList.toggle('light', !dark);
+    document.body.dataset.theme = dark ? 'dark' : 'light';
+    document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+    tog.checked = dark;
+    tog.setAttribute('aria-label', dark ? 'Use light theme' : 'Use dark theme');
+  };
+  applyTheme(isDark);
   tog.addEventListener('change', () => {
-    document.body.classList.toggle('dark', tog.checked);
-    document.body.classList.toggle('light', !tog.checked);
-    localStorage.setItem('pb_template_theme', tog.checked ? 'dark' : 'light');
+    applyTheme(tog.checked);
+    try {
+      localStorage.setItem('pb_template_theme', tog.checked ? 'dark' : 'light');
+    } catch (_) {}
   });
 }
 
@@ -4959,7 +4962,6 @@ function applyPaymentMethodVisibility() {
 
 function preparePaymentStep() {
   applyPaymentMethodVisibility();
-  updatePaymentWindowText();
   const enabledMethods = ALL_PAYMENT_METHODS.filter(m => paymentMethods[m]);
   const selected = $('bPay')?.value || '';
   const method = selected && paymentMethods[selected] ? selected : enabledMethods[0];
@@ -4973,30 +4975,6 @@ function preparePaymentStep() {
   const refWrap = $('gcashRefWrap');
   if (refWrap) refWrap.style.display = 'none';
   if ($('cashNote')) $('cashNote').style.display = 'none';
-}
-
-function formatPhTime12(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '--';
-  return date.toLocaleTimeString('en-PH', {
-    timeZone: 'Asia/Manila',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
-
-function updatePaymentWindowText() {
-  const wrap = $('bPayWindow');
-  if (!wrap) return;
-  const started = _reservationStartedAt ? new Date(_reservationStartedAt) : null;
-  if (!started || Number.isNaN(started.getTime())) {
-    wrap.style.display = 'none';
-    return;
-  }
-  const ends = new Date(started.getTime() + RESERVATION_MINUTES * 60 * 1000);
-  if ($('bPayWindowStart')) $('bPayWindowStart').textContent = formatPhTime12(started);
-  if ($('bPayWindowEnd')) $('bPayWindowEnd').textContent = formatPhTime12(ends);
-  wrap.style.display = '';
 }
 
 function paymentInstructionText() {
@@ -5296,7 +5274,6 @@ async function selectFindTimeResult(courtId, date, start, duration) {
   };
   refreshCardSelAlias();
   updateCardUI(courtId);
-  switchCourtTab(String(courtId));
   const selectedCard = [...document.querySelectorAll('#courtsGrid .cc')]
     .find(el => String(el.dataset.id) === String(courtId));
   selectedCard?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -5919,7 +5896,6 @@ function startSlotCountdown(initialSeconds = null) {
     return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
   }
   function tick() {
-    updatePaymentWindowText();
     const t = fmt(secsLeft);
     if (timeEl) timeEl.textContent = t;
     if (bigEl)  bigEl.textContent  = t;
@@ -6116,7 +6092,7 @@ async function onCardDate(courtId, date, options = {}) {
     return;
   }
 
-  // Build slot → name map for this date (verifying = yellow lock, others = red taken)
+  // Build slot → name map for this date (verifying = green processing, others = red booked)
   const slotNameMap = {};
   const verifyingHrs = new Set();
   bookings.filter(b => b.courtId === courtId && b.date === date && bookingHoldsSlot(b))
@@ -6243,6 +6219,10 @@ async function renderCourts() {
       const r = _cTiers.map(t => t.rate);
       return r.length ? (Math.min(...r) === Math.max(...r) ? `₱${Math.min(...r)}/hr` : `₱${Math.min(...r)}–₱${Math.max(...r)}/hr`) : `${fmt(c.rate)}/hr`;
     })();
+    const compactCourtName = String(c.name || 'Court')
+      .replace(/^(?:Paddle Rage|SMASH)\s+/i, '')
+      .trim() || String(c.name || 'Court');
+    const courtTimesHeading = `<span class="court-heading-icon" aria-hidden="true"></span><span>${esc(compactCourtName)}</span><span class="court-heading-sep">·</span><span class="court-heading-label">Available Times</span>`;
 
     const courtPhotoHtml = c.photo
       ? `<img src="${esc(c.photo)}" alt="${esc(c.name)}" style="width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0"/>`
@@ -6287,7 +6267,7 @@ async function renderCourts() {
       <!-- MOBILE-ONLY HEADER -->
       <div class="cc-mobile-hd">
         <div class="cc-mobile-title">
-          <span class="cc-mobile-name">📍 ${esc(c.name)}</span>
+          <span class="cc-mobile-name">${courtTimesHeading}</span>
           <span class="cc-mobile-meta">${esc(rateRange)} · ${esc(c.desc || 'Court')}</span>
         </div>
         <div class="cc-mobile-side">
@@ -6309,7 +6289,7 @@ async function renderCourts() {
       <div class="cc-times">
         <div class="cc-times-head">
           <div>
-            <div class="cc-times-title">🕐 Available times</div>
+            <div class="cc-times-title">${courtTimesHeading}</div>
             <div class="cc-times-sub">Join Open Play or select any available court slots</div>
           </div>
           <input type="hidden" id="cDate_${esc(c.id)}" value="${esc(selectedDate)}" />
@@ -6346,42 +6326,6 @@ async function renderCourts() {
   animateStat($('sBook'),   String(bookings.length));
   if ($('sRev')) animateStat($('sRev'), totalRev);
 
-  // Build mobile court tab strip
-  const tabsEl = $('courtTabs');
-  if (tabsEl) {
-    const today_ = selectedDate;
-    const cur_   = curHour;
-    const singleCourtTabs = courts.map(c => {
-      const blk = c.blocked;
-      const allSl_ = Array.from({length: closeHour - openHour}, (_, i) => i + openHour);
-      const booked_ = new Set(
-        bookings.filter(b => b.courtId === c.id && b.date === today_ && window.BookingBalance?.holdsSlot?.(b))
-                .flatMap(b => b.slots)
-      );
-      const tabBadge = courtAvailabilityBadge({ blocked: blk, date: today_, allSlots: allSl_, curHour: cur_, bookedHours: booked_, courtId: c.id });
-      const dotCls  = tabBadge.cls === 'mnt' || tabBadge.cls === 'done' ? 'tab-dot-mnt' : tabBadge.cls === 'av' ? 'tab-dot-av' : 'tab-dot-full';
-      const shortName = c.name.replace(/^SMASH\s*/i, '');
-      return `<button class="court-tab" data-court="${esc(c.id)}" onclick="switchCourtTab('${jsArg(c.id)}')" title="${esc(c.name)}">
-        <span class="tab-dot ${dotCls}"></span>${esc(shortName)}
-      </button>`;
-    }).join('');
-    tabsEl.innerHTML = `<button class="court-tab" data-court="all" onclick="switchCourtTab('all')" title="All Courts">
-      <span class="tab-dot tab-dot-all"></span>All Courts
-    </button>` + singleCourtTabs;
-    if (courts.length > 0) {
-      const activeCourtId = cardSelectionList()[0]?.courtId || 'all';
-      switchCourtTab(activeCourtId);
-    }
-  }
-}
-
-function switchCourtTab(courtId) {
-  const showAllCourts = courtId === 'all';
-  const courtKey = String(courtId);
-  document.querySelectorAll('.court-tab').forEach(t =>
-    t.classList.toggle('active', t.dataset.court === courtKey));
-  document.querySelectorAll('#courtsGrid .cc').forEach(el =>
-    el.classList.toggle('active-mobile', showAllCourts || el.dataset.id === courtKey));
 }
 
 async function selectCourt(id) {
@@ -6781,9 +6725,6 @@ function syncGcashSharedPanel(method) {
     $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-short').forEach((el, i) => { if (bpiGuide[i]) el.textContent = bpiGuide[i]; });
     if (receiptHelp) receiptHelp.innerHTML = 'BPI to GCash/G-Xchange only.<br>Enter the BPI Confirmation No., not the Transaction Ref. No.<br>Please choose the correct payment method before paying.';
   }
-  if (receiptHelp) {
-    receiptHelp.innerHTML += '<br><br><strong>Privacy:</strong> your receipt and extracted text are securely processed by Google Cloud Vision only for payment verification and fraud prevention. The private audit record is retained only as long as needed for disputes, fraud prevention, accounting, and legal requirements. Contact bookings@paddleragecdo.ph for privacy requests.';
-  }
 }
 
 function copyPaymentNumber(method = 'gcash') {
@@ -7172,6 +7113,24 @@ async function submitBookingLegacy(e) {
         onCardDate(booking.courtId, booking.date).catch(() => {});
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🎾 Confirm Booking'; }
         return;
+      } else if (ocrStatus === 'auto_approved') {
+        const verifiedState = await canonicalAutoReceiptState(
+          booking.ref,
+          booking._receiptResult,
+        );
+        if (verifiedState) {
+          booking.status = verifiedState.bookingStatus;
+          booking.paymentStatus = verifiedState.paymentStatus;
+          DB.notifyBookingUpdate(booking, 'payment_verified', 'GCash receipt auto-verified.').catch(() => {});
+          sendCustomerConfirmationEmail(booking);
+        } else {
+          // Never invent a paid state in the browser. A mixed deployment or
+          // interrupted response is preserved for owner review without
+          // overwriting whatever canonical state the server committed.
+          booking.status = 'pending';
+          booking.paymentStatus = 'for_verification';
+          DB.notifyBookingUpdate(booking, 'payment_review_needed', 'Auto-verification response did not include a canonical settlement state.').catch(() => {});
+        }
       } else {
         // manual_review or OCR error — downgrade from verifying to pending so
         // slot shows as taken (red) while admin reviews it, not yellow forever.
@@ -7428,14 +7387,40 @@ async function submitBooking(e) {
         await refreshBookingItemViews(itemBookings);
         return;
       }
-      booking.status = 'pending';
-      booking.paymentStatus = 'for_verification';
-      itemBookings.forEach(row => { row.status = 'pending'; row.paymentStatus = 'for_verification'; });
-      await Promise.allSettled(itemBookings.map(row =>
-        DB.updateBooking(row.ref, { status: 'pending', paymentStatus: 'for_verification' })
-      ));
-      DB.notifyBookingUpdate(booking, 'payment_review_needed', receiptReasonFromFlags(booking._receiptResult?.flags || []) || 'Receipt needs owner review.').catch(() => {});
-      await refreshBookingItemViews(itemBookings);
+      if (ocrStatus === 'auto_approved') {
+        const verifiedState = await canonicalAutoReceiptState(
+          booking.ref,
+          booking._receiptResult,
+        );
+        if (verifiedState) {
+          booking.status = verifiedState.bookingStatus;
+          booking.paymentStatus = verifiedState.paymentStatus;
+          itemBookings.forEach(row => {
+            row.status = verifiedState.bookingStatus;
+            row.paymentStatus = verifiedState.paymentStatus;
+          });
+          DB.notifyBookingUpdate(booking, 'payment_verified', 'GCash receipt auto-verified.').catch(() => {});
+          sendCustomerConfirmationEmail(booking);
+        } else {
+          booking.status = 'pending';
+          booking.paymentStatus = 'for_verification';
+          itemBookings.forEach(row => {
+            row.status = 'pending';
+            row.paymentStatus = 'for_verification';
+          });
+          DB.notifyBookingUpdate(booking, 'payment_review_needed', 'Auto-verification response did not include a canonical settlement state.').catch(() => {});
+        }
+        await refreshBookingItemViews(itemBookings);
+      } else {
+        booking.status = 'pending';
+        booking.paymentStatus = 'for_verification';
+        itemBookings.forEach(row => { row.status = 'pending'; row.paymentStatus = 'for_verification'; });
+        await Promise.allSettled(itemBookings.map(row =>
+          DB.updateBooking(row.ref, { status: 'pending', paymentStatus: 'for_verification' })
+        ));
+        DB.notifyBookingUpdate(booking, 'payment_review_needed', receiptReasonFromFlags(booking._receiptResult?.flags || []) || 'Receipt needs owner review.').catch(() => {});
+        await refreshBookingItemViews(itemBookings);
+      }
     }
 
     showInvoice(booking);
@@ -7456,6 +7441,20 @@ async function submitBooking(e) {
    RECEIPT UPLOAD + AUTO-VERIFICATION
    ============================================= */
 let _receiptFile = null;
+
+async function canonicalAutoReceiptState(bookingRef, receiptResult) {
+  const canonical = result => {
+    const bookingStatus = String(result?.bookingStatus || result?.status || '').toLowerCase();
+    const paymentStatus = String(result?.paymentStatus || '').toLowerCase();
+    return bookingStatus === 'confirmed' && ['paid', 'downpayment_paid'].includes(paymentStatus)
+      ? { bookingStatus, paymentStatus }
+      : null;
+  };
+  const fromResponse = canonical(receiptResult);
+  if (fromResponse) return fromResponse;
+  const saved = await DB.getBookingByRef(bookingRef).catch(() => null);
+  return canonical(saved);
+}
 
 function onReceiptPicked(e) {
   const f = e.target.files && e.target.files[0];
@@ -7495,7 +7494,9 @@ async function verifyUploadedReceipt(bookingRef, method, inlineData = null) {
     };
     if (inlineData) payload.bookingData = inlineData;
     const res = await DB.verifyGcashReceipt(payload);
-    const status = res?.status === 'rejected' ? 'rejected' : 'manual_review';
+    const status = ['auto_approved', 'manual_review', 'rejected'].includes(res?.status)
+      ? res.status
+      : 'manual_review';
     const msg = res?.publicReason || res?.message || 'Receipt received.';
     if (st) {
       if (status === 'auto_approved') { st.style.background = 'rgba(var(--ac),.12)'; st.style.color = 'var(--accent)'; st.textContent = 'Receipt passed the initial check. Finalizing your registration...'; }
@@ -7512,6 +7513,8 @@ async function verifyUploadedReceipt(bookingRef, method, inlineData = null) {
       receiptImageHash: res?.receiptImageHash || null,
       receiptPhash: res?.receiptPhash || null,
       receiptVerifiedAt: res?.receiptVerifiedAt || new Date().toISOString(),
+      paymentStatus: res?.paymentStatus || null,
+      bookingStatus: res?.bookingStatus || null,
     };
   } catch (err) {
     const reason = extractErrMsg(err);
@@ -8742,11 +8745,13 @@ async function verifyOpReceipt(ref, method, inlineData) {
       contentType: _opReceiptFile.type || 'image/jpeg',
       bookingData: inlineData,
     });
+    // Open Play is verified before its registration row is created. Preserve
+    // every non-rejected result for owner review until settlement can be
+    // performed atomically by a trusted server workflow.
     const status = res?.status === 'rejected' ? 'rejected' : 'manual_review';
     const msg = res?.publicReason || res?.message || 'Receipt received.';
     if (st) {
-      if (status === 'auto_approved') { st.style.background = 'rgba(var(--ac),.12)'; st.style.color = 'var(--accent)'; st.textContent = '✅ ' + msg; }
-      else if (status === 'rejected') { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = '⚠️ ' + msg; }
+      if (status === 'rejected') { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = '⚠️ ' + msg; }
       else { st.style.background = 'rgba(184,126,0,.12)'; st.style.color = '#b87e00'; st.textContent = '🕓 ' + msg; }
     }
     return {
@@ -8759,6 +8764,8 @@ async function verifyOpReceipt(ref, method, inlineData) {
       receiptImageHash: res?.receiptImageHash || null,
       receiptPhash: res?.receiptPhash || null,
       receiptVerifiedAt: res?.receiptVerifiedAt || new Date().toISOString(),
+      paymentStatus: res?.paymentStatus || null,
+      bookingStatus: res?.bookingStatus || null,
     };
   } catch (err) {
     if (st) { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = 'Receipt upload failed. Please attach the screenshot again and retry.'; }

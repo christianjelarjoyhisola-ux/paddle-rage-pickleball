@@ -18,6 +18,18 @@ const receiptVerifier = fs.readFileSync(
   path.join(root, 'supabase', 'functions', 'verify-gcash-receipt', 'index.ts'),
   'utf8'
 );
+const gcashAutoMigration = fs.readFileSync(
+  path.join(
+    root,
+    'supabase',
+    'migrations',
+    '20260728120000_gcash_receipt_auto_verification.sql'
+  ),
+  'utf8'
+);
+const gcashReviewFinalizer = gcashAutoMigration.slice(
+  gcashAutoMigration.indexOf('create or replace function public.finalize_gcash_receipt_review')
+);
 
 test('anonymous booking reads expose availability fields but not PII', () => {
   assert.match(migration, /drop policy if exists bookings_select_public on public\.bookings/i);
@@ -148,6 +160,156 @@ test('published host sessions expose only the public share-link projection', () 
   )?.[0] || '';
   assert.match(publicSessionsFunction, /s\.status = 'published'/i);
   assert.doesNotMatch(publicSessionsFunction, /host_user_id|host_email/i);
+});
+
+test('GCash auto-approval is a service-role-only atomic finalization', () => {
+  assert.match(
+    gcashAutoMigration,
+    /create or replace function public\.finalize_gcash_receipt_auto_approval/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /language plpgsql\s+security definer\s+set search_path = public, pg_temp/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /pg_advisory_xact_lock[\s\S]*?paddle-rage-public-booking-group:' \|\| observed_group_ref/i
+  );
+  assert.match(gcashAutoMigration, /where b\.ref = p_booking_ref\s+for update/i);
+  assert.match(
+    gcashAutoMigration,
+    /where b\.booking_group_ref = observed_group_ref\s+order by b\.ref\s+for update/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /actual_refs is distinct from expected_refs[\s\S]*?Booking group changed during receipt verification/i
+  );
+
+  // The transaction re-checks canonical stored rows instead of trusting the
+  // Edge Function's earlier snapshot.
+  assert.match(
+    gcashAutoMigration,
+    /lower\(trim\(coalesce\(b\.payment_method, ''\)\)\) <> 'gcash'/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /regexp_replace\(coalesce\(b\.gcash_ref, ''\), '\[\^0-9\]', '', 'g'\)[\s\S]*?<> normalized_reference/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /b\.status not in \('verifying', 'pending'\)[\s\S]*?b\.payment_status not in \('unpaid', 'pending', 'for_verification'\)/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /p_receipt_extracted->>'provider', ''\) <> 'gcash'[\s\S]*?p_receipt_extracted->>'parserVersion', ''\) <> 'gcash_v1'/i
+  );
+
+  // The finalizer independently revalidates every high-confidence parser gate
+  // instead of trusting the Edge Function's auto_approved classification.
+  assert.match(
+    gcashAutoMigration,
+    /cardinality\(coalesce\(p_receipt_flags, array\[\]::text\[\]\)\) <> 0/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /p_receipt_confidence is null[\s\S]*?p_receipt_confidence < 0\.90[\s\S]*?p_receipt_confidence > 1/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /\{gcash,reference,source\}[\s\S]*?<> 'ref_label'[\s\S]*?\{gcash,reference,confidence\}[\s\S]*?<> 'high'[\s\S]*?\{gcash,reference,typedMatch\}[\s\S]*?<> 'match'/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /\{gcash,amount,reliable\}[\s\S]*?<> 'true'[\s\S]*?\{gcash,amount,ambiguous\}[\s\S]*?<> 'false'[\s\S]*?\{gcash,amount,conflictingPrimaryAmounts\}[\s\S]*?<> 'false'/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /\{gcash,timestamp,completeness\}[\s\S]*?<> 'date_time'[\s\S]*?receiptAgeMinutes[\s\S]*?< -2[\s\S]*?receiptAgeMinutes[\s\S]*?> 15/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /\{gcash,recipientComparison,phone\}[\s\S]*?<> 'exact'[\s\S]*?\{gcash,recipientComparison,name\}[\s\S]*?= 'mismatch'/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /\{gcash,indicators,classification\}[\s\S]*?<> 'gcash'[\s\S]*?\{gcash,indicators,sentViaGcash\}[\s\S]*?<> 'true'[\s\S]*?\{gcash,indicators,totalAmountSent\}[\s\S]*?<> 'true'[\s\S]*?\{gcash,indicators,referenceLabel\}[\s\S]*?<> 'true'[\s\S]*?\{gcash,indicators,amountLabel\}[\s\S]*?<> 'true'[\s\S]*?ocrProvider[\s\S]*?<> 'google_vision'/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /ocrConfidenceSource', ''\)[\s\S]*?<> 'native'/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /p_receipt_extracted->>'autoPaymentStatus'[\s\S]*?<> p_payment_status/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /p_receipt_extracted->>'amount'[\s\S]*?!~ '\^\[0-9\]\+\(\[\.\]\[0-9\]\+\)\?\$'[\s\S]*?paid_amount := \(p_receipt_extracted->>'amount'\)::numeric/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /p_payment_status = 'paid'[\s\S]*?abs\(paid_amount - expected_total\) > 0\.01/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /p_payment_status[\s\S]*?'downpayment_paid'[\s\S]*?non_host_rows <> 0[\s\S]*?abs\(paid_amount - expected_due\) > 0\.01/i
+  );
+
+  // Booking confirmation, the existing settled-reference claim trigger, and
+  // the immutable audit insert all commit or roll back together.
+  assert.match(
+    gcashAutoMigration,
+    /update public\.bookings b\s+set status = 'confirmed',\s*payment_status = p_payment_status/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /receipt_status = 'auto_approved'[\s\S]*?where b\.ref = any\(actual_refs\)/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /updated_count <> cardinality\(actual_refs\)[\s\S]*?Automatic settlement did not update the complete booking group/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /insert into public\.receipt_verifications[\s\S]*?'auto_approved'/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /lease_row\.claim_token is distinct from p_lease_token[\s\S]*?receipt_image_hash is distinct from p_receipt_image_hash/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /create or replace function public\.finalize_gcash_receipt_review[\s\S]*?duplicate_owned_elsewhere[\s\S]*?GCash review did not update the complete booking group/i
+  );
+  assert.match(
+    gcashReviewFinalizer,
+    /p_result = 'rejected'[\s\S]*?cardinality\(coalesce\(p_receipt_flags, array\[\]::text\[\]\)\) <> 1[\s\S]*?ocrConfidence[\s\S]*?< 0\.90/i
+  );
+  assert.match(
+    gcashReviewFinalizer,
+    /\{gcash,indicators,classification\}[\s\S]*?<> 'gcash'[\s\S]*?ocrProvider[\s\S]*?<> 'google_vision'[\s\S]*?ocrConfidenceSource[\s\S]*?<> 'native'/i
+  );
+  assert.match(
+    gcashReviewFinalizer,
+    /paid_amount := \(p_receipt_extracted->>'amount'\)::numeric[\s\S]*?abs\(paid_amount - expected_due\) > 0\.01/i
+  );
+  assert.match(migration, /trigger z90_claim_booking_reference_when_settled/i);
+  assert.match(
+    gcashAutoMigration,
+    /revoke all on function public\.finalize_gcash_receipt_auto_approval\([\s\S]*?\)\s+from public, anon, authenticated/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /grant execute on function public\.finalize_gcash_receipt_auto_approval\([\s\S]*?\)\s+to service_role/i
+  );
+  assert.doesNotMatch(
+    gcashAutoMigration,
+    /grant execute on function public\.finalize_gcash_receipt_auto_approval\([\s\S]*?\)\s+to (?:public|anon|authenticated)/i
+  );
+  assert.match(
+    gcashAutoMigration,
+    /revoke all on function public\.finalize_gcash_receipt_review\([\s\S]*?\)\s+from public, anon, authenticated[\s\S]*?grant execute on function public\.finalize_gcash_receipt_review\([\s\S]*?\)\s+to service_role/i
+  );
 });
 
 test('digital payment references are claimed once across every payment flow', () => {

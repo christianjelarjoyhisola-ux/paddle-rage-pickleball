@@ -813,3 +813,171 @@ textarea:focus,
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Real light theme. Keep the launch splash dark, but switch every application
+   surface and native control to a high-contrast light palette. */
+body.light,
+body.light-mode,
+body[data-theme="light"] {
+  color-scheme: light;
+  --navy: #587400;
+  --navy-dark: #3f5700;
+  --court-blue: #587400;
+  --court-red: #dc2626;
+  --court-red-dark: #991b1b;
+  --accent: #587400;
+  --accent-dark: #3f5700;
+  --cta: #587400;
+  --cta-dark: #3f5700;
+  --green: #587400;
+  --green-dark: #3f5700;
+  --green-bg: rgba(88, 116, 0, 0.1);
+  --ac: 88, 116, 0;
+  --bg: #f4f7f2;
+  --bg2: #eaf0e6;
+  --card: #ffffff;
+  --surface: #ffffff;
+  --surface2: #f1f5ee;
+  --border: #cbd6c8;
+  --text: #142019;
+  --text2: #34443a;
+  --text3: #637066;
+  --muted: #637066;
+  --input: #edf2e9;
+  --dark-bg: #f4f7f2;
+  --dark-card: #ffffff;
+  --dark-border: #cbd6c8;
+  --dark-text: #142019;
+  --dark-muted: #637066;
+  --dark-input: #edf2e9;
+  --red: #dc2626;
+  --lime: #708c00;
+  --lime-ink: #526900;
+  --slot-available: #143d63;
+  --slot-available-rgb: 20, 61, 99;
+  --slot-processing: #15803d;
+  --slot-processing-rgb: 21, 128, 61;
+  --slot-processing-ink: #15803d;
+  --slot-booked: #b91c1c;
+  --slot-booked-rgb: 185, 28, 28;
+  --slot-booked-ink: #b91c1c;
+  --slot-done: #475569;
+  --slot-done-rgb: 71, 85, 105;
+  --slot-dot-outline: rgba(20, 32, 25, 0.24);
+  --slot-dot-ring: rgba(20, 32, 25, 0.05);
+  --glow: rgba(88, 116, 0, 0.14);
+  background: var(--bg);
+  color: var(--text);
+}
+
+body.light::before,
+body.light-mode::before,
+body[data-theme="light"]::before {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(182, 240, 0, 0.13), transparent 34rem),
+    linear-gradient(rgba(88, 116, 0, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(88, 116, 0, 0.035) 1px, transparent 1px);
+  background-size: auto, 64px 64px, 64px 64px;
+}
+
+body.light .nav,
+body.light .topnav,
+body.light .navbar,
+body.light-mode .nav,
+body.light-mode .topnav,
+body.light-mode .navbar,
+body[data-theme="light"] .nav,
+body[data-theme="light"] .topnav,
+body[data-theme="light"] .navbar {
+  background: rgba(255, 255, 255, 0.94) !important;
+  border-bottom-color: rgba(88, 116, 0, 0.2) !important;
+  box-shadow: 0 8px 28px rgba(20, 32, 25, 0.07);
+}
+
+body.light .card,
+body.light .shell,
+body.light .modal,
+body.light .court-card,
+body.light .chart-card,
+body.light .stat-card,
+body.light-mode .card,
+body.light-mode .shell,
+body.light-mode .modal,
+body.light-mode .court-card,
+body.light-mode .chart-card,
+body.light-mode .stat-card,
+body[data-theme="light"] .card,
+body[data-theme="light"] .shell,
+body[data-theme="light"] .modal,
+body[data-theme="light"] .court-card,
+body[data-theme="light"] .chart-card,
+body[data-theme="light"] .stat-card {
+  border-color: var(--border);
+  box-shadow: 0 14px 38px rgba(20, 32, 25, 0.09);
+}
+
+body.light .brand-accent,
+body.light .logo-sub,
+body.light .hl,
+body.light a:hover,
+body.light-mode .brand-accent,
+body.light-mode .logo-sub,
+body.light-mode .hl,
+body.light-mode a:hover,
+body[data-theme="light"] .brand-accent,
+body[data-theme="light"] .logo-sub,
+body[data-theme="light"] .hl,
+body[data-theme="light"] a:hover {
+  color: var(--accent) !important;
+}
+
+body.light .mobile-book-bar,
+body.light-mode .mobile-book-bar,
+body[data-theme="light"] .mobile-book-bar {
+  box-shadow: 0 -4px 22px rgba(20, 32, 25, 0.12);
+}
+
+body.light .slot.past,
+body.light-mode .slot.past,
+body[data-theme="light"] .slot.past {
+  background: rgba(var(--slot-done-rgb), 0.08);
+}
+
+body.light .slot.maintenance,
+body.light-mode .slot.maintenance,
+body[data-theme="light"] .slot.maintenance {
+  background: rgba(var(--slot-done-rgb), 0.06);
+}
+
+body.light .open-play-block,
+body.light-mode .open-play-block,
+body[data-theme="light"] .open-play-block {
+  background: linear-gradient(135deg, rgba(var(--lime-rgb), 0.18), var(--surface2));
+}
+
+body.light .open-play-block.full,
+body.light-mode .open-play-block.full,
+body[data-theme="light"] .open-play-block.full {
+  background: #e7ece5;
+}
+
+body.light .date-day.selected,
+body.light .gc-copy-btn,
+body.light .wiz-step.done .wiz-dot,
+body.light-mode .date-day.selected,
+body.light-mode .gc-copy-btn,
+body.light-mode .wiz-step.done .wiz-dot,
+body[data-theme="light"] .date-day.selected,
+body[data-theme="light"] .gc-copy-btn,
+body[data-theme="light"] .wiz-step.done .wiz-dot {
+  color: #fff;
+}
+
+body.light .cc-photo-avail.av,
+body.light .wiz-court-badge.av,
+body.light-mode .cc-photo-avail.av,
+body.light-mode .wiz-court-badge.av,
+body[data-theme="light"] .cc-photo-avail.av,
+body[data-theme="light"] .wiz-court-badge.av {
+  color: #050706;
+}
