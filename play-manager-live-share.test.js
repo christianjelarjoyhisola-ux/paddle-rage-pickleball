@@ -210,7 +210,7 @@ test("player live board uses the transparent system logo without a badge backgro
     /<img class="plb-brand-mark" src="paddleragelogo-transparent\.png" alt="" width="48" height="48" aria-hidden="true">/i
   );
   assert.doesNotMatch(playerPage, /class="plb-brand-mark"[^>]*>PR<\/span>/i);
-  assert.match(playerPage, /player-live\.css\?v=20260726-match-center-v3/i);
+  assert.match(playerPage, /player-live\.css\?v=20260728-smooth-live-v4/i);
   assert.match(
     playerCss,
     /\.plb-brand-mark\s*\{[\s\S]*?width:\s*48px[\s\S]*?height:\s*48px[\s\S]*?border:\s*0[\s\S]*?background:\s*transparent[\s\S]*?object-fit:\s*contain/i
@@ -313,6 +313,91 @@ test("Share Live is a spectator-first, responsive match center", () => {
     matchCenterCss,
     /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.plb-winner-reveal,[\s\S]*?display:\s*none !important/i
   );
+});
+
+test("Share Live updates smoothly without recurring blink animations", () => {
+  const fetchSnapshot = playerClient.match(
+    /async function fetchSnapshot\(\{ showBusy = false \} = \{\}\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function handleClick/i
+  )?.[0] || "";
+  const handleClick = playerClient.match(
+    /function handleClick\(event\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function handleChange/i
+  )?.[0] || "";
+
+  assert.match(playerClient, /hasRendered:\s*false/i);
+  assert.match(playerClient, /const initialRender = !state\.hasRendered/i);
+  assert.match(
+    playerClient,
+    /element\.className = `plb-board\$\{initialRender \? " is-initial-render" : ""\}`/i
+  );
+  assert.match(playerClient, /state\.hasRendered = true/i);
+  assert.match(fetchSnapshot, /if \(showBusy\)[\s\S]*?button\.disabled = true/i);
+  assert.match(fetchSnapshot, /if \(showBusy\)[\s\S]*?button\.disabled = false/i);
+  assert.match(handleClick, /fetchSnapshot\(\{ showBusy: true \}\)/i);
+  assert.match(playerClient, /state\.pollTimer = setTimeout\(fetchSnapshot, delay\)/i);
+  assert.match(
+    playerClient,
+    /const currentId = links[\s\S]*?aria-current[\s\S]*?sections\.some\(section => section\.id === currentId\) \? currentId/i
+  );
+  assert.doesNotMatch(playerClient, /setCurrent\(sections\[0\]\?\.id \|\| ""\);/i);
+
+  assert.match(
+    playerCss,
+    /\.plb-status-pill\.is-active::before\s*\{[^}]*animation:\s*none/i
+  );
+  assert.match(
+    playerCss,
+    /\.plb-court-pill\.is-live::before\s*\{[^}]*animation:\s*none/i
+  );
+  assert.match(
+    playerCss,
+    /\.plb-matchup-live-dot\s*\{[^}]*animation:\s*none/i
+  );
+  assert.match(
+    playerCss,
+    /\.plb-board\.is-initial-render \.plb-court-card,[\s\S]*?animation:\s*plb-enter-up/i
+  );
+  assert.doesNotMatch(playerCss, /plb-ready-glow/i);
+
+  const signatureStart = playerClient.indexOf("  function contentSignature(");
+  const signatureEnd = playerClient.indexOf("  function announceUpdate(", signatureStart);
+  assert.ok(signatureStart >= 0 && signatureEnd > signatureStart, "content signature must be extractable");
+  const signature = new Function(
+    `${playerClient.slice(signatureStart, signatureEnd)}\nreturn contentSignature;`
+  )();
+  const baseSnapshot = {
+    generatedAt: "2026-07-28T06:00:00.000Z",
+    session: { date: "2026-07-28", timeLabel: "6PM–10PM", status: "active", currentRound: 1 },
+    players: ["A", "B", "C", "D"],
+    latestRound: {
+      roundNo: 1,
+      assignments: [{
+        courtName: "Court 1",
+        team1: ["A", "B"],
+        team2: ["C", "D"],
+        startedAt: "2026-07-28T06:00:00.000Z",
+        winner: null,
+        gameCount: 1,
+      }],
+      queue: ["A", "B", "C", "D"],
+    },
+    standings: [{ name: "A", wins: 0, games: 1 }],
+    resultCount: 0,
+    latestResult: null,
+  };
+  const semanticallyEqual = {
+    ...structuredClone(baseSnapshot),
+    generatedAt: "2026-07-28T06:00:03.000Z",
+    ignoredServerField: "does not render",
+    session: { ...baseSnapshot.session, ignoredServerField: true },
+  };
+  assert.equal(
+    signature(baseSnapshot),
+    signature(semanticallyEqual),
+    "freshness and unrelated response fields must not recreate the live board"
+  );
+  const changedSnapshot = structuredClone(baseSnapshot);
+  changedSnapshot.latestRound.queue = ["B", "A", "C", "D"];
+  assert.notEqual(signature(baseSnapshot), signature(changedSnapshot));
 });
 
 test("manager exposes clear live-session completion controls", () => {
@@ -442,7 +527,7 @@ test("new results play one contained winner reveal in the manager and shared boa
   assert.match(playerClient, /scheduleWinnerRevealEnd\(/i);
   assert.match(playerCss, /@keyframes plb-winner-reveal/i);
   assert.match(playerCss, /\.plb-winner-reveal-sparks::before/i);
-  assert.match(playerPage, /player-live\.js\?v=20260726-match-center-v1/i);
+  assert.match(playerPage, /player-live\.js\?v=20260728-smooth-live-v2/i);
 });
 
 test("Share Live keeps the completed winner visible while its court is READY", () => {
@@ -465,7 +550,7 @@ test("Share Live reveals each newly started matchup once, never on first load or
     /function matchupRevealsForUpdate\(previousSnapshot, nextSnapshot\) \{[\s\S]*?\n  \}/i
   )?.[0] || "";
   const fetchSnapshot = playerClient.match(
-    /async function fetchSnapshot\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function handleClick/i
+    /async function fetchSnapshot\(\{ showBusy = false \} = \{\}\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function handleClick/i
   )?.[0] || "";
 
   assert.match(matchupDiff, /previousSnapshot[\s\S]*?nextSnapshot/i);

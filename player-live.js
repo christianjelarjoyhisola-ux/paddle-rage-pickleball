@@ -20,6 +20,7 @@
     clockTimer: null,
     shareFeedbackTimer: null,
     navObserver: null,
+    hasRendered: false,
   };
 
   const root = () => document.getElementById("playerLiveRoot");
@@ -732,6 +733,10 @@
   function syncMobileNav() {
     const nav = document.querySelector(".plb-mobile-nav");
     const links = [...(nav?.querySelectorAll("a[href^='#']") || [])];
+    const currentId = links
+      .find(link => link.getAttribute("aria-current") === "location")
+      ?.getAttribute("href")
+      ?.slice(1) || "";
     state.navObserver?.disconnect();
     state.navObserver = null;
     if (!links.length || !("IntersectionObserver" in window)) return;
@@ -744,7 +749,7 @@
         else link.removeAttribute("aria-current");
       });
     };
-    setCurrent(sections[0]?.id || "");
+    setCurrent(sections.some(section => section.id === currentId) ? currentId : (sections[0]?.id || ""));
     state.navObserver = new IntersectionObserver(entries => {
       const visible = entries
         .filter(entry => entry.isIntersecting)
@@ -761,6 +766,7 @@
     const element = root();
     const snapshot = state.snapshot;
     if (!element || !snapshot) return;
+    const initialRender = !state.hasRendered;
     const activeElement = document.activeElement;
     const focusedId = element.contains(activeElement) ? activeElement.id : "";
     const scrollX = window.scrollX;
@@ -837,7 +843,7 @@
     }
 
     document.title = `Round ${Number(round.roundNo || 0)} · Paddle Rage Live`;
-    element.className = "plb-board";
+    element.className = `plb-board${initialRender ? " is-initial-render" : ""}`;
     element.setAttribute("aria-busy", "false");
     element.innerHTML = `
       <section class="plb-session-hero">
@@ -935,6 +941,7 @@
         ${renderMyPosition(snapshot)}
       </section>
     `;
+    state.hasRendered = true;
 
     Object.entries(nestedScroll).forEach(([id, top]) => {
       const scrollRegion = document.getElementById(id);
@@ -1000,14 +1007,57 @@
   }
 
   function contentSignature(snapshot) {
-    return JSON.stringify([
-      snapshot.session || null,
-      snapshot.players || [],
-      snapshot.latestRound || null,
-      snapshot.standings || [],
-      Number(snapshot.resultCount || 0),
-      snapshot.latestResult || null,
-    ]);
+    const session = snapshot.session || {};
+    const round = snapshot.latestRound || {};
+    const cleanNames = names => Array.isArray(names) ? names.map(String) : [];
+    const cleanGame = game => ({
+      courtName: String(game?.courtName || ""),
+      team1: cleanNames(game?.team1),
+      team2: cleanNames(game?.team2),
+      startedAt: String(game?.startedAt || ""),
+      winner: String(game?.winner || ""),
+      gameCount: Number(game?.gameCount || 0),
+    });
+    const cleanResult = result => result ? {
+      eventId: String(result.eventId || ""),
+      roundNo: Number(result.roundNo || 0),
+      courtIndex: Number(result.courtIndex || 0),
+      courtName: String(result.courtName || ""),
+      team1: cleanNames(result.team1),
+      team2: cleanNames(result.team2),
+      winner: String(result.winner || ""),
+      resultAt: String(result.resultAt || ""),
+    } : null;
+
+    return JSON.stringify({
+      session: {
+        date: String(session.date || ""),
+        timeLabel: String(session.timeLabel || ""),
+        status: String(session.status || "active"),
+        currentRound: Number(session.currentRound || 0),
+      },
+      players: cleanNames(snapshot.players),
+      latestRound: snapshot.latestRound ? {
+        roundNo: Number(round.roundNo || 0),
+        assignments: Array.isArray(round.assignments) ? round.assignments.map(cleanGame) : [],
+        queue: cleanNames(round.queue),
+        upNext: round.upNext ? {
+          courtName: String(round.upNext.courtName || ""),
+          players: cleanNames(round.upNext.players),
+          team1: cleanNames(round.upNext.team1),
+          team2: cleanNames(round.upNext.team2),
+        } : null,
+      } : null,
+      standings: Array.isArray(snapshot.standings)
+        ? snapshot.standings.map(row => ({
+            name: String(row?.name || ""),
+            wins: Number(row?.wins || 0),
+            games: Number(row?.games || 0),
+          }))
+        : [],
+      resultCount: Number(snapshot.resultCount || 0),
+      latestResult: cleanResult(snapshot.latestResult),
+    });
   }
 
   function announceUpdate(snapshot) {
@@ -1117,12 +1167,14 @@
     }
   }
 
-  async function fetchSnapshot() {
+  async function fetchSnapshot({ showBusy = false } = {}) {
     if (state.inFlight || state.terminal || document.hidden) return;
     state.inFlight = true;
-    document.querySelectorAll('[data-plb-action="refresh"]').forEach(button => {
-      button.disabled = true;
-    });
+    if (showBusy) {
+      document.querySelectorAll('[data-plb-action="refresh"]').forEach(button => {
+        button.disabled = true;
+      });
+    }
     try {
       const snapshot = await DB.getPublicOpenPlayGameLiveBoard(state.token);
       if (!snapshot) {
@@ -1171,9 +1223,11 @@
       }
     } finally {
       state.inFlight = false;
-      document.querySelectorAll('[data-plb-action="refresh"]').forEach(button => {
-        button.disabled = false;
-      });
+      if (showBusy) {
+        document.querySelectorAll('[data-plb-action="refresh"]').forEach(button => {
+          button.disabled = false;
+        });
+      }
       schedulePoll();
     }
   }
@@ -1183,7 +1237,7 @@
     if (!button) return;
     if (button.dataset.plbAction === "refresh") {
       clearTimeout(state.pollTimer);
-      fetchSnapshot();
+      fetchSnapshot({ showBusy: true });
       return;
     }
     if (button.dataset.plbAction === "share") {

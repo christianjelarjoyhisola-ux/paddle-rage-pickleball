@@ -223,7 +223,7 @@ a:focus-visible {
   border-radius: 50%;
   background: var(--plb-live);
   box-shadow: 0 0 0 3px rgba(6, 182, 212, .14);
-  animation: plb-pulse 1.4s ease-in-out infinite;
+  animation: none;
 }
 
 .plb-status-pill.is-paused {
@@ -819,7 +819,7 @@ a:focus-visible {
   border-radius: 50%;
   background: var(--plb-live);
   box-shadow: 0 0 0 4px rgba(6, 182, 212, .14);
-  animation: plb-pulse 1.55s ease-in-out infinite;
+  animation: none;
 }
 
 .plb-court-pill.is-final {
@@ -1212,7 +1212,7 @@ a:focus-visible {
   border-radius: 50%;
   background: #6fe89b;
   box-shadow: 0 0 0 4px rgba(111, 232, 155, .12);
-  animation: plb-matchup-dot 1s ease-in-out infinite;
+  animation: none;
 }
 
 .plb-matchup-reveal-grid {
@@ -3173,38 +3173,34 @@ body {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .plb-court-card,
-  .plb-dispatch-card,
-  .plb-queue-list li,
-  .plb-standings tbody tr {
+  .plb-board.is-initial-render .plb-court-card,
+  .plb-board.is-initial-render .plb-dispatch-card,
+  .plb-board.is-initial-render .plb-queue-list li,
+  .plb-board.is-initial-render .plb-standings tbody tr {
     animation: plb-enter-up 240ms cubic-bezier(.2, .8, .2, 1) both;
   }
 
-  .plb-court-card:nth-child(2),
-  .plb-dispatch-card:nth-child(2) {
+  .plb-board.is-initial-render .plb-court-card:nth-child(2),
+  .plb-board.is-initial-render .plb-dispatch-card:nth-child(2) {
     animation-delay: 45ms;
   }
 
-  .plb-court-card:nth-child(3),
-  .plb-dispatch-card:nth-child(3) {
+  .plb-board.is-initial-render .plb-court-card:nth-child(3),
+  .plb-board.is-initial-render .plb-dispatch-card:nth-child(3) {
     animation-delay: 90ms;
   }
 
-  .plb-queue-list li,
-  .plb-standings tbody tr {
+  .plb-board.is-initial-render .plb-queue-list li,
+  .plb-board.is-initial-render .plb-standings tbody tr {
     animation-delay: calc(min(var(--plb-order, 0), 9) * 18ms);
     animation-duration: 220ms;
   }
 
-  .plb-court-pill.is-live::before {
-    animation-duration: 1.8s;
-  }
-
-  .plb-dispatch-card.is-ready {
-    animation-name: plb-enter-up, plb-ready-glow;
-    animation-duration: 240ms, 2.4s;
-    animation-delay: calc(var(--plb-order, 0) * 45ms), 300ms;
-    animation-iteration-count: 1, infinite;
+  .plb-board.is-initial-render .plb-dispatch-card.is-ready {
+    animation-name: plb-enter-up;
+    animation-duration: 240ms;
+    animation-delay: calc(var(--plb-order, 0) * 45ms);
+    animation-iteration-count: 1;
   }
 }
 
@@ -3216,16 +3212,6 @@ body {
   to {
     opacity: 1;
     transform: none;
-  }
-}
-
-@keyframes plb-ready-glow {
-  0%,
-  100% {
-    box-shadow: 0 8px 22px rgba(15, 23, 42, .055);
-  }
-  50% {
-    box-shadow: 0 10px 28px rgba(16, 185, 129, .15);
   }
 }
 
