@@ -1130,15 +1130,15 @@ test("Up Next renders one ordered dispatch slot per court and keeps READY reserv
   );
   assert.match(
     managerCss,
-    /\.pm2 \.pm2-dispatch-card-title > strong\s*\{[^}]*font-size:\s*\.875rem/i
+    /\.pm2 \.pm2-dispatch-card-title > strong\s*\{[^}]*font-size:\s*\.9375rem/i
   );
   assert.match(
     managerCss,
-    /\.pm2 \.pm2-dispatch-player,\s*\.pm2 \.pm2-dispatch-player > span,\s*\.pm2 \.pm2-dispatch-player\.is-empty\s*\{[^}]*font-size:\s*\.8125rem/i
+    /\.pm2 \.pm2-dispatch-player,\s*\.pm2 \.pm2-dispatch-player > span,\s*\.pm2 \.pm2-dispatch-player\.is-empty\s*\{[^}]*font-size:\s*\.875rem/i
   );
   assert.match(
     managerCss,
-    /\.pm2 \.pm2-dispatch-detail\s*\{[^}]*font-size:\s*\.8125rem\s*!important/i
+    /\.pm2 \.pm2-dispatch-detail\s*\{[^}]*font-size:\s*\.875rem\s*!important/i
   );
   assert.match(managerCss, /\.pm2-dispatch-card\.is-ready\s*\{[\s\S]*?border-color:\s*#93ddbd/i);
 });
@@ -1278,7 +1278,7 @@ test("LIVE court card mirrors the READY card system with a cyan state treatment"
     managerCss,
     /\.pm2-court-card\.is-live \.pm2-result-btn\s*\{[^}]*min-height:\s*56px[^}]*border-radius:\s*11px[^}]*font-size:\s*1rem/is
   );
-  assert.match(admin, /play-manager\.css\?v=20260729-dispatch-type-v1/i);
+  assert.match(admin, /play-manager\.css\?v=20260729-dispatch-type-v2/i);
 });
 
 test("court cards share one compact height and use the modern indigo-coral team palette", () => {

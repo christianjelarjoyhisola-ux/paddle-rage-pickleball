@@ -5500,32 +5500,32 @@
 }
 
 .pm2 .pm2-dispatch-card-title > span {
-  font-size: .8125rem;
+  font-size: .875rem;
 }
 
 .pm2 .pm2-dispatch-card-title > strong {
-  font-size: .875rem;
+  font-size: .9375rem;
 }
 
 .pm2 .pm2-dispatch-status,
 .pm2 .pm2-dispatch-team-head,
 .pm2 .pm2-dispatch-team-head > span {
-  font-size: .75rem;
+  font-size: .8125rem;
 }
 
 .pm2 .pm2-dispatch-player,
 .pm2 .pm2-dispatch-player > span,
 .pm2 .pm2-dispatch-player.is-empty {
-  font-size: .8125rem;
+  font-size: .875rem;
   font-weight: 700;
 }
 
 .pm2 .pm2-dispatch-player > b {
-  font-size: .6875rem;
+  font-size: .75rem;
 }
 
 .pm2 .pm2-dispatch-detail {
-  font-size: .8125rem !important;
+  font-size: .875rem !important;
   font-weight: 600;
 }
 
