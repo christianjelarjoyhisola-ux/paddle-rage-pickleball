@@ -363,6 +363,8 @@ test("competitive ranking applies the complete evidence hierarchy in order", () 
     pointsExact: 12.25,
     wins: 3,
     games: 4,
+    headToHeadWins: 0,
+    headToHeadGames: 0,
     averageOpponentRatingExact: 1225,
     bestUpsetExact: 80,
   };
@@ -382,6 +384,11 @@ test("competitive ranking applies the complete evidence hierarchy in order", () 
       criterion: "wins",
       ahead: { ...baseline, wins: 4, games: 8 },
       behind: { ...baseline, wins: 3, games: 6 },
+    },
+    {
+      criterion: "head_to_head",
+      ahead: { ...baseline, headToHeadWins: 2, headToHeadGames: 3 },
+      behind: { ...baseline, headToHeadWins: 1, headToHeadGames: 3 },
     },
     {
       criterion: "opponent_strength",

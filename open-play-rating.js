@@ -82,12 +82,27 @@
     );
   }
 
+  function compareHeadToHead(left, right) {
+    const leftGames = Math.max(0, numeric(left?.headToHeadGames));
+    const rightGames = Math.max(0, numeric(right?.headToHeadGames));
+    const leftWins = Math.max(0, numeric(left?.headToHeadWins));
+    const rightWins = Math.max(0, numeric(right?.headToHeadWins));
+    if (!leftGames && !rightGames) return 0;
+    if (!leftGames) return 1;
+    if (!rightGames) return -1;
+    return (
+      rightWins * leftGames - leftWins * rightGames ||
+      rightWins - leftWins
+    );
+  }
+
   function competitiveCriterion(left, right) {
     if (numeric(left?.pointsExact) !== numeric(right?.pointsExact)) {
       return "performance_points";
     }
     if (compareWinRates(left, right)) return "win_percentage";
     if (numeric(left?.wins) !== numeric(right?.wins)) return "wins";
+    if (compareHeadToHead(left, right)) return "head_to_head";
     if (
       numeric(left?.averageOpponentRatingExact) !==
       numeric(right?.averageOpponentRatingExact)
@@ -103,6 +118,7 @@
       performance_points: "Exact Performance Points",
       win_percentage: "Win percentage tiebreak",
       wins: "Wins tiebreak",
+      head_to_head: "Head-to-head tiebreak",
       opponent_strength: "Opponent strength tiebreak",
       quality_win: "Best upset tiebreak",
       podium_decider: "Podium decider required",
@@ -114,6 +130,7 @@
       numeric(right?.pointsExact) - numeric(left?.pointsExact) ||
       compareWinRates(left, right) ||
       numeric(right?.wins) - numeric(left?.wins) ||
+      compareHeadToHead(left, right) ||
       numeric(right?.averageOpponentRatingExact) -
         numeric(left?.averageOpponentRatingExact) ||
       numeric(right?.bestUpsetExact) - numeric(left?.bestUpsetExact)
@@ -196,6 +213,7 @@
         wins: 0,
         opponentRatingTotal: 0,
         bestUpset: 0,
+        headToHead: new Map(),
       });
     });
 
@@ -235,6 +253,12 @@
         record.bestUpset = Math.max(record.bestUpset, upsetA);
         record.pointsExact += deltaA;
         record.ratingExact += deltaA;
+        teamB.forEach(opponent => {
+          const result = record.headToHead.get(opponent.id) || { games: 0, wins: 0 };
+          result.games += 1;
+          if (aWon) result.wins += 1;
+          record.headToHead.set(opponent.id, result);
+        });
       });
 
       teamB.forEach(record => {
@@ -244,10 +268,16 @@
         record.bestUpset = Math.max(record.bestUpset, upsetB);
         record.pointsExact += deltaB;
         record.ratingExact += deltaB;
+        teamA.forEach(opponent => {
+          const result = record.headToHead.get(opponent.id) || { games: 0, wins: 0 };
+          result.games += 1;
+          if (!aWon) result.wins += 1;
+          record.headToHead.set(opponent.id, result);
+        });
       });
     });
 
-    const sorted = [...records.values()]
+    const scored = [...records.values()]
       .map(record => {
         const points = roundOne(record.pointsExact);
         const rating = roundOne(record.ratingExact);
@@ -279,11 +309,50 @@
           averageOpponentRatingExact,
           bestUpset,
           bestUpsetExact,
+          headToHeadGames: 0,
+          headToHeadWins: 0,
+          headToHeadLosses: 0,
+          headToHeadPercentage: 0,
           eligible: record.games >= minGames,
           gamesNeeded: Math.max(0, minGames - record.games),
         };
-      })
-      .sort((left, right) => {
+      });
+
+    if (mode === RANKING_MODE_COMPETITIVE) {
+      const tiedGroups = new Map();
+      scored.forEach(row => {
+        const key = [
+          row.eligible ? "qualified" : "provisional",
+          row.pointsExact,
+          winRatioKey(row.wins, row.games),
+          row.wins,
+        ].join("|");
+        const group = tiedGroups.get(key) || [];
+        group.push(row);
+        tiedGroups.set(key, group);
+      });
+      tiedGroups.forEach(group => {
+        if (group.length < 2) return;
+        const peerIds = new Set(group.map(row => row.id));
+        group.forEach(row => {
+          const source = records.get(row.id);
+          source?.headToHead?.forEach((result, opponentId) => {
+            if (!peerIds.has(opponentId)) return;
+            row.headToHeadGames += numeric(result?.games);
+            row.headToHeadWins += numeric(result?.wins);
+          });
+          row.headToHeadLosses = Math.max(
+            0,
+            row.headToHeadGames - row.headToHeadWins
+          );
+          row.headToHeadPercentage = row.headToHeadGames
+            ? roundOne((row.headToHeadWins / row.headToHeadGames) * 100)
+            : 0;
+        });
+      });
+    }
+
+    const sorted = scored.sort((left, right) => {
         const eligibility = Number(right.eligible) - Number(left.eligible);
         if (eligibility) return eligibility;
         if (mode === RANKING_MODE_COMPETITIVE) {
@@ -451,6 +520,7 @@
     matchDelta,
     exactMatchDelta,
     compareWinRates,
+    compareHeadToHead,
     competitiveCriterion,
     compareCompetitive,
     chronologicalMatches,

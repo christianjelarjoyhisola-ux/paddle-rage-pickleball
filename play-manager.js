@@ -70,17 +70,14 @@
   }
 
   function sessionRankingMode(session = state.session) {
-    if (!window.PB_USE_LOCAL_DATA) return RANKING_MODE_PERFORMANCE;
     return normalizeRankingMode(session?.ranking_mode ?? session?.rankingMode);
   }
 
   function isWinPercentageMode(mode = sessionRankingMode()) {
-    if (!window.PB_USE_LOCAL_DATA) return false;
     return normalizeRankingMode(mode) === RANKING_MODE_WIN_PERCENTAGE;
   }
 
   function isCompetitiveMode(mode = sessionRankingMode()) {
-    if (!window.PB_USE_LOCAL_DATA) return false;
     return normalizeRankingMode(mode) === RANKING_MODE_COMPETITIVE;
   }
 
@@ -186,12 +183,12 @@
       return {
         name: "Competitive Ranking",
         badge: "Recommended",
-        eyebrow: "Performance + record + strength",
+        eyebrow: "Elo + record + head-to-head + strength",
         standings: "Competitive Standings",
         podium: "Competitive Podium",
         summary: "Competitive Ranking",
-        liveDescription: "Rank every player by exact Performance Points, then win percentage, wins, opponent strength, and best upset.",
-        completedDescription: "Performance leads the ranking. Win percentage, wins, opponent strength, and best upset resolve close podium places.",
+        liveDescription: "Rank every player by exact Elo Performance Points, then win percentage, wins, head-to-head, opponent strength, and best upset.",
+        completedDescription: "Elo performance leads. Win percentage, wins, head-to-head, opponent strength, and best upset resolve close podium places.",
       };
     }
     if (isWinPercentageMode(mode)) {
@@ -1208,7 +1205,7 @@
           <div>
             <span class="pm2-rating-kicker">Official podium &middot; Individual</span>
             <h3 id="pm2RatingTitle">Competitive Ranking</h3>
-            <p>Your teammate can change every game. The ranking follows your own results and the strength of the competition you faced.</p>
+            <p>Your teammate can change every game. The ranking follows your own results, direct matchups, and the strength of the competition you faced.</p>
           </div>
           <span class="pm2-rating-badge">Recommended</span>
         </div>
@@ -1221,13 +1218,26 @@
           <div>
             <span aria-hidden="true">02</span>
             <strong>Clear tiebreaks</strong>
-            <p>Win percentage, more wins, opponent strength, then best upset are checked in order.</p>
+            <p>Win percentage, more wins, head-to-head, opponent strength, then best upset are checked in order.</p>
           </div>
           <div>
             <span aria-hidden="true">03</span>
             <strong>No artificial winner</strong>
             <p>If every competitive result is identical, the podium shows Decider Required instead of inventing a winner.</p>
           </div>
+        </div>
+        <div class="pm2-ranking-ladder" aria-label="Competitive ranking order">
+          <span><b>1</b> Exact Elo points</span>
+          <i aria-hidden="true">&rarr;</i>
+          <span><b>2</b> Win %</span>
+          <i aria-hidden="true">&rarr;</i>
+          <span><b>3</b> Wins</span>
+          <i aria-hidden="true">&rarr;</i>
+          <span><b>4</b> Head-to-head</span>
+          <i aria-hidden="true">&rarr;</i>
+          <span><b>5</b> Opponent strength</span>
+          <i aria-hidden="true">&rarr;</i>
+          <span><b>6</b> Best upset</span>
         </div>
         <div class="pm2-rating-rule">
           <strong>Complete at least 3 games to qualify.</strong>
@@ -1311,7 +1321,7 @@
     const mode = state.session?.mode || "smart_random_mixer";
     const rankingMode = state.session
       ? sessionRankingMode(state.session)
-      : (window.PB_USE_LOCAL_DATA ? RANKING_MODE_COMPETITIVE : RANKING_MODE_PERFORMANCE);
+      : RANKING_MODE_COMPETITIVE;
     const scoring = rankingCopy(rankingMode);
     const names = state.players.map(player => player.full_name).filter(Boolean);
     const isRestart = !!state.rounds.length;
@@ -1388,7 +1398,7 @@
                       <strong>Competitive Ranking</strong>
                       <em>Recommended</em>
                     </span>
-                    <small>Performance first, with Win %, wins, opponent strength, and best upset as clear tiebreaks.</small>
+                    <small>Exact Elo performance first, then Win %, wins, head-to-head, opponent strength, and best upset.</small>
                     <b>Best for a decisive official podium</b>
                   </span>
                 </label>
@@ -2363,7 +2373,7 @@
         ? normalizeRankingMode(
             element?.querySelector('input[name="rankingMode"]:checked')?.value
           )
-        : RANKING_MODE_PERFORMANCE,
+        : RANKING_MODE_COMPETITIVE,
       courtIds,
       names,
     };
@@ -3852,7 +3862,7 @@
     context.font = '850 24px "DM Sans", "Segoe UI", sans-serif';
     context.fillText(
       isCompetitiveMode()
-        ? "Exact performance • Win % • Wins • Opponent strength • Best upset"
+        ? "Exact Elo • Win % • Wins • Head-to-head • Opponent strength • Best upset"
         : isWinPercentageMode()
           ? "Individual Win Percentage • Every win counts equally"
           : "Individual Session Points • Opponent strength matters",
@@ -4004,6 +4014,10 @@
       "exact_performance_rating",
       "average_opponent_rating_exact",
       "best_upset_exact",
+      "head_to_head_wins",
+      "head_to_head_losses",
+      "head_to_head_games",
+      "head_to_head_win_percentage",
       "rank_criterion",
       "rank_reason",
       "tiebreak_reason",
@@ -4031,6 +4045,10 @@
         winPercentageMode ? "" : row.ratingExact,
         winPercentageMode ? "" : row.averageOpponentRatingExact,
         winPercentageMode ? "" : row.bestUpsetExact,
+        isCompetitiveMode(row.mode) ? row.headToHeadWins : "",
+        isCompetitiveMode(row.mode) ? row.headToHeadLosses : "",
+        isCompetitiveMode(row.mode) ? row.headToHeadGames : "",
+        isCompetitiveMode(row.mode) ? row.headToHeadPercentage : "",
         row.rankCriterion || "",
         row.rankReason || "",
         row.tieBreakReason || "",

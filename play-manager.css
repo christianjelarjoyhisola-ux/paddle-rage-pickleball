@@ -723,6 +723,51 @@
   line-height: 1.4;
 }
 
+.pm2-ranking-ladder {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 11px 18px 4px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201, 243, 29, .35) transparent;
+}
+
+.pm2-ranking-ladder span {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 9px 5px 6px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 999px;
+  color: #dce5f1;
+  background: rgba(255, 255, 255, .045);
+  font-size: .58rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pm2-ranking-ladder span b {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 50%;
+  color: #111827;
+  background: var(--pm2-lime);
+  font-size: .52rem;
+  font-weight: 950;
+}
+
+.pm2-ranking-ladder i {
+  flex: 0 0 auto;
+  color: #6f7f93;
+  font-size: .7rem;
+  font-style: normal;
+}
+
 .pm2-rating-rule {
   display: flex;
   align-items: center;
@@ -4446,6 +4491,23 @@
 
   .pm2-rating-principles > div {
     padding: 12px 14px;
+  }
+
+  .pm2-ranking-ladder {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    overflow: visible;
+    padding: 11px 14px 5px;
+  }
+
+  .pm2-ranking-ladder span {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .pm2-ranking-ladder i {
+    display: none;
   }
 
   .pm2-rating-rule {

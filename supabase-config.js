@@ -1724,6 +1724,9 @@ window.DB = {
       court_ids: session.courtIds || [],
       court_names: session.courtNames || [],
       mode: session.mode || 'smart_random_mixer',
+      ranking_mode: normalizeOpenPlayRankingMode(
+        session.rankingMode ?? session.ranking_mode ?? 'competitive'
+      ),
       status: session.status || 'draft',
       current_round: session.currentRound || 0,
       performance_rating_version: 'pr-performance-v1',
@@ -1743,6 +1746,11 @@ window.DB = {
     if (updates.courtIds !== undefined) row.court_ids = updates.courtIds;
     if (updates.courtNames !== undefined) row.court_names = updates.courtNames;
     if (updates.mode !== undefined) row.mode = updates.mode;
+    if (updates.rankingMode !== undefined || updates.ranking_mode !== undefined) {
+      row.ranking_mode = normalizeOpenPlayRankingMode(
+        updates.rankingMode ?? updates.ranking_mode
+      );
+    }
     if (updates.status !== undefined) row.status = updates.status;
     if (updates.currentRound !== undefined) row.current_round = updates.currentRound;
     const { data, error } = await _sb.from('open_play_game_sessions').update(row).eq('id', id).select('*').single();
@@ -3067,6 +3075,10 @@ window.DB = {
             averageOpponentRatingExact: row.averageOpponentRatingExact,
             bestUpset: row.bestUpset,
             bestUpsetExact: row.bestUpsetExact,
+            headToHeadGames: row.headToHeadGames,
+            headToHeadWins: row.headToHeadWins,
+            headToHeadLosses: row.headToHeadLosses,
+            headToHeadPercentage: row.headToHeadPercentage,
             rankCriterion: row.rankCriterion,
             rankReason: row.rankReason,
             tieBreakReason: row.tieBreakReason,
@@ -3107,7 +3119,7 @@ window.DB = {
             ? 'Individual Win Percentage'
             : 'Individual Performance Rating',
         version: rankingMode === 'competitive'
-          ? 'competitive-ranking-v1'
+          ? 'competitive-ranking-v2'
           : rankingMode === 'win_percentage'
             ? 'win-percentage-v1'
             : (session.performance_rating_version || 'pr-performance-v1'),

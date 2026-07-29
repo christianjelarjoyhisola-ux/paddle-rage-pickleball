@@ -24,6 +24,10 @@ const performanceRatingMigrationPath = "supabase/migrations/20260728130000_open_
 const performanceRatingMigration = fs.existsSync(path.join(root, performanceRatingMigrationPath))
   ? read(performanceRatingMigrationPath)
   : "";
+const competitiveRankingMigrationPath = "supabase/migrations/20260729130000_open_play_competitive_head_to_head.sql";
+const competitiveRankingMigration = fs.existsSync(path.join(root, competitiveRankingMigrationPath))
+  ? read(competitiveRankingMigrationPath)
+  : "";
 const performanceRating = read("open-play-rating.js");
 const client = read("supabase-config.js");
 const setupSql = read("SETUP_NEW_SUPABASE.sql");
@@ -140,6 +144,10 @@ test("local Competitive live boards publish exact ranking evidence without playe
     averageOpponentRatingExact: 1044.4444444,
     bestUpset: 38.9,
     bestUpsetExact: 38.8888888,
+    headToHeadGames: 2,
+    headToHeadWins: 2,
+    headToHeadLosses: 0,
+    headToHeadPercentage: 100,
     rankCriterion: "opponent_strength",
     rankReason: "Opponent strength tiebreak",
     tieBreakReason: "Opponent strength tiebreak",
@@ -195,7 +203,7 @@ return localOpenPlayLiveBoard;`
   assert.deepEqual(board.ratingSystem, {
     mode: "competitive",
     name: "Competitive Ranking",
-    version: "competitive-ranking-v1",
+    version: "competitive-ranking-v2",
     minGames: 3,
     rankingMetric: "competitive",
   });
@@ -204,6 +212,10 @@ return localOpenPlayLiveBoard;`
     "pointsExact",
     "averageOpponentRatingExact",
     "bestUpsetExact",
+    "headToHeadGames",
+    "headToHeadWins",
+    "headToHeadLosses",
+    "headToHeadPercentage",
     "rankCriterion",
     "rankReason",
     "tieBreakReason",
@@ -520,6 +532,10 @@ test("Share Live updates smoothly without recurring blink animations", () => {
       averageOpponentRatingExact: 1012.345679,
       bestUpset: 0,
       bestUpsetExact: 0,
+      headToHeadGames: 1,
+      headToHeadWins: 1,
+      headToHeadLosses: 0,
+      headToHeadPercentage: 100,
       rankCriterion: "opponent_strength",
       rankReason: "Opponent strength tiebreak",
       tieBreakReason: "Opponent strength tiebreak",
@@ -529,7 +545,7 @@ test("Share Live updates smoothly without recurring blink animations", () => {
     ratingSystem: {
       mode: "competitive",
       name: "Competitive Ranking",
-      version: "competitive-ranking-v1",
+      version: "competitive-ranking-v2",
       minGames: 3,
       rankingMetric: "competitive",
     },
@@ -558,6 +574,7 @@ test("Share Live updates smoothly without recurring blink animations", () => {
     ["exact points", snapshot => { snapshot.standings[0].pointsExact += 0.000001; }],
     ["exact opponent strength", snapshot => { snapshot.standings[0].averageOpponentRatingExact += 0.000001; }],
     ["exact best upset", snapshot => { snapshot.standings[0].bestUpsetExact += 0.000001; }],
+    ["head-to-head wins", snapshot => { snapshot.standings[0].headToHeadWins += 1; }],
     ["rank criterion", snapshot => { snapshot.standings[0].rankCriterion = "quality_win"; }],
     ["rank reason", snapshot => { snapshot.standings[0].rankReason = "Best upset tiebreak"; }],
     ["tiebreak reason", snapshot => { snapshot.standings[0].tieBreakReason = "Best upset tiebreak"; }],
@@ -775,7 +792,7 @@ test("completed sessions download a branded Paddle Rage result image", () => {
   assert.match(brandedDownload, /SESSION WIN % PODIUM[\s\S]*?SESSION PERFORMANCE PODIUM/i);
   assert.match(
     brandedDownload,
-    /Exact performance[\s\S]*?Win %[\s\S]*?Wins[\s\S]*?Opponent strength[\s\S]*?Best upset/i
+    /Exact Elo[\s\S]*?Win %[\s\S]*?Wins[\s\S]*?Head-to-head[\s\S]*?Opponent strength[\s\S]*?Best upset/i
   );
   assert.match(brandedDownload, /const hasPodiumDecider = podiumStandings\.some\(requiresPodiumDecider\)/i);
   assert.match(
@@ -919,7 +936,7 @@ test("new results play one contained winner reveal in the manager and shared boa
   assert.match(playerClient, /scheduleWinnerRevealEnd\(/i);
   assert.match(playerCss, /@keyframes plb-winner-reveal/i);
   assert.match(playerCss, /\.plb-winner-reveal-sparks::before/i);
-  assert.match(playerPage, /player-live\.js\?v=20260728-competitive-v1/i);
+  assert.match(playerPage, /player-live\.js\?v=20260729-head-to-head-v1/i);
 });
 
 test("Share Live keeps the completed winner visible while its court is READY", () => {
@@ -1245,7 +1262,7 @@ test("LIVE court card mirrors the READY card system with a cyan state treatment"
     managerCss,
     /\.pm2-court-card\.is-live \.pm2-result-btn\s*\{[^}]*min-height:\s*56px[^}]*border-radius:\s*11px[^}]*font-size:\s*1rem/is
   );
-  assert.match(admin, /play-manager\.css\?v=20260728-competitive-v1/i);
+  assert.match(admin, /play-manager\.css\?v=20260729-head-to-head-v1/i);
 });
 
 test("court cards share one compact height and use the modern indigo-coral team palette", () => {
@@ -1550,9 +1567,9 @@ test("Play Manager stores editable six-star player skills and uses them for bala
     managerCss,
     /\.pm2-team-skill-total\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?letter-spacing:\s*0/i
   );
-  assert.match(admin, /supabase-config\.js\?v=20260728-competitive-v1/i);
-  assert.match(admin, /open-play-rating\.js\?v=20260728-competitive-v1/i);
-  assert.match(admin, /play-manager\.js\?v=20260728-competitive-v4/i);
+  assert.match(admin, /supabase-config\.js\?v=20260729-head-to-head-v1/i);
+  assert.match(admin, /open-play-rating\.js\?v=20260729-head-to-head-v1/i);
+  assert.match(admin, /play-manager\.js\?v=20260729-head-to-head-v1/i);
   assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
 });
 
@@ -1578,6 +1595,8 @@ test("local Open Play offers three ranking modes with Competitive as the local d
   assert.match(performanceRating, /row\?\.eligible && Number\(row\.rank\) <=/i);
   assert.match(performanceRating, /averageOpponentRating/i);
   assert.match(performanceRating, /bestUpset/i);
+  assert.match(performanceRating, /function compareHeadToHead\(left, right\)/i);
+  assert.match(performanceRating, /head_to_head:\s*"Head-to-head tiebreak"/i);
   assert.match(performanceRatingMigration, /add column if not exists performance_seed_rating/i);
   assert.match(performanceRatingMigration, /PLAY_MANAGER_PERFORMANCE_SEED_IMMUTABLE/i);
   assert.match(performanceRatingMigration, /calculate_open_play_performance_standings/i);
@@ -1586,6 +1605,13 @@ test("local Open Play offers three ranking modes with Competitive as the local d
   assert.match(performanceRatingMigration, /check \(performance_rating_scale = 400\)/i);
   assert.match(performanceRatingMigration, /check \(performance_rating_min_games = 3\)/i);
   assert.match(performanceRatingMigration, /'rankingMetric', 'session_points'/i);
+  assert.ok(competitiveRankingMigration, `${competitiveRankingMigrationPath} must exist`);
+  assert.match(competitiveRankingMigration, /add column if not exists ranking_mode text/i);
+  assert.match(competitiveRankingMigration, /default 'competitive'/i);
+  assert.match(competitiveRankingMigration, /calculate_open_play_competitive_standings/i);
+  assert.match(competitiveRankingMigration, /headToHeadWins/i);
+  assert.match(competitiveRankingMigration, /'head_to_head' then 'Head-to-head tiebreak'/i);
+  assert.match(competitiveRankingMigration, /'competitive-ranking-v2'/i);
   assert.match(client, /performance_rating_k:\s*24/i);
   assert.match(client, /performance_rating_scale:\s*400/i);
   assert.match(client, /PBOpenPlayRating[\s\S]*?calculateStandings\(sessionPlayers, ratingMatches/i);
@@ -1603,13 +1629,11 @@ test("local Open Play offers three ranking modes with Competitive as the local d
     client.indexOf("async createOpenPlayGameSession(session)"),
     client.indexOf("async updateOpenPlayGameSession(id, updates)")
   );
-  assert.doesNotMatch(productionCreateSession, /ranking_mode|rankingMode/i);
-  assert.match(manager, /if \(!window\.PB_USE_LOCAL_DATA\) return RANKING_MODE_PERFORMANCE/i);
-  assert.match(manager, /function isWinPercentageMode[\s\S]*?if \(!window\.PB_USE_LOCAL_DATA\) return false/i);
-  assert.match(manager, /function isCompetitiveMode[\s\S]*?if \(!window\.PB_USE_LOCAL_DATA\) return false/i);
+  assert.match(productionCreateSession, /ranking_mode:\s*normalizeOpenPlayRankingMode/i);
+  assert.doesNotMatch(manager, /if \(!window\.PB_USE_LOCAL_DATA\) return RANKING_MODE_PERFORMANCE/i);
   assert.match(
     manager,
-    /const rankingMode = state\.session[\s\S]*?window\.PB_USE_LOCAL_DATA \? RANKING_MODE_COMPETITIVE : RANKING_MODE_PERFORMANCE/i
+    /const rankingMode = state\.session[\s\S]*?: RANKING_MODE_COMPETITIVE/i
   );
   assert.match(manager, /\$\{window\.PB_USE_LOCAL_DATA \? `[\s\S]*?name="rankingMode"/i);
   assert.match(
@@ -1627,7 +1651,8 @@ test("local Open Play offers three ranking modes with Competitive as the local d
   );
   assert.match(manager, /id="pm2RatingTitle">Competitive Ranking<\/h3>/i);
   assert.match(manager, /Exact, unrounded Performance Points determine the initial order/i);
-  assert.match(manager, /Win percentage, more wins, opponent strength, then best upset/i);
+  assert.match(manager, /Win percentage, more wins, head-to-head, opponent strength, then best upset/i);
+  assert.match(manager, /pm2-ranking-ladder[\s\S]*?Exact Elo points[\s\S]*?Head-to-head/i);
   assert.match(manager, /Individual Performance Rating/i);
   assert.match(manager, /Individual Win Percentage/i);
   assert.match(manager, /Your teammate can change every game/i);
@@ -1635,7 +1660,7 @@ test("local Open Play offers three ranking modes with Competitive as the local d
   assert.match(manager, /Complete at least 3 games to qualify/i);
   assert.match(manager, /If percentages tie, more wins ranks first/i);
   assert.match(manager, /mode:\s*sessionRankingMode\(\)/i);
-  assert.match(manager, /rankingMode:\s*window\.PB_USE_LOCAL_DATA[\s\S]*?: RANKING_MODE_PERFORMANCE/i);
+  assert.match(manager, /rankingMode:\s*window\.PB_USE_LOCAL_DATA[\s\S]*?: RANKING_MODE_COMPETITIVE/i);
   assert.match(manager, /rankingMode:\s*setup\.rankingMode/i);
   assert.match(playerClient, /Ranked by Session Points/i);
   assert.match(playerClient, /Top 10 Performance/i);
