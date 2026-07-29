@@ -349,7 +349,7 @@ test("player live board uses the transparent system logo without a badge backgro
     /<img class="plb-brand-mark" src="paddleragelogo-transparent\.png" alt="" width="48" height="48" aria-hidden="true">/i
   );
   assert.doesNotMatch(playerPage, /class="plb-brand-mark"[^>]*>PR<\/span>/i);
-  assert.match(playerPage, /player-live\.css\?v=20260728-competitive-v1/i);
+  assert.match(playerPage, /player-live\.css\?v=20260729-readable-type-v1/i);
   assert.match(
     playerCss,
     /\.plb-brand-mark\s*\{[\s\S]*?width:\s*48px[\s\S]*?height:\s*48px[\s\S]*?border:\s*0[\s\S]*?background:\s*transparent[\s\S]*?object-fit:\s*contain/i
@@ -451,6 +451,24 @@ test("Share Live is a spectator-first, responsive match center", () => {
   assert.match(
     matchCenterCss,
     /@media \(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.plb-winner-reveal,[\s\S]*?display:\s*none !important/i
+  );
+});
+
+test("Share Live keeps primary venue text at a readable size", () => {
+  const readabilityCss = playerCss.match(
+    /\/\* Share Live readability:[^*]*\*\/([\s\S]*?)\.plb-final-standings/i
+  )?.[1] || "";
+
+  assert.match(readabilityCss, /\.plb-player\s*\{[^}]*font-size:\s*\.875rem/i);
+  assert.match(readabilityCss, /\.plb-dispatch-player > strong\s*\{[^}]*font-size:\s*\.875rem/i);
+  assert.match(readabilityCss, /\.plb-queue-player strong\s*\{[^}]*font-size:\s*\.875rem/i);
+  assert.match(
+    readabilityCss,
+    /\.plb-standings tbody th,[\s\S]*?font-size:\s*\.875rem/i
+  );
+  assert.match(
+    playerCss,
+    /@media \(max-width:\s*420px\)[\s\S]*?\.plb-dispatch-player > strong\s*\{[^}]*font-size:\s*\.8125rem/i
   );
 });
 

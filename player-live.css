@@ -2699,6 +2699,102 @@ body {
   background: #f7ffd8;
 }
 
+/* Share Live readability: keep the venue board easy to scan from a distance. */
+.plb-court-head h3 {
+  font-size: 1rem;
+}
+
+.plb-team-label {
+  font-size: .6875rem;
+}
+
+.plb-team-label b,
+.plb-player b {
+  font-size: .625rem;
+}
+
+.plb-player {
+  font-size: .875rem;
+}
+
+.plb-player span.is-long {
+  font-size: .8125rem;
+}
+
+.plb-player span.is-very-long {
+  font-size: .75rem;
+}
+
+.plb-panel-head h2 {
+  font-size: 1.0625rem;
+}
+
+.plb-dispatch-card-head > div > span {
+  font-size: .75rem;
+}
+
+.plb-dispatch-card-head > div > strong {
+  font-size: .9375rem;
+}
+
+.plb-dispatch-status {
+  font-size: .6875rem;
+}
+
+.plb-dispatch-team-label {
+  font-size: .6875rem;
+}
+
+.plb-dispatch-player > strong {
+  font-size: .875rem;
+}
+
+.plb-dispatch-player > strong.is-long {
+  font-size: .8125rem;
+}
+
+.plb-dispatch-player > strong.is-very-long {
+  font-size: .75rem;
+}
+
+.plb-dispatch-player > b {
+  font-size: .625rem;
+}
+
+.plb-dispatch-player.is-empty,
+.plb-dispatch-card > footer {
+  font-size: .8125rem;
+}
+
+.plb-queue-player strong {
+  font-size: .875rem;
+}
+
+.plb-queue-player small {
+  font-size: .6875rem;
+}
+
+.plb-list-note {
+  font-size: .75rem;
+}
+
+.plb-standings {
+  font-size: .8125rem;
+}
+
+.plb-standings thead th {
+  font-size: .625rem;
+}
+
+.plb-standings tbody th,
+.plb-standings tbody td:nth-child(3) strong {
+  font-size: .875rem;
+}
+
+.plb-standings tbody th small {
+  font-size: .6875rem;
+}
+
 .plb-final-standings {
   display: grid;
   gap: 14px;
@@ -3247,7 +3343,15 @@ body {
   }
 
   .plb-dispatch-player > strong {
-    font-size: .64rem;
+    font-size: .8125rem;
+  }
+
+  .plb-dispatch-player > strong.is-long {
+    font-size: .75rem;
+  }
+
+  .plb-dispatch-player > strong.is-very-long {
+    font-size: .6875rem;
   }
 
   .plb-queue-list li {
