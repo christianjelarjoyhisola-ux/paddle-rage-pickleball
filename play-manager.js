@@ -1387,7 +1387,6 @@
                 </label>
               </div>
             </fieldset>
-            ${window.PB_USE_LOCAL_DATA ? `
             <fieldset class="pm2-field pm2-field-wide pm2-ranking-field">
               <legend class="pm2-label">Choose how the podium is ranked</legend>
               <div class="pm2-ranking-options">
@@ -1423,8 +1422,8 @@
                   </span>
                 </label>
               </div>
+              ${isRestart ? `<p class="pm2-ranking-lock-note">Changing the ranking starts a revised session. Existing rounds and results stay preserved.</p>` : `<p class="pm2-ranking-lock-note">Choose before starting play. The scoring method is locked once the first round begins.</p>`}
             </fieldset>
-            ` : ""}
             <section
               class="pm2-rating-explainer pm2-field-wide"
               id="pm2RatingExplainer"
@@ -2369,11 +2368,9 @@
       date: element?.querySelector("#pm2Date")?.value || localDateValue(),
       timeLabel: element?.querySelector("#pm2Time")?.value.trim() || "Open Play",
       mode: element?.querySelector('input[name="mode"]:checked')?.value || "smart_random_mixer",
-      rankingMode: window.PB_USE_LOCAL_DATA
-        ? normalizeRankingMode(
-            element?.querySelector('input[name="rankingMode"]:checked')?.value
-          )
-        : RANKING_MODE_COMPETITIVE,
+      rankingMode: normalizeRankingMode(
+        element?.querySelector('input[name="rankingMode"]:checked')?.value
+      ),
       courtIds,
       names,
     };

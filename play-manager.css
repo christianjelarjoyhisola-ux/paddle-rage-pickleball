@@ -599,6 +599,27 @@
   font-weight: 900;
 }
 
+.pm2-ranking-lock-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 9px 2px 0;
+  color: #64748b;
+  font-size: .62rem;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.pm2-ranking-lock-note::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pm2-lime);
+  box-shadow: 0 0 0 4px rgba(201, 243, 29, .14);
+}
+
 .pm2-ranking-option > input:checked + .pm2-ranking-option-copy {
   border-color: #4f46e5;
   background: linear-gradient(145deg, #f8faff, #eef2ff);

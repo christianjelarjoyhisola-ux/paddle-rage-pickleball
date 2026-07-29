@@ -28,6 +28,10 @@ const competitiveRankingMigrationPath = "supabase/migrations/20260729130000_open
 const competitiveRankingMigration = fs.existsSync(path.join(root, competitiveRankingMigrationPath))
   ? read(competitiveRankingMigrationPath)
   : "";
+const productionRankingModesMigrationPath = "supabase/migrations/20260729150000_open_play_production_ranking_modes.sql";
+const productionRankingModesMigration = fs.existsSync(path.join(root, productionRankingModesMigrationPath))
+  ? read(productionRankingModesMigrationPath)
+  : "";
 const performanceRating = read("open-play-rating.js");
 const client = read("supabase-config.js");
 const setupSql = read("SETUP_NEW_SUPABASE.sql");
@@ -1262,7 +1266,7 @@ test("LIVE court card mirrors the READY card system with a cyan state treatment"
     managerCss,
     /\.pm2-court-card\.is-live \.pm2-result-btn\s*\{[^}]*min-height:\s*56px[^}]*border-radius:\s*11px[^}]*font-size:\s*1rem/is
   );
-  assert.match(admin, /play-manager\.css\?v=20260729-head-to-head-v1/i);
+  assert.match(admin, /play-manager\.css\?v=20260729-ranking-selector-v1/i);
 });
 
 test("court cards share one compact height and use the modern indigo-coral team palette", () => {
@@ -1569,11 +1573,11 @@ test("Play Manager stores editable six-star player skills and uses them for bala
   );
   assert.match(admin, /supabase-config\.js\?v=20260729-head-to-head-v1/i);
   assert.match(admin, /open-play-rating\.js\?v=20260729-head-to-head-v1/i);
-  assert.match(admin, /play-manager\.js\?v=20260729-head-to-head-v1/i);
+  assert.match(admin, /play-manager\.js\?v=20260729-ranking-selector-v1/i);
   assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
 });
 
-test("local Open Play offers three ranking modes with Competitive as the local default", () => {
+test("Open Play offers three production ranking modes with Competitive as the default", () => {
   assert.ok(performanceRatingMigration, `${performanceRatingMigrationPath} must exist`);
   assert.match(performanceRating, /const VERSION = "pr-performance-v1"/i);
   assert.match(performanceRating, /const RANKING_MODE_PERFORMANCE = "performance"/i);
@@ -1612,6 +1616,16 @@ test("local Open Play offers three ranking modes with Competitive as the local d
   assert.match(competitiveRankingMigration, /headToHeadWins/i);
   assert.match(competitiveRankingMigration, /'head_to_head' then 'Head-to-head tiebreak'/i);
   assert.match(competitiveRankingMigration, /'competitive-ranking-v2'/i);
+  assert.ok(productionRankingModesMigration, `${productionRankingModesMigrationPath} must exist`);
+  assert.match(
+    productionRankingModesMigration,
+    /ranking_mode in \('competitive', 'performance', 'win_percentage'\)/i
+  );
+  assert.match(productionRankingModesMigration, /calculate_open_play_win_percentage_standings/i);
+  assert.match(
+    productionRankingModesMigration,
+    /when 'win_percentage' then[\s\S]*?calculate_open_play_win_percentage_standings/i
+  );
   assert.match(client, /performance_rating_k:\s*24/i);
   assert.match(client, /performance_rating_scale:\s*400/i);
   assert.match(client, /PBOpenPlayRating[\s\S]*?calculateStandings\(sessionPlayers, ratingMatches/i);
@@ -1635,7 +1649,7 @@ test("local Open Play offers three ranking modes with Competitive as the local d
     manager,
     /const rankingMode = state\.session[\s\S]*?: RANKING_MODE_COMPETITIVE/i
   );
-  assert.match(manager, /\$\{window\.PB_USE_LOCAL_DATA \? `[\s\S]*?name="rankingMode"/i);
+  assert.doesNotMatch(manager, /\$\{window\.PB_USE_LOCAL_DATA \? `[\s\S]*?name="rankingMode"/i);
   assert.match(
     manager,
     /name="rankingMode" value="\$\{RANKING_MODE_COMPETITIVE\}"[\s\S]*?<strong>Competitive Ranking<\/strong>/i
@@ -1643,11 +1657,11 @@ test("local Open Play offers three ranking modes with Competitive as the local d
   assert.match(manager, /Performance Rating \(Elo\)/i);
   assert.match(manager, /<strong>Win Percentage<\/strong>/i);
   const rankingInputs = manager.match(/<input type="radio" name="rankingMode"/g) || [];
-  assert.equal(rankingInputs.length, 3, "local setup must render exactly three ranking choices");
+  assert.equal(rankingInputs.length, 3, "production setup must render exactly three ranking choices");
   assert.ok(
     manager.indexOf('value="${RANKING_MODE_COMPETITIVE}"')
       < manager.indexOf('value="${RANKING_MODE_PERFORMANCE}"'),
-    "Competitive Ranking should be the first local setup choice"
+    "Competitive Ranking should be the first production setup choice"
   );
   assert.match(manager, /id="pm2RatingTitle">Competitive Ranking<\/h3>/i);
   assert.match(manager, /Exact, unrounded Performance Points determine the initial order/i);
@@ -1660,7 +1674,8 @@ test("local Open Play offers three ranking modes with Competitive as the local d
   assert.match(manager, /Complete at least 3 games to qualify/i);
   assert.match(manager, /If percentages tie, more wins ranks first/i);
   assert.match(manager, /mode:\s*sessionRankingMode\(\)/i);
-  assert.match(manager, /rankingMode:\s*window\.PB_USE_LOCAL_DATA[\s\S]*?: RANKING_MODE_COMPETITIVE/i);
+  assert.match(manager, /rankingMode:\s*normalizeRankingMode\([\s\S]*?input\[name="rankingMode"\]:checked/i);
+  assert.match(manager, /scoring method is locked once the first round begins/i);
   assert.match(manager, /rankingMode:\s*setup\.rankingMode/i);
   assert.match(playerClient, /Ranked by Session Points/i);
   assert.match(playerClient, /Top 10 Performance/i);
