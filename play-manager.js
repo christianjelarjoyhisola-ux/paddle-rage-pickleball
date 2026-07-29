@@ -1826,16 +1826,17 @@
             title="Open ${escapeHtml(name)} profile"
             ${state.session?.status === "active" ? "" : "disabled"}
           >
-            <strong class="pm2-queue-name">${escapeHtml(name)}</strong>
+            <span class="pm2-queue-name-row">
+              <strong class="pm2-queue-name">${escapeHtml(name)}</strong>
+              <span class="pm2-queue-wait" aria-label="Waiting time">
+                <span aria-hidden="true">&#9203;</span>
+                <span data-pm-wait-start="${escapeHtml(waitStartedAt)}">${waitStartedAt ? "0:00" : "&mdash;"}</span>
+              </span>
+            </span>
             <span class="pm2-queue-meta">
               <span>${games} ${games === 1 ? "game" : "games"}</span>
               <span aria-hidden="true">·</span>
               <span class="${display.tone}">${display.compactScore}</span>
-              <span aria-hidden="true">·</span>
-              <span class="pm2-queue-wait" aria-label="Waiting time">
-                <span aria-hidden="true">⌛</span>
-                <span data-pm-wait-start="${escapeHtml(waitStartedAt)}">${waitStartedAt ? "0:00" : "—"}</span>
-              </span>
             </span>
           </button>
           ${state.session?.status === "active"

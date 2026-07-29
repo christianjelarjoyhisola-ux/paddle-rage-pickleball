@@ -2353,6 +2353,17 @@
   white-space: nowrap;
 }
 
+.pm2-queue-name-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.pm2-queue-name-row .pm2-queue-name {
+  flex: 1 1 auto;
+}
+
 .pm2-queue-meta {
   display: flex;
   align-items: center;
@@ -2373,9 +2384,18 @@
 .pm2-queue-wait {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   gap: 3px;
-  color: #95a2b5;
+  min-height: 22px;
+  padding: 3px 7px;
+  border: 1px solid rgba(8, 229, 138, .22);
+  border-radius: 999px;
+  color: #b9f9d8;
+  background: rgba(8, 229, 138, .09);
+  font-size: .625rem;
+  font-weight: 750;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .pm2-queue-actions {

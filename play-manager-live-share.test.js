@@ -1266,7 +1266,7 @@ test("LIVE court card mirrors the READY card system with a cyan state treatment"
     managerCss,
     /\.pm2-court-card\.is-live \.pm2-result-btn\s*\{[^}]*min-height:\s*56px[^}]*border-radius:\s*11px[^}]*font-size:\s*1rem/is
   );
-  assert.match(admin, /play-manager\.css\?v=20260729-ranking-selector-v1/i);
+  assert.match(admin, /play-manager\.css\?v=20260729-queue-wait-v1/i);
 });
 
 test("court cards share one compact height and use the modern indigo-coral team palette", () => {
@@ -1503,6 +1503,10 @@ test("queue wait timers persist, reset on court entry, and survive skips", () =>
   );
   assert.match(manager, /data-pm-wait-start="\$\{escapeHtml\(waitStartedAt\)\}"/i);
   assert.match(manager, /querySelectorAll\("\[data-pm-wait-start\]"\)/i);
+  assert.match(
+    manager,
+    /pm2-queue-name-row[\s\S]*?pm2-queue-name[\s\S]*?pm2-queue-wait[\s\S]*?pm2-queue-meta/i
+  );
   assert.match(manager, /await syncQueueWaitTimes\(roundQueue\(state\.rounds\[state\.rounds\.length - 1\]\)\)/i);
   assert.match(manager, /data-pm-action="skip-player"/i);
 });
@@ -1518,6 +1522,8 @@ test("manager queue matches the compact reference while retaining Skip", () => {
   assert.match(manager, /\$\{display\.compactScore\}/i);
   assert.match(managerCss, /--pm2-queue-green:\s*#08e58a/i);
   assert.match(managerCss, /\.pm2-queue-no\s*\{[\s\S]*?font-size:\s*1\.16rem/i);
+  assert.match(managerCss, /\.pm2-queue-name-row\s*\{[\s\S]*?display:\s*flex/i);
+  assert.match(managerCss, /\.pm2-queue-wait\s*\{[\s\S]*?border-radius:\s*999px/i);
   assert.match(managerCss, /\.pm2-queue-meta\s*\{[\s\S]*?font-variant-numeric|\.pm2-queue-wait\s*\{[\s\S]*?font-variant-numeric/i);
 });
 
@@ -1573,7 +1579,7 @@ test("Play Manager stores editable six-star player skills and uses them for bala
   );
   assert.match(admin, /supabase-config\.js\?v=20260729-head-to-head-v1/i);
   assert.match(admin, /open-play-rating\.js\?v=20260729-head-to-head-v1/i);
-  assert.match(admin, /play-manager\.js\?v=20260729-ranking-selector-v1/i);
+  assert.match(admin, /play-manager\.js\?v=20260729-queue-wait-v1/i);
   assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
 });
 
