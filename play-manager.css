@@ -5248,7 +5248,9 @@
 
 .pm2 .pm2-matchmaking-layout {
   display: grid;
-  grid-template-columns: minmax(300px, 350px) minmax(0, 1fr);
+  grid-template-columns:
+    clamp(420px, calc((100% - 32px) / 3), 600px)
+    minmax(0, 1fr);
   align-items: start;
   gap: 16px;
 }

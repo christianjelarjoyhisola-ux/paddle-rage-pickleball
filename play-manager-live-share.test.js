@@ -1266,7 +1266,7 @@ test("LIVE court card mirrors the READY card system with a cyan state treatment"
     managerCss,
     /\.pm2-court-card\.is-live \.pm2-result-btn\s*\{[^}]*min-height:\s*56px[^}]*border-radius:\s*11px[^}]*font-size:\s*1rem/is
   );
-  assert.match(admin, /play-manager\.css\?v=20260729-queue-wait-v1/i);
+  assert.match(admin, /play-manager\.css\?v=20260729-queue-width-v1/i);
 });
 
 test("court cards share one compact height and use the modern indigo-coral team palette", () => {
@@ -1433,7 +1433,7 @@ test("admin live session groups courts, matchmaking, and activity in operational
   assert.match(managerCss, /\.pm2 \.pm2-courts\s*\{[\s\S]*?repeat\(3,\s*minmax\(0,\s*1fr\)\)/i);
   assert.match(
     managerCss,
-    /\.pm2 \.pm2-matchmaking-layout\s*\{[\s\S]*?grid-template-columns:\s*minmax\(300px,\s*350px\) minmax\(0,\s*1fr\)/i
+    /\.pm2 \.pm2-matchmaking-layout\s*\{[\s\S]*?grid-template-columns:\s*clamp\(420px,\s*calc\(\(100%\s*-\s*32px\)\s*\/\s*3\),\s*600px\)\s*minmax\(0,\s*1fr\)/i
   );
   assert.match(
     managerCss,
@@ -1579,7 +1579,7 @@ test("Play Manager stores editable six-star player skills and uses them for bala
   );
   assert.match(admin, /supabase-config\.js\?v=20260729-head-to-head-v1/i);
   assert.match(admin, /open-play-rating\.js\?v=20260729-head-to-head-v1/i);
-  assert.match(admin, /play-manager\.js\?v=20260729-queue-wait-v1/i);
+  assert.match(admin, /play-manager\.js\?v=20260729-queue-width-v1/i);
   assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
 });
 
