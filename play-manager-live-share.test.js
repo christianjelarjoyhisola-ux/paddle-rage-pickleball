@@ -893,7 +893,7 @@ test("saved branded-results PNG keeps enlarged type readable in a compact dynami
   );
   assert.match(
     brandedDownload,
-    /const footerY = canvasHeight - footerHeight;[\s\S]*?context\.font = '900 22px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?footerY \+ 40[\s\S]*?context\.font = '700 20px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?footerY \+ 68[\s\S]*?context\.textAlign = "center";[\s\S]*?context\.font = '700 18px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?context\.fillText\("Powered by Paddle Rage", canvasWidth \/ 2, footerY \+ 56\);[\s\S]*?footerY \+ 54/i
+    /const footerY = canvasHeight - footerHeight;[\s\S]*?const poweredLabel = "Powered by ";[\s\S]*?const poweredBrand = "Paddle Rage Pickleball CDO";[\s\S]*?context\.measureText\(poweredLabel\)[\s\S]*?context\.measureText\(poweredBrand\)[\s\S]*?context\.fillText\(poweredLabel, poweredX, footerY \+ 56\);[\s\S]*?context\.fillStyle = "#c9f31d";[\s\S]*?context\.fillText\(poweredBrand, poweredX, footerY \+ 56\);[\s\S]*?footerY \+ 54/i
   );
 });
 
@@ -1579,7 +1579,7 @@ test("Play Manager stores editable six-star player skills and uses them for bala
   );
   assert.match(admin, /supabase-config\.js\?v=20260729-head-to-head-v1/i);
   assert.match(admin, /open-play-rating\.js\?v=20260729-head-to-head-v1/i);
-  assert.match(admin, /play-manager\.js\?v=20260729-queue-width-v1/i);
+  assert.match(admin, /play-manager\.js\?v=20260729-result-footer-v1/i);
   assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
 });
 
