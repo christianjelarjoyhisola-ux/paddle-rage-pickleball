@@ -9,6 +9,7 @@ const theme = read('brand-theme.css');
 const manager = read('play-manager.js');
 const player = read('player-live.js');
 const supabase = read('supabase-config.js');
+const localServer = read('tools/local-server.js');
 
 test('public booking keeps a zoomable, explicit, first-session intro', () => {
   assert.match(index, /name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/);
@@ -43,6 +44,15 @@ test('mobile court selector is a roving, keyboard-operable tab interface', () =>
   assert.match(index, /\.court-tab\s*\{[\s\S]*?min-height:44px/);
   assert.match(index, /<button type="button" class="cc-slot-btn\$\{isSelectedSlot_/);
   assert.match(index, /aria-pressed="\$\{isSelectedSlot_ \? 'true' : 'false'\}"/);
+});
+
+test('local launch mode supports the same atomic batch-booking API as production', () => {
+  const localDataMode = supabase.slice(supabase.indexOf('(function installLocalDataMode()'));
+  assert.match(localDataMode, /async addBookings\(bookings\)/);
+  assert.match(localDataMode, /db\.bookings\.push\(\.\.\.prepared\)/);
+  assert.match(localDataMode, /return prepared\.map\(booking => booking\.ref\)/);
+  assert.match(localDataMode, /async addBooking\(booking\)\s*\{\s*return this\.addBookings\(\[booking\]\)/);
+  assert.match(localServer, /'\.mp3': 'audio\/mpeg'/);
 });
 
 test('synced production surfaces remain Paddle-only and tenant-isolated', () => {
