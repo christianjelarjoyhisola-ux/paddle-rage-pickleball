@@ -809,9 +809,9 @@ test("completed sessions download a branded Paddle Rage result image", () => {
   assert.match(brandedDownload, /PADDLE RAGE PICKLEBALL/i);
   assert.match(
     brandedDownload,
-    /SESSION COMPETITIVE PODIUM[\s\S]*?SESSION WIN % PODIUM[\s\S]*?SESSION PERFORMANCE PODIUM/i
+    /COMPETITIVE SESSION RESULTS[\s\S]*?WIN PERCENTAGE SESSION RESULTS[\s\S]*?PERFORMANCE SESSION RESULTS/i
   );
-  assert.match(brandedDownload, /SESSION WIN % PODIUM[\s\S]*?SESSION PERFORMANCE PODIUM/i);
+  assert.match(brandedDownload, /Competitive Open Play[\s\S]*?Win Percentage Open Play[\s\S]*?Performance Open Play/i);
   assert.match(
     brandedDownload,
     /Exact Elo[\s\S]*?Win %[\s\S]*?Wins[\s\S]*?Head-to-head[\s\S]*?Opponent strength[\s\S]*?Best upset/i
@@ -819,9 +819,9 @@ test("completed sessions download a branded Paddle Rage result image", () => {
   assert.match(brandedDownload, /const hasPodiumDecider = podiumStandings\.some\(requiresPodiumDecider\)/i);
   assert.match(
     brandedDownload,
-    /hasPodiumDecider \? "PODIUM DECIDER REQUIRED"[\s\S]*?Official places remain TBD until one separating result is recorded/i
+    /hasPodiumDecider \? "Podium decider required"[\s\S]*?Official places remain TBD until one separating result is recorded/i
   );
-  assert.match(manager, /function drawResultPodiumCard[\s\S]*?PODIUM DECIDER[\s\S]*?standingRankLabel\(row\)/i);
+  assert.match(manager, /function drawModernResultPodiumCard[\s\S]*?PODIUM DECIDER[\s\S]*?standingRankLabel\(row\)/i);
   assert.match(brandedDownload, /const topStandings = standings\.slice\(0, 10\)/i);
   assert.match(brandedDownload, /const podiumStandings = PERFORMANCE\.podiumRows\(standings\)/i);
   assert.match(brandedDownload, /const featuredPodiumIds = new Set\(featuredPodium\.map/i);
@@ -838,7 +838,7 @@ test("completed sessions download a branded Paddle Rage result image", () => {
     /const isPrimaryCard = height >= 350[\s\S]*?const placeY = avatarY \+ avatarRadius \+ 30[\s\S]*?const nameY = placeY \+ 40[\s\S]*?const recordY = nameY \+ \(isPrimaryCard \? 72 : 62\)[\s\S]*?const metaY = y \+ height - \(isPrimaryCard \? 28 : 18\)/i
   );
   assert.match(brandedDownload, /canvas\.toBlob\(resolve, "image\/png"\)/i);
-  assert.match(brandedDownload, /paddle-rage-results-\$\{state\.session\?\.date \|\| localDateValue\(\)\}\.png/i);
+  assert.match(brandedDownload, /paddle-rage-open-play-results-\$\{state\.session\?\.date \|\| localDateValue\(\)\}\.png/i);
   assert.match(manager, /action === "download-result"[\s\S]*?withBusy\(downloadBrandedResult\)/i);
   assert.match(
     managerCss,
@@ -851,7 +851,7 @@ test("saved branded-results PNG keeps enlarged type readable in a compact dynami
     /function drawResultStat\([\s\S]*?\r?\n  \}\r?\n\r?\n  function drawResultPodiumCard/i
   )?.[0] || "";
   const podiumPainter = manager.match(
-    /function drawResultPodiumCard\([\s\S]*?\r?\n  \}\r?\n\r?\n  async function downloadBrandedResult/i
+    /function drawModernResultPodiumCard\([\s\S]*?\r?\n  \}\r?\n\r?\n  async function downloadBrandedResult/i
   )?.[0] || "";
   const brandedDownload = manager.match(
     /async function downloadBrandedResult\(\) \{[\s\S]*?\r?\n  \}\r?\n\r?\n  function exportCsv/i
@@ -860,58 +860,58 @@ test("saved branded-results PNG keeps enlarged type readable in a compact dynami
   assert.match(brandedDownload, /await document\.fonts\?\.ready/i);
   assert.match(
     brandedDownload,
-    /const listTop = 964;[\s\S]*?const rowHeight = 90;[\s\S]*?const footerHeight = 96;[\s\S]*?const listHeight = remaining\.length \? remaining\.length \* rowHeight : 104;[\s\S]*?const canvasHeight = Math\.max\(1480, listTop \+ listHeight \+ footerHeight \+ 48\);[\s\S]*?canvas\.height = canvasHeight/i
+    /const listTop = 986;[\s\S]*?const rowHeight = 82;[\s\S]*?const footerHeight = 110;[\s\S]*?const listHeight = remaining\.length \? remaining\.length \* rowHeight : 104;[\s\S]*?const canvasHeight = Math\.max\(1490, listTop \+ listHeight \+ footerHeight \+ 42\);[\s\S]*?canvas\.height = canvasHeight/i
   );
 
   assert.match(
     brandedDownload,
-    /resultCanvasRoundRect\(context, 72, y, 1296, 80, 14\)/i
+    /resultCanvasRoundRect\(context, 72, y, 1296, 72, 13\)/i
   );
   assert.match(
     brandedDownload,
-    /PODIUM LEADERS", 72, 450\)[\s\S]*?72,\s*480[\s\S]*?featuredPodium\[1\][\s\S]*?72, 560, 400, 300\)[\s\S]*?featuredPodium\[0\][\s\S]*?520, 510, 400, 350\)[\s\S]*?leaderboardTitle, 72, 900\)/i
+    /"Podium leaders", 72, 416\)[\s\S]*?featuredPodium\[1\][\s\S]*?72, 506, 408, 340\)[\s\S]*?featuredPodium\[0\][\s\S]*?516, 466, 408, 380\)[\s\S]*?modernLeaderboardTitle, 72, 906\)/i
   );
   assert.match(
     brandedDownload,
-    /const rankText = String\(rank\);\s*context\.font = `950 \$\{rankText\.length > 2 \? 22 : 32\}px "DM Sans", "Segoe UI", sans-serif`/i
+    /const rankText = String\(rank\);\s*context\.font = `950 \$\{rankText\.length > 2 \? 18 : 24\}px "DM Sans", "Segoe UI", sans-serif`/i
   );
   assert.match(
     brandedDownload,
-    /context\.font = '900 32px "DM Sans", "Segoe UI", sans-serif';\s*context\.fillText\(resultCanvasFitText\(context, row\.name/i
+    /context\.font = '900 27px "DM Sans", "Segoe UI", sans-serif';\s*context\.fillText\(resultCanvasFitText\(context, row\.name/i
   );
   assert.match(
     brandedDownload,
-    /context\.font = '950 32px "DM Sans", "Segoe UI", sans-serif';\s*context\.fillText\(display\.compactScore/i
+    /context\.font = '950 27px "DM Sans", "Segoe UI", sans-serif';\s*context\.fillText\(display\.compactScore/i
   );
   assert.match(
     brandedDownload,
-    /context\.font = '750 22px "DM Sans", "Segoe UI", sans-serif';\s*context\.fillText\(`\$\{row\.games\}[\s\S]*?context\.font = '750 22px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?context\.fillText\(`\$\{rowStatus\}/i
+    /context\.font = '750 17px "DM Sans", "Segoe UI", sans-serif';\s*context\.fillText\(`\$\{row\.games\}[\s\S]*?context\.font = '750 17px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?context\.fillText\(`\$\{rowStatus\}/i
   );
 
   assert.match(
     podiumPainter,
-    /const metaY = y \+ height - \(isPrimaryCard \? 28 : 18\)/i
+    /const heightAdjustment = Math\.max\(0, height - 300\)/i
   );
   assert.match(
     podiumPainter,
-    /context\.font = `950 \$\{isPrimaryCard \? 35 : 31\}px "DM Sans", "Segoe UI", sans-serif`/i
+    /context\.font = '950 31px "DM Sans", "Segoe UI", sans-serif'/i
   );
   assert.match(
     podiumPainter,
-    /const scoreFontSize = isPrimaryCard \? 54 : 48;[\s\S]*?context\.font = `950 \$\{scoreFontSize\}px "DM Sans", "Segoe UI", sans-serif`/i
+    /const scoreFontSize = 46;[\s\S]*?context\.font = `950 \$\{scoreFontSize\}px "DM Sans", "Segoe UI", sans-serif`/i
   );
   assert.match(
     podiumPainter,
-    /context\.font = '750 20px "DM Sans", "Segoe UI", sans-serif';\s*const podiumMeta =/i
+    /context\.font = '900 24px "DM Sans", "Segoe UI", sans-serif';\s*const podiumMeta =/i
   );
 
   assert.match(
     statPainter,
-    /context\.font = '900 36px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?context\.font = '800 18px "DM Sans", "Segoe UI", sans-serif'/i
+    /context\.font = '950 34px "DM Sans", "Segoe UI", sans-serif';[\s\S]*?context\.font = '850 16px "DM Sans", "Segoe UI", sans-serif'/i
   );
   assert.match(
     brandedDownload,
-    /const footerY = canvasHeight - footerHeight;[\s\S]*?const poweredLabel = "Powered by ";[\s\S]*?const poweredBrand = "Paddle Rage Pickleball CDO";[\s\S]*?context\.measureText\(poweredLabel\)[\s\S]*?context\.measureText\(poweredBrand\)[\s\S]*?context\.fillText\(poweredLabel, poweredX, footerY \+ 56\);[\s\S]*?context\.fillStyle = "#c9f31d";[\s\S]*?context\.fillText\(poweredBrand, poweredX, footerY \+ 56\);[\s\S]*?footerY \+ 54/i
+    /const footerY = canvasHeight - footerHeight;[\s\S]*?const poweredLabel = "Powered by ";[\s\S]*?const poweredBrand = "Paddle Rage Pickleball CDO";[\s\S]*?context\.measureText\(poweredLabel\)[\s\S]*?context\.measureText\(poweredBrand\)[\s\S]*?context\.fillText\(poweredLabel, poweredX, footerY \+ 62\);[\s\S]*?context\.fillStyle = "#c9f31d";[\s\S]*?context\.fillText\(poweredBrand, poweredX, footerY \+ 62\);[\s\S]*?footerY \+ 62/i
   );
 });
 
@@ -1296,7 +1296,7 @@ test("LIVE court card mirrors the READY card system with a cyan state treatment"
     managerCss,
     /\.pm2-court-card\.is-live \.pm2-result-btn\s*\{[^}]*min-height:\s*56px[^}]*border-radius:\s*11px[^}]*font-size:\s*1rem/is
   );
-  assert.match(admin, /play-manager\.css\?v=20260729-dispatch-type-v2/i);
+  assert.match(admin, /play-manager\.css\?v=20260830-adaptive-v1/i);
 });
 
 test("court cards share one compact height and use the modern indigo-coral team palette", () => {
@@ -1582,7 +1582,7 @@ test("Play Manager stores editable six-star player skills and uses them for bala
   assert.match(manager, /name="skillLevel"/i);
   assert.match(manager, />★<\/span>/i);
   assert.match(manager, /Set skill/i);
-  assert.match(manager, /New players start at 1-star Beginner/i);
+  assert.match(manager, /New players start at 3-star Intermediate/i);
   assert.match(manager, /data-pm-action="edit-player-skill"/i);
   assert.match(manager, /class="pm2-player-identity"[\s\S]*?data-pm-action="edit-player-skill"[\s\S]*?data-player-id="\$\{escapeHtml\(id\)\}"/i);
   assert.match(manager, /class="pm2-player-skill-icon"[^>]*>★<\/span>/i);
@@ -1607,9 +1607,9 @@ test("Play Manager stores editable six-star player skills and uses them for bala
     managerCss,
     /\.pm2-team-skill-total\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?letter-spacing:\s*0/i
   );
-  assert.match(admin, /supabase-config\.js\?v=20260729-head-to-head-v1/i);
-  assert.match(admin, /open-play-rating\.js\?v=20260729-head-to-head-v1/i);
-  assert.match(admin, /play-manager\.js\?v=20260729-result-footer-v1/i);
+  assert.match(admin, /supabase-config\.js\?v=20260830-premium-sync-v1/i);
+  assert.match(admin, /open-play-rating\.js\?v=20260729-paddle-rage-three-games-v1/i);
+  assert.match(admin, /play-manager\.js\?v=20260830-adaptive-v1/i);
   assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
 });
 

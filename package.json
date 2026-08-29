@@ -7,8 +7,8 @@
     "dev": "node tools/local-server.js",
     "build:vendor:qrcode": "esbuild tools/qrcode-browser-entry.js --bundle --minify --platform=browser --format=iife --outfile=qrcode.min.js",
     "seed:demo": "node seed-demo-data.js",
-    "test": "node --test booking-balance.test.js revenue-report.test.js supabase-hardening.test.js turnstile-hardening.test.js balance-notification-lease.test.js integration-security.test.js play-manager-live-share.test.js open-play-rating.test.js",
-    "check": "node --check booking-balance.js && node --check finance-core.js && node --check open-play-rating.js && node --check play-manager.js && node --check player-live.js && node --check supabase-config.js && node --check create-accounts.js && node --check setup-db.js && node --check seed-demo-data.js"
+    "test": "node --test booking-balance.test.js revenue-report.test.js supabase-hardening.test.js turnstile-hardening.test.js balance-notification-lease.test.js integration-security.test.js play-manager-live-share.test.js open-play-rating.test.js open-play-rotation.test.js admin-host-booking-status.test.js mobile-court-photo.test.js paddle-premium-sync.test.js",
+    "check": "node --check booking-balance.js && node --check finance-core.js && node --check open-play-rating.js && node --check open-play-rotation.js && node --check play-manager.js && node --check player-live.js && node --check supabase-config.js && node --check create-accounts.js && node --check setup-db.js && node --check seed-demo-data.js && node tools/check-index-inline.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",
