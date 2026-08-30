@@ -3021,6 +3021,8 @@ body.host-mode .courts { padding-bottom:140px; }
   border-top:1px solid rgba(var(--ticket-accent-rgb),.105);
   background:rgba(var(--ticket-accent-rgb),.025);
 }
+.inv-ticket-summary > .inv-status-strip:first-child { border-top:0; }
+.inv-status-strip + .inv-session-card { border-top:1px solid rgba(var(--ticket-accent-rgb),.105); }
 .inv-timeline { margin:0; padding:0; border:0; background:transparent; }
 .inv-card[data-invoice-state="confirmed"] .inv-timeline,
 .inv-card[data-invoice-state="rejected"] .inv-timeline { display:none; }
@@ -3903,6 +3905,14 @@ try {
 
     <div class="inv-scroll-region">
       <div class="inv-ticket-summary">
+        <section class="inv-status-strip" aria-label="Booking progress and next step">
+          <div class="inv-timeline" id="iTimeline"></div>
+          <div class="inv-guidance">
+            <div class="inv-next" id="iStatusSummary"></div>
+            <div class="inv-email-note" id="iEmailNote" hidden></div>
+          </div>
+        </section>
+
         <section class="inv-session-card" aria-labelledby="iSessionLabel">
           <div class="inv-session-heading">
             <div class="inv-section-label" id="iSessionLabel">Session</div>
@@ -3947,14 +3957,6 @@ try {
           <div class="inv-field"><dt>Contact</dt><dd id="iContact">—</dd></div>
           <div class="inv-field inv-field--wide"><dt>Email</dt><dd id="iEmail">—</dd></div>
         </dl>
-
-        <section class="inv-status-strip" aria-label="Booking progress and next step">
-          <div class="inv-timeline" id="iTimeline"></div>
-          <div class="inv-guidance">
-            <div class="inv-next" id="iStatusSummary"></div>
-            <div class="inv-email-note" id="iEmailNote" hidden></div>
-          </div>
-        </section>
       </div>
     </div>
 

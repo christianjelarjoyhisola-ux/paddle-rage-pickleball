@@ -90,7 +90,7 @@ test('ticket keeps actions visible and uses a readable single-column mobile flow
   );
 
   const ticketMarkup = sourceBetween('<div class="inv-ticket-summary">', '</div>\n    </div>\n\n    <footer class="inv-actions">');
-  const flow = ['inv-session-card', 'inv-payment-card', 'inv-customer-grid', 'inv-status-strip'];
+  const flow = ['inv-status-strip', 'inv-session-card', 'inv-payment-card', 'inv-customer-grid'];
   for (let index = 1; index < flow.length; index += 1) {
     assert.ok(
       ticketMarkup.indexOf(flow[index - 1]) < ticketMarkup.indexOf(flow[index]),
