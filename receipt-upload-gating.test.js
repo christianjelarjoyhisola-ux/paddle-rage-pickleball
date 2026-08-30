@@ -27,12 +27,59 @@ test('court receipt starts uploading immediately and must finish before Continue
   assert.match(page, /if \(ready && consentAgreed\) button\.disabled = false/);
   assert.match(page, /Agree Below to Continue/);
   assert.match(page, /Continue — Verify Payment/);
-  assert.match(page, /Upload complete\. Continue to verify your payment/);
+  assert.match(page, /Upload complete — ready to verify/);
+  assert.match(page, /Upload complete\. Agree below to continue/);
   assert.match(page, /!\$\('bookingPolicyAgree'\)\?\.checked[\s\S]*?Please agree to the booking and payment policy/);
   assert.match(
     automaticUpload,
     /const stale(?:BeforeUpload)? = sequence !== _receiptUploadSequence \|\|[\s\S]*?file !== _receiptFile \|\|[\s\S]*?bookingRef !== _reservedRef \|\|[\s\S]*?paymentMethod !==/,
   );
+});
+
+test('court receipt shows an accessible animated upload state', () => {
+  const statusTag = page.match(/<div[^>]*id="bReceiptStatus"[^>]*>/)?.[0] || '';
+  const statusHelper = page.slice(
+    page.indexOf('function setBookingReceiptUploadMessage'),
+    page.indexOf('function receiptUploadStateMatchesCurrentContext'),
+  );
+  const continueState = page.slice(
+    page.indexOf('function setBookingReceiptContinueState'),
+    page.indexOf('function beginAutomaticReceiptUpload'),
+  );
+  const clearing = page.slice(
+    page.indexOf('function clearReceipt(options = {})'),
+    page.indexOf('async function verifyUploadedReceipt'),
+  );
+  const verifier = page.slice(
+    page.indexOf('async function verifyUploadedReceipt'),
+    page.indexOf('function sendCustomerConfirmationEmail'),
+  );
+  const reducedMotionStart = page.indexOf(
+    '@media(prefers-reduced-motion:reduce)',
+    page.indexOf('@keyframes receiptStatePop'),
+  );
+  const reducedMotion = page.slice(reducedMotionStart, page.indexOf('.booking-policy-check', reducedMotionStart));
+
+  assert.match(statusTag, /class="bpay-upload-status"/);
+  assert.match(statusTag, /role="status"/);
+  assert.match(statusTag, /aria-live="polite"/);
+  assert.match(statusTag, /aria-atomic="true"/);
+  assert.match(page, /\.bpay-upload-status\[data-state="uploading"\]::before[\s\S]*?animation:receiptUploadSpin[^;]*infinite/);
+  assert.match(page, /\.bpay-upload-status\[data-state="uploading"\]::after[\s\S]*?animation:receiptUploadSweep[^;]*infinite/);
+  assert.match(page, /#wizNextBtn\.is-receipt-uploading::before[\s\S]*?animation:receiptUploadSpin[^;]*infinite/);
+  assert.match(page, /@keyframes receiptUploadSpin/);
+  assert.match(page, /@keyframes receiptUploadSweep/);
+  assert.match(reducedMotion, /\.bpay-upload-status\[data-state="uploading"\]::before/);
+  assert.match(reducedMotion, /#wizNextBtn\.is-receipt-uploading::before/);
+  assert.match(reducedMotion, /animation:none !important/);
+  assert.match(statusHelper, /status\.dataset\.state = kind/);
+  assert.match(statusHelper, /region\.dataset\.uploadState = kind/);
+  assert.match(statusHelper, /region\.setAttribute\('aria-busy', String\(kind === 'uploading'\)\)/);
+  assert.match(statusHelper, /kind === 'failed' \? 'assertive' : 'polite'/);
+  assert.match(continueState, /button\.classList\.toggle\('is-receipt-uploading', uploadActive\)/);
+  assert.match(continueState, /button\.setAttribute\('aria-busy', String\(uploadActive\)\)/);
+  assert.match(clearing, /setBookingReceiptUploadMessage\('idle', ''\)/);
+  assert.match(verifier, /setBookingReceiptUploadMessage\('verifying', 'Checking payment details…'\)/);
 });
 
 test('final verification reuses the exact staged receipt checkpoint', () => {

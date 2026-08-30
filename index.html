@@ -1099,6 +1099,152 @@ select.fi option { background:var(--card); }
 }
 .bpay-receipt-preview { display:none; margin-top:7px; align-items:center; gap:9px; }
 .bpay-receipt-preview img { width:42px; height:42px; object-fit:cover; border-radius:7px; border:1px solid var(--border); }
+.bpay-upload-status {
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  min-height:42px;
+  margin-top:8px;
+  padding:10px 12px 10px 39px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  color:var(--muted);
+  font-size:.76rem;
+  font-weight:800;
+  line-height:1.4;
+  transition:background .2s,border-color .2s,color .2s,box-shadow .2s;
+}
+.bpay-upload-status::before {
+  position:absolute;
+  left:12px;
+  top:calc(50% - 9px);
+  z-index:2;
+  display:grid;
+  width:18px;
+  height:18px;
+  box-sizing:border-box;
+  place-items:center;
+}
+.bpay-upload-status[data-state="uploading"] {
+  background:linear-gradient(135deg,rgba(var(--lime-rgb),.14),rgba(var(--lime-rgb),.055));
+  border-color:rgba(var(--lime-rgb),.5);
+  color:var(--lime-ink);
+  box-shadow:0 0 0 1px rgba(var(--lime-rgb),.08),0 8px 24px rgba(var(--lime-rgb),.08);
+}
+.bpay-upload-status[data-state="uploading"]::before,
+.bpay-upload-status[data-state="verifying"]::before {
+  content:'';
+  border:2px solid rgba(var(--lime-rgb),.3);
+  border-top-color:var(--lime);
+  border-radius:50%;
+  animation:receiptUploadSpin .72s linear infinite;
+}
+.bpay-upload-status[data-state="uploading"]::after {
+  content:'';
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:3px;
+  z-index:1;
+  background:linear-gradient(90deg,transparent 0%,var(--lime) 46%,transparent 76%);
+  transform:translateX(-100%);
+  animation:receiptUploadSweep 1.15s ease-in-out infinite;
+}
+.bpay-upload-status[data-state="uploaded"] {
+  background:rgba(var(--lime-rgb),.11);
+  border-color:rgba(var(--lime-rgb),.42);
+  color:var(--lime-ink);
+}
+.bpay-upload-status[data-state="uploaded"]::before {
+  content:'\2713';
+  border-radius:50%;
+  background:var(--lime);
+  color:#071015;
+  font-size:.72rem;
+  font-weight:1000;
+  animation:receiptStatePop .22s ease-out both;
+}
+.bpay-upload-status[data-state="verifying"] {
+  background:rgba(var(--ac),.1);
+  border-color:rgba(var(--ac),.36);
+  color:var(--accent);
+}
+.bpay-upload-status[data-state="failed"] {
+  background:rgba(229,57,53,.09);
+  border-color:rgba(229,57,53,.38);
+  color:#e53935;
+}
+.bpay-upload-status[data-state="failed"]::before {
+  content:'!';
+  border-radius:50%;
+  background:#e53935;
+  color:#fff;
+  font-size:.72rem;
+  font-weight:1000;
+}
+.bpay-upload-status[data-state="review"] {
+  background:rgba(184,126,0,.1);
+  border-color:rgba(184,126,0,.34);
+  color:#b87e00;
+}
+.bpay-upload-status[data-state="review"]::before {
+  content:'\2026';
+  border:2px solid currentColor;
+  border-radius:50%;
+  font-size:.76rem;
+  line-height:1;
+}
+.bpay-receipt[data-upload-state="uploading"] .bpay-receipt-preview img {
+  border-color:rgba(var(--lime-rgb),.72);
+  box-shadow:0 0 0 2px rgba(var(--lime-rgb),.14),0 0 18px rgba(var(--lime-rgb),.2);
+  animation:receiptUploadThumbPulse 1.25s ease-in-out infinite;
+}
+#wizNextBtn.is-receipt-uploading::before {
+  content:'';
+  width:15px;
+  height:15px;
+  box-sizing:border-box;
+  border:2px solid rgba(255,255,255,.42);
+  border-top-color:#fff;
+  border-radius:50%;
+  animation:receiptUploadSpin .72s linear infinite;
+}
+.bk-modal-ft #wizNextBtn.is-receipt-uploading:disabled {
+  opacity:.92;
+  background:linear-gradient(135deg,var(--cta),var(--cta-dark));
+  box-shadow:0 0 0 1px rgba(var(--lime-rgb),.16),0 6px 22px rgba(var(--lime-rgb),.14);
+}
+@keyframes receiptUploadSpin { to { transform:rotate(360deg); } }
+@keyframes receiptUploadSweep {
+  0% { transform:translateX(-100%); }
+  100% { transform:translateX(100%); }
+}
+@keyframes receiptUploadThumbPulse {
+  0%,100% { opacity:.64; transform:scale(.98); }
+  50% { opacity:1; transform:scale(1); }
+}
+@keyframes receiptStatePop {
+  from { opacity:0; transform:scale(.55); }
+  to { opacity:1; transform:scale(1); }
+}
+@media(max-width:520px) {
+  .bpay-upload-status { min-height:50px; padding-top:12px; padding-bottom:12px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .bpay-upload-status[data-state="uploading"]::before,
+  .bpay-upload-status[data-state="uploading"]::after,
+  .bpay-upload-status[data-state="verifying"]::before,
+  .bpay-upload-status[data-state="uploaded"]::before,
+  .bpay-receipt[data-upload-state="uploading"] .bpay-receipt-preview img,
+  #wizNextBtn.is-receipt-uploading::before {
+    animation:none !important;
+  }
+  .bpay-upload-status[data-state="uploading"]::after {
+    opacity:.68;
+    transform:none;
+  }
+}
 .booking-policy-check {
   margin-top:8px;
   display:grid;
@@ -3239,7 +3385,7 @@ try {
               </div>
 
               <!-- Receipt screenshot upload (auto-verification) -->
-              <div class="bpay-receipt">
+              <div class="bpay-receipt" id="bReceiptUploadRegion" aria-busy="false">
                 <label class="bpay-ref-label" style="display:block;margin-bottom:6px">
                   Proof of Payment <span style="color:#e53935;font-size:.8rem">*</span>
                 </label>
@@ -3253,7 +3399,7 @@ try {
                   <span id="bReceiptName" style="font-size:.76rem;color:var(--text);flex:1;word-break:break-all"></span>
                   <button type="button" onclick="clearReceipt()" style="background:none;border:none;color:#e53935;font-size:.74rem;font-weight:700;cursor:pointer">✕ Remove</button>
                 </div>
-                <div id="bReceiptStatus" role="status" aria-live="polite" style="display:none;margin-top:8px;font-size:.78rem;font-weight:700;border-radius:8px;padding:8px 10px;line-height:1.5"></div>
+                <div id="bReceiptStatus" class="bpay-upload-status" role="status" aria-live="polite" aria-atomic="true" style="display:none"></div>
                 <div id="bReceiptRequired" class="bpay-help">
                   Selecting a receipt starts its secure upload for payment verification.<br>
                   GCash to GCash only.<br>BDO Pay/InstaPay receipts will be rejected.<br>Please choose the correct payment method before paying.
@@ -6003,6 +6149,9 @@ function initBookingValidationHighlights() {
       }
       // File selection stages the private receipt immediately. This agreement
       // gates OCR verification and final booking submission, not the upload.
+      if (_receiptUploadState?.status === 'uploaded') {
+        setBookingReceiptUploadMessage('uploaded', bookingReceiptUploadedMessage());
+      }
       setBookingReceiptContinueState(_receiptUploadState?.status || 'idle');
     });
   }
@@ -7579,19 +7728,35 @@ function setBookingSubmissionControlsLocked(locked) {
   });
 }
 
+function bookingReceiptUploadedMessage() {
+  return $('bookingPolicyAgree')?.checked
+    ? 'Upload complete — ready to verify.'
+    : 'Upload complete. Agree below to continue.';
+}
+
 function setBookingReceiptUploadMessage(kind, message) {
   const status = $('bReceiptStatus');
   if (!status) return;
-  const styles = {
-    uploading: ['rgba(74,154,220,.1)', '#4b5563'],
-    uploaded: ['rgba(var(--ac),.12)', 'var(--accent)'],
-    failed: ['rgba(229,57,53,.1)', '#e53935'],
-  };
-  const [background, color] = styles[kind] || styles.uploading;
+  const region = $('bReceiptUploadRegion');
+  if (kind === 'idle') {
+    status.style.display = 'none';
+    status.textContent = '';
+    status.removeAttribute('data-state');
+    status.setAttribute('aria-live', 'polite');
+    if (region) {
+      region.removeAttribute('data-upload-state');
+      region.setAttribute('aria-busy', 'false');
+    }
+    return;
+  }
   status.style.display = '';
-  status.style.background = background;
-  status.style.color = color;
+  status.dataset.state = kind;
+  status.setAttribute('aria-live', kind === 'failed' ? 'assertive' : 'polite');
   status.textContent = message;
+  if (region) {
+    region.dataset.uploadState = kind;
+    region.setAttribute('aria-busy', String(kind === 'uploading'));
+  }
 }
 
 function receiptUploadStateMatchesCurrentContext(state = _receiptUploadState) {
@@ -7661,7 +7826,11 @@ function invalidateBookingReceiptUpload(options = {}) {
 
 function setBookingReceiptContinueState(kind = 'idle') {
   const button = $('wizNextBtn');
-  if (!button || wizStep !== 5) return;
+  if (!button) return;
+  const uploadActive = kind === 'uploading' || _receiptUploadState?.status === 'uploading';
+  button.classList.toggle('is-receipt-uploading', uploadActive);
+  button.setAttribute('aria-busy', String(uploadActive));
+  if (wizStep !== 5) return;
   if (_bookingSubmissionInFlight) {
     button.disabled = true;
     return;
@@ -7738,7 +7907,7 @@ function beginAutomaticReceiptUpload(file = _receiptFile) {
 
   const sequence = ++_receiptUploadSequence;
   _receiptFinalRetryNeeded = false;
-  setBookingReceiptUploadMessage('uploading', 'Uploading receipt securely… Please wait.');
+  setBookingReceiptUploadMessage('uploading', 'Uploading receipt securely… Keep this window open.');
   setBookingReceiptContinueState('uploading');
   const discardBarrier = _receiptDiscardPromise.catch(() => null);
   const promise = discardBarrier.then(() => {
@@ -7773,7 +7942,7 @@ function beginAutomaticReceiptUpload(file = _receiptFile) {
       result,
       promise: Promise.resolve(result),
     };
-    setBookingReceiptUploadMessage('uploaded', '✓ Upload complete. Continue to verify your payment.');
+    setBookingReceiptUploadMessage('uploaded', bookingReceiptUploadedMessage());
     setBookingReceiptContinueState('uploaded');
     return result;
   }).catch(error => {
@@ -7793,7 +7962,7 @@ function beginAutomaticReceiptUpload(file = _receiptFile) {
     };
     setBookingReceiptUploadMessage(
       'failed',
-      `Upload failed: ${extractErrMsg(error)} Tap Retry Receipt Upload.`,
+      `Upload failed: ${extractErrMsg(error)} Your receipt is still selected — tap Retry Receipt Upload.`,
     );
     setBookingReceiptContinueState('failed');
     return null;
@@ -7923,7 +8092,7 @@ function clearReceipt(options = {}) {
   if ($('bReceiptName')) $('bReceiptName').textContent = '';
   if ($('bReceiptPreviewWrap')) $('bReceiptPreviewWrap').style.display = 'none';
   const drop = $('bReceiptDrop'); if (drop) drop.style.display = '';
-  const st = $('bReceiptStatus'); if (st) st.style.display = 'none';
+  setBookingReceiptUploadMessage('idle', '');
   setBookingReceiptContinueState('idle');
   return true;
 }
@@ -7935,8 +8104,7 @@ async function verifyUploadedReceipt(
   receiptFile = _receiptFile,
   stagedResult = null,
 ) {
-  const st = $('bReceiptStatus');
-  if (st) { st.style.display = ''; st.style.background = 'rgba(74,154,220,.1)'; st.style.color = '#4b5563'; st.textContent = '🔎 Verifying your receipt…'; }
+  setBookingReceiptUploadMessage('verifying', 'Checking payment details…');
   try {
     if (!receiptFile) throw new Error('Receipt screenshot is required.');
     const staged = stagedResult?.stagedReceiptPath
@@ -7963,11 +8131,9 @@ async function verifyUploadedReceipt(
       ? res.status
       : 'manual_review';
     const msg = res?.publicReason || res?.message || 'Receipt received.';
-    if (st) {
-      if (status === 'auto_approved') { st.style.background = 'rgba(var(--ac),.12)'; st.style.color = 'var(--accent)'; st.textContent = 'Receipt passed the initial check. Finalizing your registration...'; }
-      else if (status === 'rejected') { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = '⚠️ ' + msg; }
-      else { st.style.background = 'rgba(184,126,0,.12)'; st.style.color = '#b87e00'; st.textContent = '🕓 ' + msg; }
-    }
+    if (status === 'auto_approved') setBookingReceiptUploadMessage('uploaded', 'Receipt passed the initial check. Finalizing your registration…');
+    else if (status === 'rejected') setBookingReceiptUploadMessage('failed', msg);
+    else setBookingReceiptUploadMessage('review', msg);
     return {
       status,
       message: msg,
@@ -7982,11 +8148,7 @@ async function verifyUploadedReceipt(
       bookingStatus: res?.bookingStatus || null,
     };
   } catch (err) {
-    if (st) {
-      st.style.background = 'rgba(229,57,53,.1)';
-      st.style.color = '#e53935';
-      st.textContent = 'Receipt upload failed. Please attach the screenshot again and retry.';
-    }
+    setBookingReceiptUploadMessage('failed', 'Receipt verification failed. Your upload is still selected — please retry.');
     throw err;
   }
 }
