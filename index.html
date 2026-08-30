@@ -6169,7 +6169,16 @@ function wizGoTo(n) {
     }
   }
   $('wizBackBtn').textContent = n <= wizStartStep ? '✕ Cancel' : '← Back';
-  $('wizNextBtn').textContent = n === 5 ? '🎾 Confirm Booking' : 'Next →';
+  const nextButton = $('wizNextBtn');
+  nextButton.textContent = n === 5 ? '🎾 Confirm Booking' : 'Next →';
+  // Receipt upload locking belongs only to the Payment step. The wizard uses
+  // this same button on every step, so always clear stale upload state before
+  // returning to Court, Date & Time, Details, or Payment Method.
+  if (n !== 5) {
+    nextButton.disabled = false;
+    nextButton.classList.remove('is-receipt-uploading');
+    nextButton.setAttribute('aria-busy', 'false');
+  }
   if (n === 2) { renderSlots(); }
   if (n === 3) { updateWiz3Summary(); }
   if (n === 4) {
@@ -7827,10 +7836,15 @@ function invalidateBookingReceiptUpload(options = {}) {
 function setBookingReceiptContinueState(kind = 'idle') {
   const button = $('wizNextBtn');
   if (!button) return;
+  if (wizStep !== 5) {
+    button.disabled = false;
+    button.classList.remove('is-receipt-uploading');
+    button.setAttribute('aria-busy', 'false');
+    return;
+  }
   const uploadActive = kind === 'uploading' || _receiptUploadState?.status === 'uploading';
   button.classList.toggle('is-receipt-uploading', uploadActive);
   button.setAttribute('aria-busy', String(uploadActive));
-  if (wizStep !== 5) return;
   if (_bookingSubmissionInFlight) {
     button.disabled = true;
     return;

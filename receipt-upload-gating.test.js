@@ -82,6 +82,103 @@ test('court receipt shows an accessible animated upload state', () => {
   assert.match(verifier, /setBookingReceiptUploadMessage\('verifying', 'Checking payment details…'\)/);
 });
 
+test('leaving receipt upload restores the shared Next button on earlier wizard steps', () => {
+  const continueState = page.slice(
+    page.indexOf('function setBookingReceiptContinueState'),
+    page.indexOf('function beginAutomaticReceiptUpload'),
+  );
+  const navigation = page.slice(
+    page.indexOf('function wizGoTo'),
+    page.indexOf('async function wizNext'),
+  );
+
+  const runRegression = new Function(`
+    const nextButton = {
+      disabled: false,
+      textContent: '',
+      attrs: new Map(),
+      classes: new Set(),
+      classList: {
+        toggle(name, force) {
+          if (force) nextButton.classes.add(name);
+          else nextButton.classes.delete(name);
+        },
+        remove(name) { nextButton.classes.delete(name); },
+      },
+      setAttribute(name, value) { this.attrs.set(name, String(value)); },
+    };
+    const simpleNode = () => ({
+      textContent: '',
+      value: '',
+      checked: false,
+      classList: { toggle() {}, remove() {} },
+    });
+    const nodes = {
+      wizNextBtn: nextButton,
+      wizBackBtn: simpleNode(),
+      bPay: { value: 'gcash' },
+      bookingPolicyAgree: { checked: false },
+    };
+    for (let i = 1; i <= 5; i += 1) {
+      nodes['wizPanel' + i] = simpleNode();
+      nodes['wizStep' + i] = simpleNode();
+    }
+    const $ = id => nodes[id] || null;
+    const document = { querySelector: () => ({ scrollTop: 0 }) };
+    let wizStep = 1;
+    const wizStartStep = 1;
+    let _receiptUploadState = { status: 'uploading' };
+    let _bookingSubmissionInFlight = false;
+    let _receiptFile = { name: 'receipt.jpg' };
+    let _reservedRef = 'PR-REGRESSION';
+    let _receiptFinalRetryNeeded = false;
+    const renderSlots = () => {};
+    const updateWiz3Summary = () => {};
+    const updatePrice = () => {};
+    const preparePaymentStep = () => {};
+    const saveGuestBookingResume = () => {};
+    const isDigitalPayMethod = method => method === 'gcash';
+    const receiptUploadStateMatchesCurrentContext = () => true;
+    const bookingReceiptUploadReady = () => false;
+
+    ${continueState}
+    ${navigation}
+
+    wizGoTo(5);
+    const duringUpload = {
+      disabled: nextButton.disabled,
+      busy: nextButton.attrs.get('aria-busy'),
+      uploading: nextButton.classes.has('is-receipt-uploading'),
+    };
+    wizGoTo(3);
+    // A receipt promise may settle after the player has already gone Back.
+    // Late upload updates must never re-lock a non-Payment wizard step.
+    setBookingReceiptContinueState('uploading');
+    return {
+      duringUpload,
+      afterBack: {
+        disabled: nextButton.disabled,
+        busy: nextButton.attrs.get('aria-busy'),
+        uploading: nextButton.classes.has('is-receipt-uploading'),
+        label: nextButton.textContent,
+      },
+    };
+  `);
+
+  const state = runRegression();
+  assert.deepEqual(state.duringUpload, {
+    disabled: true,
+    busy: 'true',
+    uploading: true,
+  });
+  assert.deepEqual(state.afterBack, {
+    disabled: false,
+    busy: 'false',
+    uploading: false,
+    label: 'Next →',
+  });
+});
+
 test('final verification reuses the exact staged receipt checkpoint', () => {
   const verifier = page.slice(
     page.indexOf('async function verifyUploadedReceipt'),
