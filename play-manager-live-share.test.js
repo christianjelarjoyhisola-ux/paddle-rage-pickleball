@@ -4,7 +4,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const root = __dirname;
-const read = file => fs.readFileSync(path.join(root, file), "utf8");
+const read = file => fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n?/g, "\n");
 const migration = read("supabase/migrations/20260725110000_play_manager_live_sharing.sql");
 const lifecycleMigration = read("supabase/migrations/20260725120000_play_manager_live_share_lifecycle.sql");
 const mutationGuardMigration = read("supabase/migrations/20260725130000_play_manager_session_mutation_guard.sql");
