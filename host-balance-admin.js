@@ -7,6 +7,8 @@
     loading: null,
     current: null,
     receiptLoaded: false,
+    depositReceiptLoaded: false,
+    activeReceipt: 'balance',
     busy: false,
     lastFocus: null,
     originalRenderPaymentReview: null,
@@ -87,6 +89,47 @@
     });
   }
 
+  function paymentAmount(payment, camelKey, snakeKey) {
+    const amount = Number(payment?.[camelKey] ?? payment?.[snakeKey] ?? 0);
+    return Number.isFinite(amount) ? Math.max(0, amount) : 0;
+  }
+
+  function paymentValue(payment, camelKey, snakeKey, fallback = '') {
+    return String(payment?.[camelKey] ?? payment?.[snakeKey] ?? fallback).trim();
+  }
+
+  function humanizeFlag(flag) {
+    const label = String(flag || '').trim().replace(/_+/g, ' ').toLowerCase();
+    return label ? label.charAt(0).toUpperCase() + label.slice(1) : 'Verification warning';
+  }
+
+  function secureReceiptUrl(value) {
+    const url = new URL(String(value || ''));
+    if (url.protocol !== 'https:') throw new Error('Receipt link is not secure.');
+    return url.href;
+  }
+
+  function depositBookingRefs(payment) {
+    const refs = [];
+    const add = value => {
+      const ref = String(value || '').trim();
+      if (ref && !refs.includes(ref)) refs.push(ref);
+    };
+    add(payment?.bookingRef ?? payment?.booking_ref);
+    const collection = payment?.bookingRefs ?? payment?.booking_refs;
+    if (Array.isArray(collection)) collection.forEach(add);
+    return refs;
+  }
+
+  async function loadDepositBooking(payment) {
+    const db = global.DB;
+    if (!db?.getBookingByRef) throw new Error('Deposit record service is unavailable.');
+    const refs = depositBookingRefs(payment);
+    if (!refs.length) throw new Error('Deposit booking reference is unavailable.');
+    const rows = await Promise.all(refs.map(ref => db.getBookingByRef(ref).catch(() => null)));
+    return rows.find(row => row?.receiptImageUrl) || rows.find(Boolean) || null;
+  }
+
   function role() {
     try { return String(global.Auth?.getSession?.()?.role || '').toLowerCase(); }
     catch (_) { return ''; }
@@ -135,29 +178,81 @@
       .hba-status{font-size:.71rem;font-weight:850;color:var(--yellow)}
       .hba-booking-pending{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:4px 8px;border:1px solid rgba(255,193,7,.3);border-radius:999px;background:rgba(255,193,7,.1);color:var(--yellow);font-size:.68rem;font-weight:900;line-height:1.2}
       .hba-empty{padding:24px;text-align:center;color:var(--muted);font-size:.82rem;line-height:1.5}
-      .hba-overlay{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(2,8,5,.84);backdrop-filter:blur(8px)}
+      .hba-overlay{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(2,8,5,.88);backdrop-filter:blur(12px)}
       .hba-overlay[hidden]{display:none}
-      .hba-modal{width:min(620px,100%);max-height:min(90dvh,820px);overflow:auto;border:1px solid rgba(201,207,67,.24);border-radius:19px;background:var(--surface);box-shadow:0 28px 90px rgba(0,0,0,.58)}
-      .hba-modal-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--border);background:var(--surface)}
-      .hba-modal-head h3{margin:0;font-size:1rem}
+      .hba-modal{width:min(960px,100%);max-height:min(94dvh,920px);overflow:auto;border:1px solid rgba(201,207,67,.28);border-radius:22px;background:linear-gradient(165deg,var(--surface),#071008 72%);box-shadow:0 32px 110px rgba(0,0,0,.68)}
+      .hba-modal-head{position:sticky;top:0;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border);background:rgba(7,16,8,.96);backdrop-filter:blur(16px)}
+      .hba-modal-head h3{margin:2px 0 0;font-size:1.05rem;letter-spacing:.015em}
+      .hba-modal-kicker{color:var(--pickle-lime);font-size:.61rem;font-weight:950;letter-spacing:.1em;text-transform:uppercase}
       .hba-close{width:40px;height:40px;border:1px solid var(--border);border-radius:11px;background:var(--input);color:var(--text);font-size:1.2rem;cursor:pointer}
-      .hba-modal-body{padding:18px}
-      .hba-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:14px}
-      .hba-summary>div{padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--input);font-size:.77rem;overflow-wrap:anywhere}
+      .hba-modal-body{padding:18px 20px 20px}
+      .hba-state-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+      .hba-state-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid rgba(201,207,67,.26);border-radius:999px;background:rgba(201,207,67,.08);color:var(--pickle-lime);font-size:.65rem;font-weight:900;letter-spacing:.035em}
+      .hba-state-chip.review{border-color:rgba(255,193,7,.3);background:rgba(255,193,7,.09);color:var(--yellow)}
+      .hba-money-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:10px}
+      .hba-money-strip>div{padding:12px 13px;border:1px solid var(--border);border-radius:12px;background:linear-gradient(145deg,var(--input),rgba(201,207,67,.035))}
+      .hba-money-strip b{display:block;margin-bottom:5px;color:var(--muted);font-size:.6rem;text-transform:uppercase;letter-spacing:.075em}
+      .hba-money-strip strong{display:block;color:var(--text);font-size:1rem;line-height:1.1}
+      .hba-money-strip .accepted strong{color:var(--pickle-lime)}
+      .hba-money-strip .review strong{color:var(--yellow)}
+      .hba-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+      .hba-summary>div{padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.018);font-size:.73rem;overflow-wrap:anywhere}
       .hba-explainer{margin:0 0 14px;padding:11px 12px;border:1px solid rgba(201,207,67,.22);border-radius:11px;background:rgba(201,207,67,.07);color:var(--text2);font-size:.75rem;line-height:1.5}
       .hba-explainer strong{color:var(--pickle-lime)}
-      .hba-proof{min-height:220px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:12px;background:#050a07;overflow:hidden}
-      .hba-proof img{display:none;width:100%;max-height:420px;object-fit:contain}
+      .hba-workspace{display:grid;grid-template-columns:255px minmax(0,1fr);gap:12px;align-items:start}
+      .hba-payment-tabs{display:grid;gap:9px}
+      .hba-payment-tab{width:100%;padding:13px;text-align:left;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.018);color:var(--text);cursor:pointer;transition:border-color .18s ease,background .18s ease,transform .18s ease}
+      .hba-payment-tab:hover{border-color:rgba(201,207,67,.35);transform:translateY(-1px)}
+      .hba-payment-tab[aria-selected="true"]{border-color:rgba(201,207,67,.52);background:linear-gradient(145deg,rgba(201,207,67,.14),rgba(201,207,67,.035));box-shadow:0 0 0 1px rgba(201,207,67,.05),0 10px 28px rgba(0,0,0,.2)}
+      .hba-tab-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+      .hba-tab-step{color:var(--muted);font-size:.58rem;font-weight:950;letter-spacing:.085em;text-transform:uppercase}
+      .hba-tab-status{padding:3px 7px;border-radius:999px;background:rgba(201,207,67,.13);color:var(--pickle-lime);font-size:.57rem;font-weight:950;text-transform:uppercase}
+      .hba-tab-status.review{background:rgba(255,193,7,.12);color:var(--yellow)}
+      .hba-payment-tab strong{display:block;font-size:.79rem;line-height:1.3}
+      .hba-tab-amount{display:block;margin-top:7px;font-size:1.02rem;font-weight:950}
+      .hba-tab-meta{display:block;margin-top:5px;color:var(--muted);font-size:.65rem;line-height:1.35;overflow-wrap:anywhere}
+      .hba-receipt-stage{min-width:0;border:1px solid var(--border);border-radius:15px;background:rgba(2,8,5,.48);overflow:hidden}
+      .hba-proof-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.018)}
+      .hba-proof-head b{display:block;color:var(--text);font-size:.77rem}
+      .hba-proof-head span{display:block;margin-top:3px;color:var(--muted);font-size:.65rem}
+      .hba-proof-link{display:none;flex-shrink:0;color:var(--pickle-lime);font-size:.65rem;font-weight:850;text-decoration:none}
+      .hba-proof-link:hover{text-decoration:underline}
+      .hba-proof{min-height:330px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 25%,rgba(201,207,67,.045),transparent 45%),#030805;overflow:hidden}
+      .hba-proof img{display:none;width:auto;max-width:100%;max-height:470px;object-fit:contain}
       .hba-proof-status{padding:20px;color:var(--muted);font-size:.8rem;text-align:center}
-      .hba-flags{margin-top:10px;color:var(--muted);font-size:.72rem;line-height:1.5;overflow-wrap:anywhere}
-      .hba-reason{width:100%;min-height:72px;margin-top:14px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--input);color:var(--text);resize:vertical}
+      .hba-proof-note{padding:11px 13px;border-top:1px solid var(--border);color:var(--text2);font-size:.69rem;line-height:1.45}
+      .hba-proof-note strong{color:var(--pickle-lime)}
+      .hba-flags{padding:11px 13px;border-top:1px solid var(--border);color:var(--muted);font-size:.69rem;line-height:1.45;overflow-wrap:anywhere}
+      .hba-flag-title{display:block;margin-bottom:7px;color:var(--yellow);font-weight:850}
+      .hba-flag-list{display:flex;gap:5px;flex-wrap:wrap}
+      .hba-flag{padding:3px 7px;border:1px solid rgba(255,193,7,.22);border-radius:999px;background:rgba(255,193,7,.075);color:var(--text2);font-size:.6rem;font-weight:750}
+      .hba-reason{width:100%;min-height:68px;margin-top:14px;padding:10px 11px;border:1px solid var(--border);border-radius:11px;background:var(--input);color:var(--text);resize:vertical}
+      .hba-decision-hint{margin-top:8px;color:var(--muted);font-size:.68rem;line-height:1.4}
       .hba-modal-actions{display:grid;grid-template-columns:1fr 1.45fr;gap:10px;margin-top:12px}
+      .hba-modal-actions[hidden],.hba-reason[hidden]{display:none}
       .hba-modal-actions button{min-height:44px;justify-content:center}
+      @media(max-width:760px){
+        .hba-modal{width:min(620px,100%)}
+        .hba-workspace{grid-template-columns:1fr}
+        .hba-payment-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+        .hba-proof{min-height:280px}
+        .hba-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+      }
       @media(max-width:560px){
         .hba-head,.hba-card-top,.hba-bottom{align-items:stretch;flex-direction:column}
-        .hba-meta,.hba-summary,.hba-modal-actions{grid-template-columns:1fr}
+        .hba-meta,.hba-modal-actions{grid-template-columns:1fr}
         .hba-overlay{align-items:flex-end;padding:0}
         .hba-modal{width:100%;max-height:94dvh;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom)}
+        .hba-modal-head{padding:14px 16px}
+        .hba-modal-body{padding:14px 14px 18px}
+        .hba-money-strip{grid-template-columns:1fr 1fr}
+        .hba-money-strip>div:first-child{grid-column:1/-1}
+        .hba-payment-tab{padding:10px}
+        .hba-tab-top{align-items:flex-start;flex-direction:column;gap:5px}
+        .hba-tab-amount{font-size:.88rem}
+        .hba-tab-meta{display:none}
+        .hba-proof-head{padding:10px 11px}
+        .hba-proof{min-height:250px}
       }
     `;
     document.head.appendChild(style);
@@ -176,6 +271,43 @@
     container.appendChild(cell);
   }
 
+  function appendMetric(container, label, value, tone) {
+    const cell = make('div', tone || '');
+    cell.append(make('b', '', label), make('strong', '', value));
+    container.appendChild(cell);
+  }
+
+  function renderVerificationFlags(flags) {
+    const container = byId('hostBalanceReviewFlags');
+    if (!container) return;
+    container.replaceChildren();
+    const values = Array.isArray(flags) ? [...new Set(flags.map(String).filter(Boolean))] : [];
+    if (!values.length) {
+      container.append(make('strong', 'hba-flag-title', 'No automatic warnings detected.'));
+      return;
+    }
+    container.append(make('strong', 'hba-flag-title', 'Manual verification required'));
+    const list = make('div', 'hba-flag-list');
+    values.forEach(flag => list.append(make('span', 'hba-flag', humanizeFlag(flag))));
+    container.append(list);
+  }
+
+  function selectPaymentReceipt(kind) {
+    const next = kind === 'deposit' ? 'deposit' : 'balance';
+    state.activeReceipt = next;
+    for (const value of ['deposit', 'balance']) {
+      const selected = value === next;
+      const tab = byId(value === 'deposit' ? 'hostDepositTab' : 'hostBalanceTab');
+      const panel = byId(value === 'deposit' ? 'hostDepositPanel' : 'hostBalancePanel');
+      if (tab) {
+        tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+        tab.tabIndex = selected ? 0 : -1;
+      }
+      if (panel) panel.hidden = !selected;
+    }
+    syncActions();
+  }
+
   function ensurePanel() {
     const section = byId('sec-payreview');
     if (!section) return null;
@@ -190,7 +322,7 @@
     heading.append(make('div', 'hba-kicker', 'Host court balances'));
     const title = make('h3', '', 'Balance Payment Review');
     title.id = 'hostBalanceAdminTitle';
-    heading.append(title, make('div', 'hba-sub', 'Review only the new receipt and reference for the exact remaining balance.'));
+    heading.append(title, make('div', 'hba-sub', 'Review the accepted deposit and new balance receipt as one protected payment history.'));
     const refresh = make('button', 'btn btn-g btn-sm', 'Refresh');
     refresh.type = 'button';
     refresh.addEventListener('click', () => render(true));
@@ -208,11 +340,20 @@
 
   function syncActions() {
     const reason = String(byId('hostBalanceReviewReason')?.value || '').trim();
-    const locked = state.busy || !canDecide() || !state.receiptLoaded;
+    const reviewingBalance = state.activeReceipt === 'balance';
+    const locked = state.busy || !canDecide() || !state.receiptLoaded || !reviewingBalance;
     const approve = byId('hostBalanceApproveBtn');
     const reject = byId('hostBalanceRejectBtn');
     if (approve) approve.disabled = locked;
     if (reject) reject.disabled = locked || reason.length < 3;
+    const reasonField = byId('hostBalanceReviewReason');
+    const actions = byId('hostBalanceActions');
+    if (reasonField) reasonField.hidden = !reviewingBalance;
+    if (actions) actions.hidden = !reviewingBalance;
+    const hint = byId('hostBalanceDecisionHint');
+    if (hint) hint.textContent = reviewingBalance
+      ? 'This decision applies only to Payment 2 — the remaining balance.'
+      : 'Payment 1 is read-only. Select Payment 2 to approve or reject the remaining balance.';
   }
 
   function ensureModal() {
@@ -226,45 +367,131 @@
     overlay.setAttribute('aria-labelledby', 'hostBalanceReviewTitle');
     const modal = make('div', 'hba-modal');
     const head = make('div', 'hba-modal-head');
-    const title = make('h3', '', 'Review Host Balance Receipt');
+    const titleBox = make('div');
+    const kicker = make('div', 'hba-modal-kicker', 'Verify payment 2 of 2');
+    const title = make('h3', '', 'Booking Payment History');
     title.id = 'hostBalanceReviewTitle';
+    titleBox.append(kicker, title);
     const close = make('button', 'hba-close', '×');
     close.type = 'button';
     close.setAttribute('aria-label', 'Close host balance review');
     close.addEventListener('click', closeModal);
-    head.append(title, close);
+    head.append(titleBox, close);
     const body = make('div', 'hba-modal-body');
+    const stateRow = make('div', 'hba-state-row');
+    stateRow.append(
+      make('span', 'hba-state-chip', '✓ Court reserved'),
+      make('span', 'hba-state-chip review', '● Balance receipt under review'),
+    );
+    const moneyStrip = make('div', 'hba-money-strip');
+    moneyStrip.id = 'hostBalanceMoneyStrip';
     const summary = make('div', 'hba-summary');
     summary.id = 'hostBalanceReviewSummary';
     const explainer = make('div', 'hba-explainer');
-    explainer.innerHTML = '<strong>Court already reserved.</strong> The deposit confirmed the reservation. Approving this new receipt marks only the remaining balance fully paid.';
-    const proof = make('div', 'hba-proof');
-    const proofStatus = make('div', 'hba-proof-status', 'Loading receipt proof…');
+    explainer.innerHTML = '<strong>Two separate payments, one protected history.</strong> Payment 1 secured the court and stays read-only. Only Payment 2 can be approved or rejected here.';
+
+    const workspace = make('div', 'hba-workspace');
+    const tabs = make('div', 'hba-payment-tabs');
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', 'Booking payments');
+    const buildPaymentTab = (id, panelId, step, titleText, statusText, statusClass) => {
+      const tab = make('button', 'hba-payment-tab');
+      tab.id = id;
+      tab.type = 'button';
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-controls', panelId);
+      const top = make('span', 'hba-tab-top');
+      top.append(make('span', 'hba-tab-step', step), make('span', `hba-tab-status${statusClass ? ` ${statusClass}` : ''}`, statusText));
+      tab.append(top, make('strong', '', titleText), make('span', 'hba-tab-amount', '₱0.00'), make('span', 'hba-tab-meta', 'Loading payment record…'));
+      return tab;
+    };
+    const depositTab = buildPaymentTab('hostDepositTab', 'hostDepositPanel', 'Payment 1 of 2', 'Reservation deposit', 'Accepted', '');
+    depositTab.addEventListener('click', () => selectPaymentReceipt('deposit'));
+    const balanceTab = buildPaymentTab('hostBalanceTab', 'hostBalancePanel', 'Payment 2 of 2', 'Remaining balance', 'Review needed', 'review');
+    balanceTab.addEventListener('click', () => selectPaymentReceipt('balance'));
+    depositTab.addEventListener('keydown', event => {
+      if (!['ArrowRight', 'ArrowDown'].includes(event.key)) return;
+      event.preventDefault();
+      selectPaymentReceipt('balance');
+      balanceTab.focus();
+    });
+    balanceTab.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowUp'].includes(event.key)) return;
+      event.preventDefault();
+      selectPaymentReceipt('deposit');
+      depositTab.focus();
+    });
+    tabs.append(depositTab, balanceTab);
+
+    const stage = make('div', 'hba-receipt-stage');
+    const buildProofHead = (label, linkId, linkLabel) => {
+      const proofHead = make('div', 'hba-proof-head');
+      const copy = make('div');
+      copy.append(make('b', '', label), make('span', '', 'Private receipt preview · link expires shortly'));
+      const link = make('a', 'hba-proof-link', linkLabel);
+      link.id = linkId;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      proofHead.append(copy, link);
+      return proofHead;
+    };
+
+    const depositPanel = make('section', 'hba-receipt-panel');
+    depositPanel.id = 'hostDepositPanel';
+    depositPanel.setAttribute('role', 'tabpanel');
+    depositPanel.setAttribute('aria-labelledby', 'hostDepositTab');
+    depositPanel.hidden = true;
+    const depositProof = make('div', 'hba-proof');
+    const depositProofStatus = make('div', 'hba-proof-status', 'Loading deposit receipt…');
+    depositProofStatus.id = 'hostDepositProofStatus';
+    const depositImage = document.createElement('img');
+    depositImage.id = 'hostDepositProofImage';
+    depositImage.alt = 'Payment 1 reservation deposit receipt';
+    depositImage.referrerPolicy = 'no-referrer';
+    depositProof.append(depositProofStatus, depositImage);
+    const depositNote = make('div', 'hba-proof-note');
+    depositNote.id = 'hostDepositProofNote';
+    depositNote.innerHTML = '<strong>Accepted deposit.</strong> This first payment is preserved as read-only financial evidence.';
+    depositPanel.append(buildProofHead('Payment 1 — Reservation deposit', 'hostDepositProofLink', 'Open full receipt ↗'), depositProof, depositNote);
+
+    const balancePanel = make('section', 'hba-receipt-panel');
+    balancePanel.id = 'hostBalancePanel';
+    balancePanel.setAttribute('role', 'tabpanel');
+    balancePanel.setAttribute('aria-labelledby', 'hostBalanceTab');
+    const balanceProof = make('div', 'hba-proof');
+    const proofStatus = make('div', 'hba-proof-status', 'Loading balance receipt…');
     proofStatus.id = 'hostBalanceProofStatus';
     const image = document.createElement('img');
     image.id = 'hostBalanceProofImage';
-    image.alt = 'New host balance payment receipt';
+    image.alt = 'Payment 2 remaining balance receipt';
     image.referrerPolicy = 'no-referrer';
-    proof.append(proofStatus, image);
+    balanceProof.append(proofStatus, image);
     const flags = make('div', 'hba-flags');
     flags.id = 'hostBalanceReviewFlags';
+    balancePanel.append(buildProofHead('Payment 2 — Remaining balance', 'hostBalanceProofLink', 'Open full receipt ↗'), balanceProof, flags);
+    stage.append(depositPanel, balancePanel);
+    workspace.append(tabs, stage);
+
     const reason = document.createElement('textarea');
     reason.id = 'hostBalanceReviewReason';
     reason.className = 'hba-reason';
-    reason.placeholder = 'Reason required to reject (at least 3 characters)';
+    reason.placeholder = 'Reason required to reject Payment 2 (at least 3 characters)';
     reason.setAttribute('aria-label', 'Balance payment review reason');
     reason.addEventListener('input', syncActions);
+    const decisionHint = make('div', 'hba-decision-hint', 'This decision applies only to Payment 2 — the remaining balance.');
+    decisionHint.id = 'hostBalanceDecisionHint';
     const actions = make('div', 'hba-modal-actions');
-    const reject = make('button', 'btn btn-d', 'Reject Receipt');
+    actions.id = 'hostBalanceActions';
+    const reject = make('button', 'btn btn-d', 'Reject Payment 2');
     reject.id = 'hostBalanceRejectBtn';
     reject.type = 'button';
     reject.addEventListener('click', () => decide('reject'));
-    const approve = make('button', 'btn btn-p', 'Approve & Mark Fully Paid');
+    const approve = make('button', 'btn btn-p', 'Approve Balance');
     approve.id = 'hostBalanceApproveBtn';
     approve.type = 'button';
     approve.addEventListener('click', () => decide('approve'));
     actions.append(reject, approve);
-    body.append(summary, explainer, proof, flags, reason, actions);
+    body.append(stateRow, moneyStrip, summary, explainer, workspace, reason, decisionHint, actions);
     modal.append(head, body);
     overlay.appendChild(modal);
     overlay.addEventListener('mousedown', event => { if (event.target === overlay) closeModal(); });
@@ -275,6 +502,73 @@
     return overlay;
   }
 
+  function prepareReceiptImage({
+    imageId, statusId, linkId, alt, loadingText, failureText,
+    loadToken, expectedId, onLoad, onError,
+  }) {
+    const current = () => loadToken === state.loadToken && expectedId === state.expectedPaymentId;
+    const oldImage = byId(imageId);
+    const image = document.createElement('img');
+    image.id = imageId;
+    image.alt = alt;
+    image.referrerPolicy = 'no-referrer';
+    image.style.display = 'none';
+    const status = byId(statusId);
+    const link = byId(linkId);
+    if (status) {
+      status.style.display = '';
+      status.textContent = loadingText;
+    }
+    if (link) {
+      link.style.display = 'none';
+      link.removeAttribute('href');
+    }
+    image.addEventListener('load', () => {
+      if (!current()) return;
+      image.style.display = 'block';
+      if (status) status.style.display = 'none';
+      if (link) link.style.display = 'inline-flex';
+      onLoad?.();
+    });
+    image.addEventListener('error', () => {
+      if (!current()) return;
+      image.removeAttribute('src');
+      image.style.display = 'none';
+      if (link) {
+        link.style.display = 'none';
+        link.removeAttribute('href');
+      }
+      if (status) {
+        status.style.display = '';
+        status.textContent = failureText;
+      }
+      onError?.();
+    });
+    oldImage?.replaceWith(image);
+    return {
+      show(rawUrl) {
+        if (!current()) return;
+        const url = secureReceiptUrl(rawUrl);
+        if (link) link.href = url;
+        image.src = url;
+      },
+      fail(error) {
+        if (!current()) return;
+        image.removeAttribute('src');
+        image.style.display = 'none';
+        if (link) {
+          link.style.display = 'none';
+          link.removeAttribute('href');
+        }
+        if (status) {
+          status.style.display = '';
+          status.textContent = error?.message || String(error || failureText);
+        }
+        onError?.();
+      },
+    };
+  }
+
   async function openModal(payment, trigger) {
     if (state.busy) return;
     const expectedId = paymentId(payment);
@@ -282,62 +576,123 @@
     state.current = payment;
     state.expectedPaymentId = expectedId;
     state.receiptLoaded = false;
+    state.depositReceiptLoaded = false;
+    state.activeReceipt = 'balance';
     state.lastFocus = trigger || document.activeElement;
     const overlay = ensureModal();
+    const totalAmount = paymentAmount(payment, 'totalAmount', 'total_amount');
+    const depositAmount = paymentAmount(payment, 'originalPaidAmount', 'original_paid_amount');
+    const balanceAmount = paymentAmount(payment, 'balanceAmount', 'expected_amount');
+    const provider = paymentValue(payment, 'paymentProvider', 'payment_provider', '—').toUpperCase();
+    const balanceReference = paymentValue(payment, 'paymentReference', 'payment_reference', '—');
+    const bookingReference = paymentValue(payment, 'bookingGroupRef', 'booking_group_ref')
+      || paymentValue(payment, 'bookingRef', 'booking_ref')
+      || paymentValue(payment, 'bookingKey', 'booking_key', '—');
+
+    const moneyStrip = byId('hostBalanceMoneyStrip');
+    moneyStrip.replaceChildren();
+    appendMetric(moneyStrip, 'Total booking', money(totalAmount), '');
+    appendMetric(moneyStrip, 'Payment 1 · Accepted', money(depositAmount), 'accepted');
+    appendMetric(moneyStrip, 'Payment 2 · Submitted', money(balanceAmount), 'review');
     const summary = byId('hostBalanceReviewSummary');
     summary.replaceChildren();
     appendSummary(summary, 'Host', payment.customerName || payment.customer_name);
-    appendSummary(summary, 'Booking', payment.bookingGroupRef || payment.booking_group_ref || payment.bookingRef || payment.booking_ref || payment.bookingKey);
-    appendSummary(summary, 'Exact balance', money(payment.balanceAmount || payment.balance_amount || payment.expectedAmount || payment.expected_amount));
-    appendSummary(summary, 'New payment', `${String(payment.paymentProvider || payment.payment_provider || '—').toUpperCase()} · ${payment.paymentReference || payment.payment_reference || '—'}`);
+    appendSummary(summary, 'Booking', bookingReference);
     appendSummary(summary, 'Schedule', payment.scheduleLabel || payment.schedule_label || payment.bookingDate || payment.booking_date);
     appendSummary(summary, 'Submitted', when(payment.submittedAt || payment.submitted_at || payment.createdAt || payment.created_at));
     const flags = payment.receiptFlags || payment.receipt_flags || [];
-    byId('hostBalanceReviewFlags').textContent = Array.isArray(flags) && flags.length
-      ? `Verification flags: ${flags.join(', ')}` : 'Verification flags: none';
+    renderVerificationFlags(flags);
     byId('hostBalanceReviewReason').value = '';
-    const oldImage = byId('hostBalanceProofImage');
-    const image = document.createElement('img');
-    image.id = 'hostBalanceProofImage';
-    image.alt = 'New host balance payment receipt';
-    image.referrerPolicy = 'no-referrer';
-    image.style.display = 'none';
-    image.addEventListener('load', () => {
-      if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
-      state.receiptLoaded = true;
-      image.style.display = 'block';
-      status.style.display = 'none';
-      syncActions();
+    byId('hostDepositTab').querySelector('.hba-tab-amount').textContent = money(depositAmount);
+    byId('hostDepositTab').querySelector('.hba-tab-meta').textContent = 'Loading accepted deposit…';
+    byId('hostBalanceTab').querySelector('.hba-tab-amount').textContent = money(balanceAmount);
+    byId('hostBalanceTab').querySelector('.hba-tab-meta').textContent = `${provider} · ${balanceReference}`;
+    const depositNote = byId('hostDepositProofNote');
+    depositNote.replaceChildren(
+      make('strong', '', 'Accepted deposit. '),
+      document.createTextNode('This first payment is preserved as read-only financial evidence.'),
+    );
+    const reject = byId('hostBalanceRejectBtn');
+    const approve = byId('hostBalanceApproveBtn');
+    if (reject) reject.textContent = 'Reject Payment 2';
+    if (approve) approve.textContent = `Approve ${money(balanceAmount)} Balance`;
+
+    const balanceProof = prepareReceiptImage({
+      imageId: 'hostBalanceProofImage',
+      statusId: 'hostBalanceProofStatus',
+      linkId: 'hostBalanceProofLink',
+      alt: 'Payment 2 remaining balance receipt',
+      loadingText: 'Loading Payment 2 receipt…',
+      failureText: 'Payment 2 receipt could not be loaded. Approval remains disabled.',
+      loadToken,
+      expectedId,
+      onLoad() {
+        state.receiptLoaded = true;
+        syncActions();
+      },
+      onError() {
+        state.receiptLoaded = false;
+        syncActions();
+      },
     });
-    image.addEventListener('error', () => {
-      if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
-      state.receiptLoaded = false;
-      image.removeAttribute('src');
-      image.style.display = 'none';
-      status.style.display = '';
-      status.textContent = 'Receipt image could not be loaded. Approval remains disabled.';
-      syncActions();
+    const depositProof = prepareReceiptImage({
+      imageId: 'hostDepositProofImage',
+      statusId: 'hostDepositProofStatus',
+      linkId: 'hostDepositProofLink',
+      alt: 'Payment 1 reservation deposit receipt',
+      loadingText: 'Loading Payment 1 deposit receipt…',
+      failureText: 'Deposit accepted, but its receipt image is unavailable.',
+      loadToken,
+      expectedId,
+      onLoad() { state.depositReceiptLoaded = true; },
+      onError() { state.depositReceiptLoaded = false; },
     });
-    oldImage?.replaceWith(image);
-    const status = byId('hostBalanceProofStatus');
-    status.style.display = '';
-    status.textContent = 'Loading receipt proof…';
     overlay.hidden = false;
     document.body.style.overflow = 'hidden';
+    selectPaymentReceipt('balance');
     syncActions();
     overlay.querySelector('.hba-close')?.focus();
-    try {
-      const result = await apiCall('receipt_url', { paymentId: expectedId });
-      if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
-      const rawUrl = result?.url || result?.data?.url;
-      const url = new URL(String(rawUrl || ''));
-      if (url.protocol !== 'https:') throw new Error('Receipt link is not secure.');
-      image.src = url.href;
-    } catch (error) {
-      if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
-      status.textContent = error?.message || 'Receipt proof is unavailable.';
-      syncActions();
-    }
+
+    const balanceRequest = (async () => {
+      try {
+        const result = await apiCall('receipt_url', { paymentId: expectedId });
+        if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
+        balanceProof.show(result?.url || result?.data?.url);
+      } catch (error) {
+        if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
+        balanceProof.fail(error?.message || 'Payment 2 receipt is unavailable.');
+      }
+    })();
+
+    const depositRequest = (async () => {
+      let depositHistoryLoaded = false;
+      try {
+        const booking = await loadDepositBooking(payment);
+        if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
+        if (!booking) throw new Error('Accepted deposit record could not be found.');
+        const depositMethod = String(booking.paymentMethod || provider || '—').toUpperCase();
+        const depositReference = String(booking.gcashRef || 'Reference unavailable');
+        byId('hostDepositTab').querySelector('.hba-tab-meta').textContent = `${depositMethod} · ${depositReference}`;
+        depositHistoryLoaded = true;
+        depositNote.replaceChildren(
+          make('strong', '', 'Accepted deposit. '),
+          document.createTextNode(`Recorded ${when(booking.paidAt || booking.receiptVerifiedAt || booking.createdAt)}. This payment is read-only.`),
+        );
+        if (!booking.receiptImageUrl) throw new Error('Deposit accepted, but no receipt image is attached.');
+        if (!global.DB?.getReceiptSignedUrl) throw new Error('Deposit receipt service is unavailable.');
+        const url = await global.DB.getReceiptSignedUrl(booking.ref);
+        if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
+        depositProof.show(url);
+      } catch (error) {
+        if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
+        if (!depositHistoryLoaded) {
+          byId('hostDepositTab').querySelector('.hba-tab-meta').textContent = 'Accepted · history unavailable';
+        }
+        depositProof.fail(error?.message || 'Deposit receipt is unavailable.');
+      }
+    })();
+
+    await Promise.allSettled([balanceRequest, depositRequest]);
   }
 
   function closeModal() {
@@ -347,24 +702,38 @@
     state.expectedPaymentId = '';
     overlay.hidden = true;
     document.body.style.overflow = '';
-    byId('hostBalanceProofImage')?.removeAttribute('src');
+    for (const id of ['hostDepositProofImage', 'hostBalanceProofImage']) {
+      byId(id)?.removeAttribute('src');
+    }
+    for (const id of ['hostDepositProofLink', 'hostBalanceProofLink']) {
+      const link = byId(id);
+      link?.removeAttribute('href');
+      if (link) link.style.display = 'none';
+    }
     state.current = null;
     state.receiptLoaded = false;
+    state.depositReceiptLoaded = false;
+    state.activeReceipt = 'balance';
     state.lastFocus?.focus?.();
     state.lastFocus = null;
   }
 
   async function decide(decision) {
     const payment = state.current;
-    if (!payment || paymentId(payment) !== state.expectedPaymentId || state.busy || !canDecide() || !state.receiptLoaded) return;
+    if (!payment || paymentId(payment) !== state.expectedPaymentId || state.busy || !canDecide()
+      || !state.receiptLoaded || state.activeReceipt !== 'balance') return;
     const reason = String(byId('hostBalanceReviewReason')?.value || '').trim();
+    const amount = money(payment.balanceAmount || payment.balance_amount || payment.expectedAmount || payment.expected_amount);
+    const reference = payment.paymentReference || payment.payment_reference || '—';
     if (decision === 'reject' && reason.length < 3) {
-      notify('Enter a reason before rejecting the receipt.', 'err');
+      notify('Enter a reason before rejecting Payment 2.', 'err');
       return;
     }
-    if (decision === 'approve' && !global.confirm(`Approve ${money(payment.balanceAmount || payment.balance_amount || payment.expectedAmount || payment.expected_amount)} and mark every booking row fully paid?`)) return;
+    if (decision === 'approve' && !global.confirm(
+      `Approve Payment 2 — ${amount} remaining balance?\n\nReference: ${reference}\nThis marks the booking fully paid. Payment 1 stays unchanged.`
+    )) return;
     if (decision === 'reject' && !global.confirm(
-      `Reject ${money(payment.balanceAmount || payment.balance_amount || payment.expectedAmount || payment.expected_amount)} for ${payment.bookingGroupRef || payment.booking_group_ref || payment.bookingRef || payment.booking_ref || 'this booking'}?\n\nReference: ${payment.paymentReference || payment.payment_reference || '—'}\nReason: ${reason}`
+      `Reject Payment 2 — ${amount} for ${payment.bookingGroupRef || payment.booking_group_ref || payment.bookingRef || payment.booking_ref || 'this booking'}?\n\nReference: ${reference}\nReason: ${reason}`
     )) return;
     state.busy = true;
     const button = byId(decision === 'approve' ? 'hostBalanceApproveBtn' : 'hostBalanceRejectBtn');
@@ -373,7 +742,7 @@
     syncActions();
     try {
       await apiCall('review', { paymentId: paymentId(payment), decision, reason });
-      notify(decision === 'approve' ? 'Host balance approved. The booking is fully paid.' : 'Host balance receipt rejected.', decision === 'approve' ? 'ok' : 'inf');
+      notify(decision === 'approve' ? 'Payment 2 approved. The booking is fully paid.' : 'Payment 2 balance receipt rejected.', decision === 'approve' ? 'ok' : 'inf');
       state.busy = false;
       closeModal();
       await render(true);
@@ -414,7 +783,7 @@
       appendSummary(meta, 'New reference', payment.paymentReference || payment.payment_reference);
       const bottom = make('div', 'hba-bottom');
       bottom.appendChild(make('div', 'hba-status', 'Waiting for owner review'));
-      const review = make('button', 'btn btn-p btn-sm', 'Review Receipt');
+      const review = make('button', 'btn btn-p btn-sm', 'Review Payment History');
       review.type = 'button';
       review.addEventListener('click', event => openModal(payment, event.currentTarget));
       bottom.appendChild(review);

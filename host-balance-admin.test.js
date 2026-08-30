@@ -69,19 +69,59 @@ test('separates reservation state from pending balance review on desktop and mob
   const pendingBranch = admin.match(/if \(hostBalancePendingPayment\(b\)\) \{([\s\S]*?)\n  \}/)?.[1] || '';
   assert.match(pendingBranch, /PAYMENT REVIEW NEEDED/);
   assert.doesNotMatch(pendingBranch, /payStatusBdg\('downpayment_paid'\)/);
-  assert.match(hostBalanceAdmin, /Court already reserved/);
-  assert.match(hostBalanceAdmin, /Approving this new receipt marks only the remaining balance fully paid/);
+  assert.match(hostBalanceAdmin, /✓ Court reserved/);
+  assert.match(hostBalanceAdmin, /Payment 1 secured the court and stays read-only/);
 });
 
 test('reveals a successfully loaded host balance receipt', () => {
-  const loadHandler = hostBalanceAdmin.match(
-    /image\.addEventListener\('load', \(\) => \{([\s\S]*?)\n\s*\}\);/,
-  )?.[1] || '';
-  assert.match(loadHandler, /state\.receiptLoaded = true/);
-  assert.match(loadHandler, /image\.style\.display = 'block'/);
-  assert.match(loadHandler, /status\.style\.display = 'none'/);
-  assert.doesNotMatch(loadHandler, /image\.style\.display = ''/);
-  assert.match(admin, /host-balance-admin\.js\?v=20260831-host-balance-v4/);
+  assert.match(hostBalanceAdmin, /function prepareReceiptImage\([\s\S]*?image\.addEventListener\('load'/);
+  assert.match(hostBalanceAdmin, /image\.style\.display = 'block'/);
+  assert.match(hostBalanceAdmin, /status\.style\.display = 'none'/);
+  assert.match(hostBalanceAdmin, /link\.style\.display = 'inline-flex'/);
+  assert.doesNotMatch(hostBalanceAdmin, /image\.style\.display = ''/);
+  assert.match(hostBalanceAdmin, /onLoad\(\) \{\s*state\.receiptLoaded = true;\s*syncActions\(\);/);
+  assert.match(admin, /host-balance-admin\.js\?v=20260831-host-balance-v5/);
+});
+
+test('shows a premium two-payment history without merging financial evidence', () => {
+  assert.match(hostBalanceAdmin, /Booking Payment History/);
+  assert.match(hostBalanceAdmin, /Payment 1 of 2/);
+  assert.match(hostBalanceAdmin, /Reservation deposit/);
+  assert.match(hostBalanceAdmin, /Payment 2 of 2/);
+  assert.match(hostBalanceAdmin, /Remaining balance/);
+  assert.match(hostBalanceAdmin, /appendMetric\(moneyStrip, 'Payment 1 · Accepted', money\(depositAmount\)/);
+  assert.match(hostBalanceAdmin, /appendMetric\(moneyStrip, 'Payment 2 · Submitted', money\(balanceAmount\)/);
+  assert.match(hostBalanceAdmin, /Approve \$\{money\(balanceAmount\)\} Balance/);
+  assert.match(hostBalanceAdmin, /Review Payment History/);
+  assert.match(hostBalanceAdmin, /\.hba-workspace\{display:grid;grid-template-columns:255px minmax\(0,1fr\)/);
+  assert.match(hostBalanceAdmin, /@media\(max-width:760px\)[\s\S]*?\.hba-workspace\{grid-template-columns:1fr\}/);
+});
+
+test('loads the accepted deposit through its existing private receipt API', () => {
+  assert.match(hostBalanceAdmin, /function depositBookingRefs\(payment\)/);
+  assert.match(hostBalanceAdmin, /if \(ref && !refs\.includes\(ref\)\) refs\.push\(ref\)/);
+  assert.match(hostBalanceAdmin, /db\.getBookingByRef\(ref\)\.catch\(\(\) => null\)/);
+  assert.match(hostBalanceAdmin, /global\.DB\.getReceiptSignedUrl\(booking\.ref\)/);
+  assert.match(hostBalanceAdmin, /depositProof\.show\(url\)/);
+  assert.doesNotMatch(hostBalanceAdmin, /depositProof\.show\(booking\.receiptImageUrl\)/);
+  assert.match(hostBalanceAdmin, /function secureReceiptUrl\(value\)[\s\S]*?url\.protocol !== 'https:'/);
+  assert.match(hostBalanceAdmin, /onLoad\(\) \{ state\.depositReceiptLoaded = true; \}/);
+  assert.match(hostBalanceAdmin, /if \(!depositHistoryLoaded\)[\s\S]*?Accepted · history unavailable/);
+  assert.doesNotMatch(hostBalanceAdmin, /depositReceiptLoaded[\s\S]{0,120}state\.receiptLoaded = true/);
+});
+
+test('permits decisions only while viewing the loaded Payment 2 receipt', () => {
+  assert.match(hostBalanceAdmin, /const reviewingBalance = state\.activeReceipt === 'balance'/);
+  assert.match(hostBalanceAdmin, /!state\.receiptLoaded \|\| !reviewingBalance/);
+  assert.match(hostBalanceAdmin, /reasonField\.hidden = !reviewingBalance/);
+  assert.match(hostBalanceAdmin, /actions\.hidden = !reviewingBalance/);
+  assert.match(hostBalanceAdmin, /state\.activeReceipt !== 'balance'\) return/);
+  assert.match(hostBalanceAdmin, /state\.activeReceipt = 'balance';[\s\S]*?selectPaymentReceipt\('balance'\)/);
+  assert.match(hostBalanceAdmin, /Payment 1 is read-only\. Select Payment 2/);
+  assert.match(hostBalanceAdmin, /Reject Payment 2/);
+  assert.match(hostBalanceAdmin, /Approve Payment 2 — \$\{amount\} remaining balance/);
+  assert.match(hostBalanceAdmin, /for \(const id of \['hostDepositProofImage', 'hostBalanceProofImage'\]\)[\s\S]*?removeAttribute\('src'\)/);
+  assert.match(hostBalanceAdmin, /for \(const id of \['hostDepositProofLink', 'hostBalanceProofLink'\]\)[\s\S]*?removeAttribute\('href'\)/);
 });
 
 test('blocks conflicting booking mutations and reminders during pending review', () => {
