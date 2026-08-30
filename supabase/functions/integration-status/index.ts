@@ -43,7 +43,7 @@ function service(
 }
 
 function receiptOcrService(): ServiceStatus {
-  const required = ["GOOGLE_VISION_API_KEY", "TURNSTILE_SECRET_KEY"];
+  const required = ["GOOGLE_VISION_API_KEY"];
   const missing = missingEnv(required);
   const configured = missing.length === 0;
   return {
@@ -51,11 +51,11 @@ function receiptOcrService(): ServiceStatus {
     label: "Receipt OCR",
     configured,
     required,
-    recommended: ["TURNSTILE_EXPECTED_HOSTNAMES"],
+    recommended: [],
     missing,
     note: configured
-      ? "Receipt verification uses Google Vision behind server-verified Turnstile."
-      : "Add Google Vision and the server-only Turnstile secret for public receipt OCR.",
+      ? "Receipt verification uses Google Vision."
+      : "Add the Google Vision API key for receipt OCR.",
   };
 }
 

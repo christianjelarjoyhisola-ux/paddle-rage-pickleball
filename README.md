@@ -2,7 +2,7 @@
 
 A standalone pickleball court booking and operations platform with public reservations, Open Play hosting, receipt verification, payments, admin reporting, and role-based access. Production is served at `https://paddleragecdo.ph` and uses a dedicated Supabase project.
 
-Receipt OCR runs server-side through Google Cloud Vision behind Cloudflare Turnstile. Customer confirmation and reschedule messages use Maileroo from the verified `paddleragecdo.ph` sending domain; no provider secret is shipped to the browser.
+Receipt OCR runs server-side through Google Cloud Vision. Customer confirmation and reschedule messages use Maileroo from the verified `paddleragecdo.ph` sending domain; no provider secret is shipped to the browser.
 
 ## Brand system
 
@@ -16,10 +16,10 @@ Receipt OCR runs server-side through Google Cloud Vision behind Cloudflare Turns
 ## Production deployment
 
 1. Copy `.env.example` to the ignored `.env.local` and fill in Paddle Rage's deployment credentials. Never commit this file.
-2. Review [GOOGLE_VISION_SETUP.md](GOOGLE_VISION_SETUP.md) and [TURNSTILE_SETUP.md](TURNSTILE_SETUP.md).
+2. Review [GOOGLE_VISION_SETUP.md](GOOGLE_VISION_SETUP.md).
 3. Run `npm test` and `npm run check`.
 4. Run `deploy-edge-functions.ps1`; it applies migrations before publishing functions and fails closed when required remote integration secrets are missing.
-5. Authenticate with `wrangler login` (or set a scoped `CLOUDFLARE_API_TOKEN`), then run `deploy-cloudflare-pages.ps1` to publish the static site and public Turnstile site key.
+5. Authenticate with `wrangler login` (or set a scoped `CLOUDFLARE_API_TOKEN`), then run `deploy-cloudflare-pages.ps1` to publish the static site.
 6. Verify the custom domain, Edge Function health, one receipt flow, and one delivered confirmation email after release.
 
 ## Local preview

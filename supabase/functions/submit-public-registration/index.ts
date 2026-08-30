@@ -1,10 +1,4 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  parseTurnstileHostnames,
-  PUBLIC_REGISTRATION_TURNSTILE_ACTION,
-  turnstileRemoteIp,
-  verifyTurnstileToken,
-} from "../_shared/turnstile.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -196,33 +190,6 @@ function hostSessionMessage(
   );
 }
 
-async function requireRegistrationTurnstile(
-  req: Request,
-  token: unknown,
-): Promise<Response | null> {
-  const result = await verifyTurnstileToken({
-    token,
-    secret: Deno.env.get("TURNSTILE_SECRET_KEY"),
-    remoteIp: turnstileRemoteIp(req),
-    expectedAction: PUBLIC_REGISTRATION_TURNSTILE_ACTION,
-    allowedHostnames: parseTurnstileHostnames(
-      Deno.env.get("TURNSTILE_EXPECTED_HOSTNAMES"),
-    ),
-  });
-  if (result.ok) return null;
-  const status = result.reason === "server-misconfigured" ||
-      result.reason === "verification-unavailable"
-    ? 503
-    : 403;
-  return json({
-    ok: false,
-    code: `TURNSTILE_${result.reason.replaceAll("-", "_").toUpperCase()}`,
-    error: result.reason === "missing-token"
-      ? "Complete the secure human verification before submitting this registration."
-      : "Secure human verification failed. Please try again.",
-  }, status);
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -247,12 +214,6 @@ Deno.serve(async (req) => {
     if (paymentMethod !== "cash" && !DIGITAL_METHODS.has(paymentMethod)) {
       return json({ ok: false, error: "Unsupported payment method" }, 400);
     }
-    // Every registration is challenged here. Digital receipt verification has
-    // its own independent action/token, and free host sessions can otherwise
-    // be disguised as a digital payment by a caller-controlled method.
-    const denial = await requireRegistrationTurnstile(req, body.turnstileToken);
-    if (denial) return denial;
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const serviceKey = Deno.env.get("SERVICE_ROLE_KEY") ||
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
