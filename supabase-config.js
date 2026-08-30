@@ -10,12 +10,6 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const PB_REQUEST_TIMEOUT_MS = 45000;
 const PB_RECEIPT_TIMEOUT_MS = 90000;
-const PB_TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-const PB_TURNSTILE_ACTION = 'receipt_ocr';
-const PB_REGISTRATION_TURNSTILE_ACTION = 'public_registration';
-const PB_HOST_APPLICATION_TURNSTILE_ACTION = 'host_application';
-const PB_TURNSTILE_WIDGET_TIMEOUT_MS = 60000;
-let _pbTurnstileScriptPromise = null;
 
 function normalizeOpenPlaySkillLevel(value, fallback = 1) {
   const level = Number(value);
@@ -37,207 +31,10 @@ function normalizeOpenPlayRankingMode(value) {
   return value === 'win_percentage' ? 'win_percentage' : 'performance';
 }
 
-function _pbTurnstileError(message, code) {
+function _pbApiError(message, code) {
   const error = new Error(message);
   error.code = code;
   return error;
-}
-
-function _pbTurnstileSiteKey() {
-  const value = String(
-    window.PB_TURNSTILE_SITE_KEY ||
-    window.PB_PUBLIC_CONFIG?.turnstileSiteKey ||
-    '',
-  ).trim();
-  if (!value || /^YOUR_|TURNSTILE_SITE_KEY/i.test(value)) return '';
-  return value;
-}
-
-function _pbLoadTurnstile() {
-  if (window.turnstile?.render && window.turnstile?.execute) {
-    return Promise.resolve(window.turnstile);
-  }
-  if (_pbTurnstileScriptPromise) return _pbTurnstileScriptPromise;
-
-  _pbTurnstileScriptPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    let settled = false;
-    const finish = (callback, value) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      script.onload = null;
-      script.onerror = null;
-      callback(value);
-    };
-    const timer = setTimeout(() => {
-      finish(reject, _pbTurnstileError(
-        'Secure human verification took too long to load. Check your connection or content blocker, then try again.',
-        'TURNSTILE_SCRIPT_TIMEOUT',
-      ));
-    }, 15000);
-
-    script.src = PB_TURNSTILE_SCRIPT_URL;
-    script.async = true;
-    script.defer = true;
-    script.dataset.pbTurnstile = 'true';
-    script.onload = () => {
-      if (window.turnstile?.render && window.turnstile?.execute) {
-        finish(resolve, window.turnstile);
-      } else {
-        finish(reject, _pbTurnstileError(
-          'Secure human verification loaded incorrectly. Please refresh the page and try again.',
-          'TURNSTILE_API_MISSING',
-        ));
-      }
-    };
-    script.onerror = () => finish(reject, _pbTurnstileError(
-      'Secure human verification could not load. Check your connection or content blocker, then try again.',
-      'TURNSTILE_SCRIPT_FAILED',
-    ));
-    document.head.appendChild(script);
-  }).catch(error => {
-    _pbTurnstileScriptPromise = null;
-    document.querySelector('script[data-pb-turnstile="true"]')?.remove();
-    throw error;
-  });
-
-  return _pbTurnstileScriptPromise;
-}
-
-async function _pbAcquireTurnstile(action = PB_TURNSTILE_ACTION, contextLabel = 'receipt upload') {
-  const sitekey = _pbTurnstileSiteKey();
-  if (!sitekey) {
-    throw _pbTurnstileError(
-      `Secure ${contextLabel} verification is not configured yet. Please contact Paddle Rage.`,
-      'TURNSTILE_SITE_KEY_MISSING',
-    );
-  }
-  if (!document.body) {
-    throw _pbTurnstileError(
-      'Secure human verification is unavailable on this page. Please refresh and try again.',
-      'TURNSTILE_PAGE_UNAVAILABLE',
-    );
-  }
-
-  const turnstile = await _pbLoadTurnstile();
-  const shell = document.createElement('div');
-  const container = document.createElement('div');
-  shell.setAttribute('role', 'status');
-  shell.setAttribute('aria-live', 'polite');
-  shell.style.cssText = [
-    'position:fixed',
-    'right:12px',
-    'bottom:12px',
-    'z-index:2147483000',
-    'width:min(320px,calc(100vw - 24px))',
-    'min-height:58px',
-    'padding:10px',
-    'box-sizing:border-box',
-    'border:1px solid rgba(182,240,0,.45)',
-    'border-radius:12px',
-    'background:#0b0f0c',
-    'box-shadow:0 12px 34px rgba(0,0,0,.45)',
-    'color:#f4f7f2',
-    'font:600 12px/1.4 system-ui,sans-serif',
-  ].join(';');
-  const label = document.createElement('div');
-  label.textContent = `Checking browser security before ${contextLabel}...`;
-  label.style.cssText = 'margin:0 0 6px;color:#d7ff3f';
-  shell.append(label, container);
-  document.body.appendChild(shell);
-
-  let widgetId = null;
-  const dispose = () => {
-    if (widgetId !== null) {
-      try { turnstile.reset(widgetId); } catch (_) {}
-      try { turnstile.remove(widgetId); } catch (_) {}
-      widgetId = null;
-    }
-    shell.remove();
-  };
-
-  try {
-    const token = await new Promise((resolve, reject) => {
-      let settled = false;
-      const finish = (callback, value) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        callback(value);
-      };
-      const fail = (message, code) => finish(
-        reject,
-        _pbTurnstileError(message, code),
-      );
-      const timer = setTimeout(() => fail(
-        'Secure human verification timed out. Please try the receipt upload again.',
-        'TURNSTILE_WIDGET_TIMEOUT',
-      ), PB_TURNSTILE_WIDGET_TIMEOUT_MS);
-
-      try {
-        widgetId = turnstile.render(container, {
-          sitekey,
-          action: action === PB_TURNSTILE_ACTION ? PB_TURNSTILE_ACTION : action,
-          execution: 'execute',
-          appearance: 'interaction-only',
-          theme: 'dark',
-          size: 'flexible',
-          language: 'en',
-          'response-field': false,
-          'refresh-expired': 'never',
-          'refresh-timeout': 'never',
-          callback: value => {
-            const freshToken = String(value || '').trim();
-            if (!freshToken) {
-              fail('Human verification returned no token. Please try again.', 'TURNSTILE_EMPTY_TOKEN');
-              return;
-            }
-            finish(resolve, freshToken);
-          },
-          'error-callback': () => {
-            fail('Human verification could not be completed. Please try again.', 'TURNSTILE_WIDGET_ERROR');
-            return true;
-          },
-          'expired-callback': () => fail(
-            'Human verification expired. Please try the receipt upload again.',
-            'TURNSTILE_WIDGET_EXPIRED',
-          ),
-          'timeout-callback': () => fail(
-            'Human verification timed out. Please try the receipt upload again.',
-            'TURNSTILE_WIDGET_TIMEOUT',
-          ),
-          'unsupported-callback': () => fail(
-            'This browser cannot run secure human verification. Please update it or use another browser.',
-            'TURNSTILE_BROWSER_UNSUPPORTED',
-          ),
-        });
-        if (widgetId === undefined || widgetId === null) {
-          fail('Human verification could not start. Please refresh and try again.', 'TURNSTILE_RENDER_FAILED');
-          return;
-        }
-        turnstile.execute(widgetId);
-      } catch (_) {
-        fail('Human verification could not start. Please refresh and try again.', 'TURNSTILE_RENDER_FAILED');
-      }
-    });
-    return { token, reset: dispose };
-  } catch (error) {
-    dispose();
-    throw error;
-  }
-}
-
-function _pbAcquireReceiptTurnstile() {
-  return _pbAcquireTurnstile(PB_TURNSTILE_ACTION, 'receipt upload');
-}
-
-function _pbAcquirePublicRegistrationTurnstile() {
-  return _pbAcquireTurnstile(PB_REGISTRATION_TURNSTILE_ACTION, 'registration');
-}
-
-function _pbAcquireHostApplicationTurnstile() {
-  return _pbAcquireTurnstile(PB_HOST_APPLICATION_TURNSTILE_ACTION, 'host application');
 }
 
 async function _pbFetchWithTimeout(input, init = {}, timeoutMs = PB_REQUEST_TIMEOUT_MS) {
@@ -515,7 +312,6 @@ async function _pbVerifyReceiptBase64Fallback(fnUrl, payload, imageFile, authHea
     imageBase64,
     ...(payload?.bookingData ? { bookingData: payload.bookingData } : {}),
     ...(payload?.bookingAccessToken ? { bookingAccessToken: payload.bookingAccessToken } : {}),
-    ...(payload?.turnstileToken ? { turnstileToken: payload.turnstileToken } : {}),
   };
   const res = await _pbFetchWithTimeout(fnUrl, {
     method: 'POST',
@@ -1189,13 +985,10 @@ window.DB = {
     const publicAccessToken = _pbBookingAccessToken(tokenKey, true);
     batch.forEach(booking => _pbRememberBookingAccessToken(booking.ref, publicAccessToken));
 
-    let turnstileChallenge = null;
     try {
-      turnstileChallenge = await _pbAcquirePublicRegistrationTurnstile();
       const response = await _invokeEdgeFunction('submit-public-booking', {
         bookings: batch.map(bookingToRow),
         accessToken: publicAccessToken,
-        turnstileToken: turnstileChallenge.token,
       }, { retryDirect: false });
       const refs = Array.isArray(response?.refs) ? response.refs.map(String) : [];
       if (refs.length !== batch.length) {
@@ -1208,8 +1001,6 @@ window.DB = {
       batch.forEach(booking => _pbForgetBookingAccessToken(booking.ref));
       console.error('addBookings:', error);
       throw error;
-    } finally {
-      turnstileChallenge?.reset();
     }
   },
 
@@ -1391,9 +1182,7 @@ window.DB = {
 
   async addOpenPlayRegistration(reg) {
     const paymentMethod = String(reg.paymentMethod || 'cash').toLowerCase();
-    let turnstileChallenge = null;
     try {
-      turnstileChallenge = await _pbAcquirePublicRegistrationTurnstile();
       const response = await _invokeEdgeFunction('submit-public-registration', {
         action: 'open_play',
         fullName: reg.fullName,
@@ -1405,7 +1194,6 @@ window.DB = {
         gcashRef: reg.gcashRef || null,
         receiptImageUrl: reg.receiptImageUrl || null,
         receiptStatus: reg.receiptStatus || 'none',
-        turnstileToken: turnstileChallenge?.token || null,
       }, { retryDirect: false });
       const saved = response?.registration;
       if (!saved?.id) throw new Error(response?.error || 'Open Play registration was not saved.');
@@ -1427,8 +1215,6 @@ window.DB = {
     } catch (error) {
       console.error('addOpenPlayRegistration:', error);
       throw error;
-    } finally {
-      turnstileChallenge?.reset();
     }
   },
 
@@ -1493,45 +1279,31 @@ window.DB = {
   },
 
   async submitOpenPlayHostSignup(app) {
-    let turnstileChallenge = null;
-    try {
-      turnstileChallenge = await _pbAcquireHostApplicationTurnstile();
-      const data = await _invokeEdgeFunction('host-application', {
-        action: 'signup',
-        turnstileToken: turnstileChallenge.token,
-        fullName: app.fullName,
-        contactNumber: app.contactNumber,
-        email: app.email,
-        password: app.password,
-        gcashNumber: app.gcashNumber,
-        validIdBase64: app.validIdBase64,
-        validIdFileName: app.validIdFileName,
-        validIdFileType: app.validIdFileType,
-        validIdFileSize: app.validIdFileSize,
-        preferredSchedule: app.preferredSchedule || '',
-        notes: app.notes || '',
-      }, { preferDirect: true });
-      if (data?.error) throw new Error(data.error);
-      return data;
-    } finally {
-      turnstileChallenge?.reset();
-    }
+    const data = await _invokeEdgeFunction('host-application', {
+      action: 'signup',
+      fullName: app.fullName,
+      contactNumber: app.contactNumber,
+      email: app.email,
+      password: app.password,
+      gcashNumber: app.gcashNumber,
+      validIdBase64: app.validIdBase64,
+      validIdFileName: app.validIdFileName,
+      validIdFileType: app.validIdFileType,
+      validIdFileSize: app.validIdFileSize,
+      preferredSchedule: app.preferredSchedule || '',
+      notes: app.notes || '',
+    }, { preferDirect: true });
+    if (data?.error) throw new Error(data.error);
+    return data;
   },
 
   async resendOpenPlayHostVerification(email) {
-    let turnstileChallenge = null;
-    try {
-      turnstileChallenge = await _pbAcquireHostApplicationTurnstile();
-      const data = await _invokeEdgeFunction('host-application', {
-        action: 'resend-verification',
-        email,
-        turnstileToken: turnstileChallenge.token,
-      }, { preferDirect: true });
-      if (data?.error) throw new Error(data.error);
-      return data;
-    } finally {
-      turnstileChallenge?.reset();
-    }
+    const data = await _invokeEdgeFunction('host-application', {
+      action: 'resend-verification',
+      email,
+    }, { preferDirect: true });
+    if (data?.error) throw new Error(data.error);
+    return data;
   },
 
   async getOpenPlayHostIdSignedUrl(applicationId) {
@@ -1625,9 +1397,7 @@ window.DB = {
 
   async addOpenPlayHostSessionRegistration(reg) {
     const paymentMethod = String(reg.paymentMethod || 'cash').toLowerCase();
-    let turnstileChallenge = null;
     try {
-      turnstileChallenge = await _pbAcquirePublicRegistrationTurnstile();
       const response = await _invokeEdgeFunction('submit-public-registration', {
         action: 'host_session',
         sessionId: reg.sessionId,
@@ -1637,7 +1407,6 @@ window.DB = {
         gcashRef: reg.gcashRef || null,
         receiptImageUrl: reg.receiptImageUrl || null,
         receiptStatus: reg.receiptStatus || 'none',
-        turnstileToken: turnstileChallenge?.token || null,
       }, { retryDirect: false });
       const saved = response?.registration;
       if (!saved?.id) throw new Error(response?.error || 'Host-session registration was not saved.');
@@ -1648,8 +1417,6 @@ window.DB = {
     } catch (error) {
       console.error('addOpenPlayHostSessionRegistration:', error);
       throw error;
-    } finally {
-      turnstileChallenge?.reset();
     }
   },
 
@@ -2093,99 +1860,70 @@ window.DB = {
   async verifyGcashReceipt(payload) {
     const bookingRef = String(payload?.bookingRef || '');
     const storedBookingToken = _pbBookingAccessToken(bookingRef, false);
-    const authenticatedHostFlow = payload?.authenticatedHostFlow === true;
     const requestPayload = {
       ...(payload || {}),
       ...(storedBookingToken ? { bookingAccessToken: storedBookingToken } : {}),
     };
-    // This hint controls only whether this browser renders a widget. The Edge
-    // Function ignores it and independently proves the signed-in host owns the
-    // exact booking/session before granting a bypass.
-    delete requestPayload.authenticatedHostFlow;
     const sessionResult = await _sb.auth.getSession();
     const userAccessToken = sessionResult?.data?.session?.access_token || '';
     const authHeader = `Bearer ${userAccessToken || SUPABASE_ANON_KEY}`;
-    let accountRole = '';
-    try { accountRole = await _pbCurrentAccountRole(); } catch (_) {}
-    const browserMayBypass = ['owner', 'court_owner', 'staff'].includes(accountRole) ||
-      (accountRole === 'host' && authenticatedHostFlow);
-    let turnstileChallenge = null;
 
-    if (!browserMayBypass) {
-      turnstileChallenge = await _pbAcquireReceiptTurnstile();
-      requestPayload.turnstileToken = turnstileChallenge.token;
-    }
-
-    try {
-      // Do not use `instanceof Blob` here. Facebook/Messenger WebViews can hand
-      // us a File from a different JavaScript realm, where that check is false.
-      if (requestPayload.imageFile) {
-        const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/verify-gcash-receipt`;
-        const imageFile = await _pbPrepareReceiptImage(requestPayload.imageFile);
-        const form = new FormData();
-        form.append('action', 'verify');
-        form.append('bookingRef', bookingRef);
-        form.append('provider', String(requestPayload.provider || 'gcash'));
-        form.append('contentType', imageFile.type || requestPayload.contentType || 'image/jpeg');
-        if (requestPayload.bookingData) form.append('bookingData', JSON.stringify(requestPayload.bookingData));
-        if (requestPayload.bookingAccessToken) form.append('bookingAccessToken', requestPayload.bookingAccessToken);
-        if (requestPayload.turnstileToken) form.append('turnstileToken', requestPayload.turnstileToken);
-        try {
-          form.append('receipt', imageFile, imageFile.name || 'receipt.jpg');
-        } catch (_) {
-          // Older embedded WebViews may expose a file-like object that FormData
-          // refuses. Base64 is a compatibility fallback, not the normal path.
-          return _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader);
-        }
-
-        const res = await _pbFetchWithTimeout(fnUrl, {
-          method: 'POST',
-          headers: {
-            'apikey': SUPABASE_ANON_KEY,
-            'Authorization': authHeader,
-          },
-          body: form,
-        }, PB_RECEIPT_TIMEOUT_MS);
-        const txt = await res.text();
-        const json = _safeJsonParse(txt);
-        if (!res.ok) {
-          const reason = String(json?.error || txt || `HTTP ${res.status}`);
-          // A small set of WebViews sends multipart headers but drops the File
-          // part. This server response occurs before siteverify, so the same
-          // fresh token remains safe for the compatibility retry.
-          const missingMultipartImage = [400, 415, 422].includes(res.status) &&
-            /receipt file|multipart body|empty image/i.test(reason);
-          if (missingMultipartImage) {
-            return _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader);
-          }
-          throw _pbTurnstileError(reason, String(json?.code || `HTTP_${res.status}`));
-        }
-        if (!json) throw new Error('Receipt verification returned an invalid response.');
-        return json;
+    // Do not use `instanceof Blob` here. Facebook/Messenger WebViews can hand
+    // us a File from a different JavaScript realm, where that check is false.
+    if (requestPayload.imageFile) {
+      const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/verify-gcash-receipt`;
+      const imageFile = await _pbPrepareReceiptImage(requestPayload.imageFile);
+      const form = new FormData();
+      form.append('action', 'verify');
+      form.append('bookingRef', bookingRef);
+      form.append('provider', String(requestPayload.provider || 'gcash'));
+      form.append('contentType', imageFile.type || requestPayload.contentType || 'image/jpeg');
+      if (requestPayload.bookingData) form.append('bookingData', JSON.stringify(requestPayload.bookingData));
+      if (requestPayload.bookingAccessToken) form.append('bookingAccessToken', requestPayload.bookingAccessToken);
+      try {
+        form.append('receipt', imageFile, imageFile.name || 'receipt.jpg');
+      } catch (_) {
+        // Older embedded WebViews may expose a file-like object that FormData
+        // refuses. Base64 is a compatibility fallback, not the normal path.
+        return _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader);
       }
 
-      // A Turnstile token is single use. Send old base64 clients directly once;
-      // an automatic wrapper retry could replay a consumed token or double-bill
-      // OCR after an uncertain network response.
-      const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/verify-gcash-receipt`;
       const res = await _pbFetchWithTimeout(fnUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': authHeader },
-        body: JSON.stringify(requestPayload),
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': authHeader,
+        },
+        body: form,
       }, PB_RECEIPT_TIMEOUT_MS);
       const txt = await res.text();
       const json = _safeJsonParse(txt);
-      if (!res.ok) throw _pbTurnstileError(
-        String(json?.error || txt || `HTTP ${res.status}`),
-        String(json?.code || `HTTP_${res.status}`),
-      );
+      if (!res.ok) {
+        const reason = String(json?.error || txt || `HTTP ${res.status}`);
+        const missingMultipartImage = [400, 415, 422].includes(res.status) &&
+          /receipt file|multipart body|empty image/i.test(reason);
+        if (missingMultipartImage) {
+          return _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader);
+        }
+        throw _pbApiError(reason, String(json?.code || `HTTP_${res.status}`));
+      }
+      if (!json) throw new Error('Receipt verification returned an invalid response.');
       return json;
-    } finally {
-      // Siteverify tokens expire quickly and cannot be reused. Reset/remove the
-      // explicit widget after every request outcome so a retry always executes
-      // a new challenge and receives a new token.
-      turnstileChallenge?.reset();
     }
+
+    const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/verify-gcash-receipt`;
+    const res = await _pbFetchWithTimeout(fnUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': authHeader },
+      body: JSON.stringify(requestPayload),
+    }, PB_RECEIPT_TIMEOUT_MS);
+    const txt = await res.text();
+    const json = _safeJsonParse(txt);
+    if (!res.ok) throw _pbApiError(
+      String(json?.error || txt || `HTTP ${res.status}`),
+      String(json?.code || `HTTP_${res.status}`),
+    );
+    return json;
   },
 
   // Request a short-lived signed URL to view a stored receipt (admin only).
@@ -4271,7 +4009,7 @@ window.DB = {
           { id: 'email', label: 'Email confirmations (Maileroo)', configured: false, required: ['MAILEROO_API_KEY', 'MAILEROO_FROM_ADDRESS'], missing: ['MAILEROO_API_KEY', 'MAILEROO_FROM_ADDRESS'], note: 'Local data mode' },
           { id: 'telegram', label: 'Telegram admin alerts', configured: false, required: ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'], missing: ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'], note: 'Local data mode' },
           { id: 'payments', label: 'PayMongo checkout', configured: false, required: ['PAYMONGO_SECRET_KEY', 'PAYMENT_SUCCESS_URL', 'PAYMENT_CANCEL_URL'], missing: ['PAYMONGO_SECRET_KEY', 'PAYMENT_SUCCESS_URL', 'PAYMENT_CANCEL_URL'], note: 'Local data mode' },
-          { id: 'ocr', label: 'Receipt OCR', configured: false, required: ['GOOGLE_VISION_API_KEY', 'TURNSTILE_SECRET_KEY'], missing: ['GOOGLE_VISION_API_KEY', 'TURNSTILE_SECRET_KEY'], note: 'Local data mode' },
+          { id: 'ocr', label: 'Receipt OCR', configured: false, required: ['GOOGLE_VISION_API_KEY'], missing: ['GOOGLE_VISION_API_KEY'], note: 'Local data mode' },
           { id: 'service_role', label: 'Server database access', configured: false, required: ['SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY'], missing: ['SERVICE_ROLE_KEY or SUPABASE_SERVICE_ROLE_KEY'], note: 'Local data mode' },
         ],
       };

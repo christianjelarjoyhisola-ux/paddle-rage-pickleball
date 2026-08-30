@@ -19,7 +19,7 @@ const gcashAutoFinalizer = read(
   'supabase/migrations/20260728120000_gcash_receipt_auto_verification.sql'
 );
 
-test('all public creation paths are deployed behind hostname-bound Turnstile', () => {
+test('public creation paths keep configured Edge and database boundaries', () => {
   const config = read('supabase/config.toml');
   const deploy = read('deploy-edge-functions.ps1');
   assert.match(config, /\[functions\.submit-public-booking\]\s*verify_jwt = true/);
@@ -31,15 +31,8 @@ test('all public creation paths are deployed behind hostname-bound Turnstile', (
   assert.match(deploy, /"submit-public-registration"/);
   assert.match(deploy, /"host-application"/);
 
-  const bookingGate = bookingEdge.indexOf('await verifyTurnstileToken');
-  const bookingWrite = bookingEdge.indexOf('db.rpc("submit_public_booking_holds"');
-  assert.ok(bookingGate > 0 && bookingWrite > bookingGate);
-  assert.match(bookingEdge, /expectedAction: PUBLIC_REGISTRATION_TURNSTILE_ACTION/);
-
-  const registrationGate = registrationEdge.indexOf('await requireRegistrationTurnstile');
-  const registrationWrite = registrationEdge.indexOf('"submit_public_open_play_registration"');
-  assert.ok(registrationGate > 0 && registrationWrite > registrationGate);
-  assert.doesNotMatch(registrationEdge, /if \(paymentMethod === "cash"\)[\s\S]{0,120}requireRegistrationTurnstile/);
+  assert.match(bookingEdge, /db\.rpc\("submit_public_booking_holds"/);
+  assert.match(registrationEdge, /"submit_public_open_play_registration"/);
 
   const openPlayTrigger = migration.slice(
     migration.indexOf('create or replace function public.prepare_public_open_play_registration'),
@@ -52,16 +45,14 @@ test('all public creation paths are deployed behind hostname-bound Turnstile', (
   assert.match(openPlayTrigger, /public\.public_payment_method_ready\(new\.payment_method\)/);
   assert.match(hostSessionTrigger, /public\.public_payment_method_ready\(new\.payment_method\)/);
 
-  const hostGate = hostApplicationEdge.indexOf('await verifyTurnstileToken');
   const hostLookup = hostApplicationEdge.indexOf('await restSelect("accounts"');
   const hostAuth = hostApplicationEdge.indexOf('await createAuthUser(email, password, fullName)');
   const hostStorage = hostApplicationEdge.indexOf('db.storage.from("host-ids").upload');
   const hostWrite = hostApplicationEdge.indexOf('await restInsert("open_play_host_applications"');
   assert.ok(
-    hostGate > 0 && hostLookup > hostGate && hostAuth > hostGate &&
-      hostStorage > hostGate && hostWrite > hostGate,
+    hostLookup > 0 && hostAuth > hostLookup && hostStorage > hostAuth &&
+      hostWrite > hostStorage,
   );
-  assert.match(hostApplicationEdge, /expectedAction: HOST_APPLICATION_TURNSTILE_ACTION/);
   assert.match(hostApplicationEdge, /const MAX_REQUEST_BYTES = 8 \* 1024 \* 1024/);
   assert.match(hostApplicationEdge, /total > MAX_REQUEST_BYTES[\s\S]*?reader\.cancel\(\)/);
   assert.match(hostApplicationEdge, /\.generateLink\(\{[\s\S]*?type: "signup"/);
@@ -75,10 +66,8 @@ test('all public creation paths are deployed behind hostname-bound Turnstile', (
   const client = read('supabase-config.js');
   const hostPage = read('host.html');
   const mainPage = read('index.html');
-  assert.match(client, /PB_HOST_APPLICATION_TURNSTILE_ACTION = 'host_application'/);
   assert.match(client, /addOpenPlayHostApplication\(app\)[\s\S]*?return this\.submitOpenPlayHostSignup\(app\)/);
-  assert.match(client, /submitOpenPlayHostSignup\(app\)[\s\S]*?_pbAcquireHostApplicationTurnstile\(\)/);
-  assert.match(hostPage, /runtime-config\.js/);
+  assert.doesNotMatch(hostPage, /runtime-config\.js/);
   assert.match(hostPage, /result\?\.emailVerificationSent/);
   assert.match(mainPage, /DB\.addOpenPlayHostApplication\(\{[\s\S]*?password,[\s\S]*?gcashNumber,/);
   assert.doesNotMatch(

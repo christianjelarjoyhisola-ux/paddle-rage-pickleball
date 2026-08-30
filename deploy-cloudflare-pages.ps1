@@ -36,11 +36,6 @@ if (-not $env:CLOUDFLARE_API_TOKEN) {
 
 $projectName = if ($envMap["CLOUDFLARE_PAGES_PROJECT"]) { $envMap["CLOUDFLARE_PAGES_PROJECT"] } else { "paddle-rage-pickleball" }
 $branchName = if ($envMap["CLOUDFLARE_PAGES_BRANCH"]) { $envMap["CLOUDFLARE_PAGES_BRANCH"] } else { "main" }
-$defaultTurnstileSiteKey = "0x4AAAAAAD4nzq_UBKjDttlu"
-$turnstileSiteKey = if ($env:TURNSTILE_SITE_KEY) { $env:TURNSTILE_SITE_KEY.Trim() } elseif ($envMap["TURNSTILE_SITE_KEY"]) { $envMap["TURNSTILE_SITE_KEY"].Trim() } else { $defaultTurnstileSiteKey }
-if (-not $turnstileSiteKey -or $turnstileSiteKey -match '^YOUR_|TURNSTILE_SITE_KEY') {
-  $turnstileSiteKey = $defaultTurnstileSiteKey
-}
 
 $publicFiles = @(
   "_headers",
@@ -67,7 +62,6 @@ $publicFiles = @(
   "player-live.js",
   "qrcode-LICENSE.txt",
   "qrcode.min.js",
-  "runtime-config.js",
   "supabase-config.js",
   "supabase.min.js",
   "splash-music.mp3"
@@ -86,12 +80,6 @@ foreach ($file in $publicFiles) {
   }
   Copy-Item -LiteralPath $source -Destination $stagingDir -Force
 }
-
-# Generate only public browser configuration in the staging directory. JSON
-# encoding prevents a malformed key from becoming executable JavaScript.
-$turnstileSiteKeyJson = ConvertTo-Json -InputObject $turnstileSiteKey -Compress
-$runtimeConfig = "window.PB_PUBLIC_CONFIG = Object.freeze({ turnstileSiteKey: $turnstileSiteKeyJson });"
-Set-Content -LiteralPath (Join-Path $stagingDir "runtime-config.js") -Value $runtimeConfig -Encoding utf8
 
 $wranglerCli = Get-Command "wrangler.cmd" -CommandType Application -ErrorAction SilentlyContinue
 if (-not $wranglerCli) {

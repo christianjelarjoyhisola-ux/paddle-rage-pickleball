@@ -5,12 +5,6 @@ import {
   renderHostDecisionEmail,
   renderHostVerificationEmail,
 } from "../_shared/paddle-rage-email.ts";
-import {
-  HOST_APPLICATION_TURNSTILE_ACTION,
-  parseTurnstileHostnames,
-  turnstileRemoteIp,
-  verifyTurnstileToken,
-} from "../_shared/turnstile.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,7 +31,6 @@ type SignupPayload = {
   applicationId?: string;
   status?: "approved" | "rejected";
   reviewNote?: string;
-  turnstileToken?: string;
   fullName?: string;
   contactNumber?: string;
   email?: string;
@@ -260,8 +253,7 @@ async function loadHostApplication(
 }
 
 // Supabase Auth does not expose an exact-email admin lookup, so scan its
-// paginated admin list and compare normalized emails exactly. Public signup
-// reaches this only after hostname/action-bound Turnstile verification.
+// paginated admin list and compare normalized emails exactly.
 async function authUsersByExactEmail(
   db: any,
   email: string,
@@ -863,30 +855,6 @@ Deno.serve(async (req): Promise<Response> => {
   } catch (error) {
     const status = error instanceof RequestBodyError ? error.status : 400;
     return json({ error: errMsg(error) }, status);
-  }
-
-  if (body.action === "signup" || body.action === "resend-verification") {
-    const turnstile = await verifyTurnstileToken({
-      token: body.turnstileToken,
-      secret: Deno.env.get("TURNSTILE_SECRET_KEY"),
-      remoteIp: turnstileRemoteIp(req),
-      expectedAction: HOST_APPLICATION_TURNSTILE_ACTION,
-      allowedHostnames: parseTurnstileHostnames(
-        Deno.env.get("TURNSTILE_EXPECTED_HOSTNAMES"),
-      ),
-    });
-    if (!turnstile.ok) {
-      const unavailable = turnstile.reason === "server-misconfigured" ||
-        turnstile.reason === "verification-unavailable";
-      return json({
-        error: unavailable
-          ? "Secure host-application verification is temporarily unavailable."
-          : "Secure human verification failed. Please try again.",
-        code: `TURNSTILE_${
-          turnstile.reason.replaceAll("-", "_").toUpperCase()
-        }`,
-      }, unavailable ? 503 : 403);
-    }
   }
 
   if (body.action === "resend-verification") {

@@ -54,12 +54,6 @@ import {
   canViewHostSessionReceipt,
   type ReceiptAccount,
 } from "../_shared/receipt-access.ts";
-import {
-  parseTurnstileHostnames,
-  RECEIPT_OCR_TURNSTILE_ACTION,
-  turnstileRemoteIp,
-  verifyTurnstileToken,
-} from "../_shared/turnstile.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1110,7 +1104,6 @@ Deno.serve(async (req) => {
         action: String(form.get("action") || "verify"),
         bookingRef: String(form.get("bookingRef") || ""),
         bookingAccessToken: String(form.get("bookingAccessToken") || ""),
-        turnstileToken: String(form.get("turnstileToken") || ""),
         provider: String(form.get("provider") || "gcash"),
         contentType: uploadedImage?.type ||
           String(form.get("contentType") || "image/jpeg"),
@@ -1232,7 +1225,6 @@ Deno.serve(async (req) => {
   try {
     const bookingRef = String(body.bookingRef || "");
     const bookingAccessToken = String(body.bookingAccessToken || "");
-    const turnstileToken = String(body.turnstileToken || "");
     let provider = normalizedProvider(String(body.provider || "gcash"));
     let imageBase64 = String(body.imageBase64 || "");
     // Optional inline data supports pre-save Open Play registration receipts.
@@ -1281,8 +1273,8 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (bookingErr) return json({ error: "Booking could not be loaded" }, 500);
 
-    // Authentication is loaded once and is used only to decide whether this
-    // exact row/session qualifies for the narrow staff/host Turnstile bypass.
+    // Authentication is loaded once so a staff member or the owning host can
+    // authorize a persisted receipt mutation without the customer access token.
     // An anonymous Supabase key is not a user session and produces no caller.
     let caller: ReceiptCaller | null;
     try {
@@ -1295,7 +1287,7 @@ Deno.serve(async (req) => {
     let booking: Record<string, unknown>;
     let bookingMutationScope: BookingMutationScope = {};
     let inlinePricingKind: "open_play" | "host_session" | null = null;
-    let authenticatedTurnstileBypass = false;
+    let authorizedReceiptCaller = false;
     const hasPersistedBooking = !!persistedRow;
     if (persistedRow) {
       booking = { ...(persistedRow as Record<string, unknown>) };
@@ -1306,14 +1298,14 @@ Deno.serve(async (req) => {
         bookingAccessToken,
         storedAccessTokenHash,
       );
-      authenticatedTurnstileBypass = !!caller &&
+      authorizedReceiptCaller = !!caller &&
         canViewBookingReceipt(caller.account, caller.userId, booking);
       if (customerTokenAuthorized) {
         bookingMutationScope = {
           customerAccessTokenHash: storedAccessTokenHash,
         };
       } else {
-        if (!authenticatedTurnstileBypass) {
+        if (!authorizedReceiptCaller) {
           return json({
             error: "Receipt verification is not authorized for this booking",
           }, 403);
@@ -1399,29 +1391,6 @@ Deno.serve(async (req) => {
       inlinePricingKind = booking.host_session_id
         ? "host_session"
         : "open_play";
-      authenticatedTurnstileBypass = !!caller &&
-        canViewDashboardReceipt(caller.account);
-      if (
-        !authenticatedTurnstileBypass && caller &&
-        inlinePricingKind === "host_session"
-      ) {
-        const sessionId = String(booking.host_session_id || "").trim();
-        const { data: session, error: sessionError } = await db
-          .from("open_play_host_sessions")
-          .select("host_user_id")
-          .eq("id", sessionId)
-          .maybeSingle();
-        if (sessionError) {
-          return json({
-            error: "Host session authorization could not be checked",
-          }, 500);
-        }
-        authenticatedTurnstileBypass = canViewHostSessionReceipt(
-          caller.account,
-          caller.userId,
-          session,
-        );
-      }
     }
     const authoritativeProvider = paymentMethodProvider(
       booking.payment_method ?? booking.paymentMethod,
@@ -1437,9 +1406,9 @@ Deno.serve(async (req) => {
     // cash/unknown booking or select weaker provider rules in the request.
     provider = authoritativeProvider;
 
-    // A disabled or unconfigured payment method must fail before Turnstile is
-    // consumed, Storage is written, or a short-lived hold can be promoted to a
-    // permanent manual-review state by the service role.
+    // A disabled or unconfigured payment method must fail before Storage is
+    // written or a short-lived hold can be promoted to a permanent
+    // manual-review state by the service role.
     const { data: methodReady, error: methodReadyError } = await db.rpc(
       "public_payment_method_ready",
       { p_method: provider },
@@ -1455,58 +1424,6 @@ Deno.serve(async (req) => {
         error: "This payment method is not currently enabled.",
         code: "PAYMENT_METHOD_DISABLED",
       }, 409);
-    }
-
-    // Cloudflare tokens expire after five minutes and are single use. The
-    // official siteverify call therefore rejects missing, expired, or replayed
-    // public tokens before any Storage write or billable Vision request.
-    if (!authenticatedTurnstileBypass) {
-      const turnstileResult = await verifyTurnstileToken({
-        token: turnstileToken,
-        secret: Deno.env.get("TURNSTILE_SECRET_KEY") || "",
-        remoteIp: turnstileRemoteIp(req),
-        expectedAction: RECEIPT_OCR_TURNSTILE_ACTION,
-        allowedHostnames: parseTurnstileHostnames(
-          Deno.env.get("TURNSTILE_EXPECTED_HOSTNAMES") || "",
-        ),
-      });
-      if (!turnstileResult.ok) {
-        console.warn("receipt Turnstile rejected", {
-          bookingRef,
-          reason: turnstileResult.reason,
-          codes: turnstileResult.errorCodes,
-        });
-        if (turnstileResult.reason === "server-misconfigured") {
-          return json({
-            error:
-              "Human verification is not configured. Please contact Paddle Rage support.",
-            code: "TURNSTILE_NOT_CONFIGURED",
-          }, 503);
-        }
-        if (turnstileResult.reason === "verification-unavailable") {
-          return json({
-            error:
-              "Human verification is temporarily unavailable. Please wait a moment and try again.",
-            code: "TURNSTILE_UNAVAILABLE",
-          }, 503);
-        }
-        if (turnstileResult.reason === "missing-token") {
-          return json({
-            error:
-              "Please complete the human verification before uploading your receipt.",
-            code: "TURNSTILE_REQUIRED",
-          }, 400);
-        }
-        const expiredOrReplayed = turnstileResult.errorCodes.includes(
-          "timeout-or-duplicate",
-        );
-        return json({
-          error: expiredOrReplayed
-            ? "Human verification expired or was already used. Please try again."
-            : "Human verification did not pass. Please try again.",
-          code: expiredOrReplayed ? "TURNSTILE_EXPIRED" : "TURNSTILE_INVALID",
-        }, 403);
-      }
     }
 
     if (hasPersistedBooking) {

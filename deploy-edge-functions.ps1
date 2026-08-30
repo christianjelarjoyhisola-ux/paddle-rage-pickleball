@@ -42,8 +42,6 @@ $projectRef = Resolve-ConfigValue "SUPABASE_PROJECT_REF" $envMap -Required
 $serviceRoleKey = Resolve-ConfigValue "SUPABASE_SERVICE_ROLE_KEY" $envMap -Required
 $databasePassword = Resolve-ConfigValue "SUPABASE_DB_PASSWORD" $envMap
 $googleVisionKey = Resolve-ConfigValue "GOOGLE_VISION_API_KEY" $envMap
-$turnstileSecretKey = Resolve-ConfigValue "TURNSTILE_SECRET_KEY" $envMap
-$turnstileExpectedHostnames = Resolve-ConfigValue "TURNSTILE_EXPECTED_HOSTNAMES" $envMap
 $paymentProvider = Resolve-ConfigValue "PAYMENT_PROVIDER" $envMap
 if (-not $paymentProvider) { $paymentProvider = "template" }
 $paymentWebhookSecret = Resolve-ConfigValue "PAYMENT_WEBHOOK_SECRET" $envMap
@@ -129,8 +127,6 @@ try {
   $remoteSecretNames = @($secretRows | ForEach-Object { [string]$_.name })
   $requiredIntegrationSecrets = @(
     @{ Name = "GOOGLE_VISION_API_KEY"; Value = $googleVisionKey },
-    @{ Name = "TURNSTILE_SECRET_KEY"; Value = $turnstileSecretKey },
-    @{ Name = "TURNSTILE_EXPECTED_HOSTNAMES"; Value = $turnstileExpectedHostnames },
     @{ Name = "MAILEROO_API_KEY"; Value = $mailerooApiKey },
     @{ Name = "MAILEROO_FROM_ADDRESS"; Value = $mailerooFromAddress },
     @{ Name = "MAILEROO_FROM_NAME"; Value = $mailerooFromName },
@@ -160,8 +156,6 @@ try {
     "PAYMENT_PROVIDER=$paymentProvider"
   )
   if ($googleVisionKey) { $secretArgs += "GOOGLE_VISION_API_KEY=$googleVisionKey" }
-  if ($turnstileSecretKey) { $secretArgs += "TURNSTILE_SECRET_KEY=$turnstileSecretKey" }
-  if ($turnstileExpectedHostnames) { $secretArgs += "TURNSTILE_EXPECTED_HOSTNAMES=$turnstileExpectedHostnames" }
   if ($paymentWebhookSecret) { $secretArgs += "PAYMENT_WEBHOOK_SECRET=$paymentWebhookSecret" }
   if ($publicLogoUrl) { $secretArgs += "PUBLIC_LOGO_URL=$publicLogoUrl" }
   if ($appAdminUrl) { $secretArgs += "APP_ADMIN_URL=$appAdminUrl" }

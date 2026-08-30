@@ -604,9 +604,9 @@ create trigger a00_prepare_public_booking_insert
 before insert on public.bookings
 for each row execute function public.prepare_public_booking_insert();
 
--- Public booking holds are created only by the Turnstile-protected Edge
--- Function. The function accepts a small atomic group so a multi-court hold
--- never consumes several challenge tokens or leaves a partially-created set.
+-- Public booking holds are created only by the Edge Function. The function
+-- accepts a small atomic group so a multi-court hold never leaves a
+-- partially-created set.
 create or replace function public.submit_public_booking_holds(
   p_bookings jsonb,
   p_access_token_hash text
@@ -2062,8 +2062,8 @@ grant select, insert, update, delete on table public.open_play_host_sessions to 
 revoke all on table public.open_play_host_session_registrations from public, anon;
 grant select, insert, update on table public.open_play_host_session_registrations to authenticated;
 
--- Host applications are created only by the hostname/action-bound Turnstile
--- Edge Function. Keep review access for authenticated dashboard roles, but
+-- Host applications are created only by the Edge Function. Keep review access
+-- for authenticated dashboard roles, but
 -- remove the legacy browser-to-table insertion path for every client role.
 drop policy if exists open_play_host_applications_insert_public
   on public.open_play_host_applications;

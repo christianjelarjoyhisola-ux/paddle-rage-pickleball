@@ -1,10 +1,4 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import {
-  parseTurnstileHostnames,
-  PUBLIC_REGISTRATION_TURNSTILE_ACTION,
-  turnstileRemoteIp,
-  verifyTurnstileToken,
-} from "../_shared/turnstile.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -220,29 +214,6 @@ Deno.serve(async (req) => {
         ok: false,
         error: "Secure booking access token is invalid.",
       }, 400);
-    }
-
-    const turnstile = await verifyTurnstileToken({
-      token: body.turnstileToken,
-      secret: Deno.env.get("TURNSTILE_SECRET_KEY"),
-      remoteIp: turnstileRemoteIp(req),
-      expectedAction: PUBLIC_REGISTRATION_TURNSTILE_ACTION,
-      allowedHostnames: parseTurnstileHostnames(
-        Deno.env.get("TURNSTILE_EXPECTED_HOSTNAMES"),
-      ),
-    });
-    if (!turnstile.ok) {
-      const unavailable = turnstile.reason === "server-misconfigured" ||
-        turnstile.reason === "verification-unavailable";
-      return json({
-        ok: false,
-        code: `TURNSTILE_${
-          turnstile.reason.replaceAll("-", "_").toUpperCase()
-        }`,
-        error: unavailable
-          ? "Secure booking verification is temporarily unavailable. Please try again shortly."
-          : "Secure human verification failed. Please try again.",
-      }, unavailable ? 503 : 403);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";

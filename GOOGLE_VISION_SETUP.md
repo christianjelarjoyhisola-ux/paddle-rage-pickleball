@@ -87,10 +87,9 @@ describing this workflow as independently authenticated proof of payment.
   invocation volume.
 - Keep the key restricted to Cloud Vision API and rotate it if it is ever
   exposed.
-- Keep the included Turnstile boundary enabled for every public receipt upload.
-  The server validates a fresh, single-use token before Storage or Vision; a
-  browser cooldown and CORS are not security boundaries. See
-  [TURNSTILE_SETUP.md](TURNSTILE_SETUP.md).
+- Treat browser cooldowns and CORS as user-experience controls, not abuse
+  protection. Monitor request volume and keep conservative Google Cloud quotas
+  because public receipt OCR can incur provider cost.
 
 [Cloud Vision quotas](https://cloud.google.com/vision/quotas) are project-wide.
 

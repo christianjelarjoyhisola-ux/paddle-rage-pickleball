@@ -3927,8 +3927,6 @@ async function verifyHostSessionReceipt(ref, method, inlineData) {
     imageFile: _hostSessionReceiptFile,
     contentType: _hostSessionReceiptFile.type || 'image/jpeg',
     bookingData: inlineData,
-    authenticatedHostFlow: !!activeHostSession() &&
-      String(activeHostSession().id || '') === String(_hostSessionCurrent?.hostUserId || ''),
   });
   // Host-session joins are verified before their registration row exists.
   // Until a trusted server transaction can create and settle that row
@@ -7081,8 +7079,6 @@ async function submitBookingLegacy(e) {
         booking._receiptResult = await verifyUploadedReceipt(booking.ref, payMethod);
       } catch(err) {
         const receiptError = extractErrMsg(err);
-        const humanVerificationFailed = String(err?.code || '').startsWith('TURNSTILE_') ||
-          /human verification|secure receipt verification/i.test(receiptError);
         // A client timeout does not prove the server failed; it may still be
         // storing or verifying the receipt. Never cancel a paid booking on an
         // uncertain network result. Keep the server row as verifying and give
@@ -7092,9 +7088,7 @@ async function submitBookingLegacy(e) {
         DB.notifyBookingUpdate(booking, 'payment_review_needed', `Receipt request uncertain: ${receiptError}`).catch(() => {});
         showInvoice(booking);
         resetForm();
-        toast(humanVerificationFailed
-          ? `Booking saved as ${booking.ref}, but the receipt was not uploaded: ${receiptError} Please contact Paddle Rage and do not pay again.`
-          : `Booking saved as ${booking.ref}. Receipt verification is still pending; please do not pay again.`, humanVerificationFailed ? 'err' : 'inf');
+        toast(`Booking saved as ${booking.ref}. Receipt verification is still pending; please do not pay again.`, 'inf');
         await renderCourts();
         onCardDate(booking.courtId, booking.date).catch(() => {});
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🎾 Confirm Booking'; }
@@ -7363,8 +7357,6 @@ async function submitBooking(e) {
         booking._receiptResult = await verifyUploadedReceipt(booking.ref, payMethod);
       } catch(err) {
         const receiptError = extractErrMsg(err);
-        const humanVerificationFailed = String(err?.code || '').startsWith('TURNSTILE_') ||
-          /human verification|secure receipt verification/i.test(receiptError);
         // Do not overwrite server state after a timeout/network error: the
         // Edge Function may finish successfully after the WebView disconnects.
         booking.status = 'pending';
@@ -7373,9 +7365,7 @@ async function submitBooking(e) {
         DB.notifyBookingUpdate(booking, 'payment_review_needed', `Receipt request uncertain: ${receiptError}`).catch(() => {});
         showInvoice(booking);
         resetForm();
-        toast(humanVerificationFailed
-          ? `Booking saved as ${booking.ref}, but the receipt was not uploaded: ${receiptError} Please contact Paddle Rage and do not pay again.`
-          : `Booking saved as ${booking.ref}. Receipt verification is still pending; please do not pay again.`, humanVerificationFailed ? 'err' : 'inf');
+        toast(`Booking saved as ${booking.ref}. Receipt verification is still pending; please do not pay again.`, 'inf');
         await refreshBookingItemViews(itemBookings);
         return;
       }
@@ -7504,7 +7494,6 @@ async function verifyUploadedReceipt(bookingRef, method, inlineData = null) {
       provider: method,
       imageFile: _receiptFile,
       contentType: _receiptFile.type || 'image/jpeg',
-      authenticatedHostFlow: isVerifiedHostBooking(),
     };
     if (inlineData) payload.bookingData = inlineData;
     const res = await DB.verifyGcashReceipt(payload);
@@ -7531,14 +7520,10 @@ async function verifyUploadedReceipt(bookingRef, method, inlineData = null) {
       bookingStatus: res?.bookingStatus || null,
     };
   } catch (err) {
-    const reason = extractErrMsg(err);
-    const verificationError = String(err?.code || '').startsWith('TURNSTILE_') || /human verification|secure receipt verification/i.test(reason);
     if (st) {
       st.style.background = 'rgba(229,57,53,.1)';
       st.style.color = '#e53935';
-      st.textContent = verificationError
-        ? reason
-        : 'Receipt upload failed. Please attach the screenshot again and retry.';
+      st.textContent = 'Receipt upload failed. Please attach the screenshot again and retry.';
     }
     throw err;
   }
@@ -9028,7 +9013,6 @@ async function submitOpenPlay() {
 }
 </script>
 <script src="supabase.min.js"></script>
-<script src="runtime-config.js"></script>
 <script src="supabase-config.js?v=20260719-payment-policy-v4&amp;rollback=deb2d66"></script>
 
 <!-- MOBILE STICKY BOOK NOW BAR -->
