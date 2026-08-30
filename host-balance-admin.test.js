@@ -84,9 +84,9 @@ test('separates reservation state from pending balance review on desktop and mob
   assert.match(admin, /deposit accepted · \$\{fmt\(pendingAmount\)\} submitted/);
   assert.match(admin, /Awaiting owner verification/);
   assert.match(admin, /<div class="mb-book-primary-actions">\$\{hostBalanceReviewButton\(b, true\)\}\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}<\/div>/);
-  assert.match(admin, /b\.hostBooking \? hostDepositEvidenceBadge\(b\) : receiptBadge\(b\)/);
+  assert.match(admin, /b\.hostBooking \? hostPaymentEvidenceHtml\(b\) : receiptBadge\(b\)/);
   assert.match(admin, /<span>Payment status<\/span><span>\$\{bookingPayStateSelect\(b\)\}<\/span>/);
-  assert.match(admin, /<span>Deposit<\/span><span>\$\{hostDepositEvidenceBadge\(b\) \|\| 'Not recorded'\}<\/span>/);
+  assert.match(admin, /<span>Payments<\/span><span>\$\{hostPaymentEvidenceHtml\(b\) \|\| 'Not recorded'\}<\/span>/);
   assert.match(admin, /bookingActionsHtml\(b, canDelete, !b\.hostBooking\)/);
   const pendingBranch = admin.match(/if \(hostBalancePendingPayment\(b\)\) \{([\s\S]*?)\n  \}/)?.[1] || '';
   assert.match(pendingBranch, /PAYMENT REVIEW NEEDED/);
@@ -230,6 +230,182 @@ test('keeps owner review actions fail-closed until the Payment 2 image load even
   assert.match(
     decide,
     /!state\.reviewable[\s\S]*?paymentStatus\(payment\) !== 'pending_review'[\s\S]*?!state\.receiptLoaded[\s\S]*?state\.activeReceipt !== 'balance'/,
+  );
+});
+
+test('derives booking-row Payment 2 evidence from a real persisted balance attempt', () => {
+  assert.match(hostBalanceAdmin, /function paymentEvidenceForBooking\(booking\)/);
+  assert.match(hostBalanceAdmin, /function approvedForBooking\(booking\)/);
+  assert.match(hostBalanceAdmin, /function listPaymentEvidence\(\)/);
+  assert.match(hostBalanceAdmin, /paymentStatus\([^)]*\) === 'approved'/);
+  assert.match(
+    hostBalanceAdmin,
+    /pendingForBooking,[\s\S]*?paymentEvidenceForBooking,[\s\S]*?approvedForBooking,/,
+  );
+
+  const approvedStart = hostBalanceAdmin.indexOf('function approvedForBooking(booking)');
+  const approvedEnd = hostBalanceAdmin.indexOf('\n  function ', approvedStart + 1);
+  const approved = hostBalanceAdmin.slice(approvedStart, approvedEnd);
+  assert.notEqual(approvedStart, -1, 'approvedForBooking must exist');
+  assert.match(approved, /approvedAttemptMatchesBooking\(booking, attempt\)/);
+  assert.doesNotMatch(approved, /bookingPaymentStatus|payment_status\s*===\s*'paid'/);
+
+  const strictStart = hostBalanceAdmin.indexOf('function approvedAttemptMatchesBooking(booking, attempt)');
+  const strictEnd = hostBalanceAdmin.indexOf('\n  function ', strictStart + 1);
+  const strict = hostBalanceAdmin.slice(strictStart, strictEnd);
+  assert.notEqual(strictStart, -1, 'approved Payment 2 evidence must have a strict matcher');
+  assert.match(strict, /booking\?\.hostBooking/);
+  assert.match(strict, /paymentStatus\(attempt\) !== 'approved'/);
+  assert.match(strict, /approvedAt|approved_at/);
+  assert.match(strict, /receiptVerificationId|receipt_verification_id/);
+  assert.match(strict, /bookingRefs|booking_refs/);
+  assert.match(strict, /bookingKey|booking_key/);
+  assert.match(strict, /totalAmount|total_amount/);
+  assert.match(strict, /\.every\(/);
+  assert.match(strict, /expectedRefs\.size !== attemptRefs\.size/);
+  assert.match(strict, /Math\.abs\(bookingTotal - attemptTotal\) <= 0\.01/);
+
+  const rowsStart = hostBalanceAdmin.indexOf('function bookingRows(booking)');
+  const rowsEnd = hostBalanceAdmin.indexOf('\n  function ', rowsStart + 1);
+  const strictMatch = new Function(
+    'paymentStatus',
+    'normalizedBookingRef',
+    `${hostBalanceAdmin.slice(rowsStart, rowsEnd)}\n${strict}; return approvedAttemptMatchesBooking;`,
+  )(
+    attempt => String(attempt?.status || '').toLowerCase(),
+    value => String(value || '').trim().toUpperCase(),
+  );
+  const booking = {
+    hostBooking: true,
+    paymentStatus: 'paid',
+    groupRef: 'PB-GROUP-G',
+    total: 4680,
+    allItems: [
+      { ref: 'PB-ROW-1', hostBooking: true, paymentStatus: 'paid' },
+      { ref: 'PB-ROW-2', hostBooking: true, paymentStatus: 'paid' },
+    ],
+  };
+  const realApproval = {
+    status: 'approved',
+    approvedAt: '2026-08-31T01:00:00Z',
+    receiptVerificationId: 'audit-id',
+    bookingKey: 'PB-GROUP-G',
+    bookingRefs: ['PB-ROW-1', 'PB-ROW-2'],
+    totalAmount: 4680,
+  };
+  assert.equal(strictMatch(booking, realApproval), true);
+  assert.equal(strictMatch(booking, { ...realApproval, status: 'pending_review' }), false);
+  assert.equal(strictMatch(booking, { ...realApproval, approvedAt: null }), false);
+  assert.equal(strictMatch(booking, { ...realApproval, receiptVerificationId: null }), false);
+  assert.equal(strictMatch(booking, { ...realApproval, bookingKey: 'PB-OTHER-G' }), false);
+  assert.equal(strictMatch(booking, { ...realApproval, bookingRefs: ['PB-ROW-1'] }), false);
+  assert.equal(strictMatch(booking, { ...realApproval, totalAmount: 4679 }), false);
+  assert.equal(strictMatch({ ...booking, hostBooking: false }, realApproval), false);
+  assert.equal(strictMatch({ ...booking, allItems: [{ ...booking.allItems[0], paymentStatus: 'downpayment_paid' }] }, realApproval), false);
+
+  const evidenceStart = hostBalanceAdmin.indexOf('function paymentEvidenceForBooking(booking)');
+  const evidenceEnd = hostBalanceAdmin.indexOf('\n  function ', evidenceStart + 1);
+  const evidence = hostBalanceAdmin.slice(evidenceStart, evidenceEnd);
+  assert.match(evidence, /attemptsLoadState !== 'ready'/);
+  assert.match(evidence, /approvedForBooking\(booking\)/);
+  assert.match(evidence, /bookingPaymentState === 'paid'/);
+  assert.match(evidence, /approvedCandidates\.length[\s\S]*?state: 'unknown'[\s\S]*?state: 'manual'/);
+
+  let attempts = [];
+  let strictApproval = null;
+  const evidenceForBooking = new Function(
+    'state',
+    'matchedAttemptsForBooking',
+    'approvedForBooking',
+    'paymentStatus',
+    `${evidence}; return paymentEvidenceForBooking;`,
+  )(
+    { attemptsLoadState: 'ready' },
+    () => attempts,
+    () => strictApproval,
+    attempt => String(attempt?.status || '').toLowerCase(),
+  );
+  const paidBooking = { hostBooking: true, paymentStatus: 'paid' };
+  assert.deepEqual(evidenceForBooking(paidBooking), { state: 'manual', attempt: null });
+  attempts = [{ status: 'approved', bookingKey: 'wrong-key' }];
+  assert.deepEqual(
+    evidenceForBooking(paidBooking),
+    { state: 'unknown', attempt: null },
+    'a malformed approved candidate must fail closed instead of being mislabeled manual',
+  );
+  strictApproval = { status: 'approved', approvedAt: '2026-08-31T01:00:00Z' };
+  assert.deepEqual(evidenceForBooking(paidBooking), { state: 'approved', attempt: strictApproval });
+
+  const listStart = hostBalanceAdmin.indexOf('async function listPaymentEvidence()');
+  const listEnd = hostBalanceAdmin.indexOf('\n  function ', listStart + 1);
+  const list = hostBalanceAdmin.slice(listStart, listEnd);
+  assert.notEqual(listStart, -1, 'listPaymentEvidence must batch-load the complete evidence set');
+  assert.match(list, /\.range\(/);
+  assert.doesNotMatch(list, /\.limit\(1000\)/);
+});
+
+test('keeps the pending review queue usable when settled-history evidence cannot load', () => {
+  const loadStart = hostBalanceAdmin.indexOf('function load(force)');
+  const loadEnd = hostBalanceAdmin.indexOf('\n  function render(', loadStart);
+  const load = hostBalanceAdmin.slice(loadStart, loadEnd);
+  assert.notEqual(loadStart, -1, 'load must coordinate pending and settled evidence');
+  assert.match(load, /pendingRequest/);
+  assert.match(load, /listPaymentEvidence\(\)/);
+  assert.match(load, /Promise\.allSettled/);
+  assert.doesNotMatch(load, /await Promise\.all\(\[pendingRequest/);
+  assert.match(load, /attemptsLoadState = 'error'/);
+  assert.match(load, /state\.payments = pendingResult\.value/);
+});
+
+test('shows truthful Payment 1 and Payment 2 evidence on desktop and mobile booking rows', () => {
+  const helpersStart = admin.indexOf('function hostDepositEvidenceBadge(b)');
+  const helpersEnd = admin.indexOf('\nfunction duplicatePaymentRefBadge', helpersStart);
+  const helpers = admin.slice(helpersStart, helpersEnd);
+  assert.notEqual(helpersStart, -1, 'Payment 1 evidence helper must exist');
+  assert.notEqual(helpersEnd, -1, 'shared hostPaymentEvidenceHtml helper must exist');
+
+  const browserWindow = { HostBalanceAdmin: { paymentEvidenceForBooking: () => ({ state: 'unknown', attempt: null }) } };
+  const renderEvidence = new Function(
+    'window',
+    `${helpers}; return hostPaymentEvidenceHtml;`,
+  )(browserWindow);
+  const verifiedDeposit = {
+    hostBooking: true,
+    receiptStatus: 'auto_approved',
+    paymentStatus: 'downpayment_paid',
+  };
+
+  browserWindow.HostBalanceAdmin.paymentEvidenceForBooking = () => ({ state: 'pending', attempt: { status: 'pending_review' } });
+  const pending = renderEvidence(verifiedDeposit);
+  assert.match(pending, /Payment 1 accepted/);
+  assert.match(pending, /Payment 2 under review/);
+  assert.doesNotMatch(pending, /Payment 2 accepted|recorded manually/);
+
+  browserWindow.HostBalanceAdmin.paymentEvidenceForBooking = () => ({ state: 'approved', attempt: { status: 'approved' } });
+  const approved = renderEvidence({ ...verifiedDeposit, paymentStatus: 'paid' });
+  assert.match(approved, /Payment 1 accepted/);
+  assert.match(approved, /Payment 2 accepted/);
+  assert.doesNotMatch(approved, /under review|recorded manually/);
+
+  browserWindow.HostBalanceAdmin.paymentEvidenceForBooking = () => ({ state: 'manual', attempt: null });
+  const manual = renderEvidence({ ...verifiedDeposit, paymentStatus: 'paid' });
+  assert.match(manual, /Payment 1 accepted/);
+  assert.match(manual, /Balance recorded manually/);
+  assert.doesNotMatch(manual, /Payment 2 accepted/);
+
+  browserWindow.HostBalanceAdmin.paymentEvidenceForBooking = () => ({ state: 'unknown', attempt: null });
+  const unknownPaid = renderEvidence({ ...verifiedDeposit, paymentStatus: 'paid' });
+  assert.match(unknownPaid, /Payment 1 accepted/);
+  assert.doesNotMatch(
+    unknownPaid,
+    /Payment 2 accepted|Balance recorded manually/,
+    'generic paid state without authoritative history must not invent Payment 2 evidence',
+  );
+
+  assert.match(admin, /b\.hostBooking \? hostPaymentEvidenceHtml\(b\) : receiptBadge\(b\)/);
+  assert.match(
+    admin,
+    /<div class="mb-book-detail-row"><span>Payments<\/span><span>\$\{hostPaymentEvidenceHtml\(b\) \|\| 'Not recorded'\}<\/span><\/div>/,
   );
 });
 

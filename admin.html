@@ -615,6 +615,16 @@ tr:hover td { background: var(--bg2); }
 .host-deposit-evidence { color: var(--green); font-size: .67rem; font-weight: 850; line-height: 1.35; }
 .host-deposit-evidence.warn { color: var(--yellow); }
 .host-deposit-evidence.flagged { color: var(--red); }
+.host-payment-ledger { display: grid; gap: 3px; min-width: 0; }
+.host-payment-ledger .host-deposit-evidence,
+.host-balance-evidence {
+  display: flex; align-items: center; gap: 5px; min-width: 0;
+  font-size: .67rem; font-weight: 850; line-height: 1.35;
+}
+.host-balance-evidence.accepted { color: var(--green); }
+.host-balance-evidence.review { color: var(--yellow); }
+.host-balance-evidence.rejected { color: var(--red); }
+.host-balance-evidence.manual { color: var(--text2); }
 .mb-book-primary-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; margin-top: 10px; }
 .mb-book-primary-actions .btn { width: 100%; min-height: 40px; padding: 7px 9px; justify-content: center; }
 .receipt-badge {
@@ -5774,6 +5784,21 @@ function hostDepositEvidenceBadge(b){
   }
   return '';
 }
+function hostPaymentEvidenceHtml(b){
+  const payment1 = hostDepositEvidenceBadge(b);
+  if (!payment1) return '';
+  const evidence = window.HostBalanceAdmin?.paymentEvidenceForBooking?.(b) || { state: 'unknown' };
+  const payment2 = evidence.state === 'approved'
+    ? '<span class="host-balance-evidence accepted">✓ Payment 2 accepted</span>'
+    : evidence.state === 'pending'
+      ? '<span class="host-balance-evidence review">● Payment 2 under review</span>'
+      : evidence.state === 'rejected'
+        ? '<span class="host-balance-evidence rejected">× Payment 2 rejected</span>'
+        : evidence.state === 'manual'
+          ? '<span class="host-balance-evidence manual">✓ Balance recorded manually</span>'
+          : '';
+  return `<div class="host-payment-ledger">${payment1}${payment2}</div>`;
+}
 function duplicatePaymentRefBadge(b){
   if (!b?.duplicatePaymentRef) return '';
   const count = Number(b.duplicatePaymentRefCount || 0);
@@ -6125,6 +6150,14 @@ function mobileBookingCard(b, canDelete){
   const courtLabel = b.courtName || 'Court';
   const deadlineState = window.BookingBalance?.deadlineState?.(b) || {};
   const pendingBalance = hostBalancePendingPayment(b);
+  const hostPaymentEvidence = b.hostBooking
+    ? (window.HostBalanceAdmin?.paymentEvidenceForBooking?.(b) || { state: 'unknown' })
+    : { state: 'not_applicable' };
+  const mobilePayState = hostPaymentEvidence.state === 'approved'
+    ? '2/2 payments accepted'
+    : hostPaymentEvidence.state === 'manual'
+      ? 'Fully paid · manual record'
+      : payState;
   const bookedOn = b.createdAt ? (() => {
     const d = new Date(b.createdAt);
     return Number.isNaN(d.getTime()) ? '--' : `${d.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})} ${d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true})}`;
@@ -6147,7 +6180,7 @@ function mobileBookingCard(b, canDelete){
       <div class="mb-book-summary">
         <span class="mb-book-chip amount">${fmt(b.total)}</span>
         <span class="mb-book-chip">${esc(payMethod)}</span>
-        ${pendingBalance ? `<span class="mb-book-chip warn">Payment review needed</span>` : `<span class="mb-book-chip ${['unpaid','rejected','failed'].includes(String(b.paymentStatus || '').toLowerCase()) ? 'warn' : ''}">${esc(payState)}</span>`}
+        ${pendingBalance ? `<span class="mb-book-chip warn">Payment review needed</span>` : `<span class="mb-book-chip ${['unpaid','rejected','failed'].includes(String(b.paymentStatus || '').toLowerCase()) ? 'warn' : ''}">${esc(mobilePayState)}</span>`}
         ${!pendingBalance && deadlineState.label ? `<span class="mb-book-chip warn">${esc(deadlineState.label)}</span>` : ''}
         ${bookingSourceBadge(b)}
       </div>
@@ -6169,7 +6202,7 @@ function mobileBookingCard(b, canDelete){
         <div class="mb-book-detail-row"><span>Payment status</span><span>${bookingPayStateSelect(b)}</span></div>
         ${b.duplicatePaymentRef ? `<div class="mb-book-detail-row"><span>Warning</span><span>${duplicatePaymentRefBadge(b)}</span></div>` : ''}
         ${b.hostBooking
-          ? `<div class="mb-book-detail-row"><span>Deposit</span><span>${hostDepositEvidenceBadge(b) || 'Not recorded'}</span></div>`
+          ? `<div class="mb-book-detail-row"><span>Payments</span><span>${hostPaymentEvidenceHtml(b) || 'Not recorded'}</span></div>`
           : b.receiptStatus && b.receiptStatus !== 'none' ? `<div class="mb-book-detail-row"><span>Receipt</span><span>${receiptBadge(b)}</span></div>` : ''}
       </div>
       <div class="mb-book-actions">${bookingActionsHtml(b, canDelete, !b.hostBooking)}</div>
@@ -6875,7 +6908,7 @@ async function renderBookings(){
           <option value="rejected" ${b.paymentStatus==='rejected'?'selected':''}>Rejected</option>
         </select>
         ${duplicatePaymentRefBadge(b)}
-        ${b.hostBooking ? hostDepositEvidenceBadge(b) : receiptBadge(b)}
+        ${b.hostBooking ? hostPaymentEvidenceHtml(b) : receiptBadge(b)}
       </div></td>
       <td data-label="Reservation"><div class="booking-status-stack">${hostBalanceBookingStatus(b)}${bookingQuickConfirmButton(b)}</div></td>
       <td data-label="Actions"><div style="display:flex;gap:5px;flex-wrap:wrap">${bookingActionsHtml(b, canDelete)}</div></td>
@@ -13745,6 +13778,6 @@ async function checkAgreementGate(session) {
 <script src="supabase-config.js?v=20260830-host-balance-v1"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>
-<script src="host-balance-admin.js?v=20260831-review-action-v8"></script>
+<script src="host-balance-admin.js?v=20260831-payment-evidence-v9"></script>
 </body>
 </html>

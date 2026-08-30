@@ -3,6 +3,7 @@
 
   const state = {
     payments: [],
+    attempts: [],
     loadedAt: 0,
     loading: null,
     current: null,
@@ -18,6 +19,7 @@
     historyToken: 0,
     expectedPaymentId: '',
     loadState: 'idle',
+    attemptsLoadState: 'idle',
     generation: 0,
   };
   const byId = id => document.getElementById(id);
@@ -77,6 +79,96 @@
   function statusForBooking(booking) {
     if (pendingForBooking(booking)) return 'pending';
     return state.loadState === 'ready' ? 'clear' : 'unknown';
+  }
+
+  function matchedAttemptsForBooking(booking) {
+    if (state.attemptsLoadState !== 'ready' || !global.HostBalancePayment?.attemptMatchesBooking) return [];
+    return state.attempts.filter(attempt => global.HostBalancePayment.attemptMatchesBooking(booking, attempt));
+  }
+
+  function bookingRows(booking) {
+    if (Array.isArray(booking?.allItems) && booking.allItems.length) return booking.allItems;
+    if (Array.isArray(booking?.items) && booking.items.length) return booking.items;
+    return booking ? [booking] : [];
+  }
+
+  function approvedAttemptMatchesBooking(booking, attempt) {
+    const rows = bookingRows(booking);
+    if (!booking?.hostBooking || !rows.length || paymentStatus(attempt) !== 'approved') return false;
+    if (!attempt?.approvedAt || !attempt?.receiptVerificationId) return false;
+    if (String(booking.paymentStatus || '').toLowerCase() !== 'paid') return false;
+    if (!rows.every(row => row?.hostBooking && String(row.paymentStatus || '').toLowerCase() === 'paid')) return false;
+
+    const expectedKey = normalizedBookingRef(booking.groupRef || booking.group_ref || booking.primaryRef || booking.ref);
+    const attemptKey = normalizedBookingRef(attempt.bookingKey || attempt.booking_key);
+    if (!expectedKey || attemptKey !== expectedKey) return false;
+
+    const expectedRefs = new Set(rows.map(row => normalizedBookingRef(row?.ref)).filter(Boolean));
+    const attemptRefs = new Set((attempt.bookingRefs || attempt.booking_refs || []).map(normalizedBookingRef).filter(Boolean));
+    if (!expectedRefs.size || expectedRefs.size !== attemptRefs.size) return false;
+    for (const ref of expectedRefs) if (!attemptRefs.has(ref)) return false;
+
+    const bookingTotal = Number(booking.total);
+    const attemptTotal = Number(attempt.totalAmount ?? attempt.total_amount);
+    return Number.isFinite(bookingTotal) && Number.isFinite(attemptTotal)
+      && Math.abs(bookingTotal - attemptTotal) <= 0.01;
+  }
+
+  function approvedForBooking(booking) {
+    if (state.attemptsLoadState !== 'ready') return null;
+    return matchedAttemptsForBooking(booking).find(attempt => approvedAttemptMatchesBooking(booking, attempt)) || null;
+  }
+
+  function paymentEvidenceForBooking(booking) {
+    if (state.attemptsLoadState !== 'ready') return { state: 'unknown', attempt: null };
+    const attempts = matchedAttemptsForBooking(booking);
+    const pending = attempts.find(attempt => paymentStatus(attempt) === 'pending_review');
+    if (pending) return { state: 'pending', attempt: pending };
+    const approvedCandidates = attempts.filter(attempt => paymentStatus(attempt) === 'approved');
+    const approved = approvedForBooking(booking);
+    if (approved) return { state: 'approved', attempt: approved };
+    const bookingPaymentState = String(booking?.paymentStatus ?? booking?.payment_status ?? '').toLowerCase();
+    if (bookingPaymentState === 'paid') {
+      return approvedCandidates.length
+        ? { state: 'unknown', attempt: null }
+        : { state: 'manual', attempt: null };
+    }
+    const rejected = attempts.find(attempt => paymentStatus(attempt) === 'rejected');
+    if (rejected) return { state: 'rejected', attempt: rejected };
+    return { state: 'deposit_only', attempt: null };
+  }
+
+  async function listPaymentEvidence() {
+    if (!global._supabase?.from || !global.HostBalancePayment?.normalizeAttempt) {
+      throw new Error('Payment history is unavailable. Refresh and try again.');
+    }
+    const columns = [
+      'id', 'booking_key', 'booking_ref', 'booking_group_ref', 'booking_refs',
+      'status', 'total_amount', 'original_paid_amount', 'expected_amount',
+      'receipt_verification_id', 'submitted_at', 'reviewed_at', 'approved_at',
+      'rejected_at', 'created_at', 'updated_at',
+    ].join(',');
+    const pageSize = 500;
+    const attempts = [];
+    let offset = 0;
+    for (let page = 0; page < 1000; page += 1) {
+      const { data, error } = await global._supabase
+        .from('host_booking_balance_payments')
+        .select(columns)
+        .order('updated_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      if (!Array.isArray(data)) throw new Error('Payment history response is invalid.');
+      attempts.push(...data.map(row => ({
+        ...global.HostBalancePayment.normalizeAttempt(row),
+        receiptVerificationId: row.receipt_verification_id || null,
+      })));
+      if (data.length < pageSize) return attempts;
+      offset += data.length;
+      if (page === 999) throw new Error('Payment history is too large to load safely.');
+    }
+    return attempts;
   }
 
   function money(value) {
@@ -984,49 +1076,72 @@
   function load(force) {
     if (!canDecide()) {
       state.payments = [];
+      state.attempts = [];
       state.loadedAt = 0;
       state.loadState = 'forbidden';
+      state.attemptsLoadState = 'forbidden';
       return Promise.resolve(state.payments);
     }
     if (global.PB_USE_LOCAL_DATA) {
       state.payments = [];
+      state.attempts = [];
       state.loadedAt = Date.now();
       state.loadState = 'ready';
+      state.attemptsLoadState = 'ready';
       return Promise.resolve(state.payments);
     }
     if (!force && state.loadedAt && Date.now() - state.loadedAt < 15000) return Promise.resolve(state.payments);
     if (state.loading) return state.loading;
     state.loadState = 'loading';
+    state.attemptsLoadState = 'loading';
     state.loading = (async () => {
       try {
         for (let attempt = 0; attempt < 3; attempt += 1) {
           const generation = state.generation;
-          const payments = [];
-          let offset = 0;
-          for (let page = 0; page < 1000; page += 1) {
-            const result = await apiCall('list_pending', { limit: 100, offset });
-            const rows = result?.payments || result?.data?.payments || [];
-            if (!Array.isArray(rows)) throw new Error('Pending balance response is invalid.');
-            payments.push(...rows);
-            const nextOffset = result?.nextOffset ?? result?.data?.nextOffset;
-            if (nextOffset == null) break;
-            if (!Number.isSafeInteger(Number(nextOffset)) || Number(nextOffset) <= offset) {
-              throw new Error('Pending balance pagination is invalid.');
+          const pendingRequest = (async () => {
+            const payments = [];
+            let offset = 0;
+            for (let page = 0; page < 1000; page += 1) {
+              const result = await apiCall('list_pending', { limit: 100, offset });
+              const rows = result?.payments || result?.data?.payments || [];
+              if (!Array.isArray(rows)) throw new Error('Pending balance response is invalid.');
+              payments.push(...rows);
+              const nextOffset = result?.nextOffset ?? result?.data?.nextOffset;
+              if (nextOffset == null) break;
+              if (!Number.isSafeInteger(Number(nextOffset)) || Number(nextOffset) <= offset) {
+                throw new Error('Pending balance pagination is invalid.');
+              }
+              offset = Number(nextOffset);
+              if (page === 999) throw new Error('Pending balance queue is too large to load safely.');
             }
-            offset = Number(nextOffset);
-            if (page === 999) throw new Error('Pending balance queue is too large to load safely.');
-          }
+            return payments;
+          })();
+          const [pendingResult, attemptsResult] = await Promise.allSettled([
+            pendingRequest,
+            listPaymentEvidence(),
+          ]);
+          if (pendingResult.status === 'rejected') throw pendingResult.reason;
           if (generation !== state.generation) continue;
-          state.payments = payments;
+          state.payments = pendingResult.value;
           state.loadedAt = Date.now();
           state.loadState = 'ready';
+          if (attemptsResult.status === 'fulfilled') {
+            state.attempts = attemptsResult.value;
+            state.attemptsLoadState = 'ready';
+          } else {
+            state.attempts = [];
+            state.attemptsLoadState = 'error';
+            console.warn('Host payment history evidence unavailable:', attemptsResult.reason);
+          }
           return state.payments;
         }
         throw new Error('Pending balances changed while loading. Refresh and try again.');
       } catch (error) {
         state.payments = [];
+        state.attempts = [];
         state.loadedAt = 0;
         state.loadState = 'error';
+        state.attemptsLoadState = 'error';
         throw error;
       }
     })().finally(() => { state.loading = null; });
@@ -1137,7 +1252,9 @@
     state.generation += 1;
     state.loadedAt = 0;
     state.payments = [];
+    state.attempts = [];
     if (state.loadState === 'ready') state.loadState = 'idle';
+    if (state.attemptsLoadState === 'ready') state.attemptsLoadState = 'idle';
   }
 
   function install() {
@@ -1161,6 +1278,8 @@
     invalidate,
     pendingForBooking,
     statusForBooking,
+    paymentEvidenceForBooking,
+    approvedForBooking,
     reviewForBooking,
     openHistoryForBooking,
     open: openModal,
