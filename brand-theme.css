@@ -97,39 +97,6 @@ body[data-theme="dark"] {
   color: var(--pr-text);
 }
 
-/* Accessible interaction defaults for the public and operations surfaces. */
-.skip-link {
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  z-index: 10050;
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--pr-neon-bright);
-  color: #10150b;
-  font-weight: 900;
-  transform: translateY(-160%);
-  transition: transform .16s ease;
-}
-
-.skip-link:focus { transform: translateY(0); }
-
-:where(a, button, input, select, textarea, [tabindex]):focus-visible {
-  outline: 3px solid rgba(215, 255, 63, .55);
-  outline-offset: 3px;
-}
-
-@media (pointer: coarse) {
-  button,
-  .btn,
-  [role="button"],
-  input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]),
-  select,
-  textarea {
-    min-height: 44px;
-  }
-}
-
 /* Strong black shell with a restrained neon court-grid texture. */
 body::before {
   content: "";
@@ -586,6 +553,161 @@ a:hover {
   outline-offset: 4px;
 }
 
+.advance-booking-notice {
+  position: fixed;
+  z-index: 1010;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(3, 7, 4, 0.78);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .22s ease, visibility .22s ease;
+}
+
+.advance-booking-notice.show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.advance-booking-card {
+  position: relative;
+  width: min(100%, 430px);
+  overflow: hidden;
+  border: 1px solid rgba(182, 240, 0, 0.58);
+  border-radius: 20px;
+  padding: 30px 26px 24px;
+  background:
+    radial-gradient(circle at 85% 0%, rgba(182, 240, 0, 0.17), transparent 36%),
+    linear-gradient(145deg, #111a10, #080c08 66%);
+  color: #f5f8f3;
+  text-align: left;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.58), 0 0 36px rgba(182, 240, 0, 0.1);
+  transform: translateY(14px) scale(.98);
+  transition: transform .24s cubic-bezier(.2,.8,.2,1);
+}
+
+.advance-booking-notice.show .advance-booking-card {
+  transform: translateY(0) scale(1);
+}
+
+.advance-booking-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: var(--pr-neon);
+}
+
+.advance-booking-close {
+  position: absolute;
+  top: 13px;
+  right: 13px;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.74);
+  font: inherit;
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+.advance-booking-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin-bottom: 14px;
+  padding: 0 10px;
+  border: 1px solid rgba(182, 240, 0, 0.44);
+  border-radius: 999px;
+  background: rgba(182, 240, 0, 0.09);
+  color: var(--pr-neon);
+  font-size: .66rem;
+  font-weight: 850;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.advance-booking-title {
+  margin: 0 38px 10px 0;
+  color: #fff;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(2rem, 8vw, 2.8rem);
+  line-height: .96;
+  letter-spacing: .04em;
+}
+
+.advance-booking-copy {
+  margin: 0;
+  color: #bdc7bb;
+  font-size: .94rem;
+  line-height: 1.62;
+}
+
+.advance-booking-highlight {
+  margin: 18px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(182, 240, 0, 0.2);
+  border-radius: 12px;
+  background: rgba(182, 240, 0, 0.07);
+  color: #eaf1e5;
+  font-size: .79rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.advance-booking-actions {
+  display: grid;
+  gap: 9px;
+}
+
+.advance-booking-primary,
+.advance-booking-secondary {
+  min-height: 50px;
+  border-radius: 12px;
+  font-family: 'Outfit', sans-serif;
+  font-size: .78rem;
+  font-weight: 850;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.advance-booking-primary {
+  border: 1px solid var(--pr-neon);
+  background: var(--pr-neon);
+  color: var(--pr-black);
+  box-shadow: 0 10px 26px rgba(182, 240, 0, 0.16);
+}
+
+.advance-booking-primary:disabled {
+  cursor: wait;
+  opacity: .72;
+}
+
+.advance-booking-secondary {
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  color: #9ca99a;
+}
+
+.advance-booking-close:focus-visible,
+.advance-booking-primary:focus-visible,
+.advance-booking-secondary:focus-visible {
+  outline: 3px solid rgba(215, 255, 63, 0.34);
+  outline-offset: 3px;
+}
+
 .pr-splash-footer {
   position: absolute;
   z-index: 3;
@@ -786,6 +908,19 @@ textarea:focus,
     letter-spacing: 0.12em;
   }
 
+  .advance-booking-notice {
+    align-items: flex-end;
+    padding: 14px;
+  }
+
+  .advance-booking-card {
+    padding: 26px 20px 18px;
+    border-radius: 18px;
+  }
+
+  .advance-booking-title {
+    font-size: 2.25rem;
+  }
 }
 
 @media (max-height: 620px) and (min-width: 621px) {

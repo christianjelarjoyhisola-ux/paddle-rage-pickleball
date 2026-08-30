@@ -3160,34 +3160,21 @@ window.DB = {
         .filter(b => !opts.activeOnly || (b.status !== 'cancelled' && b.status !== 'forfeited'))
         .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     },
-    async addBookings(bookings) {
-      const batch = Array.isArray(bookings) ? bookings.filter(Boolean) : [];
-      if (batch.length < 1 || batch.length > 8) {
-        throw new Error('Choose between one and eight booking items.');
-      }
-
-      const db = readDb();
-      const prepared = [];
-      for (const booking of batch) {
-        const existing = [...db.bookings, ...prepared]
-          .filter(b => String(b.courtId) === String(booking.courtId) && b.date === booking.date && b.status !== 'cancelled' && b.status !== 'forfeited');
-        if (hasSlotConflict(existing, booking)) {
-          throw new Error('One or more time slots are no longer available. Please refresh and choose a different time.');
-        }
-        prepared.push({
-          ...booking,
-          ref: booking.ref || localRef('PB'),
-          receivedAccount: receivedAccountForBooking(booking),
-          createdAt: booking.createdAt || nowIso(),
-        });
-      }
-
-      db.bookings.push(...prepared);
-      writeDb(db);
-      return prepared.map(booking => booking.ref);
-    },
     async addBooking(booking) {
-      return this.addBookings([booking]);
+      const db = readDb();
+      const existing = db.bookings
+        .filter(b => String(b.courtId) === String(booking.courtId) && b.date === booking.date && b.status !== 'cancelled' && b.status !== 'forfeited');
+      if (hasSlotConflict(existing, booking)) {
+        throw new Error('One or more time slots are no longer available. Please refresh and choose a different time.');
+      }
+      const row = {
+        ...booking,
+        ref: booking.ref || localRef('PB'),
+        receivedAccount: receivedAccountForBooking(booking),
+        createdAt: booking.createdAt || nowIso(),
+      };
+      db.bookings.push(row);
+      writeDb(db);
     },
     async getBookingByRef(ref) { return readDb().bookings.find(b => String(b.ref) === String(ref)) || null; },
     async updateBooking(ref, updates) {

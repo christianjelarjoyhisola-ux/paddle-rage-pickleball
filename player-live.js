@@ -251,14 +251,12 @@
   function rankLabel(row) {
     if (!row?.eligible) return "P";
     if (requiresPodiumDecider(row)) return "TBD";
-    if (row?.sharedRank) return `T${row.rank}`;
     return row?.rank || "—";
   }
 
   function rankDescription(row) {
     if (!row?.eligible) return "Provisional";
     if (requiresPodiumDecider(row)) return "Podium decider required";
-    if (row?.sharedRank) return `Tied at rank ${row.rank}`;
     return `Rank ${row?.rank}`;
   }
 
@@ -1247,7 +1245,6 @@
             pointsExact: Number(row?.pointsExact || 0),
             eligible: Boolean(row?.eligible),
             rank: row?.rank == null ? null : Number(row.rank),
-            sharedRank: Boolean(row?.sharedRank),
             averageOpponentRating: Number(row?.averageOpponentRating || 0),
             averageOpponentRatingExact: Number(row?.averageOpponentRatingExact || 0),
             bestUpset: Number(row?.bestUpset || 0),
