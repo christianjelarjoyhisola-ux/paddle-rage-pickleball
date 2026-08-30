@@ -12,11 +12,65 @@
     originalRenderPaymentReview: null,
     loadToken: 0,
     expectedPaymentId: '',
+    loadState: 'idle',
+    generation: 0,
   };
   const byId = id => document.getElementById(id);
 
   function paymentId(payment) {
     return String(payment?.paymentId || payment?.payment_id || payment?.id || '').trim();
+  }
+
+  function normalizedBookingRef(value) {
+    return String(value || '').trim().toUpperCase();
+  }
+
+  function bookingRefs(booking) {
+    const refs = new Set();
+    const add = value => {
+      const ref = normalizedBookingRef(value);
+      if (ref) refs.add(ref);
+    };
+    if (typeof booking === 'string') add(booking);
+    else if (booking) {
+      [booking.ref, booking.primaryRef, booking.primary_ref, booking.groupRef,
+        booking.group_ref, booking.displayRef, booking.display_ref,
+        booking.bookingKey, booking.booking_key].forEach(add);
+      for (const collection of [booking.items, booking.allItems, booking.bookingRefs, booking.booking_refs]) {
+        if (!Array.isArray(collection)) continue;
+        collection.forEach(item => typeof item === 'string' ? add(item) : add(item?.ref));
+      }
+    }
+    return refs;
+  }
+
+  function paymentRefs(payment) {
+    const refs = new Set();
+    const add = value => {
+      const ref = normalizedBookingRef(value);
+      if (ref) refs.add(ref);
+    };
+    [payment?.bookingKey, payment?.booking_key, payment?.bookingRef,
+      payment?.booking_ref, payment?.bookingGroupRef, payment?.booking_group_ref]
+      .forEach(add);
+    for (const collection of [payment?.bookingRefs, payment?.booking_refs]) {
+      if (Array.isArray(collection)) collection.forEach(add);
+    }
+    return refs;
+  }
+
+  function pendingForBooking(booking) {
+    const candidates = bookingRefs(booking);
+    if (!candidates.size) return null;
+    return state.payments.find(payment => {
+      for (const ref of paymentRefs(payment)) if (candidates.has(ref)) return true;
+      return false;
+    }) || null;
+  }
+
+  function statusForBooking(booking) {
+    if (pendingForBooking(booking)) return 'pending';
+    return state.loadState === 'ready' ? 'clear' : 'unknown';
   }
 
   function money(value) {
@@ -79,6 +133,7 @@
       .hba-meta b,.hba-summary b{display:block;margin-bottom:2px;color:var(--muted);font-size:.62rem;text-transform:uppercase;letter-spacing:.07em}
       .hba-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px;padding-top:11px;border-top:1px solid var(--border)}
       .hba-status{font-size:.71rem;font-weight:850;color:var(--yellow)}
+      .hba-booking-pending{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:4px 8px;border:1px solid rgba(255,193,7,.3);border-radius:999px;background:rgba(255,193,7,.1);color:var(--yellow);font-size:.68rem;font-weight:900;line-height:1.2}
       .hba-empty{padding:24px;text-align:center;color:var(--muted);font-size:.82rem;line-height:1.5}
       .hba-overlay{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(2,8,5,.84);backdrop-filter:blur(8px)}
       .hba-overlay[hidden]{display:none}
@@ -319,6 +374,9 @@
       closeModal();
       await render(true);
       if (state.originalRenderPaymentReview) await state.originalRenderPaymentReview();
+      if (byId('sec-bookings')?.classList.contains('on') && typeof global.renderBookings === 'function') {
+        await global.renderBookings();
+      }
     } catch (error) {
       notify(error?.message || 'Could not save the host balance decision.', 'err');
     } finally {
@@ -361,33 +419,102 @@
     });
   }
 
-  function render(force) {
-    ensurePanel();
+  function load(force) {
     if (!canDecide()) {
-      byId('hostBalanceAdminList')?.replaceChildren(make('div', 'hba-empty', 'Only the System Owner or Court Owner can review host balance payments.'));
-      return Promise.resolve([]);
-    }
-    if (!force && state.loadedAt && Date.now() - state.loadedAt < 15000) {
-      renderCards();
+      state.payments = [];
+      state.loadedAt = 0;
+      state.loadState = 'forbidden';
       return Promise.resolve(state.payments);
     }
+    if (global.PB_USE_LOCAL_DATA) {
+      state.payments = [];
+      state.loadedAt = Date.now();
+      state.loadState = 'ready';
+      return Promise.resolve(state.payments);
+    }
+    if (!force && state.loadedAt && Date.now() - state.loadedAt < 15000) return Promise.resolve(state.payments);
     if (state.loading) return state.loading;
-    const list = byId('hostBalanceAdminList');
-    if (list) list.replaceChildren(make('div', 'hba-empty', 'Loading host balance payments…'));
+    state.loadState = 'loading';
     state.loading = (async () => {
       try {
-        const result = await apiCall('list_pending', { limit: 100 });
-        const rows = result?.payments || result?.data?.payments || [];
-        state.payments = Array.isArray(rows) ? rows : [];
-        state.loadedAt = Date.now();
-        renderCards();
-        return state.payments;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const generation = state.generation;
+          const payments = [];
+          let offset = 0;
+          for (let page = 0; page < 1000; page += 1) {
+            const result = await apiCall('list_pending', { limit: 100, offset });
+            const rows = result?.payments || result?.data?.payments || [];
+            if (!Array.isArray(rows)) throw new Error('Pending balance response is invalid.');
+            payments.push(...rows);
+            const nextOffset = result?.nextOffset ?? result?.data?.nextOffset;
+            if (nextOffset == null) break;
+            if (!Number.isSafeInteger(Number(nextOffset)) || Number(nextOffset) <= offset) {
+              throw new Error('Pending balance pagination is invalid.');
+            }
+            offset = Number(nextOffset);
+            if (page === 999) throw new Error('Pending balance queue is too large to load safely.');
+          }
+          if (generation !== state.generation) continue;
+          state.payments = payments;
+          state.loadedAt = Date.now();
+          state.loadState = 'ready';
+          return state.payments;
+        }
+        throw new Error('Pending balances changed while loading. Refresh and try again.');
       } catch (error) {
-        list?.replaceChildren(make('div', 'hba-empty', error?.message || 'Could not load host balance payments.'));
-        return [];
-      } finally { state.loading = null; }
-    })();
+        state.payments = [];
+        state.loadedAt = 0;
+        state.loadState = 'error';
+        throw error;
+      }
+    })().finally(() => { state.loading = null; });
     return state.loading;
+  }
+
+  function render(force) {
+    ensurePanel();
+    const list = byId('hostBalanceAdminList');
+    if (!canDecide()) {
+      list?.replaceChildren(make('div', 'hba-empty', 'Only the System Owner or Court Owner can review host balance payments.'));
+      return Promise.resolve([]);
+    }
+    if (list) list.replaceChildren(make('div', 'hba-empty', 'Loading host balance payments…'));
+    return load(force).then(payments => {
+      renderCards();
+      return payments;
+    }).catch(error => {
+      list?.replaceChildren(make('div', 'hba-empty', error?.message || 'Could not load host balance payments.'));
+      return [];
+    });
+  }
+
+  async function reviewForBooking(booking, trigger) {
+    if (!canDecide()) {
+      notify('Only the System Owner or Court Owner can review host balance payments.', 'err');
+      return false;
+    }
+    let payment = pendingForBooking(booking);
+    if (!payment) {
+      try { await load(true); }
+      catch (error) {
+        notify(error?.message || 'Could not load the pending balance receipt.', 'err');
+        return false;
+      }
+      payment = pendingForBooking(booking);
+    }
+    if (!payment) {
+      notify('This booking no longer has a balance receipt waiting for review.', 'inf');
+      if (typeof global.renderBookings === 'function') global.renderBookings();
+      return false;
+    }
+    await openModal(payment, trigger);
+    return true;
+  }
+
+  function invalidate() {
+    state.generation += 1;
+    state.loadedAt = 0;
+    if (state.loadState === 'ready') state.loadState = 'idle';
   }
 
   function install() {
@@ -398,12 +525,22 @@
       state.originalRenderPaymentReview = global.renderPaymentReview;
       global.renderPaymentReview = async function wrappedPaymentReview() {
         const result = await state.originalRenderPaymentReview.apply(this, arguments);
-        render(false).catch(() => {});
+        await render(false);
         return result;
       };
     }
   }
 
-  global.HostBalanceAdmin = Object.freeze({ install, render, open: openModal, close: closeModal });
+  global.HostBalanceAdmin = Object.freeze({
+    install,
+    load,
+    render,
+    invalidate,
+    pendingForBooking,
+    statusForBooking,
+    reviewForBooking,
+    open: openModal,
+    close: closeModal,
+  });
   install();
 })(window);

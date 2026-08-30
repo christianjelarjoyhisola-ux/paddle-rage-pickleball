@@ -41,6 +41,13 @@ type BookingRow = {
   payment_status: string;
 };
 
+type PendingBalancePayment = {
+  booking_key: string | null;
+  booking_ref: string | null;
+  booking_group_ref: string | null;
+  booking_refs: string[] | null;
+};
+
 function groupRows(rows: BookingRow[]): BookingRow[][] {
   const groups = new Map<string, BookingRow[]>();
   for (const row of rows) {
@@ -49,6 +56,40 @@ function groupRows(rows: BookingRow[]): BookingRow[][] {
     groups.get(key)!.push(row);
   }
   return [...groups.values()];
+}
+
+async function loadPendingBalancePayments(db: any): Promise<PendingBalancePayment[]> {
+  const payments: PendingBalancePayment[] = [];
+  const pageSize = 1000;
+  for (let offset = 0; offset < 1_000_000; offset += pageSize) {
+    const { data, error } = await db.from("host_booking_balance_payments")
+      .select("booking_key,booking_ref,booking_group_ref,booking_refs")
+      .eq("status", "pending_review")
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const rows = (data || []) as PendingBalancePayment[];
+    payments.push(...rows);
+    if (rows.length < pageSize) return payments;
+  }
+  throw new Error("Pending balance queue is too large to process safely");
+}
+
+function groupHasPendingBalance(
+  rows: BookingRow[],
+  payments: PendingBalancePayment[],
+): boolean {
+  const refs = new Set<string>();
+  for (const row of rows) {
+    if (row.ref) refs.add(String(row.ref));
+    if (row.booking_group_ref) refs.add(String(row.booking_group_ref));
+  }
+  return payments.some((payment) => [
+    payment.booking_key,
+    payment.booking_ref,
+    payment.booking_group_ref,
+    ...(Array.isArray(payment.booking_refs) ? payment.booking_refs : []),
+  ].some((ref) => ref && refs.has(String(ref))));
 }
 
 function summary(rows: BookingRow[]) {
@@ -145,6 +186,12 @@ async function sendNotice(
       ? "Already sent"
       : claim.reason === "lease_active"
       ? "Already processing"
+      : claim.reason === "balance_pending_review"
+      ? "Balance receipt pending owner review"
+      : claim.reason === "balance_already_paid"
+      ? "Balance is already paid"
+      : claim.reason === "booking_not_payable"
+      ? "Booking is no longer eligible for a balance reminder"
       : "Notification claim was not acquired";
     return {
       skipped: true,
@@ -284,6 +331,16 @@ Deno.serve(async (req) => {
       if (error || !manualRows?.length) {
         throw error || new Error("Booking not found");
       }
+      const pendingPayments = await loadPendingBalancePayments(db);
+      if (groupHasPendingBalance(manualRows as BookingRow[], pendingPayments)) {
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: "A balance receipt is already awaiting owner review. Do not send another payment reminder.",
+          }),
+          { status: 409, headers: JSON_HEADERS },
+        );
+      }
       const eventType = manualRows.some((row: BookingRow) =>
           row.status === "forfeited"
         )
@@ -333,10 +390,19 @@ Deno.serve(async (req) => {
       )
       .not("balance_due_at", "is", null);
     if (error) throw error;
+    const pendingPayments = await loadPendingBalancePayments(db);
 
     const results = [];
     const now = Date.now();
     for (const rows of groupRows((data || []) as BookingRow[])) {
+      if (groupHasPendingBalance(rows, pendingPayments)) {
+        results.push({
+          skipped: true,
+          reason: "Balance receipt pending owner review",
+          bookingKey: summary(rows).key,
+        });
+        continue;
+      }
       const info = summary(rows);
       const remaining = new Date(info.deadline).getTime() - now;
       if (remaining <= 0) {

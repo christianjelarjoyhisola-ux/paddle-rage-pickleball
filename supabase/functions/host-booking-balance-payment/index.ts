@@ -28,6 +28,7 @@ type RequestBody = {
   decision?: unknown;
   reason?: unknown;
   limit?: unknown;
+  offset?: unknown;
 };
 
 const corsHeaders = {
@@ -474,17 +475,24 @@ export async function handleHostBookingBalancePayment(
       const limit = Number.isSafeInteger(requestedLimit)
         ? Math.max(1, Math.min(requestedLimit, 100))
         : 100;
+      const requestedOffset = Number(body.offset);
+      const offset = Number.isSafeInteger(requestedOffset)
+        ? Math.max(0, requestedOffset)
+        : 0;
       const { data, error } = await db
         .from("host_booking_balance_payments")
         .select("*")
         .eq("status", "pending_review")
         .order("submitted_at", { ascending: true })
-        .limit(limit);
+        .order("id", { ascending: true })
+        .range(offset, offset + limit - 1);
       if (error) throw error;
+      const payments = (data || []).map(normalizePaymentRow);
       return json({
         ok: true,
         action,
-        payments: (data || []).map(normalizePaymentRow),
+        payments,
+        nextOffset: payments.length === limit ? offset + payments.length : null,
       });
     }
 

@@ -18,7 +18,13 @@ export type AcquiredBalanceNoticeClaim = {
 export type RejectedBalanceNoticeClaim = {
   acquired: false;
   id: string | null;
-  reason: "already_sent" | "lease_active" | "not_claimed";
+  reason:
+    | "already_sent"
+    | "lease_active"
+    | "balance_pending_review"
+    | "balance_already_paid"
+    | "booking_not_payable"
+    | "not_claimed";
   leaseExpiresAt: string | null;
 };
 
@@ -81,7 +87,11 @@ export async function claimBalanceNotification(
   }
 
   const reason =
-    result.reason === "already_sent" || result.reason === "lease_active"
+    result.reason === "already_sent" ||
+      result.reason === "lease_active" ||
+      result.reason === "balance_pending_review" ||
+      result.reason === "balance_already_paid" ||
+      result.reason === "booking_not_payable"
       ? result.reason
       : "not_claimed";
   return {

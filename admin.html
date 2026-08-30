@@ -5886,20 +5886,54 @@ function bookingDetailsButton(b){
   const actionRef = b.primaryRef || b.ref;
   return `<button class="btn btn-sm" style="background:rgba(200,160,96,.15);color:var(--yellow);border:1px solid rgba(200,160,96,.35);font-weight:700" onclick="openBookingDetails('${jsArg(actionRef)}')">Details</button>`;
 }
+function hostBalancePendingPayment(b){
+  return window.HostBalanceAdmin?.pendingForBooking?.(b) || null;
+}
+function hostBalanceReviewState(b){
+  if (!b?.hostBooking || String(b.paymentStatus || '').toLowerCase() !== 'downpayment_paid') return 'not_applicable';
+  return window.HostBalanceAdmin?.statusForBooking?.(b) || 'unknown';
+}
+function hostBalancePendingBadge(b){
+  return hostBalanceReviewState(b) === 'pending'
+    ? '<span class="hba-booking-pending">🧾 Balance receipt pending</span>'
+    : '';
+}
+function hostBalanceReviewBadge(b){
+  const state = hostBalanceReviewState(b);
+  if (state === 'pending') return hostBalancePendingBadge(b);
+  if (state === 'unknown') return '<span class="hba-booking-pending">⚠ Balance review unavailable</span>';
+  return '';
+}
+function hostBalanceReviewButton(b){
+  if (!hostBalancePendingPayment(b)) return '';
+  const actionRef = b.primaryRef || b.ref;
+  return `<button type="button" class="btn btn-p btn-sm" onclick="reviewHostBalanceForBooking('${jsArg(actionRef)}',this)">Review Balance</button>`;
+}
+async function reviewHostBalanceForBooking(ref, trigger){
+  try {
+    if (!window.HostBalanceAdmin?.reviewForBooking) throw new Error('Balance review is unavailable. Refresh and try again.');
+    await window.HostBalanceAdmin.reviewForBooking(ref, trigger);
+  } catch (error) {
+    toast(error?.message || 'Could not open the balance receipt.', 'err');
+  }
+}
 function bookingActionsHtml(b, canDelete){
   const grouped = Array.isArray(b.items) && b.items.length > 1;
   const actionRef = b.primaryRef || b.ref;
   const forfeited = b.status === 'forfeited' || b.paymentStatus === 'deposit_retained';
   const hasBalance = b.hostBooking && b.paymentStatus === 'downpayment_paid';
-  const canRecordManualPayment = hasBalance && ['owner','court_owner'].includes(String(sess?.role || ''));
+  const balanceReviewState = hostBalanceReviewState(b);
+  const balanceReviewLocked = hasBalance && balanceReviewState !== 'clear';
+  const canRecordManualPayment = hasBalance && !balanceReviewLocked && ['owner','court_owner'].includes(String(sess?.role || ''));
   const canCorrectForfeiture = forfeited && b.hostBooking && ['owner','court_owner'].includes(String(sess?.role || ''));
   return `${bookingDetailsButton(b)}
-    ${!grouped && !['cancelled','forfeited'].includes(b.status)?`<button class="btn btn-sm" style="background:rgba(74,154,220,.12);color:#5a9ad4;border:1px solid rgba(74,154,220,.3)" onclick="openRescheduleModal('${jsArg(actionRef)}')">Reschedule</button>`:''}
-    ${b.email && (forfeited || hasBalance)?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Notice':'Balance Reminder'}</button>`:''}
+    ${hostBalanceReviewButton(b)}
+    ${!balanceReviewLocked && !grouped && !['cancelled','forfeited'].includes(b.status)?`<button class="btn btn-sm" style="background:rgba(74,154,220,.12);color:#5a9ad4;border:1px solid rgba(74,154,220,.3)" onclick="openRescheduleModal('${jsArg(actionRef)}')">Reschedule</button>`:''}
+    ${b.email && (forfeited || (hasBalance && balanceReviewState === 'clear'))?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Notice':'Balance Reminder'}</button>`:''}
     ${b.status==='confirmed' && b.email && !hasBalance?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendConfirmationEmail('${jsArg(actionRef)}')">Resend Email</button>`:''}
     ${canRecordManualPayment?`<button class="btn btn-p btn-sm" onclick="updatePaymentStatus('${jsArg(actionRef)}','paid')">Record Fully Paid</button>`:''}
     ${canCorrectForfeiture?`<button class="btn btn-p btn-sm" onclick="restoreForfeitedHostBooking('${jsArg(actionRef)}')">Restore Fully Paid</button>`:''}
-    <select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" ${forfeited?'disabled title="Forfeited records are permanent"':''} onchange="updateStatus('${jsArg(actionRef)}',this.value)">
+    <select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" ${forfeited?'disabled title="Forfeited records are permanent"':balanceReviewLocked?'disabled title="Resolve the pending balance review first"':''} onchange="updateStatus('${jsArg(actionRef)}',this.value)">
       ${b.status==='mixed'?'<option value="mixed" selected disabled>Mixed</option>':''}
       <option value="pending" ${b.status==='pending'?'selected':''}>Pending</option>
       <option value="confirmed" ${b.status==='confirmed'?'selected':''}>Confirmed</option>
@@ -5908,11 +5942,17 @@ function bookingActionsHtml(b, canDelete){
       <option value="cancelled" ${b.status==='cancelled'?'selected':''}>Cancelled</option>
       ${(b.hostBooking && (b.paymentStatus==='downpayment_paid' || b.status==='forfeited')) ? `<option value="forfeited" ${b.status==='forfeited'?'selected':''}>Forfeited</option>` : ''}
     </select>
-    ${canDelete && !forfeited?`<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>`:''}`;
+    ${canDelete && !forfeited && !balanceReviewLocked?`<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>`:''}`;
 }
 function bookingPayStateSelect(b){
   const actionRef = b.primaryRef || b.ref;
   if (b.status === 'forfeited' || b.paymentStatus === 'deposit_retained') return payStatusBdg('deposit_retained');
+  if (hostBalancePendingPayment(b)) {
+    return `<div>${payStatusBdg('downpayment_paid')}${hostBalancePendingBadge(b)}</div>`;
+  }
+  if (hostBalanceReviewState(b) === 'unknown') {
+    return `<div>${payStatusBdg('downpayment_paid')}${hostBalanceReviewBadge(b)}</div>`;
+  }
   return `<select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" onchange="updatePaymentStatus('${jsArg(actionRef)}',this.value)">
     ${b.paymentStatus==='mixed'?'<option value="mixed" selected disabled>Mixed</option>':''}
     <option value="unpaid" ${(!b.paymentStatus||b.paymentStatus==='unpaid')?'selected':''}>Unpaid</option>
@@ -6019,6 +6059,7 @@ function mobileBookingCard(b, canDelete){
         <span class="mb-book-chip amount">${fmt(b.total)}</span>
         <span class="mb-book-chip">${esc(payMethod)}</span>
         <span class="mb-book-chip ${['unpaid','rejected','failed'].includes(String(b.paymentStatus || '').toLowerCase()) ? 'warn' : ''}">${esc(payState)}</span>
+        ${hostBalanceReviewBadge(b)}
         ${deadlineState.label ? `<span class="mb-book-chip warn">${esc(deadlineState.label)}</span>` : ''}
         ${bookingSourceBadge(b)}
       </div>
@@ -6074,6 +6115,7 @@ async function openBookingDetails(ref) {
     const paid = window.BookingBalance?.paidAmount?.(b) || 0;
     const historicalBalance = Math.max(0, total - paid);
     const forfeited = b.status === 'forfeited' || b.paymentStatus === 'deposit_retained';
+    const balanceReviewState = hostBalanceReviewState(b);
     const currentDue = forfeited ? 0 : historicalBalance;
     const deadlineState = window.BookingBalance?.deadlineState?.(b) || {};
     const deadline = b.balanceDueAt ? new Date(b.balanceDueAt) : deadlineState.deadline;
@@ -6102,7 +6144,7 @@ async function openBookingDetails(ref) {
       <div class="booking-detail-section"><h3>Payment record</h3>
         <div class="booking-detail-row"><span>Payment method</span><strong>${esc(paymentMethodLabel(b.paymentMethod))}</strong></div>
         <div class="booking-detail-row"><span>Payment reference</span><strong>${esc(b.gcashRef || '--')}</strong></div>
-        <div class="booking-detail-row"><span>Payment state</span><strong>${esc(payStatusText(b.paymentStatus))}</strong></div>
+        <div class="booking-detail-row"><span>Payment state</span><strong>${esc(payStatusText(b.paymentStatus))}${hostBalanceReviewBadge(b)}</strong></div>
         <div class="booking-detail-row"><span>Policy</span><strong>Final and non-refundable</strong></div>
       </div>
       ${b.hostBooking ? `<div class="booking-detail-section"><h3>Email history</h3><div class="booking-notice-list">${notices}</div></div>` : ''}`;
@@ -6110,8 +6152,9 @@ async function openBookingDetails(ref) {
     const hasReceipt = (b.gcashRef || (b.receiptStatus && b.receiptStatus !== 'none')) && isDigitalPayment(b.paymentMethod);
     $('bookingDetailsActions').innerHTML = `
       <button class="btn btn-g" onclick="closeBookingDetails()">Close</button>
-      ${hasReceipt ? `<button class="btn btn-g" onclick="closeBookingDetails();openVerifyModal('${jsArg(actionRef)}')">View Payment</button>` : ''}
-      ${b.hostBooking && b.email && (forfeited || historicalBalance > 0) ? `<button class="btn btn-p" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Forfeiture Notice':'Send Balance Reminder'}</button>` : ''}`;
+      ${hostBalanceReviewButton(b)}
+      ${hasReceipt ? `<button class="btn btn-g" onclick="closeBookingDetails();openVerifyModal('${jsArg(actionRef)}')">${b.hostBooking?'View Deposit':'View Payment'}</button>` : ''}
+      ${b.hostBooking && b.email && (forfeited || (historicalBalance > 0 && balanceReviewState === 'clear')) ? `<button class="btn btn-p" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Forfeiture Notice':'Send Balance Reminder'}</button>` : ''}`;
     requestAnimationFrame(() => modal.querySelector('.booking-details-modal')?.focus());
   } catch (error) {
     body.innerHTML = `<div class="booking-details-loading">${esc(error?.message || 'Could not load booking details.')}</div>`;
@@ -6119,6 +6162,17 @@ async function openBookingDetails(ref) {
 }
 async function resendHostBalanceNotice(ref) {
   try {
+    const booking = await getBookingGroupByRef(ref);
+    if (booking?.hostBooking && String(booking.paymentStatus || '').toLowerCase() === 'downpayment_paid') {
+      try { await window.HostBalanceAdmin?.load?.(true); }
+      catch (_) { }
+      const reviewState = hostBalanceReviewState(booking);
+      if (reviewState !== 'clear') {
+        throw new Error(reviewState === 'pending'
+          ? 'A balance receipt is already awaiting owner review. Do not send another payment reminder.'
+          : 'Balance review status could not be verified. Refresh before sending a reminder.');
+      }
+    }
     const result = await DB.sendHostBalanceNotice(ref, 'reminder_1d');
     if (!result?.ok) throw new Error(result?.error || 'Email could not be sent.');
     toast('Host balance notice sent.');
@@ -6137,7 +6191,7 @@ let sess;
    ============================================== */
 const titles={dash:'Dashboard',bookings:'Bookings',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',gamemgr:'Play Manager',accounts:'Host Accounts',remittances:'Remittances',hosts:'Host Center',maintenance:'Maintenance',payments:'Payments'};
 const SECTION_PERM={dash:'dashboard',bookings:'bookings',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',gamemgr:'open_play',accounts:'host_accounts_view',remittances:'remittances',hosts:'host_open_play',maintenance:'maintenance',payments:'payments'};
-const SECTION_LOADERS={dash:renderDash,bookings:renderBookings,deleted:renderDeletedBookings,payreview:renderPaymentReview,reports:renderReport,courts:renderCourts,gamemgr:()=>window.PlayManager?.render(),accounts:renderAccounts,remittances:renderRemittances,hosts:renderHostCenter,maintenance:renderMaintenance,payments:renderPaymentSettings};
+const SECTION_LOADERS={dash:renderDash,bookings:renderBookings,deleted:renderDeletedBookings,payreview:()=>renderPaymentReview(),reports:renderReport,courts:renderCourts,gamemgr:()=>window.PlayManager?.render(),accounts:renderAccounts,remittances:renderRemittances,hosts:renderHostCenter,maintenance:renderMaintenance,payments:renderPaymentSettings};
 let _curSection=null;
 function canAccessSection(s,role=sess?.role){
   if(!SECTION_LOADERS[s] || !$('sec-'+s)) return false;
@@ -6209,6 +6263,32 @@ function handleAdminRouteChange(){
 window.addEventListener('popstate',handleAdminRouteChange);
 window.addEventListener('hashchange',handleAdminRouteChange);
 
+let _adminSessionInvalidated=false;
+function invalidateStaleAdminSession(){
+  if(_adminSessionInvalidated) return;
+  _adminSessionInvalidated=true;
+  showAdminBoot('Another Paddle Rage account was signed in. Returning to secure sign in…');
+  document.documentElement.style.pointerEvents='none';
+  const returnTo=`admin.html${location.hash||''}`;
+  setTimeout(()=>location.replace(`login.html?next=${encodeURIComponent(returnTo)}&reason=account_changed`),0);
+}
+function startAdminSessionGuard(){
+  if(window.PB_USE_LOCAL_DATA || !sess?.id) return;
+  const bootUserId=String(sess.id);
+  window.addEventListener('storage',event=>{
+    if(event.key!=='pb_session') return;
+    let nextUserId='';
+    try{ nextUserId=String(JSON.parse(event.newValue||'null')?.id||''); }catch(_){ }
+    if(nextUserId!==bootUserId) invalidateStaleAdminSession();
+  });
+  _supabase.auth.onAuthStateChange((event,nextSession)=>{
+    const nextUserId=String(nextSession?.user?.id||'');
+    if(event==='SIGNED_OUT' || (nextUserId && nextUserId!==bootUserId)) {
+      setTimeout(invalidateStaleAdminSession,0);
+    }
+  });
+}
+
 /* ==============================================
    REALTIME — keep the admin dashboard live (no manual refresh)
    ============================================== */
@@ -6228,6 +6308,10 @@ function startAdminRealtime(){
       }catch(_){}
     },300);
   };
+  const rerenderHostBalances=()=>{
+    window.HostBalanceAdmin?.invalidate?.();
+    rerender();
+  };
   _supabase.channel('admin-rt')
     .on('postgres_changes',{event:'*',schema:'public',table:'bookings'},rerender)
     .on('postgres_changes',{event:'*',schema:'public',table:'deleted_booking_archive'},rerender)
@@ -6242,6 +6326,7 @@ function startAdminRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'booking_fee_remittance_items'},rerender)
     .on('postgres_changes',{event:'*',schema:'public',table:'booking_fee_remittance_payments'},rerender)
     .on('postgres_changes',{event:'*',schema:'public',table:'accounts'},rerender)
+    .on('postgres_changes',{event:'*',schema:'public',table:'host_booking_balance_payments'},rerenderHostBalances)
     .subscribe();
 }
 
@@ -6580,7 +6665,13 @@ async function renderBookings(){
   if (body) body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:28px">Loading bookings...</td></tr>';
   let bks;
   try {
-    bks=await DB.getBookings();
+    const pendingBalances = ['owner','court_owner'].includes(String(sess?.role || ''))
+      ? Promise.resolve(window.HostBalanceAdmin?.load?.(false)).catch(error => {
+          console.warn('Host balance indicators unavailable:', error);
+          return [];
+        })
+      : Promise.resolve([]);
+    [bks] = await Promise.all([DB.getBookings(), pendingBalances]);
   } catch (e) {
     console.error('renderBookings getBookings failed:', e);
     updateBookingFilterMeta(0, 0, bookingFilters());
@@ -7567,6 +7658,19 @@ function quickConfirmBooking(ref, trigger) {
 }
 
 async function updateStatus(ref, status) {
+  const current = await getBookingGroupByRef(ref);
+  if (current?.hostBooking && String(current.paymentStatus || '').toLowerCase() === 'downpayment_paid') {
+    try { await window.HostBalanceAdmin?.load?.(true); }
+    catch (_) { }
+    const reviewState = hostBalanceReviewState(current);
+    if (reviewState !== 'clear') {
+      toast(reviewState === 'pending'
+        ? 'Resolve the pending balance receipt before changing this booking.'
+        : 'Balance review status could not be verified. Refresh before changing this booking.', 'err');
+      await renderBookings();
+      return;
+    }
+  }
   if (status === 'confirmed') {
     const confirmed = await confirmBookingTransaction(ref);
     if (!confirmed) await renderBookings();
@@ -13208,6 +13312,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   $('uRole').className = 'role-bdg ' + (ROLE_CLASSES[role] || 'r-staff');
 
   applyRoleVisibility(role);
+  startAdminSessionGuard();
 
   // Modal close on overlay click
   document.querySelectorAll('.overlay').forEach(ov=>ov.addEventListener('click',e=>{
@@ -13545,6 +13650,6 @@ async function checkAgreementGate(session) {
 <script src="supabase-config.js?v=20260830-host-balance-v1"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>
-<script src="host-balance-admin.js?v=20260830-host-balance-v1"></script>
+<script src="host-balance-admin.js?v=20260831-host-balance-v2"></script>
 </body>
 </html>
