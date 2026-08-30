@@ -83,7 +83,7 @@ test('separates reservation state from pending balance review on desktop and mob
   assert.match(admin, /balanceReviewState === 'pending' \? '' : `<select/);
   assert.match(admin, /deposit accepted · \$\{fmt\(pendingAmount\)\} submitted/);
   assert.match(admin, /Awaiting owner verification/);
-  assert.match(admin, /<div class="mb-book-primary-actions">\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}<\/div>/);
+  assert.match(admin, /<div class="mb-book-primary-actions">\$\{hostBalanceReviewButton\(b, true\)\}\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}<\/div>/);
   assert.match(admin, /b\.hostBooking \? hostDepositEvidenceBadge\(b\) : receiptBadge\(b\)/);
   assert.match(admin, /<span>Payment status<\/span><span>\$\{bookingPayStateSelect\(b\)\}<\/span>/);
   assert.match(admin, /<span>Deposit<\/span><span>\$\{hostDepositEvidenceBadge\(b\) \|\| 'Not recorded'\}<\/span>/);
@@ -101,8 +101,8 @@ test('reveals a successfully loaded host balance receipt', () => {
   assert.match(hostBalanceAdmin, /status\.style\.display = 'none'/);
   assert.match(hostBalanceAdmin, /link\.style\.display = 'inline-flex'/);
   assert.doesNotMatch(hostBalanceAdmin, /image\.style\.display = ''/);
-  assert.match(hostBalanceAdmin, /onLoad\(\) \{\s*state\.receiptLoaded = true;\s*syncActions\(\);/);
-  assert.match(admin, /host-balance-admin\.js\?v=20260831-host-balance-v6/);
+  assert.match(hostBalanceAdmin, /onLoad\(\) \{\s*state\.receiptLoaded = true;\s*state\.receiptLoadState = 'ready';\s*syncActions\(\);/);
+  assert.match(admin, /host-balance-admin\.js\?v=20260831-[a-z0-9-]+/);
 });
 
 test('shows a premium two-payment history without merging financial evidence', () => {
@@ -141,14 +141,16 @@ test('retrieves reviewer-only historical host payments without exposing receipt 
   );
 });
 
-test('places one permanent host Payment History control beside Details on desktop and mobile', () => {
-  assert.match(admin, /includePrimaryActions \? `\$\{bookingDetailsButton\(b\)\} \$\{hostPaymentHistoryButton\(b\)\}`/);
-  assert.match(admin, /b\.hostBooking[\s\S]{0,100}<div class="mb-book-primary-actions">\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}<\/div>/);
+test('keeps permanent Payment History and adds Review & Confirm only for pending Payment 2', () => {
+  assert.match(admin, /includePrimaryActions \? `\$\{bookingDetailsButton\(b\)\} \$\{hostBalanceReviewButton\(b\)\} \$\{hostPaymentHistoryButton\(b\)\}`/);
+  assert.match(admin, /b\.hostBooking[\s\S]{0,100}<div class="mb-book-primary-actions">\$\{hostBalanceReviewButton\(b, true\)\}\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}<\/div>/);
+  assert.match(admin, /function hostBalanceReviewButton\(b, mobile = false\)[\s\S]*?if \([^\n]*!hostBalancePendingPayment\(b\)\) return ''/);
+  assert.match(admin, /host-balance-review-button[\s\S]{0,240}>Review & Confirm<\/button>/);
   assert.match(admin, /function openHostPaymentHistoryFromDetails\(ref\)/);
   assert.match(admin, /closeBookingDetails\(\);[\s\S]*?openHostPaymentHistory\(ref, trigger\)/);
   assert.match(admin, /b\.hostBooking && canViewHostPaymentHistory\(\) \? `<button[^`]+openHostPaymentHistoryFromDetails/);
   assert.match(admin, /!b\.hostBooking && hasReceipt[\s\S]{0,180}>View Payment<\/button>/);
-  assert.doesNotMatch(admin, /hostBalanceReviewButton|reviewHostBalanceForBooking|View Deposit/);
+  assert.doesNotMatch(admin, /reviewHostBalanceForBooking|View Deposit/);
 });
 
 test('uses the canonical booking group snapshot when no online balance receipt exists', () => {
@@ -222,8 +224,8 @@ test('keeps owner review actions fail-closed until the Payment 2 image load even
   assert.notEqual(decideStart, -1, 'decide must independently enforce the receipt gate');
   assert.match(syncActions, /!state\.reviewable[\s\S]*?!state\.receiptLoaded[\s\S]*?!reviewingBalance/);
   assert.match(openModal, /state\.receiptLoaded = false/);
-  assert.match(openModal, /onLoad\(\) \{\s*state\.receiptLoaded = true;\s*syncActions\(\);/);
-  assert.match(openModal, /onError\([^)]*\) \{\s*state\.receiptLoaded = false;\s*syncActions\(\);/);
+  assert.match(openModal, /onLoad\(\) \{\s*state\.receiptLoaded = true;\s*state\.receiptLoadState = 'ready';\s*syncActions\(\);/);
+  assert.match(openModal, /onError\([^)]*\) \{\s*state\.receiptLoaded = false;\s*state\.receiptLoadState = 'error';\s*syncActions\(\);/);
   assert.doesNotMatch(openModal, /balanceProof\.show\([^)]*\);\s*state\.receiptLoaded = true/);
   assert.match(
     decide,
@@ -262,4 +264,68 @@ test('invalidates a stale Admin shell when another account replaces its session'
   assert.match(admin, /nextUserId!==bootUserId/);
   assert.match(admin, /invalidateStaleAdminSession\(\)/);
   assert.match(admin, /startAdminSessionGuard\(\);/);
+});
+
+test('adds a canonical Review & Confirm action without replacing Payment History', () => {
+  const helperStart = admin.indexOf('function hostBalancePendingPayment(b)');
+  const helperEnd = admin.indexOf('\nasync function openHostPaymentHistory(ref, trigger)', helperStart);
+  const helpers = admin.slice(helperStart, helperEnd);
+  assert.notEqual(helperStart, -1, 'host pending-payment helpers must exist');
+  assert.notEqual(helperEnd, -1, 'host payment-history opener must follow the row action helper');
+
+  const browserWindow = { HostBalanceAdmin: { pendingForBooking: () => ({ status: 'pending_review' }) } };
+  const makeButton = new Function(
+    'window',
+    'sess',
+    'esc',
+    'jsArg',
+    `${helpers}; return { history: hostPaymentHistoryButton, review: hostBalanceReviewButton };`,
+  )(
+    browserWindow,
+    { role: 'owner' },
+    value => String(value),
+    value => String(value),
+  );
+
+  const pending = { hostBooking: true, primaryRef: 'PB-GROUP-CANONICAL', ref: 'PB-ROW-REF' };
+  const historyHtml = makeButton.history(pending);
+  const reviewHtml = makeButton.review(pending);
+  assert.match(historyHtml, />Payment History<\/button>/);
+  assert.doesNotMatch(historyHtml, />Review & Confirm<\/button>/);
+  assert.match(reviewHtml, />Review & Confirm<\/button>/);
+  assert.match(reviewHtml, /data-booking-ref="PB-GROUP-CANONICAL"/);
+  assert.match(reviewHtml, /onclick="openHostPaymentHistory\('PB-GROUP-CANONICAL',this\)"/);
+
+  browserWindow.HostBalanceAdmin.pendingForBooking = () => null;
+  assert.match(makeButton.history(pending), />Payment History<\/button>/);
+  assert.equal(makeButton.review(pending), '');
+});
+
+test('routes Review & Confirm directly to pending Payment 2 and gates approval on its image load', () => {
+  const buttonStart = admin.indexOf('function hostBalanceReviewButton(b, mobile = false)');
+  const buttonEnd = admin.indexOf('\nasync function openHostPaymentHistory(ref, trigger)', buttonStart);
+  const button = admin.slice(buttonStart, buttonEnd);
+  const historyStart = hostBalanceAdmin.indexOf('async function openHistoryForBooking(booking, trigger)');
+  const historyEnd = hostBalanceAdmin.indexOf('\n  function invalidate()', historyStart);
+  const history = hostBalanceAdmin.slice(historyStart, historyEnd);
+  const modalStart = hostBalanceAdmin.indexOf('async function openModal(payment, trigger)');
+  const modalEnd = hostBalanceAdmin.indexOf('\n  function closeModal()', modalStart);
+  const modal = hostBalanceAdmin.slice(modalStart, modalEnd);
+  const syncStart = hostBalanceAdmin.indexOf('function syncActions()');
+  const syncEnd = hostBalanceAdmin.indexOf('\n  function ensureModal', syncStart);
+  const sync = hostBalanceAdmin.slice(syncStart, syncEnd);
+
+  assert.match(button, /const actionRef = b\.primaryRef \|\| b\.ref/);
+  assert.match(button, /openHostPaymentHistory\('\$\{jsArg\(actionRef\)\}',this\)/);
+  assert.match(history, /const bookingRef = actualBookingRef\(booking\)/);
+  assert.match(history, /apiCall\('history_for_booking', \{ bookingRef \}\)/);
+  assert.match(history, /payments\.find\(item => paymentStatus\(item\) === 'pending_review'\)[\s\S]*?await openModal/);
+
+  assert.match(modal, /state\.receiptLoaded = false/);
+  assert.match(modal, /state\.reviewable = view\.key === 'pending'/);
+  assert.match(modal, /selectPaymentReceipt\(view\.hasBalanceReceipt \? 'balance' : 'deposit'\)/);
+  assert.match(modal, /onLoad\(\) \{\s*state\.receiptLoaded = true;\s*state\.receiptLoadState = 'ready';\s*syncActions\(\);/);
+  assert.match(modal, /onError\(\) \{\s*state\.receiptLoaded = false;\s*state\.receiptLoadState = 'error';\s*syncActions\(\);/);
+  assert.match(sync, /const locked = state\.busy \|\| !state\.reviewable \|\| !canDecide\(\) \|\| !state\.receiptLoaded \|\| !reviewingBalance/);
+  assert.match(sync, /if \(approve\) \{\s*approve\.disabled = locked/);
 });

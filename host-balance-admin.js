@@ -7,6 +7,7 @@
     loading: null,
     current: null,
     receiptLoaded: false,
+    receiptLoadState: 'idle',
     depositReceiptLoaded: false,
     activeReceipt: 'balance',
     reviewable: false,
@@ -452,7 +453,17 @@
     const locked = state.busy || !state.reviewable || !canDecide() || !state.receiptLoaded || !reviewingBalance;
     const approve = byId('hostBalanceApproveBtn');
     const reject = byId('hostBalanceRejectBtn');
-    if (approve) approve.disabled = locked;
+    if (approve) {
+      approve.disabled = locked;
+      if (state.reviewable && !state.busy) {
+        const amount = optionalPaymentAmount(state.current, 'balanceAmount', 'expected_amount');
+        approve.textContent = state.receiptLoadState === 'loading'
+          ? 'Loading Payment 2 receipt…'
+          : state.receiptLoadState === 'error'
+            ? 'Receipt unavailable — reopen to retry'
+            : `Approve ${money(amount || 0)} Balance`;
+      }
+    }
     if (reject) reject.disabled = locked || reason.length < 3;
     const reasonField = byId('hostBalanceReviewReason');
     const actions = byId('hostBalanceActions');
@@ -466,7 +477,11 @@
           ? 'Payment 1 is read-only. Select Payment 2 to approve or reject the remaining balance.'
           : 'Payment 1 is accepted and preserved as read-only payment evidence.')
         : state.reviewable
-          ? 'This decision applies only to Payment 2 — the remaining balance.'
+          ? state.receiptLoadState === 'loading'
+            ? 'Loading the secure Payment 2 receipt. Approval unlocks after the image is visible.'
+            : state.receiptLoadState === 'error'
+              ? 'The Payment 2 receipt could not be loaded. Close and reopen this review to retry.'
+              : 'This decision applies only to Payment 2 — the remaining balance.'
           : view.key === 'approved'
             ? 'Read-only history. Payment 2 was approved and the booking is fully paid.'
             : view.key === 'rejected'
@@ -700,6 +715,7 @@
     state.current = payment;
     state.expectedPaymentId = expectedId;
     state.receiptLoaded = false;
+    state.receiptLoadState = 'loading';
     state.depositReceiptLoaded = false;
     state.activeReceipt = view.hasBalanceReceipt ? 'balance' : 'deposit';
     state.reviewable = view.key === 'pending';
@@ -792,10 +808,12 @@
       expectedId,
       onLoad() {
         state.receiptLoaded = true;
+        state.receiptLoadState = 'ready';
         syncActions();
       },
       onError() {
         state.receiptLoaded = false;
+        state.receiptLoadState = 'error';
         syncActions();
       },
     });
@@ -880,6 +898,7 @@
     }
     state.current = null;
     state.receiptLoaded = false;
+    state.receiptLoadState = 'idle';
     state.depositReceiptLoaded = false;
     state.activeReceipt = 'balance';
     state.reviewable = false;

@@ -600,6 +600,18 @@ tr:hover td { background: var(--bg2); }
   content: ''; width: 7px; height: 7px; flex: 0 0 7px; border-radius: 999px;
   background: var(--yellow); box-shadow: 0 0 0 3px rgba(var(--yellow-rgb),.12);
 }
+.host-balance-review-button {
+  background: linear-gradient(135deg,var(--green),#b9f800);
+  color: #071007; border: 1px solid rgba(var(--green-rgb),.82); font-weight: 950;
+  box-shadow: 0 7px 20px rgba(var(--green-rgb),.14);
+}
+.host-balance-review-button:hover {
+  background: linear-gradient(135deg,#c7ff20,var(--green));
+  color: #071007; transform: translateY(-1px);
+  box-shadow: 0 9px 24px rgba(var(--green-rgb),.22);
+}
+.host-balance-review-button::before { content: '✓'; font-weight: 950; }
+.host-balance-review-button.host-balance-review-mobile { grid-column: 1 / -1; min-height: 44px; }
 .host-deposit-evidence { color: var(--green); font-size: .67rem; font-weight: 850; line-height: 1.35; }
 .host-deposit-evidence.warn { color: var(--yellow); }
 .host-deposit-evidence.flagged { color: var(--red); }
@@ -5968,6 +5980,12 @@ function hostPaymentHistoryButton(b, mobile = false){
   const aria = reviewNeeded ? 'Payment History — balance review needed' : 'Payment History';
   return `<button type="button" class="btn btn-sm host-payment-history-button${reviewNeeded?' review-needed':''}${mobile?' host-payment-history-mobile':''}" data-booking-ref="${esc(actionRef)}" aria-label="${aria}" onclick="openHostPaymentHistory('${jsArg(actionRef)}',this)">Payment History</button>`;
 }
+function hostBalanceReviewButton(b, mobile = false){
+  if (!b?.hostBooking || !canViewHostPaymentHistory() || !hostBalancePendingPayment(b)) return '';
+  const actionRef = b.primaryRef || b.ref;
+  if (!actionRef) return '';
+  return `<button type="button" class="btn btn-sm host-balance-review-button${mobile?' host-balance-review-mobile':''}" data-booking-ref="${esc(actionRef)}" aria-label="Review and confirm Payment 2" onclick="openHostPaymentHistory('${jsArg(actionRef)}',this)">Review & Confirm</button>`;
+}
 async function openHostPaymentHistory(ref, trigger){
   try {
     if (!window.HostBalanceAdmin?.openHistoryForBooking) throw new Error('Payment history is unavailable. Refresh and try again.');
@@ -5993,7 +6011,7 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true){
   const balanceReviewLocked = hasBalance && balanceReviewState !== 'clear';
   const canRecordManualPayment = hasBalance && !balanceReviewLocked && ['owner','court_owner'].includes(String(sess?.role || ''));
   const canCorrectForfeiture = forfeited && b.hostBooking && ['owner','court_owner'].includes(String(sess?.role || ''));
-  return `${includePrimaryActions ? `${bookingDetailsButton(b)} ${hostPaymentHistoryButton(b)}` : ''}
+  return `${includePrimaryActions ? `${bookingDetailsButton(b)} ${hostBalanceReviewButton(b)} ${hostPaymentHistoryButton(b)}` : ''}
     ${!balanceReviewLocked && !grouped && !['cancelled','forfeited'].includes(b.status)?`<button class="btn btn-sm" style="background:rgba(74,154,220,.12);color:#5a9ad4;border:1px solid rgba(74,154,220,.3)" onclick="openRescheduleModal('${jsArg(actionRef)}')">Reschedule</button>`:''}
     ${b.email && (forfeited || (hasBalance && balanceReviewState === 'clear'))?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Notice':'Balance Reminder'}</button>`:''}
     ${b.status==='confirmed' && b.email && !hasBalance?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendConfirmationEmail('${jsArg(actionRef)}')">Resend Email</button>`:''}
@@ -6136,7 +6154,7 @@ function mobileBookingCard(b, canDelete){
       ${duplicatePaymentRefBadge(b)}
     </div>
     ${b.hostBooking
-      ? `<div class="mb-book-primary-actions">${bookingDetailsButton(b)}${hostPaymentHistoryButton(b, true)}</div>`
+      ? `<div class="mb-book-primary-actions">${hostBalanceReviewButton(b, true)}${bookingDetailsButton(b)}${hostPaymentHistoryButton(b, true)}</div>`
       : bookingQuickConfirmButton(b, true)}
     <details class="mb-book-pay">
       <summary>Actions</summary>
@@ -6229,6 +6247,7 @@ async function openBookingDetails(ref) {
     $('bookingDetailsActions').innerHTML = `
       <button class="btn btn-g" onclick="closeBookingDetails()">Close</button>
       ${b.hostBooking && canViewHostPaymentHistory() ? `<button type="button" class="btn btn-g" onclick="openHostPaymentHistoryFromDetails('${jsArg(actionRef)}')">Payment History</button>` : ''}
+      ${b.hostBooking && pendingBalance && canViewHostPaymentHistory() ? `<button type="button" class="btn host-balance-review-button" onclick="openHostPaymentHistoryFromDetails('${jsArg(actionRef)}')">Review & Confirm</button>` : ''}
       ${!b.hostBooking && hasReceipt ? `<button class="btn btn-g" onclick="closeBookingDetails();openVerifyModal('${jsArg(actionRef)}')">View Payment</button>` : ''}
       ${b.hostBooking && b.email && (forfeited || (historicalBalance > 0 && balanceReviewState === 'clear')) ? `<button class="btn btn-p" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Forfeiture Notice':'Send Balance Reminder'}</button>` : ''}`;
     requestAnimationFrame(() => modal.querySelector('.booking-details-modal')?.focus());
@@ -13726,6 +13745,6 @@ async function checkAgreementGate(session) {
 <script src="supabase-config.js?v=20260830-host-balance-v1"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>
-<script src="host-balance-admin.js?v=20260831-payment-state-v7"></script>
+<script src="host-balance-admin.js?v=20260831-review-action-v8"></script>
 </body>
 </html>
