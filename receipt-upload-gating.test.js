@@ -419,9 +419,9 @@ test('staged verification authorizes before download and checks content-derived 
   assert.match(verify, /const upErr = stagedReceiptPath\s*\? null/);
 });
 
-test('all pages load the receipt-stage client cache key', () => {
+test('all pages load a versioned shared client cache key', () => {
   for (const path of ['index.html', 'admin.html', 'host.html', 'login.html', 'player-live.html']) {
-    assert.match(read(path), /supabase-config\.js\?v=20260830-receipt-stage-v1/);
+    assert.match(read(path), /supabase-config\.js\?v=[a-z0-9._-]+/i);
   }
 });
 

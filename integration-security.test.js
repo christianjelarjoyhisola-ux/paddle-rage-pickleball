@@ -633,6 +633,88 @@ test('booking quick confirm is a dedicated responsive row action using the canon
   );
 });
 
+test('booking confirmation adapter is not served behind the obsolete receipt-stage asset token', () => {
+  const client = read('supabase-config.js');
+  assert.match(
+    client,
+    /async\s+confirmBookingTransaction\s*\(/,
+    'fixture requires the newer booking-confirmation DB adapter API',
+  );
+
+  const pages = ['admin.html', 'index.html', 'host.html', 'login.html', 'player-live.html'];
+  const assetUrls = pages.map(file => {
+    const page = read(file);
+    const match = page.match(/<script\s+src=["'](supabase-config\.js[^"']*)["']/i);
+    assert.ok(match, `${file} must load the shared Supabase adapter`);
+    return match[1].replaceAll('&amp;', '&');
+  });
+
+  assert.equal(
+    new Set(assetUrls).size,
+    1,
+    'every page must request the same Supabase adapter revision',
+  );
+  assert.match(
+    assetUrls[0],
+    /^supabase-config\.js\?v=[A-Za-z0-9._-]+(?:&[A-Za-z0-9._-]+=[A-Za-z0-9._-]+)*$/,
+    'the shared Supabase adapter must use an explicit cache-busting revision',
+  );
+  assert.doesNotMatch(
+    assetUrls[0],
+    /20260830-receipt-stage-v1|rollback=deb2d66/i,
+    'the booking-confirmation API must not reuse the pre-confirmation receipt-stage cache key',
+  );
+});
+
+test('Pages worker prevents stale shared runtime and HTML entry responses', async () => {
+  const workerSource = read('_worker.js');
+  const workerUrl = `data:text/javascript;base64,${Buffer.from(workerSource).toString('base64')}`;
+  const { default: worker } = await import(workerUrl);
+  const staleAssetPolicy = 'max-age=14400';
+  const env = {
+    PRIMARY_HOSTNAME: 'paddleragecdo.ph',
+    ASSETS: {
+      fetch: async () => new Response('fixture', {
+        headers: { 'Cache-Control': staleAssetPolicy },
+      }),
+    },
+  };
+
+  const protectedRoutes = [
+    '/supabase-config.js?v=obsolete',
+    '/',
+    '/admin',
+    '/admin.html',
+    '/host',
+    '/host.html',
+    '/login',
+    '/login.html',
+    '/player-live',
+    '/player-live.html',
+  ];
+  for (const route of protectedRoutes) {
+    const response = await worker.fetch(
+      new Request(`https://paddleragecdo.ph${route}`),
+      env,
+    );
+    assert.equal(
+      response.headers.get('Cache-Control'),
+      'no-store, max-age=0',
+      `${route} must override the stale Pages asset cache policy`,
+    );
+  }
+
+  const staticAsset = await worker.fetch(
+    new Request('https://paddleragecdo.ph/brand-theme.css'),
+    env,
+  );
+  assert.equal(
+    staticAsset.headers.get('Cache-Control'),
+    staleAssetPolicy,
+    'the cache override must remain scoped to HTML and the shared DB adapter',
+  );
+});
+
 test('duplicate payment risk survives a lookup narrowed to one booking group', async () => {
   const admin = read('admin.html');
   const helpersStart = admin.indexOf('function bookingStartHour');

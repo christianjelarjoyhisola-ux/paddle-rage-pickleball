@@ -1607,7 +1607,7 @@ test("Play Manager stores editable six-star player skills and uses them for bala
     managerCss,
     /\.pm2-team-skill-total\s*\{[\s\S]*?border-radius:\s*999px[\s\S]*?letter-spacing:\s*0/i
   );
-  assert.match(admin, /supabase-config\.js\?v=20260830-receipt-stage-v1/i);
+  assert.match(admin, /supabase-config\.js\?v=[a-z0-9._-]+/i);
   assert.match(admin, /open-play-rating\.js\?v=20260729-head-to-head-v1/i);
   assert.match(admin, /play-manager\.js\?v=20260729-result-footer-v1/i);
   assert.doesNotMatch(playerClient, /skill_level|skillLevel/i);
