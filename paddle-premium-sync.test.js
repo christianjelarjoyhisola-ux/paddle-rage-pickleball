@@ -10,6 +10,7 @@ const manager = read('play-manager.js');
 const player = read('player-live.js');
 const supabase = read('supabase-config.js');
 const localServer = read('tools/local-server.js');
+const pagesDeploy = read('deploy-cloudflare-pages.ps1');
 
 test('public booking keeps a zoomable, explicit, first-session intro', () => {
   assert.match(index, /name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/);
@@ -53,6 +54,7 @@ test('local launch mode supports the same atomic batch-booking API as production
   assert.match(localDataMode, /return prepared\.map\(booking => booking\.ref\)/);
   assert.match(localDataMode, /async addBooking\(booking\)\s*\{\s*return this\.addBookings\(\[booking\]\)/);
   assert.match(localServer, /'\.mp3': 'audio\/mpeg'/);
+  assert.match(pagesDeploy, /"open-play-rotation\.js"/);
 });
 
 test('synced production surfaces remain Paddle-only and tenant-isolated', () => {
