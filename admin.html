@@ -698,6 +698,15 @@ tr:hover td { background: var(--bg2); }
 .amount-deadline { margin-top:3px; color:var(--yellow); font-size:.68rem; font-weight:850; line-height:1.35; }
 .amount-deadline.final,.amount-deadline.overdue,.amount-deadline.forfeited { color:var(--red); }
 .booking-mobile-card { display: none; }
+.booking-status-stack { display:flex; flex-direction:column; align-items:flex-start; gap:7px; }
+.booking-quick-confirm {
+  min-height:34px; padding:6px 11px !important; border:1px solid rgba(var(--green-rgb),.55) !important;
+  background:linear-gradient(135deg,var(--green),#8fbd00) !important; color:#071006 !important;
+  box-shadow:0 7px 18px rgba(var(--green-rgb),.14); font-weight:900 !important; white-space:nowrap;
+}
+.booking-quick-confirm:hover { transform:translateY(-1px); box-shadow:0 9px 22px rgba(var(--green-rgb),.2); }
+.booking-quick-confirm:disabled { opacity:.68; cursor:wait; transform:none; }
+.mb-book-quick-confirm { width:100%; min-height:44px; margin-top:10px; justify-content:center; }
 .booking-section-toolbar { margin-bottom: 12px; }
 .booking-type-tabs {
   display:flex; gap:6px; margin-bottom:12px; padding:5px;
@@ -1118,6 +1127,7 @@ tr:hover td { background: var(--bg2); }
     width: 100% !important; min-height: 34px; padding: 6px 8px !important;
     font-size: .72rem !important; justify-content: center;
   }
+  .mb-book-quick-confirm { margin-top:9px; }
   /* Long values (txn IDs, refs) wrap instead of overflowing the card */
   .tbl-scroll td code { word-break: break-all; white-space: normal; }
   /* Remittance panel header controls go full-width and stack */
@@ -5866,33 +5876,6 @@ function currentBookingActorFields(){
   };
 }
 function bookingDetailsButton(b){
-  if (!(b.gcashRef || (b.receiptStatus && b.receiptStatus !== 'none'))) return '';
-  if (!['gcash','bdopay','maya','bpi','gotyme','pnb'].includes(String(b.paymentMethod || '').toLowerCase())) return '';
-  return `<button class="btn btn-sm" style="background:rgba(200,160,96,.15);color:var(--yellow);border:1px solid rgba(200,160,96,.35);font-weight:700" onclick="openVerifyModal('${jsArg(b.ref)}')">🔍 ${b.status==='pending'?'Verify':'Details'}</button>`;
-}
-function bookingActionsHtml(b, canDelete){
-  return `${bookingDetailsButton(b)}
-    ${b.status!=='cancelled'?`<button class="btn btn-sm" style="background:rgba(74,154,220,.12);color:#5a9ad4;border:1px solid rgba(74,154,220,.3)" onclick="openRescheduleModal('${jsArg(b.ref)}')">📅 Reschedule</button>`:''}
-    ${b.status==='confirmed' && b.email?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendConfirmationEmail('${jsArg(b.ref)}')">📧 Resend Email</button>`:''}
-    <select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" onchange="updateStatus('${jsArg(b.ref)}',this.value)">
-      <option value="pending" ${b.status==='pending'?'selected':''}>Pending</option>
-      <option value="confirmed" ${b.status==='confirmed'?'selected':''}>Confirmed</option>
-      <option value="verifying" ${b.status==='verifying'?'selected':''}>Processing</option>
-      <option value="completed" ${b.status==='completed'?'selected':''}>Completed</option>
-      <option value="cancelled" ${b.status==='cancelled'?'selected':''}>Cancelled</option>
-    </select>
-    ${canDelete?`<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(b.ref)}')">🗑️</button>`:''}`;
-}
-function bookingPayStateSelect(b){
-  return `<select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" onchange="updatePaymentStatus('${jsArg(b.ref)}',this.value)">
-    <option value="unpaid" ${(!b.paymentStatus||b.paymentStatus==='unpaid')?'selected':''}>Unpaid</option>
-    <option value="downpayment_paid" ${b.paymentStatus==='downpayment_paid'?'selected':''}>Downpayment Paid</option>
-    <option value="paid" ${b.paymentStatus==='paid'?'selected':''}>Fully Paid</option>
-    <option value="for_verification" ${b.paymentStatus==='for_verification'?'selected':''}>For Verification</option>
-    <option value="rejected" ${b.paymentStatus==='rejected'?'selected':''}>Rejected</option>
-  </select>`;
-}
-function bookingDetailsButton(b){
   const actionRef = b.primaryRef || b.ref;
   return `<button class="btn btn-sm" style="background:rgba(200,160,96,.15);color:var(--yellow);border:1px solid rgba(200,160,96,.35);font-weight:700" onclick="openBookingDetails('${jsArg(actionRef)}')">Details</button>`;
 }
@@ -5928,6 +5911,51 @@ function bookingPayStateSelect(b){
     <option value="rejected" ${b.paymentStatus==='rejected'?'selected':''}>Rejected</option>
     <option value="deposit_retained" ${b.paymentStatus==='deposit_retained'?'selected':''} disabled>Deposit Retained</option>
   </select>`;
+}
+function bookingQuickConfirmIssue(b) {
+  const bookingState = String(b?.status || '').toLowerCase();
+  const paymentState = String(b?.paymentStatus || '').toLowerCase();
+  const receiptState = String(b?.receiptStatus || 'none').toLowerCase();
+  const items = Array.isArray(b?.allItems) && b.allItems.length ? b.allItems
+    : Array.isArray(b?.items) && b.items.length ? b.items
+    : b ? [b] : [];
+  if (!['pending','verifying'].includes(bookingState)) return 'Only pending bookings can be confirmed here.';
+  if (!items.length || ['mixed','rejected','deposit_retained'].includes(paymentState)) return 'Review this booking before confirming.';
+  if (items.some(item => ['mixed','completed','cancelled','forfeited'].includes(String(item?.status || '').toLowerCase()))) return 'Review this grouped booking before confirming.';
+  if (items.some(item => ['mixed','rejected','deposit_retained'].includes(String(item?.paymentStatus || '').toLowerCase()))) return 'Review this grouped payment before confirming.';
+  if (b?.duplicatePaymentRef) return 'Duplicate payment reference — review required.';
+  if (receiptState === 'rejected' || items.some(item => String(item?.receiptStatus || '').toLowerCase() === 'rejected')) return 'Flagged receipt — review required.';
+
+  const methods = [...new Set(items.map(item => String(item?.paymentMethod || '').toLowerCase()).filter(Boolean))];
+  if (methods.length !== 1) return 'Payment method is missing or inconsistent.';
+  const digitalPayment = isDigitalPayment(methods[0]);
+  if (!digitalPayment && methods[0] !== 'cash') return 'Use the regular booking status control.';
+  if (digitalPayment) {
+    const refs = [...new Set(items.map(item => String(item?.gcashRef || '').toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean))];
+    if (refs.length !== 1) return 'Payment reference is missing or inconsistent.';
+    const paymentAccepted = paymentState === 'paid' || (b?.hostBooking && paymentState === 'downpayment_paid');
+    if (!paymentAccepted && paymentState !== 'for_verification') return 'Payment is not ready for confirmation.';
+    if (!paymentAccepted && !items.some(item => !!item?.receiptImageUrl)) return 'Receipt image is missing.';
+  } else if (!['unpaid','pending','paid','downpayment_paid'].includes(paymentState)) {
+    return 'Cash booking is not ready for confirmation.';
+  }
+
+  const total = Number(b?.total);
+  const submitted = Number(b?.downpayment);
+  if (!Number.isFinite(total) || total <= 0 || !Number.isFinite(submitted) || submitted <= 0) return 'Payment amount is invalid.';
+  if (digitalPayment && !b?.hostBooking && submitted + .01 < total) return 'Cannot confirm: regular bookings require the full payment amount.';
+  return '';
+}
+function bookingQuickConfirmButton(b, mobile = false) {
+  if (bookingQuickConfirmIssue(b)) return '';
+  const actionRef = b.primaryRef || b.ref;
+  const courtCount = Array.isArray(b.items) ? b.items.length : 1;
+  const busy = _bookingConfirmInFlight.has(String(actionRef));
+  const actionName = isDigitalPayment(b.paymentMethod) ? 'Confirm payment and' : 'Confirm';
+  const ariaLabel = b.isGroup
+    ? `${actionName} all ${courtCount} courts for ${b.displayRef || actionRef}`
+    : `${actionName} booking ${b.displayRef || actionRef}`;
+  return `<button type="button" class="btn btn-sm booking-quick-confirm${mobile?' mb-book-quick-confirm':''}" aria-label="${esc(ariaLabel)}" ${busy?'disabled aria-busy="true"':''} onclick="quickConfirmBooking('${jsArg(actionRef)}',this)">${busy?'Confirming…':'✓ Confirm'}</button>`;
 }
 function bookingAmountSummaryHtml(b) {
   const total = Number(b.total || 0);
@@ -5985,6 +6013,7 @@ function mobileBookingCard(b, canDelete){
       </div>
       ${duplicatePaymentRefBadge(b)}
     </div>
+    ${bookingQuickConfirmButton(b, true)}
     <details class="mb-book-pay">
       <summary>Actions</summary>
       <div class="mb-book-detail-grid">
@@ -6650,20 +6679,8 @@ async function renderBookings(){
         ${duplicatePaymentRefBadge(b)}
         ${receiptBadge(b)}
       </div></td>
-      <td data-label="Status">${statusBdg(b.status)}</td>
-      <td data-label="Actions"><div style="display:flex;gap:5px;flex-wrap:wrap">${bookingActionsHtml(b, canDelete)}</div><div style="display:none">
-        ${(b.gcashRef || (b.receiptStatus && b.receiptStatus!=='none')) && isDigitalPayment(b.paymentMethod)?`<button class="btn btn-sm" style="background:rgba(200,160,96,.15);color:var(--yellow);border:1px solid rgba(200,160,96,.35);font-weight:700" onclick="openVerifyModal('${jsArg(b.ref)}')">🔍 ${b.status==='pending'?'Verify':'Details'}</button>`:''}
-        ${b.status!=='cancelled'?`<button class="btn btn-sm" style="background:rgba(74,154,220,.12);color:#5a9ad4;border:1px solid rgba(74,154,220,.3)" onclick="openRescheduleModal('${jsArg(b.ref)}')">📅 Reschedule</button>`:''}
-        ${b.status==='confirmed' && b.email?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendConfirmationEmail('${jsArg(b.ref)}')">📧 Resend Email</button>`:''}
-        <select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" onchange="updateStatus('${jsArg(b.ref)}',this.value)">
-          <option value="pending" ${b.status==='pending'?'selected':''}>Pending</option>
-          <option value="confirmed" ${b.status==='confirmed'?'selected':''}>Confirmed</option>
-          <option value="verifying" ${b.status==='verifying'?'selected':''}>Processing</option>
-          <option value="completed" ${b.status==='completed'?'selected':''}>Completed</option>
-          <option value="cancelled" ${b.status==='cancelled'?'selected':''}>Cancelled</option>
-        </select>
-        ${canDelete?`<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(b.ref)}')">🗑️</button>`:''}
-      </div></td>
+      <td data-label="Status"><div class="booking-status-stack">${statusBdg(b.status)}${bookingQuickConfirmButton(b)}</div></td>
+      <td data-label="Actions"><div style="display:flex;gap:5px;flex-wrap:wrap">${bookingActionsHtml(b, canDelete)}</div></td>
     </tr>`).join('');
   const noCopy = bookingFiltersActive({ q, fd, fs, fp }) ? 'No bookings match these filters.' : 'No bookings yet.';
   const noResults = !mtRowsHtml && !bkRowsHtml ? `<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:28px">${noCopy}</td></tr>` : '';
@@ -7335,7 +7352,82 @@ async function notifyBookingUpdateSafe(bookingOrRef, event, note = '') {
   } catch (_) {}
 }
 
+const _bookingConfirmInFlight = new Set();
+function setBookingConfirmBusy(trigger, busy) {
+  if (!(trigger instanceof HTMLButtonElement)) return;
+  if (busy) {
+    trigger.dataset.idleLabel = trigger.textContent || '✓ Confirm';
+    trigger.disabled = true;
+    trigger.setAttribute('aria-busy', 'true');
+    trigger.textContent = 'Confirming…';
+    return;
+  }
+  trigger.disabled = false;
+  trigger.removeAttribute('aria-busy');
+  trigger.textContent = trigger.dataset.idleLabel || '✓ Confirm';
+  delete trigger.dataset.idleLabel;
+}
+async function confirmBookingTransaction(ref, { trigger = null, closePaymentModal = false } = {}) {
+  const key = String(ref || '').trim();
+  if (!key) return false;
+  if (_bookingConfirmInFlight.has(key)) {
+    toast('This booking is already being confirmed.', 'inf');
+    return false;
+  }
+  _bookingConfirmInFlight.add(key);
+  setBookingConfirmBusy(trigger, true);
+  try {
+    const current = await getBookingGroupByRef(key);
+    if (!current) throw new Error('Booking not found.');
+    const issue = bookingQuickConfirmIssue(current);
+    if (issue) throw new Error(issue);
+    if (typeof DB.confirmBookingTransaction !== 'function') {
+      throw new Error('Secure booking confirmation is unavailable. Refresh and try again.');
+    }
+
+    const priorPaymentState = String(current.paymentStatus || '').toLowerCase();
+    const verifiedPaymentNow = isDigitalPayment(current.paymentMethod) && !['paid','downpayment_paid'].includes(priorPaymentState);
+    const result = await DB.confirmBookingTransaction(current.primaryRef || key);
+    const transitioned = result?.transitioned !== false;
+    if (closePaymentModal) closeVerifyModal({ restoreFocus: false });
+    const successMessage = verifiedPaymentNow ? 'Payment verified & booking confirmed!' : 'Booking confirmed!';
+    toast(transitioned ? successMessage : 'Booking is already confirmed.', transitioned ? 'ok' : 'inf');
+    await renderBookings();
+    if (_curSection === 'payreview') await renderPaymentReview();
+    renderDash();
+
+    if (transitioned) {
+      Promise.resolve(getBookingGroupByRef(current.primaryRef || key)).then(async booking => {
+        if (!booking) return;
+        const notificationEvent = verifiedPaymentNow ? 'payment_verified' : 'booking_confirmed';
+        const notificationNote = verifiedPaymentNow
+          ? 'Payment and booking confirmed by admin.'
+          : 'Booking confirmed by admin.';
+        await Promise.all([
+          sendBookingConfirmationNotice(booking),
+          notifyBookingUpdateSafe(booking, notificationEvent, notificationNote),
+        ]);
+      }).catch(() => {});
+    }
+    return true;
+  } catch (error) {
+    toast(error?.message || 'Failed to confirm booking.', 'err');
+    return false;
+  } finally {
+    _bookingConfirmInFlight.delete(key);
+    if (trigger?.isConnected) setBookingConfirmBusy(trigger, false);
+  }
+}
+function quickConfirmBooking(ref, trigger) {
+  return confirmBookingTransaction(ref, { trigger });
+}
+
 async function updateStatus(ref, status) {
+  if (status === 'confirmed') {
+    const confirmed = await confirmBookingTransaction(ref);
+    if (!confirmed) await renderBookings();
+    return;
+  }
   const updates = status === 'forfeited'
     ? { status, paymentStatus: 'deposit_retained', forfeitedAt: new Date().toISOString(), forfeitureReason: 'Remaining balance was not paid by the deadline.' }
     : { status };
@@ -7397,11 +7489,14 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   }
   await vmPopulateReceipt(b);
   const readOnly = bookingPaymentIsResolved(b);
+  const confirmationBlocked = !!b.duplicatePaymentRef || String(b.receiptStatus || '').toLowerCase() === 'rejected';
   if ($('vmRejectBtn')) $('vmRejectBtn').style.display = readOnly ? 'none' : '';
-  if ($('vmConfirmBtn')) $('vmConfirmBtn').style.display = readOnly ? 'none' : '';
+  if ($('vmConfirmBtn')) $('vmConfirmBtn').style.display = readOnly || confirmationBlocked ? 'none' : '';
   if ($('vmResolvedClose')) $('vmResolvedClose').style.display = readOnly ? '' : 'none';
   if ($('vmReviewHint')) {
-    $('vmReviewHint').textContent = readOnly
+    $('vmReviewHint').textContent = confirmationBlocked
+      ? 'This payment cannot be confirmed: the receipt is flagged or its payment reference is duplicated.'
+      : readOnly
       ? 'This payment is already resolved. Receipt evidence remains available for audit.'
       : 'Open your GCash inbox and match the reference above, then mark as received to confirm the booking and send an email to the customer.';
   }
@@ -7508,44 +7603,8 @@ async function vmPopulateReceipt(b){
 async function verifyAndConfirm() {
   const ref = $('verifyModal').dataset.ref;
   if (!ref) return;
-  try {
-    const bkForPay = await getBookingGroupByRef(ref);
-    if (!bkForPay) {
-      toast('Booking not found.', 'err');
-      return;
-    }
-    if (bookingPaymentIsResolved(bkForPay)) {
-      toast('This payment is already resolved and cannot be changed here.', 'inf');
-      return;
-    }
-    if (isDigitalPayment(bkForPay?.paymentMethod) && !bkForPay?.receiptImageUrl) {
-      toast('Cannot confirm: no receipt image is attached to this digital payment.', 'err');
-      return;
-    }
-    if (!bkForPay?.hostBooking && Number(bkForPay?.downpayment || 0) < Number(bkForPay?.total || 0)) {
-      toast('Cannot confirm: regular bookings require the full payment amount.', 'err');
-      return;
-    }
-    const isFullyPaid = bkForPay && bkForPay.downpayment >= bkForPay.total;
-    const verifiedPayStatus = bkForPay?.hostBooking && !isFullyPaid ? 'downpayment_paid' : 'paid';
-    await updateBookingGroupByRef(ref, { status: 'confirmed', paymentStatus: verifiedPayStatus });
-
-    closeVerifyModal();
-    toast('Payment verified & booking confirmed!');
-    await renderBookings();
-    if (_curSection === 'payreview') await renderPaymentReview();
-    renderDash();
-
-    Promise.resolve(getBookingGroupByRef(ref)).then(async bk => {
-      if (!bk) return;
-      await Promise.all([
-        sendBookingConfirmationNotice(bk),
-        notifyBookingUpdateSafe(bk, 'payment_verified', 'Payment marked received by admin.'),
-      ]);
-    }).catch(() => {});
-  } catch(e) {
-    toast(e.message || 'Failed to confirm booking.', 'err');
-  }
+  const trigger = $('vmConfirmBtn');
+  await confirmBookingTransaction(ref, { trigger, closePaymentModal: true });
 }
 
 async function resendConfirmationEmail(ref) {

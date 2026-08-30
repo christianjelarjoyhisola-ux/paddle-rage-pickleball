@@ -3,6 +3,43 @@ const fs = require('node:fs');
 const test = require('node:test');
 
 const read = file => fs.readFileSync(file, 'utf8');
+
+function functionSource(source, name, { required = true } = {}) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matches = [...source.matchAll(new RegExp(`^(?:async\\s+)?function\\s+${escaped}\\s*\\(`, 'gm'))];
+  const match = matches.at(-1);
+  if (!match) {
+    if (required) assert.fail(`missing function ${name}`);
+    return '';
+  }
+  const rest = source.slice(match.index + match[0].length);
+  const next = /\n(?:async\s+)?function\s+[A-Za-z_$][\w$]*\s*\(/.exec(rest);
+  return source.slice(match.index, next ? match.index + match[0].length + next.index : source.length);
+}
+
+function functionClosure(source, rootName, follow = name =>
+  /booking.*confirm|confirm.*booking|quick.*confirm|confirm.*quick|bookingPaymentIsResolved|isDigitalPayment/i.test(name)
+) {
+  const pending = [rootName];
+  const seen = new Set();
+  const blocks = [];
+  while (pending.length) {
+    const name = pending.shift();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const block = functionSource(source, name, { required: name === rootName });
+    if (!block) continue;
+    blocks.push(block);
+    for (const call of block.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)) {
+      const calledName = call[1];
+      if (follow(calledName) && !seen.has(calledName) && functionSource(source, calledName, { required: false })) {
+        pending.push(calledName);
+      }
+    }
+  }
+  return blocks.join('\n');
+}
+
 const migration = read('supabase/migrations/20260719083000_public_data_access_hardening.sql');
 const bookingEdge = read('supabase/functions/submit-public-booking/index.ts');
 const registrationEdge = read('supabase/functions/submit-public-registration/index.ts');
@@ -556,12 +593,111 @@ test('payment review covers every receipt-backed registration type', () => {
   assert.match(admin, /openHostSessionVerifyModal/);
   assert.match(admin, /DB\.getHostSessionReceiptSignedUrl\(r\.id\)/);
   assert.match(admin, /DB\.updateOpenPlayHostSessionRegistration\(id, \{ paymentStatus: 'paid' \}\)/);
-  assert.match(admin, /regular bookings require the full payment amount/);
+  assert.match(admin, /regular bookings require (?:the )?full payment(?: amount)?/);
   assert.match(admin, /receiptRef: receiptItem\.ref/);
   assert.match(admin, /function bookingPaymentIsResolved[\s\S]*?'deposit_retained'[\s\S]*?'forfeited'/);
   assert.match(admin, /vmRejectBtn'\)\.style\.display = readOnly \? 'none'/);
-  assert.match(admin, /vmConfirmBtn'\)\.style\.display = readOnly \? 'none'/);
-  assert.ok((admin.match(/if \(bookingPaymentIsResolved\(bkForPay\)\)/g) || []).length >= 2);
+  assert.match(admin, /vmConfirmBtn'\)\.style\.display\s*=\s*[^?\n]*readOnly[^?\n]*\?\s*'none'/);
+  assert.ok((admin.match(/if \(bookingPaymentIsResolved\(bkForPay\)\)/g) || []).length >= 1);
   assert.match(admin, /item\.status === 'retained'[\s\S]*?>Resolved</);
   assert.match(client, /async updateOpenPlayHostSessionRegistration\(id, updates\)/);
+});
+
+test('booking quick confirm is a dedicated responsive row action using the canonical booking ref', () => {
+  const admin = read('admin.html');
+  const quickButton = functionSource(admin, 'bookingQuickConfirmButton');
+  const quickButtonClosure = functionClosure(admin, 'bookingQuickConfirmButton');
+  const mobileCard = functionSource(admin, 'mobileBookingCard');
+  const renderBookings = functionSource(admin, 'renderBookings');
+  const activeActions = functionSource(admin, 'bookingActionsHtml');
+
+  assert.match(quickButton, /const\s+actionRef\s*=\s*b\.primaryRef\s*\|\|\s*b\.ref/);
+  assert.match(quickButton, /type=["']button["']/);
+  assert.match(quickButton, /booking-quick-confirm/);
+  assert.match(quickButtonClosure, /confirmBookingTransaction\s*\(/);
+  assert.match(quickButton, /onclick=[^\n]*\$\{jsArg\(actionRef\)\}/);
+
+  const quickAt = mobileCard.indexOf('bookingQuickConfirmButton(');
+  const detailsAt = mobileCard.indexOf('<details class="mb-book-pay">');
+  assert.ok(quickAt >= 0, 'mobile booking card must render quick confirm');
+  assert.ok(detailsAt > quickAt, 'mobile quick confirm must stay above the collapsed Details section');
+  assert.match(mobileCard, /bookingQuickConfirmButton\(b[\s\S]*?mb-book-pay/);
+
+  const desktopStatusCell = renderBookings.match(/<td\s+data-label=["']Status["'][^>]*>[\s\S]*?<\/td>/)?.[0] || '';
+  assert.match(desktopStatusCell, /booking-status-stack/);
+  assert.match(desktopStatusCell, /bookingQuickConfirmButton\(b/);
+  assert.doesNotMatch(
+    activeActions,
+    /bookingQuickConfirmButton/,
+    'desktop quick confirm belongs in the Status cell, not the crowded Actions cell',
+  );
+});
+
+test('row and verify-modal confirmation reuse one guarded booking transaction', () => {
+  const admin = read('admin.html');
+  const quickButton = functionSource(admin, 'bookingQuickConfirmButton');
+  const quickButtonClosure = functionClosure(admin, 'bookingQuickConfirmButton');
+  const transaction = functionSource(admin, 'confirmBookingTransaction');
+  const transactionClosure = functionClosure(admin, 'confirmBookingTransaction');
+  const verifyAndConfirm = functionSource(admin, 'verifyAndConfirm');
+  const updateStatus = functionSource(admin, 'updateStatus');
+
+  assert.match(quickButtonClosure, /confirmBookingTransaction\s*\(/);
+  assert.match(verifyAndConfirm, /await\s+confirmBookingTransaction\s*\(/);
+  assert.doesNotMatch(quickButton, /\bupdateStatus\s*\(/);
+  assert.doesNotMatch(transaction, /\bupdateStatus\s*\(/);
+  assert.doesNotMatch(
+    admin,
+    /updateStatus\s*\([^)]*,\s*["']confirmed["']\s*\)/,
+    'confirmation must not bypass the payment guards through a bare status update',
+  );
+  assert.match(transaction, /await\s+DB\.confirmBookingTransaction\s*\(\s*current\.primaryRef\s*\|\|\s*key\s*\)/);
+  assert.doesNotMatch(transaction, /\b(?:updateBookingGroupByRef|updatePaymentStatus)\s*\(/);
+  assert.match(updateStatus, /status\s*===\s*["']confirmed["'][\s\S]*?confirmBookingTransaction\s*\(/);
+  assert.match(transaction, /bookingQuickConfirmIssue\s*\(\s*current\s*\)/);
+  assert.doesNotMatch(
+    transaction,
+    /if\s*\(\s*requireQuickEligibility\s*\)[\s\S]{0,180}bookingQuickConfirmIssue/,
+    'modal and row confirmation must not be able to bypass the shared safety guard',
+  );
+
+  const inFlightSets = [...admin.matchAll(/\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+Set\s*\(\s*\)/g)]
+    .map(match => match[1]);
+  const confirmSet = inFlightSets.find(name => transaction.includes(name) && /confirm|booking/i.test(name));
+  assert.ok(confirmSet, 'confirmation transaction must use a dedicated in-flight Set');
+  const escapedSet = confirmSet.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  assert.match(transaction, new RegExp(`${escapedSet}\\.has\\s*\\(`));
+  assert.match(transaction, new RegExp(`${escapedSet}\\.add\\s*\\(`));
+  assert.match(transaction, new RegExp(`finally\\s*\\{[\\s\\S]*?${escapedSet}\\.delete\\s*\\(`));
+  assert.match(transactionClosure, /aria-busy/);
+  assert.match(transactionClosure, /\.disabled\s*=|disabled\s*:/);
+  assert.match(transactionClosure, /Confirming(?:\.{3}|…)/);
+});
+
+test('quick confirmation visibility and transaction guards reject unsafe payment states', () => {
+  const admin = read('admin.html');
+  const buttonClosure = functionClosure(admin, 'bookingQuickConfirmButton');
+  const transactionClosure = functionClosure(admin, 'confirmBookingTransaction');
+
+  for (const [label, pattern] of [
+    ['duplicate payment references', /duplicatePaymentRef/],
+    ['missing durable receipts', /receiptImageUrl/],
+    ['rejected receipts or payments', /rejected/],
+    ['mixed grouped state', /mixed/],
+    ['digital payment requirement', /isDigitalPayment/],
+  ]) {
+    assert.match(buttonClosure, pattern, `button visibility must guard ${label}`);
+    assert.match(transactionClosure, pattern, `transaction must re-check ${label}`);
+  }
+
+  for (const guardedSource of [buttonClosure, transactionClosure]) {
+    assert.match(guardedSource, /receiptStatus[\s\S]{0,180}rejected|rejected[\s\S]{0,180}receiptStatus/);
+    assert.match(guardedSource, /paymentStatus[\s\S]{0,180}mixed|mixed[\s\S]{0,180}paymentStatus/);
+    assert.match(guardedSource, /status[\s\S]{0,180}mixed|mixed[\s\S]{0,180}status/);
+    assert.match(
+      guardedSource,
+      /!\s*(?:b|booking|group)\??\.hostBooking[\s\S]{0,140}<(?:[\s\S]{0,40})?total|regular bookings require (?:the )?full payment(?: amount)?/i,
+      'regular underpayment must never expose or pass one-tap confirmation',
+    );
+  }
 });

@@ -27,9 +27,31 @@ const gcashAutoMigration = fs.readFileSync(
   ),
   'utf8'
 );
+const atomicBookingConfirmation = fs.readFileSync(
+  path.join(
+    root,
+    'supabase',
+    'migrations',
+    '20260830090000_atomic_booking_confirmation.sql'
+  ),
+  'utf8'
+);
 const gcashReviewFinalizer = gcashAutoMigration.slice(
   gcashAutoMigration.indexOf('create or replace function public.finalize_gcash_receipt_review')
 );
+
+function methodSources(source, methodName) {
+  const escaped = methodName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matches = [...source.matchAll(new RegExp(`^([ \\t]*)async\\s+${escaped}\\s*\\([^\\n]*\\)\\s*\\{`, 'gm'))];
+  return matches.map(match => {
+    const start = match.index;
+    const restStart = start + match[0].length;
+    const rest = source.slice(restStart);
+    const indent = match[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const next = new RegExp(`^${indent}(?:async\\s+)?[A-Za-z_$][\\w$]*\\s*\\(`, 'm').exec(rest);
+    return source.slice(start, next ? restStart + next.index : source.length);
+  });
+}
 
 test('anonymous booking reads expose availability fields but not PII', () => {
   assert.match(migration, /drop policy if exists bookings_select_public on public\.bookings/i);
@@ -310,6 +332,125 @@ test('GCash auto-approval is a service-role-only atomic finalization', () => {
     gcashAutoMigration,
     /revoke all on function public\.finalize_gcash_receipt_review\([\s\S]*?\)\s+from public, anon, authenticated[\s\S]*?grant execute on function public\.finalize_gcash_receipt_review\([\s\S]*?\)\s+to service_role/i
   );
+});
+
+test('dashboard booking confirmation is an authenticated atomic group transaction', () => {
+  const rpcFunction = atomicBookingConfirmation.match(
+    /create or replace function public\.confirm_booking_transaction[\s\S]*?\n\$\$;/i
+  )?.[0] || '';
+
+  assert.match(
+    rpcFunction,
+    /language plpgsql\s+security definer\s+set search_path = public, pg_temp/i,
+  );
+  assert.match(
+    rpcFunction,
+    /has_account_role\(array\['owner', 'court_owner', 'staff'\]\)/i,
+  );
+  assert.match(rpcFunction, /paddle-rage-pickleball-booking-fee-remittance/i);
+  assert.match(rpcFunction, /paddle-rage-public-booking-group:/i);
+  assert.match(rpcFunction, /paddle-rage-booking-confirmation:/i);
+  assert.ok(
+    (rpcFunction.match(/pg_advisory_xact_lock(?:_shared)?\s*\(/gi) || []).length >= 3,
+    'confirmation must serialize remittance, group membership, and repeat clicks',
+  );
+  assert.match(rpcFunction, /where b\.ref = requested_ref\s+for update/i);
+  assert.match(
+    rpcFunction,
+    /where b\.booking_group_ref = observed_group_ref\s+order by b\.ref\s+for update/i,
+  );
+
+  for (const values of ['status_values', 'payment_status_values', 'host_values', 'method_values']) {
+    assert.match(
+      rpcFunction,
+      new RegExp(`cardinality\\(${values}\\) <> 1`, 'i'),
+      `${values} must be uniform across every sibling`,
+    );
+  }
+  assert.match(rpcFunction, /current_booking_status in \('cancelled', 'completed', 'forfeited'\)/i);
+  assert.match(rpcFunction, /current_payment_status in \('failed', 'rejected', 'deposit_retained'\)/i);
+  assert.match(rpcFunction, /receipt_status[\s\S]*?= 'rejected'/i);
+  assert.match(rpcFunction, /receipt_flags[\s\S]*?upper\(trim\(flag\)\) ~ '\^DUPLICATE_'/i);
+  assert.match(rpcFunction, /distinct_receipt_images > 1 or distinct_receipt_hashes > 1/i);
+  assert.match(
+    rpcFunction,
+    /is_digital_payment\s+and current_payment_status = 'for_verification'\s+and receipt_image_rows = 0/i,
+  );
+  assert.match(rpcFunction, /normalize_payment_reference_key[\s\S]*?cardinality\(reference_values\) <> 1/i);
+  assert.match(rpcFunction, /not \(other_booking\.ref = any\(actual_refs\)\)[\s\S]*?payment_reference_key/i);
+  assert.match(rpcFunction, /perform public\.claim_payment_reference\(/i);
+  assert.match(
+    rpcFunction,
+    /full_amount_rows <> cardinality\(actual_refs\)[\s\S]*?abs\(expected_due - expected_total\) > 0\.01/i,
+  );
+  assert.match(rpcFunction, /calculate_booking_service_fee\(b\.slots\)[\s\S]*?\* 0\.25/i);
+
+  assert.match(
+    rpcFunction,
+    /current_booking_status = 'confirmed'[\s\S]*?current_payment_status = target_payment_status[\s\S]*?select false/i,
+    'repeat confirmations must return an idempotent non-transition result',
+  );
+  assert.equal(
+    (rpcFunction.match(/\n\s*update public\.bookings\b/gi) || []).length,
+    1,
+    'all sibling rows must transition through one SQL update statement',
+  );
+  assert.match(
+    rpcFunction,
+    /update public\.bookings b\s+set status = 'confirmed',\s*payment_status = target_payment_status,\s*paid_at = case[\s\S]*?target_payment_status in \('paid', 'downpayment_paid'\)[\s\S]*?coalesce\(b\.paid_at, confirmation_time\)[\s\S]*?else b\.paid_at[\s\S]*?where b\.ref = any\(actual_refs\)/i,
+  );
+  assert.match(
+    rpcFunction,
+    /updated_count <> cardinality\(actual_refs\)[\s\S]*?complete group could be confirmed/i,
+  );
+
+  assert.match(
+    atomicBookingConfirmation,
+    /revoke all on function public\.confirm_booking_transaction\(text\)\s+from public, anon, authenticated/i,
+  );
+  assert.match(
+    atomicBookingConfirmation,
+    /grant execute on function public\.confirm_booking_transaction\(text\)\s+to authenticated/i,
+  );
+  assert.doesNotMatch(
+    atomicBookingConfirmation,
+    /grant execute on function public\.confirm_booking_transaction\(text\)\s+to (?:public|anon)/i,
+  );
+});
+
+test('remote and local booking clients expose the same canonical confirmation result', () => {
+  const adapters = methodSources(client, 'confirmBookingTransaction');
+  assert.equal(adapters.length, 2, 'remote and local DB adapters must both implement confirmation');
+  const remote = adapters.find(source => source.includes("_sb.rpc('confirm_booking_transaction'")) || '';
+  const local = adapters.find(source => source.includes('writeDb(db)')) || '';
+  assert.ok(remote, 'missing remote confirm_booking_transaction adapter');
+  assert.ok(local, 'missing local confirmBookingTransaction adapter');
+
+  assert.match(remote, /p_booking_ref:\s*bookingRef/);
+  assert.match(remote, /typeof result\.transitioned !== 'boolean'/);
+  assert.match(remote, /result\.booking_ref/);
+  assert.match(remote, /result\.booking_refs/);
+  assert.match(remote, /result\.booking_payment_status/);
+  assert.match(remote, /result\.booking_status/);
+  const clearAt = remote.indexOf("_pbClearFastCache(['bookings'])");
+  const refreshAt = remote.indexOf('this.getBookingByRef(', clearAt);
+  assert.ok(clearAt >= 0 && refreshAt > clearAt, 'booking cache must clear before the post-commit refresh');
+  assert.match(remote, /catch \(readError\)[\s\S]*?console\.warn\('confirmBookingTransaction refresh:'/);
+
+  assert.doesNotMatch(local, /_sb\.rpc\(/);
+  assert.match(local, /groupRef|bookingGroupRef/);
+  assert.match(local, /writeDb\(db\)/);
+  assert.match(local, /paidAt/);
+  for (const [name, pattern] of [
+    ['transitioned', /\btransitioned(?:\s*:|\s*[,}])/],
+    ['booking', /\bbooking(?:\s*:|\s*[,}])/],
+    ['paymentStatus', /\bpaymentStatus(?:\s*:|\s*[,}])/],
+    ['status', /\bstatus(?:\s*:|\s*[,}])/],
+    ['refs', /\brefs\s*[,}:]/],
+  ]) {
+    assert.match(remote, pattern, `remote result must expose camelCase ${name}`);
+    assert.match(local, pattern, `local result must expose camelCase ${name}`);
+  }
 });
 
 test('digital payment references are claimed once across every payment flow', () => {

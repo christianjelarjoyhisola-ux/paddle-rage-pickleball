@@ -1172,6 +1172,51 @@ window.DB = {
     _pbClearFastCache(['bookings']);
   },
 
+  async confirmBookingTransaction(ref) {
+    const bookingRef = String(ref || '').trim();
+    if (!bookingRef) throw new Error('A booking reference is required.');
+
+    const { data, error } = await _sb.rpc('confirm_booking_transaction', {
+      p_booking_ref: bookingRef,
+    });
+    if (error) {
+      console.error('confirmBookingTransaction:', error);
+      throw new Error(_extractFnError(error, 'Could not confirm this booking payment'));
+    }
+
+    const result = Array.isArray(data) ? data[0] || null : data;
+    if (!result || typeof result.transitioned !== 'boolean') {
+      throw new Error('The booking confirmation service returned an invalid result.');
+    }
+
+    const canonicalRef = String(result.booking_ref || bookingRef);
+    const refs = Array.isArray(result.booking_refs) && result.booking_refs.length
+      ? result.booking_refs.map(value => String(value))
+      : [canonicalRef];
+
+    // The transaction is already committed at this point.  A post-commit read
+    // failure must not turn that success into a retryable confirmation error.
+    _pbClearFastCache(['bookings']);
+    let booking = null;
+    try {
+      booking = await this.getBookingByRef(canonicalRef);
+    } catch (readError) {
+      console.warn('confirmBookingTransaction refresh:', readError);
+    }
+
+    const status = String(result.booking_status || booking?.status || '').trim();
+    const paymentStatus = String(
+      result.booking_payment_status || booking?.paymentStatus || '',
+    ).trim();
+    return {
+      transitioned: result.transitioned,
+      booking: booking || undefined,
+      paymentStatus: paymentStatus || undefined,
+      status: status || undefined,
+      refs,
+    };
+  },
+
   // Stamp a set of bookings as billed on a given weekly statement (idempotent
   // audit trail; a booking is only ever billed once).
   async markBookingsBilled(refs, weeklyFeeId) {
@@ -3106,6 +3151,262 @@ window.DB = {
         throw missing;
       }
       writeDb(db);
+    },
+    async confirmBookingTransaction(ref) {
+      const bookingRef = String(ref || '').trim();
+      if (!bookingRef) throw new Error('A booking reference is required.');
+
+      const session = window.Auth?.getSession?.() || null;
+      if (!session || !['owner', 'court_owner', 'staff'].includes(String(session.role || '')) ||
+          (session.status && session.status !== 'active')) {
+        throw new Error('Only an active owner, court owner, or staff account can confirm a booking payment.');
+      }
+
+      const db = readDb();
+      const target = db.bookings.find(booking => String(booking.ref) === bookingRef);
+      if (!target) throw new Error('Booking not found.');
+
+      const groupRef = String(target.groupRef || target.bookingGroupRef || '').trim();
+      const items = groupRef
+        ? db.bookings.filter(booking =>
+            String(booking.groupRef || booking.bookingGroupRef || '').trim() === groupRef)
+        : [target];
+      const refs = items.map(booking => String(booking.ref)).sort();
+      if (!items.length || new Set(refs).size !== refs.length) {
+        throw new Error('The logical booking has invalid or duplicate rows.');
+      }
+
+      const lowerValue = value => String(value || '').toLowerCase().trim();
+      const singleValue = (values, message) => {
+        const unique = [...new Set(values)];
+        if (unique.length !== 1) throw new Error(message);
+        return unique[0];
+      };
+      const bookingStatus = singleValue(
+        items.map(item => lowerValue(item.status)),
+        'Grouped booking statuses are mixed. Review the booking details before confirming.',
+      );
+      const paymentStatus = singleValue(
+        items.map(item => lowerValue(item.paymentStatus ?? item.payment_status)),
+        'Grouped payment statuses are mixed. Review the payment details before confirming.',
+      );
+      const hostBooking = singleValue(
+        items.map(item => !!(item.hostBooking ?? item.host_booking)),
+        'Grouped booking ownership types are mixed. Review the booking details before confirming.',
+      );
+      const paymentMethod = singleValue(
+        items.map(item => lowerValue(item.paymentMethod ?? item.payment_method)),
+        'Grouped payment methods are mixed. Review the payment details before confirming.',
+      );
+
+      if (['cancelled', 'completed', 'forfeited'].includes(bookingStatus)) {
+        throw new Error('This booking is already in a terminal state and cannot be confirmed.');
+      }
+      if (!['pending', 'verifying', 'confirmed'].includes(bookingStatus)) {
+        throw new Error('This booking is not ready for confirmation.');
+      }
+      if (['failed', 'rejected', 'deposit_retained'].includes(paymentStatus)) {
+        throw new Error('This payment is already rejected or otherwise terminal.');
+      }
+      const supportedMethods = ['cash', ...PB_DIGITAL_PAYMENT_METHODS];
+      if (!supportedMethods.includes(paymentMethod)) {
+        throw new Error('This payment method cannot use one-tap confirmation.');
+      }
+      const digitalPayment = PB_DIGITAL_PAYMENT_METHODS.includes(paymentMethod);
+      if (digitalPayment && !['for_verification', 'paid', 'downpayment_paid'].includes(paymentStatus)) {
+        throw new Error('This digital payment is not ready for confirmation.');
+      }
+      if (!digitalPayment && !['unpaid', 'pending', 'paid', 'downpayment_paid'].includes(paymentStatus)) {
+        throw new Error('This cash booking payment state is not ready for confirmation.');
+      }
+      if (items.some(item => lowerValue(item.email) === 'reserve@hold.internal')) {
+        throw new Error('This reservation hold has not been completed by the customer.');
+      }
+
+      const normalizeReference = (method, typedReference) => {
+        const provider = lowerValue(method);
+        const raw = String(typedReference || '');
+        const normalized = provider === 'gcash'
+          ? raw.replace(/[^0-9]/g, '')
+          : raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (!normalized) throw new Error('A payment reference is required before confirming payment.');
+        if (provider === 'gcash' && !/^[0-9]{13}$/.test(normalized)) {
+          throw new Error('The GCash reference must contain exactly 13 digits.');
+        }
+        if (provider === 'bdopay' && !/^BN[0-9]{16}$/.test(normalized)) {
+          throw new Error('The BDO Pay reference is invalid.');
+        }
+        if (provider === 'maya' && !/^[A-Z0-9]{12}$/.test(normalized)) {
+          throw new Error('The Maya reference is invalid.');
+        }
+        if (provider === 'bpi' && !/^[0-9]{10,20}$/.test(normalized)) {
+          throw new Error('The BPI confirmation number is invalid.');
+        }
+        return provider === 'gcash' ? normalized : `${provider}:${normalized}`;
+      };
+
+      let paymentReferenceKey = '';
+      if (digitalPayment) {
+        paymentReferenceKey = singleValue(
+          items.map(item => normalizeReference(
+            item.paymentMethod ?? item.payment_method,
+            item.gcashRef ?? item.gcash_ref,
+          )),
+          'The payment reference is missing or inconsistent across this booking.',
+        );
+      }
+
+      const amountRows = items.map(item => {
+        const total = Number(item.total);
+        const hasDownpayment = item.downpayment !== undefined &&
+          item.downpayment !== null && item.downpayment !== '';
+        const downpayment = hasDownpayment ? Number(item.downpayment) : total;
+        if (!Number.isFinite(total) || total <= 0 ||
+            !Number.isFinite(downpayment) || downpayment <= 0 ||
+            downpayment > total + 0.01 || (hostBooking && !hasDownpayment)) {
+          throw new Error('Stored booking payment amounts require manual review.');
+        }
+        return { item, total, downpayment };
+      });
+      const expectedTotal = amountRows.reduce((sum, row) => sum + row.total, 0);
+      const expectedDue = amountRows.reduce((sum, row) => sum + row.downpayment, 0);
+      if (expectedDue <= 0 || expectedDue > expectedTotal + 0.01) {
+        throw new Error('Stored booking payment amounts require manual review.');
+      }
+
+      let targetPaymentStatus = paymentStatus;
+      if (digitalPayment || ['paid', 'downpayment_paid'].includes(paymentStatus)) {
+        const fullRows = amountRows.filter(row => Math.abs(row.downpayment - row.total) <= 0.01);
+        const partialRows = amountRows.filter(row => row.downpayment < row.total - 0.01);
+        if (hostBooking) {
+          if (fullRows.length === amountRows.length) {
+            targetPaymentStatus = 'paid';
+          } else if (partialRows.length === amountRows.length) {
+            const settings = db.settings || {};
+            const feeRate = Number(
+              settings.maintenance_fee ?? settings.service_fee_rate ?? settings.booking_fee ?? 0,
+            );
+            const flatFee = ['flat', 'booking', 'per_booking', 'per_transaction'].includes(
+              lowerValue(settings.fee_type),
+            );
+            const hasUnderpayment = amountRows.some(({ item, total, downpayment }) => {
+              const slotCount = Array.isArray(item.slots) ? item.slots.length : 0;
+              const configuredServiceFee = Number.isFinite(feeRate) && feeRate >= 0
+                ? feeRate * (flatFee ? 1 : slotCount)
+                : 0;
+              const serviceFee = Math.min(Math.max(configuredServiceFee, 0), total);
+              const required = Math.round(
+                (serviceFee + ((total - serviceFee) * 0.25)) * 100,
+              ) / 100;
+              return Math.abs(downpayment - required) > 0.01;
+            });
+            if (hasUnderpayment) {
+              throw new Error('The host reservation payment is lower than the required amount.');
+            }
+            targetPaymentStatus = 'downpayment_paid';
+          } else {
+            throw new Error('Grouped host payment amounts are mixed. Review the payment details before confirming.');
+          }
+        } else {
+          if (fullRows.length !== amountRows.length || Math.abs(expectedDue - expectedTotal) > 0.01) {
+            throw new Error('Regular bookings require full payment before confirmation.');
+          }
+          targetPaymentStatus = 'paid';
+        }
+      }
+
+      if (['paid', 'downpayment_paid'].includes(paymentStatus) && paymentStatus !== targetPaymentStatus) {
+        throw new Error('The settled payment state does not match the stored amount.');
+      }
+      if (bookingStatus === 'confirmed' && paymentStatus !== targetPaymentStatus) {
+        throw new Error('The confirmed booking has an inconsistent payment state.');
+      }
+
+      const receiptUrls = new Set();
+      const receiptHashes = new Set();
+      let receiptRejected = false;
+      let provenDuplicate = false;
+      items.forEach(item => {
+        const receiptStatus = lowerValue(item.receiptStatus ?? item.receipt_status ?? 'none');
+        if (receiptStatus === 'rejected') receiptRejected = true;
+        const receiptUrl = String(item.receiptImageUrl ?? item.receipt_image_url ?? '').trim();
+        const receiptHash = String(item.receiptImageHash ?? item.receipt_image_hash ?? '').trim();
+        if (receiptUrl) receiptUrls.add(receiptUrl);
+        if (receiptHash) receiptHashes.add(receiptHash);
+        const flags = item.receiptFlags ?? item.receipt_flags ?? [];
+        if (Array.isArray(flags) && flags.some(flag => /^DUPLICATE_/i.test(String(flag).trim()))) {
+          provenDuplicate = true;
+        }
+      });
+      if (receiptRejected) throw new Error('The receipt is rejected and cannot be confirmed.');
+      if (provenDuplicate) throw new Error('The receipt contains proven duplicate evidence and cannot be confirmed.');
+      if (receiptUrls.size > 1 || receiptHashes.size > 1) {
+        throw new Error('Grouped receipt evidence is inconsistent. Review the payment details before confirming.');
+      }
+      if (digitalPayment && paymentStatus === 'for_verification' && receiptUrls.size === 0) {
+        throw new Error('A receipt image is required before confirming this payment.');
+      }
+
+      if (digitalPayment) {
+        const currentRefs = new Set(refs);
+        const safeReferenceKey = item => {
+          const method = lowerValue(item.paymentMethod ?? item.payment_method);
+          if (!PB_DIGITAL_PAYMENT_METHODS.includes(method)) return '';
+          try {
+            return normalizeReference(method, item.gcashRef ?? item.gcash_ref);
+          } catch (_) {
+            return '';
+          }
+        };
+        const duplicateBooking = db.bookings.some(item =>
+          !currentRefs.has(String(item.ref)) && safeReferenceKey(item) === paymentReferenceKey,
+        );
+        const duplicateSettledExternal = [
+          ...(db.openPlayRegistrations || []),
+          ...(db.openPlayHostSessionRegistrations || []),
+        ].some(item => {
+          const state = lowerValue(item.paymentStatus ?? item.payment_status);
+          return ['paid', 'downpayment_paid', 'deposit_retained'].includes(state) &&
+            safeReferenceKey(item) === paymentReferenceKey;
+        });
+        if (duplicateBooking || duplicateSettledExternal) {
+          throw new Error('This payment reference has already been used for another payment.');
+        }
+      }
+
+      if (bookingStatus === 'confirmed' && paymentStatus === targetPaymentStatus) {
+        return {
+          transitioned: false,
+          booking: { ...target },
+          paymentStatus: targetPaymentStatus,
+          status: 'confirmed',
+          refs,
+        };
+      }
+
+      const refSet = new Set(refs);
+      const confirmedAt = nowIso();
+      db.bookings = db.bookings.map(booking => {
+        if (!refSet.has(String(booking.ref))) return booking;
+        const next = {
+          ...booking,
+          status: 'confirmed',
+          paymentStatus: targetPaymentStatus,
+        };
+        if (['paid', 'downpayment_paid'].includes(targetPaymentStatus)) {
+          next.paidAt = booking.paidAt || booking.paid_at || confirmedAt;
+        }
+        return next;
+      });
+      writeDb(db);
+      const confirmedBooking = db.bookings.find(booking => String(booking.ref) === bookingRef);
+      return {
+        transitioned: true,
+        ...(confirmedBooking ? { booking: confirmedBooking } : {}),
+        paymentStatus: targetPaymentStatus,
+        status: 'confirmed',
+        refs,
+      };
     },
     async markBookingsBilled(refs, weeklyFeeId) {
       if (!Array.isArray(refs) || refs.length === 0) return;
