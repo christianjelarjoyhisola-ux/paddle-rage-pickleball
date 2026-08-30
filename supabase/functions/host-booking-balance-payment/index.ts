@@ -93,6 +93,16 @@ function cleanUuid(value: unknown, field: string): string {
   return clean;
 }
 
+function cleanBookingRef(value: unknown): string {
+  const clean = String(value ?? "").trim().toUpperCase();
+  if (!/^[A-Z0-9][A-Z0-9_-]{3,159}$/.test(clean)) {
+    throw Object.assign(new Error("Booking reference is invalid"), {
+      code: "22023",
+    });
+  }
+  return clean;
+}
+
 function positiveAuditId(value: unknown): number {
   const id = Number(value);
   if (!Number.isSafeInteger(id) || id <= 0) {
@@ -162,6 +172,15 @@ function normalizePaymentRow(row: any): Record<string, unknown> {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function normalizePaymentHistoryRow(row: any): Record<string, unknown> {
+  const payment = normalizePaymentRow(row);
+  delete payment.hostUserId;
+  delete payment.receiptImageHash;
+  delete payment.receiptExtracted;
+  delete payment.reviewedByUserId;
+  return payment;
 }
 
 function normalizeRpcPayment(value: any): Record<string, unknown> {
@@ -465,6 +484,128 @@ export async function handleHostBookingBalancePayment(
         ok: true,
         action,
         payment,
+      });
+    }
+
+    if (action === "history_for_booking") {
+      const denied = requireReviewer(actor);
+      if (denied) return denied;
+      const bookingRef = cleanBookingRef(
+        body.bookingRef ?? body.booking_ref,
+      );
+      const { data: booking, error: bookingError } = await db
+        .from("bookings")
+        .select("ref,booking_group_ref,host_booking,host_user_id")
+        .eq("ref", bookingRef)
+        .maybeSingle();
+      if (bookingError) throw bookingError;
+      if (!booking || booking.host_booking !== true) {
+        throw Object.assign(new Error("Host booking was not found"), {
+          code: "P0002",
+        });
+      }
+      if (!booking.host_user_id) {
+        throw Object.assign(new Error("Host booking ownership is unavailable"), {
+          code: "42501",
+        });
+      }
+
+      const bookingKey = String(booking.booking_group_ref || booking.ref);
+      let bookingRowsQuery = db
+        .from("bookings")
+        .select(
+          "ref,booking_group_ref,host_booking,host_user_id,status,payment_status,total,downpayment,payment_method,full_name,email,host_name,host_email,date,start_time,end_time,court_name,created_at,paid_at",
+        )
+        .eq("host_user_id", booking.host_user_id);
+      bookingRowsQuery = booking.booking_group_ref
+        ? bookingRowsQuery.eq("booking_group_ref", bookingKey)
+        : bookingRowsQuery.eq("ref", booking.ref);
+      const { data: groupRows, error: groupRowsError } = await bookingRowsQuery
+        .order("date", { ascending: true })
+        .order("start_time", { ascending: true })
+        .order("ref", { ascending: true });
+      if (groupRowsError) throw groupRowsError;
+      const bookingRows: any[] = Array.isArray(groupRows) ? groupRows : [];
+      if (!bookingRows.length || bookingRows.some((row: any) =>
+        row.host_booking !== true || row.host_user_id !== booking.host_user_id
+      )) {
+        throw Object.assign(new Error("Host booking group is unavailable"), {
+          code: "42501",
+        });
+      }
+      const stateValue = (field: string): string => {
+        const values = [...new Set(bookingRows.map((row: any) =>
+          String(row?.[field] || "").trim().toLowerCase()
+        ).filter(Boolean))];
+        return values.length === 1 ? values[0] : values.length ? "mixed" : "unknown";
+      };
+      const sumMoney = (field: string): number => Number(bookingRows.reduce(
+        (sum: number, row: any) => sum + (Number(row?.[field]) || 0),
+        0,
+      ).toFixed(2));
+      const originalDepositKnown = bookingRows.every((row: any) =>
+        row.downpayment !== null && row.downpayment !== undefined &&
+        String(row.payment_status || "").toLowerCase() !== "paid"
+      );
+      const scheduleParts = [...new Set(bookingRows.map((row: any) => {
+        const time = [row.start_time, row.end_time].filter(Boolean).join("–");
+        const slot = [row.date, time].filter(Boolean).join(" ");
+        return [slot, row.court_name].filter(Boolean).join(" · ");
+      }).filter(Boolean))];
+      const courtNames = [...new Set(bookingRows.map((row: any) =>
+        String(row.court_name || "").trim()
+      ).filter(Boolean))];
+      const { data, error } = await db
+        .from("host_booking_balance_payments")
+        .select(
+          "id,verification_ref,booking_ref,booking_group_ref,booking_key,booking_refs,host_user_id,status,total_amount,original_paid_amount,expected_amount,balance_due_at,expires_at,payment_provider,payment_reference,customer_name,customer_email,booking_date,court_label,schedule_label,receipt_verification_id,receipt_result,receipt_flags,receipt_confidence,submitted_at,reviewed_at,reviewed_by_role,review_reason,approved_at,rejected_at,created_at,updated_at",
+        )
+        .eq("booking_key", bookingKey)
+        .eq("host_user_id", booking.host_user_id)
+        .in("status", ["pending_review", "approved", "rejected"])
+        .not("receipt_verification_id", "is", null)
+        .order("submitted_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(50);
+      if (error) throw error;
+      const rows = (data || []).filter((row: any) => {
+        const refs = Array.isArray(row.booking_refs)
+          ? row.booking_refs.map((ref: unknown) => String(ref))
+          : [];
+        return row.booking_ref === booking.ref ||
+          row.booking_group_ref === bookingKey ||
+          row.booking_key === bookingKey ||
+          refs.includes(String(booking.ref));
+      });
+      return json({
+        ok: true,
+        action,
+        booking: {
+          ref: booking.ref,
+          bookingGroupRef: booking.booking_group_ref || null,
+          bookingKey,
+          bookingRefs: bookingRows.map((row: any) => String(row.ref)),
+          status: stateValue("status"),
+          paymentStatus: stateValue("payment_status"),
+          totalAmount: sumMoney("total"),
+          originalDepositAmount: originalDepositKnown
+            ? sumMoney("downpayment")
+            : null,
+          paymentMethod: stateValue("payment_method"),
+          customerName: bookingRows[0]?.host_name ||
+            bookingRows[0]?.full_name || "Host booking",
+          customerEmail: bookingRows[0]?.host_email ||
+            bookingRows[0]?.email || null,
+          bookingDate: bookingRows[0]?.date || null,
+          courtLabel: courtNames.join(", ") || null,
+          scheduleLabel: scheduleParts.join("; ") || null,
+          createdAt: bookingRows.map((row: any) => row.created_at)
+            .filter(Boolean).sort()[0] || null,
+          paidAt: bookingRows.map((row: any) => row.paid_at)
+            .filter(Boolean).sort().at(-1) || null,
+        },
+        payments: rows.map(normalizePaymentHistoryRow),
       });
     }
 

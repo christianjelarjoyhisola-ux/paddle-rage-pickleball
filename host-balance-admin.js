@@ -9,10 +9,12 @@
     receiptLoaded: false,
     depositReceiptLoaded: false,
     activeReceipt: 'balance',
+    reviewable: false,
     busy: false,
     lastFocus: null,
     originalRenderPaymentReview: null,
     loadToken: 0,
+    historyToken: 0,
     expectedPaymentId: '',
     loadState: 'idle',
     generation: 0,
@@ -94,8 +96,60 @@
     return Number.isFinite(amount) ? Math.max(0, amount) : 0;
   }
 
+  function optionalPaymentAmount(payment, camelKey, snakeKey) {
+    const raw = payment?.[camelKey] ?? payment?.[snakeKey];
+    if (raw === null || raw === undefined || raw === '') return null;
+    const amount = Number(raw);
+    return Number.isFinite(amount) ? Math.max(0, amount) : null;
+  }
+
   function paymentValue(payment, camelKey, snakeKey, fallback = '') {
     return String(payment?.[camelKey] ?? payment?.[snakeKey] ?? fallback).trim();
+  }
+
+  function paymentStatus(payment) {
+    return paymentValue(payment, 'status', 'status', '').toLowerCase();
+  }
+
+  function paymentStatusView(payment) {
+    const status = paymentStatus(payment);
+    if (status === 'pending_review') return {
+      key: 'pending', label: 'Balance receipt under review', tab: 'Review needed', metric: 'Submitted', kicker: 'Verify payment 2 of 2', tone: 'review', hasBalanceReceipt: true,
+    };
+    if (status === 'approved') return {
+      key: 'approved', label: 'Fully paid', tab: 'Approved', metric: 'Approved', kicker: 'Two-payment record', tone: 'approved', hasBalanceReceipt: true,
+    };
+    if (status === 'rejected') return {
+      key: 'rejected', label: 'Balance receipt rejected', tab: 'Rejected', metric: 'Rejected', kicker: 'Two-payment record', tone: 'rejected', hasBalanceReceipt: true,
+    };
+    if (status === 'paid_without_online_balance') return {
+      key: 'manual', label: 'Fully paid · no online balance receipt', tab: 'No online receipt', metric: 'Recorded separately', kicker: 'Payment record', tone: 'approved', hasBalanceReceipt: false,
+    };
+    return {
+      key: 'deposit_only', label: 'Balance not submitted', tab: 'Not submitted', metric: 'Not submitted', kicker: 'Payment record', tone: 'history', hasBalanceReceipt: false,
+    };
+  }
+
+  function reservationStatusView(payment) {
+    const status = paymentValue(payment, 'bookingStatus', 'booking_status', '').toLowerCase();
+    const payState = paymentValue(payment, 'bookingPaymentStatus', 'booking_payment_status', '').toLowerCase();
+    if (status === 'completed') return { label: '✓ Booking completed', tone: 'approved' };
+    if (status === 'cancelled') return { label: '× Booking cancelled', tone: 'rejected' };
+    if (status === 'forfeited' || payState === 'deposit_retained') {
+      return { label: 'Slot released · deposit retained', tone: 'rejected' };
+    }
+    if (status === 'confirmed') return { label: '✓ Court reserved', tone: '' };
+    if (['pending', 'verifying'].includes(status)) return { label: '● Reservation pending', tone: 'review' };
+    if (status === 'mixed') return { label: 'Booking group · mixed state', tone: 'history' };
+    return { label: 'Booking record', tone: 'history' };
+  }
+
+  function actualBookingRef(booking) {
+    if (typeof booking === 'string') return booking.trim();
+    return String(
+      booking?.primaryRef || booking?.primary_ref || booking?.items?.[0]?.ref ||
+      booking?.allItems?.[0]?.ref || booking?.ref || '',
+    ).trim();
   }
 
   function humanizeFlag(flag) {
@@ -189,12 +243,18 @@
       .hba-state-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
       .hba-state-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid rgba(201,207,67,.26);border-radius:999px;background:rgba(201,207,67,.08);color:var(--pickle-lime);font-size:.65rem;font-weight:900;letter-spacing:.035em}
       .hba-state-chip.review{border-color:rgba(255,193,7,.3);background:rgba(255,193,7,.09);color:var(--yellow)}
+      .hba-state-chip.approved{border-color:rgba(105,220,145,.32);background:rgba(105,220,145,.1);color:#8befac}
+      .hba-state-chip.rejected{border-color:rgba(255,92,92,.34);background:rgba(255,92,92,.1);color:#ff8585}
+      .hba-state-chip.history{border-color:var(--border);background:var(--input);color:var(--text2)}
       .hba-money-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-bottom:10px}
       .hba-money-strip>div{padding:12px 13px;border:1px solid var(--border);border-radius:12px;background:linear-gradient(145deg,var(--input),rgba(201,207,67,.035))}
       .hba-money-strip b{display:block;margin-bottom:5px;color:var(--muted);font-size:.6rem;text-transform:uppercase;letter-spacing:.075em}
       .hba-money-strip strong{display:block;color:var(--text);font-size:1rem;line-height:1.1}
       .hba-money-strip .accepted strong{color:var(--pickle-lime)}
       .hba-money-strip .review strong{color:var(--yellow)}
+      .hba-money-strip .approved strong{color:#8befac}
+      .hba-money-strip .rejected strong{color:#ff8585}
+      .hba-money-strip .history strong{color:var(--muted)}
       .hba-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
       .hba-summary>div{padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.018);font-size:.73rem;overflow-wrap:anywhere}
       .hba-explainer{margin:0 0 14px;padding:11px 12px;border:1px solid rgba(201,207,67,.22);border-radius:11px;background:rgba(201,207,67,.07);color:var(--text2);font-size:.75rem;line-height:1.5}
@@ -208,6 +268,9 @@
       .hba-tab-step{color:var(--muted);font-size:.58rem;font-weight:950;letter-spacing:.085em;text-transform:uppercase}
       .hba-tab-status{padding:3px 7px;border-radius:999px;background:rgba(201,207,67,.13);color:var(--pickle-lime);font-size:.57rem;font-weight:950;text-transform:uppercase}
       .hba-tab-status.review{background:rgba(255,193,7,.12);color:var(--yellow)}
+      .hba-tab-status.approved{background:rgba(105,220,145,.12);color:#8befac}
+      .hba-tab-status.rejected{background:rgba(255,92,92,.12);color:#ff8585}
+      .hba-tab-status.history{background:var(--input);color:var(--muted)}
       .hba-payment-tab strong{display:block;font-size:.79rem;line-height:1.3}
       .hba-tab-amount{display:block;margin-top:7px;font-size:1.02rem;font-weight:950}
       .hba-tab-meta{display:block;margin-top:5px;color:var(--muted);font-size:.65rem;line-height:1.35;overflow-wrap:anywhere}
@@ -226,6 +289,9 @@
       .hba-flag-title{display:block;margin-bottom:7px;color:var(--yellow);font-weight:850}
       .hba-flag-list{display:flex;gap:5px;flex-wrap:wrap}
       .hba-flag{padding:3px 7px;border:1px solid rgba(255,193,7,.22);border-radius:999px;background:rgba(255,193,7,.075);color:var(--text2);font-size:.6rem;font-weight:750}
+      .hba-outcome{padding:11px 13px;border-top:1px solid var(--border);color:var(--text2);font-size:.69rem;line-height:1.48}
+      .hba-outcome strong{display:block;margin-bottom:3px;color:var(--pickle-lime)}
+      .hba-outcome.rejected strong{color:#ff8585}
       .hba-reason{width:100%;min-height:68px;margin-top:14px;padding:10px 11px;border:1px solid var(--border);border-radius:11px;background:var(--input);color:var(--text);resize:vertical}
       .hba-decision-hint{margin-top:8px;color:var(--muted);font-size:.68rem;line-height:1.4}
       .hba-modal-actions{display:grid;grid-template-columns:1fr 1.45fr;gap:10px;margin-top:12px}
@@ -292,6 +358,46 @@
     container.append(list);
   }
 
+  function renderReviewOutcome(payment, view) {
+    const container = byId('hostBalanceReviewOutcome');
+    if (!container) return;
+    container.replaceChildren();
+    container.className = `hba-outcome${view.key === 'rejected' ? ' rejected' : ''}`;
+    if (view.key === 'pending') {
+      container.hidden = true;
+      return;
+    }
+    container.hidden = false;
+    if (view.key === 'deposit_only') {
+      container.append(
+        make('strong', '', 'No separate balance transaction'),
+        document.createTextNode('This host booking has no submitted online Payment 2 receipt.'),
+      );
+      return;
+    }
+    if (view.key === 'manual') {
+      container.append(
+        make('strong', '', 'No online Payment 2 receipt'),
+        document.createTextNode('The booking is recorded as fully paid, but the remaining payment was recorded outside this online receipt flow.'),
+      );
+      return;
+    }
+    const reviewedAt = payment.approvedAt || payment.approved_at || payment.rejectedAt ||
+      payment.rejected_at || payment.reviewedAt || payment.reviewed_at;
+    const reviewer = paymentValue(payment, 'reviewedByRole', 'reviewed_by_role', '')
+      .replace(/_/g, ' ');
+    const reason = paymentValue(payment, 'reviewReason', 'review_reason', '');
+    const reviewFacts = [
+      reviewedAt ? when(reviewedAt) : 'Review time unavailable',
+      reviewer ? `Reviewed by ${reviewer}.` : 'Reviewer unavailable.',
+      reason ? `Reason: ${reason}` : '',
+    ].filter(Boolean).join(' · ');
+    container.append(
+      make('strong', '', view.key === 'approved' ? 'Payment 2 approved' : 'Payment 2 rejected'),
+      document.createTextNode(reviewFacts),
+    );
+  }
+
   function selectPaymentReceipt(kind) {
     const next = kind === 'deposit' ? 'deposit' : 'balance';
     state.activeReceipt = next;
@@ -341,19 +447,30 @@
   function syncActions() {
     const reason = String(byId('hostBalanceReviewReason')?.value || '').trim();
     const reviewingBalance = state.activeReceipt === 'balance';
-    const locked = state.busy || !canDecide() || !state.receiptLoaded || !reviewingBalance;
+    const locked = state.busy || !state.reviewable || !canDecide() || !state.receiptLoaded || !reviewingBalance;
     const approve = byId('hostBalanceApproveBtn');
     const reject = byId('hostBalanceRejectBtn');
     if (approve) approve.disabled = locked;
     if (reject) reject.disabled = locked || reason.length < 3;
     const reasonField = byId('hostBalanceReviewReason');
     const actions = byId('hostBalanceActions');
-    if (reasonField) reasonField.hidden = !reviewingBalance;
-    if (actions) actions.hidden = !reviewingBalance;
+    if (reasonField) reasonField.hidden = !reviewingBalance || !state.reviewable;
+    if (actions) actions.hidden = !reviewingBalance || !state.reviewable;
     const hint = byId('hostBalanceDecisionHint');
-    if (hint) hint.textContent = reviewingBalance
-      ? 'This decision applies only to Payment 2 — the remaining balance.'
-      : 'Payment 1 is read-only. Select Payment 2 to approve or reject the remaining balance.';
+    if (hint) {
+      const view = paymentStatusView(state.current);
+      hint.textContent = !reviewingBalance
+        ? (state.reviewable
+          ? 'Payment 1 is read-only. Select Payment 2 to approve or reject the remaining balance.'
+          : 'Payment 1 is accepted and preserved as read-only payment evidence.')
+        : state.reviewable
+          ? 'This decision applies only to Payment 2 — the remaining balance.'
+          : view.key === 'approved'
+            ? 'Read-only history. Payment 2 was approved and the booking is fully paid.'
+            : view.key === 'rejected'
+              ? 'Read-only history. Payment 2 was rejected; its reason and evidence remain recorded.'
+              : 'No separate online balance transaction was recorded for this booking.';
+    }
   }
 
   function ensureModal() {
@@ -369,6 +486,7 @@
     const head = make('div', 'hba-modal-head');
     const titleBox = make('div');
     const kicker = make('div', 'hba-modal-kicker', 'Verify payment 2 of 2');
+    kicker.id = 'hostBalanceModalKicker';
     const title = make('h3', '', 'Booking Payment History');
     title.id = 'hostBalanceReviewTitle';
     titleBox.append(kicker, title);
@@ -379,10 +497,11 @@
     head.append(titleBox, close);
     const body = make('div', 'hba-modal-body');
     const stateRow = make('div', 'hba-state-row');
-    stateRow.append(
-      make('span', 'hba-state-chip', '✓ Court reserved'),
-      make('span', 'hba-state-chip review', '● Balance receipt under review'),
-    );
+    const reservationChip = make('span', 'hba-state-chip', '✓ Court reserved');
+    reservationChip.id = 'hostBalanceReservationChip';
+    const paymentChip = make('span', 'hba-state-chip review', '● Balance receipt under review');
+    paymentChip.id = 'hostBalancePaymentChip';
+    stateRow.append(reservationChip, paymentChip);
     const moneyStrip = make('div', 'hba-money-strip');
     moneyStrip.id = 'hostBalanceMoneyStrip';
     const summary = make('div', 'hba-summary');
@@ -468,7 +587,9 @@
     balanceProof.append(proofStatus, image);
     const flags = make('div', 'hba-flags');
     flags.id = 'hostBalanceReviewFlags';
-    balancePanel.append(buildProofHead('Payment 2 — Remaining balance', 'hostBalanceProofLink', 'Open full receipt ↗'), balanceProof, flags);
+    const outcome = make('div', 'hba-outcome');
+    outcome.id = 'hostBalanceReviewOutcome';
+    balancePanel.append(buildProofHead('Payment 2 — Remaining balance', 'hostBalanceProofLink', 'Open full receipt ↗'), balanceProof, flags, outcome);
     stage.append(depositPanel, balancePanel);
     workspace.append(tabs, stage);
 
@@ -573,40 +694,79 @@
     if (state.busy) return;
     const expectedId = paymentId(payment);
     const loadToken = ++state.loadToken;
+    const view = paymentStatusView(payment);
     state.current = payment;
     state.expectedPaymentId = expectedId;
     state.receiptLoaded = false;
     state.depositReceiptLoaded = false;
-    state.activeReceipt = 'balance';
+    state.activeReceipt = view.hasBalanceReceipt ? 'balance' : 'deposit';
+    state.reviewable = view.key === 'pending';
     state.lastFocus = trigger || document.activeElement;
     const overlay = ensureModal();
     const totalAmount = paymentAmount(payment, 'totalAmount', 'total_amount');
-    const depositAmount = paymentAmount(payment, 'originalPaidAmount', 'original_paid_amount');
-    const balanceAmount = paymentAmount(payment, 'balanceAmount', 'expected_amount');
+    const depositAmount = optionalPaymentAmount(payment, 'originalPaidAmount', 'original_paid_amount');
+    const balanceAmount = optionalPaymentAmount(payment, 'balanceAmount', 'expected_amount');
     const provider = paymentValue(payment, 'paymentProvider', 'payment_provider', '—').toUpperCase();
     const balanceReference = paymentValue(payment, 'paymentReference', 'payment_reference', '—');
     const bookingReference = paymentValue(payment, 'bookingGroupRef', 'booking_group_ref')
       || paymentValue(payment, 'bookingRef', 'booking_ref')
       || paymentValue(payment, 'bookingKey', 'booking_key', '—');
 
+    byId('hostBalanceModalKicker').textContent = view.kicker;
+    const reservation = reservationStatusView(payment);
+    const reservationChip = byId('hostBalanceReservationChip');
+    reservationChip.className = `hba-state-chip ${reservation.tone}`.trim();
+    reservationChip.textContent = reservation.label;
+    const paymentChip = byId('hostBalancePaymentChip');
+    paymentChip.className = `hba-state-chip ${view.tone}`;
+    paymentChip.textContent = `${['approved', 'manual'].includes(view.key) ? '✓' : view.key === 'rejected' ? '×' : '●'} ${view.label}`;
+    const explainer = byId('hostBalanceReviewModal').querySelector('.hba-explainer');
+    if (view.key === 'pending') {
+      explainer.innerHTML = '<strong>Two separate payments, one protected history.</strong> Payment 1 secured the court and stays read-only. Only Payment 2 can be approved or rejected here.';
+    } else if (view.key === 'approved') {
+      explainer.innerHTML = '<strong>Two accepted payments, one complete history.</strong> Payment 1 secured the court and Payment 2 settled the remaining balance. This record is read-only.';
+    } else if (view.key === 'rejected') {
+      explainer.innerHTML = '<strong>Two separate payment records.</strong> Payment 1 remains accepted. Payment 2 was rejected and is preserved with its review result.';
+    } else if (view.key === 'manual') {
+      explainer.innerHTML = '<strong>Accepted receipt plus an offline payment record.</strong> Payment 1 keeps the original deposit evidence. The booking is fully paid, but no separate online Payment 2 receipt exists.';
+    } else {
+      explainer.innerHTML = '<strong>One recorded payment.</strong> Payment 1 contains the accepted payment evidence. No separate online balance payment was submitted.';
+    }
+
     const moneyStrip = byId('hostBalanceMoneyStrip');
     moneyStrip.replaceChildren();
     appendMetric(moneyStrip, 'Total booking', money(totalAmount), '');
-    appendMetric(moneyStrip, 'Payment 1 · Accepted', money(depositAmount), 'accepted');
-    appendMetric(moneyStrip, 'Payment 2 · Submitted', money(balanceAmount), 'review');
+    appendMetric(moneyStrip, 'Payment 1 · Accepted', depositAmount == null ? 'Amount unavailable' : money(depositAmount), 'accepted');
+    appendMetric(
+      moneyStrip,
+      `Payment 2 · ${view.metric}`,
+      view.key === 'manual' ? 'No online receipt' : balanceAmount == null ? 'Amount unavailable' : money(balanceAmount),
+      view.tone,
+    );
     const summary = byId('hostBalanceReviewSummary');
     summary.replaceChildren();
     appendSummary(summary, 'Host', payment.customerName || payment.customer_name);
     appendSummary(summary, 'Booking', bookingReference);
     appendSummary(summary, 'Schedule', payment.scheduleLabel || payment.schedule_label || payment.bookingDate || payment.booking_date);
-    appendSummary(summary, 'Submitted', when(payment.submittedAt || payment.submitted_at || payment.createdAt || payment.created_at));
+    const reviewedAt = payment.reviewedAt || payment.reviewed_at;
+    const submittedAt = payment.submittedAt || payment.submitted_at || payment.createdAt || payment.created_at;
+    appendSummary(summary, reviewedAt ? 'Reviewed' : view.key === 'pending' ? 'Submitted' : 'Recorded', when(reviewedAt || submittedAt));
     const flags = payment.receiptFlags || payment.receipt_flags || [];
     renderVerificationFlags(flags);
+    byId('hostBalanceReviewFlags').hidden = !view.hasBalanceReceipt;
+    renderReviewOutcome(payment, view);
     byId('hostBalanceReviewReason').value = '';
-    byId('hostDepositTab').querySelector('.hba-tab-amount').textContent = money(depositAmount);
+    byId('hostDepositTab').querySelector('.hba-tab-amount').textContent = depositAmount == null ? 'Amount unavailable' : money(depositAmount);
     byId('hostDepositTab').querySelector('.hba-tab-meta').textContent = 'Loading accepted deposit…';
-    byId('hostBalanceTab').querySelector('.hba-tab-amount').textContent = money(balanceAmount);
-    byId('hostBalanceTab').querySelector('.hba-tab-meta').textContent = `${provider} · ${balanceReference}`;
+    byId('hostBalanceTab').querySelector('.hba-tab-amount').textContent = view.key === 'manual'
+      ? 'No online receipt'
+      : balanceAmount == null ? 'Amount unavailable' : money(balanceAmount);
+    byId('hostBalanceTab').querySelector('.hba-tab-meta').textContent = view.hasBalanceReceipt
+      ? `${provider} · ${balanceReference}`
+      : view.key === 'manual' ? 'Recorded outside the online receipt flow' : 'No balance payment submitted';
+    const balanceTabStatus = byId('hostBalanceTab').querySelector('.hba-tab-status');
+    balanceTabStatus.className = `hba-tab-status ${view.tone}`;
+    balanceTabStatus.textContent = view.tab;
     const depositNote = byId('hostDepositProofNote');
     depositNote.replaceChildren(
       make('strong', '', 'Accepted deposit. '),
@@ -615,15 +775,17 @@
     const reject = byId('hostBalanceRejectBtn');
     const approve = byId('hostBalanceApproveBtn');
     if (reject) reject.textContent = 'Reject Payment 2';
-    if (approve) approve.textContent = `Approve ${money(balanceAmount)} Balance`;
+    if (approve) approve.textContent = `Approve ${money(balanceAmount || 0)} Balance`;
 
     const balanceProof = prepareReceiptImage({
       imageId: 'hostBalanceProofImage',
       statusId: 'hostBalanceProofStatus',
       linkId: 'hostBalanceProofLink',
       alt: 'Payment 2 remaining balance receipt',
-      loadingText: 'Loading Payment 2 receipt…',
-      failureText: 'Payment 2 receipt could not be loaded. Approval remains disabled.',
+      loadingText: view.hasBalanceReceipt ? 'Loading Payment 2 receipt…' : 'No separate Payment 2 receipt.',
+      failureText: state.reviewable
+        ? 'Payment 2 receipt could not be loaded. Approval remains disabled.'
+        : 'Payment 2 receipt could not be loaded.',
       loadToken,
       expectedId,
       onLoad() {
@@ -649,11 +811,15 @@
     });
     overlay.hidden = false;
     document.body.style.overflow = 'hidden';
-    selectPaymentReceipt('balance');
+    selectPaymentReceipt(view.hasBalanceReceipt ? 'balance' : 'deposit');
     syncActions();
     overlay.querySelector('.hba-close')?.focus();
 
     const balanceRequest = (async () => {
+      if (!view.hasBalanceReceipt) {
+        balanceProof.fail('No separate online Payment 2 receipt was submitted.');
+        return;
+      }
       try {
         const result = await apiCall('receipt_url', { paymentId: expectedId });
         if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
@@ -714,6 +880,7 @@
     state.receiptLoaded = false;
     state.depositReceiptLoaded = false;
     state.activeReceipt = 'balance';
+    state.reviewable = false;
     state.lastFocus?.focus?.();
     state.lastFocus = null;
   }
@@ -721,6 +888,7 @@
   async function decide(decision) {
     const payment = state.current;
     if (!payment || paymentId(payment) !== state.expectedPaymentId || state.busy || !canDecide()
+      || !state.reviewable || paymentStatus(payment) !== 'pending_review'
       || !state.receiptLoaded || state.activeReceipt !== 'balance') return;
     const reason = String(byId('hostBalanceReviewReason')?.value || '').trim();
     const amount = money(payment.balanceAmount || payment.balance_amount || payment.expectedAmount || payment.expected_amount);
@@ -783,9 +951,9 @@
       appendSummary(meta, 'New reference', payment.paymentReference || payment.payment_reference);
       const bottom = make('div', 'hba-bottom');
       bottom.appendChild(make('div', 'hba-status', 'Waiting for owner review'));
-      const review = make('button', 'btn btn-p btn-sm', 'Review Payment History');
+      const review = make('button', 'btn btn-p btn-sm', 'Payment History');
       review.type = 'button';
-      review.addEventListener('click', event => openModal(payment, event.currentTarget));
+      review.addEventListener('click', event => openHistoryForBooking(payment, event.currentTarget));
       bottom.appendChild(review);
       card.append(top, meta, bottom);
       list.appendChild(card);
@@ -862,26 +1030,86 @@
   }
 
   async function reviewForBooking(booking, trigger) {
+    return openHistoryForBooking(booking, trigger);
+  }
+
+  function depositOnlyPayment(booking, bookingRef) {
+    const total = paymentAmount(booking, 'totalAmount', 'total_amount');
+    const paymentState = paymentValue(booking, 'paymentStatus', 'payment_status', '').toLowerCase();
+    const originalDeposit = optionalPaymentAmount(booking, 'originalDepositAmount', 'original_deposit_amount');
+    const fullyPaidWithoutOnlineBalance = paymentState === 'paid';
+    return {
+      status: fullyPaidWithoutOnlineBalance ? 'paid_without_online_balance' : 'deposit_only',
+      bookingRef,
+      bookingRefs: Array.isArray(booking.bookingRefs) && booking.bookingRefs.length ? booking.bookingRefs : [bookingRef],
+      bookingGroupRef: booking.bookingGroupRef || booking.booking_group_ref || null,
+      bookingStatus: booking.status || null,
+      bookingPaymentStatus: paymentState || null,
+      totalAmount: total,
+      originalPaidAmount: originalDeposit,
+      balanceAmount: originalDeposit == null ? null : Math.max(0, total - originalDeposit),
+      paymentProvider: booking.paymentMethod || booking.payment_method || '—',
+      customerName: booking.customerName || booking.customer_name || 'Host booking',
+      customerEmail: booking.customerEmail || booking.customer_email || null,
+      bookingDate: booking.bookingDate || booking.booking_date || null,
+      courtLabel: booking.courtLabel || booking.court_label || null,
+      scheduleLabel: booking.scheduleLabel || booking.schedule_label || null,
+      createdAt: booking.paidAt || booking.paid_at || booking.createdAt || booking.created_at || null,
+    };
+  }
+
+  async function openHistoryForBooking(booking, trigger) {
     if (!canDecide()) {
-      notify('Only the System Owner or Court Owner can review host balance payments.', 'err');
+      notify('Only the System Owner or Court Owner can view host payment history.', 'err');
       return false;
     }
-    let payment = pendingForBooking(booking);
-    if (!payment) {
-      try { await load(true); }
-      catch (error) {
-        notify(error?.message || 'Could not load the pending balance receipt.', 'err');
-        return false;
+    const bookingRef = actualBookingRef(booking);
+    if (!bookingRef) {
+      notify('A real booking reference is required to open payment history.', 'err');
+      return false;
+    }
+    const historyToken = ++state.historyToken;
+    const wasDisabled = !!trigger?.disabled;
+    if (trigger) {
+      trigger.disabled = true;
+      trigger.setAttribute('aria-busy', 'true');
+    }
+    try {
+      const result = await apiCall('history_for_booking', { bookingRef });
+      if (historyToken !== state.historyToken) return false;
+      const payments = result?.payments || result?.data?.payments || [];
+      const bookingSnapshot = result?.booking || result?.data?.booking;
+      if (!Array.isArray(payments)) throw new Error('Payment history response is invalid.');
+      const payment = payments.find(item => paymentStatus(item) === 'pending_review')
+        || payments.find(item => paymentStatus(item) === 'approved')
+        || payments[0];
+      if (trigger) {
+        trigger.disabled = wasDisabled;
+        trigger.removeAttribute('aria-busy');
       }
-      payment = pendingForBooking(booking);
-    }
-    if (!payment) {
-      notify('This booking no longer has a balance receipt waiting for review.', 'inf');
-      if (typeof global.renderBookings === 'function') global.renderBookings();
+      if (payment) {
+        await openModal({
+          ...payment,
+          bookingStatus: bookingSnapshot?.status || null,
+          bookingPaymentStatus: bookingSnapshot?.paymentStatus || null,
+          bookingRefs: Array.isArray(payment.bookingRefs) && payment.bookingRefs.length
+            ? payment.bookingRefs
+            : bookingSnapshot?.bookingRefs || [bookingRef],
+        }, trigger);
+        return true;
+      }
+      if (!bookingSnapshot) throw new Error('Booking payment record was not found.');
+      await openModal(depositOnlyPayment(bookingSnapshot, bookingRef), trigger);
+      return true;
+    } catch (error) {
+      notify(error?.message || 'Could not open the booking payment history.', 'err');
       return false;
+    } finally {
+      if (trigger && byId('hostBalanceReviewModal')?.hidden) {
+        trigger.disabled = wasDisabled;
+        trigger.removeAttribute('aria-busy');
+      }
     }
-    await openModal(payment, trigger);
-    return true;
   }
 
   function invalidate() {
@@ -912,6 +1140,7 @@
     pendingForBooking,
     statusForBooking,
     reviewForBooking,
+    openHistoryForBooking,
     open: openModal,
     close: closeModal,
   });
