@@ -7,7 +7,7 @@
     "dev": "node tools/local-server.js",
     "build:vendor:qrcode": "esbuild tools/qrcode-browser-entry.js --bundle --minify --platform=browser --format=iife --outfile=qrcode.min.js",
     "seed:demo": "node seed-demo-data.js",
-    "test": "node --test booking-balance.test.js revenue-report.test.js supabase-hardening.test.js receipt-hardening.test.js receipt-upload-gating.test.js balance-notification-lease.test.js integration-security.test.js play-manager-live-share.test.js open-play-rating.test.js",
+    "test": "node --test booking-balance.test.js revenue-report.test.js supabase-hardening.test.js receipt-hardening.test.js receipt-upload-gating.test.js premium-booking-ticket.test.js balance-notification-lease.test.js integration-security.test.js play-manager-live-share.test.js open-play-rating.test.js",
     "check": "node --check booking-balance.js && node --check finance-core.js && node --check open-play-rating.js && node --check play-manager.js && node --check player-live.js && node --check supabase-config.js && node --check create-accounts.js && node --check setup-db.js && node --check seed-demo-data.js"
   },
   "dependencies": {

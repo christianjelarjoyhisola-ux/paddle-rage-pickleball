@@ -2742,6 +2742,283 @@ body.host-mode .courts { padding-bottom:140px; }
   .host-status { max-width:90px; }
 }
 
+/* ── PREMIUM SINGLE-COLUMN BOOKING TICKET ───────────────── */
+#invModal {
+  align-items:center;
+  padding:12px;
+}
+.inv-card {
+  --ticket-accent:var(--accent);
+  --ticket-accent-rgb:var(--lime-rgb);
+  width:min(610px,100%);
+  max-width:none;
+  max-height:calc(100dvh - 24px);
+  border:1px solid rgba(var(--ticket-accent-rgb),.2);
+  border-radius:22px;
+  background:linear-gradient(160deg,rgba(var(--ticket-accent-rgb),.025),transparent 36%),var(--card);
+  box-shadow:0 30px 90px rgba(0,0,0,.62),0 0 0 1px rgba(255,255,255,.025) inset;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  animation:invScaleIn .32s cubic-bezier(.32,1.2,.5,1) both;
+}
+.inv-card[data-invoice-state="pending"] { --ticket-accent:#e8b323; --ticket-accent-rgb:232,179,35; }
+.inv-card[data-invoice-state="confirmed"] { --ticket-accent:var(--accent); --ticket-accent-rgb:var(--lime-rgb); }
+.inv-card[data-invoice-state="rejected"] { --ticket-accent:#ef625b; --ticket-accent-rgb:239,98,91; }
+.inv-hero {
+  min-height:90px;
+  padding:15px 56px 14px 18px;
+  display:grid;
+  grid-template-columns:48px minmax(0,1fr) auto;
+  align-items:center;
+  gap:13px;
+  flex:0 0 auto;
+  text-align:left;
+  background:linear-gradient(135deg,#0c2017,#123021 58%,#0b251b);
+}
+.inv-hero::before {
+  background:radial-gradient(circle at 10% 0,rgba(var(--ticket-accent-rgb),.2),transparent 36%),linear-gradient(115deg,transparent 50%,rgba(255,255,255,.03));
+  pointer-events:none;
+}
+.inv-card[data-invoice-state="pending"] .inv-hero { background:linear-gradient(135deg,#221e0c,#302b0f 58%,#1d2410); }
+.inv-card[data-invoice-state="rejected"] .inv-hero { background:linear-gradient(135deg,#2c1111,#371616 58%,#261010); }
+.inv-close {
+  position:absolute;
+  top:13px;
+  right:14px;
+  z-index:3;
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(255,255,255,.11);
+  border-radius:50%;
+  background:rgba(255,255,255,.065);
+  color:#d6ddd5;
+  cursor:pointer;
+  font-size:1rem;
+  transition:background .15s,transform .15s,border-color .15s;
+}
+.inv-close:hover { background:rgba(255,255,255,.13); border-color:rgba(255,255,255,.2); }
+.inv-close:active { transform:scale(.94); }
+.inv-close:focus-visible,.inv-copy-btn:focus-visible,.inv-actions button:focus-visible { outline:2px solid var(--ticket-accent); outline-offset:2px; }
+.inv-check-wrap {
+  width:48px;
+  height:48px;
+  margin:0;
+  color:#11180f;
+  background:var(--ticket-accent);
+  box-shadow:0 0 0 5px rgba(var(--ticket-accent-rgb),.15),0 0 0 10px rgba(var(--ticket-accent-rgb),.06);
+}
+.inv-card[data-invoice-state="rejected"] .inv-check-wrap { color:#fff; }
+.inv-check-icon { font-size:1.55rem; }
+.inv-hero-copy { position:relative; z-index:1; min-width:0; }
+.inv-hero-title { margin:0; font-size:1.52rem; line-height:1; letter-spacing:1.6px; }
+.inv-hero-sub { max-width:36rem; margin:5px 0 0; font-size:.8rem; line-height:1.35; overflow-wrap:anywhere; }
+.inv-status-bdg {
+  min-height:30px;
+  margin:0;
+  padding:5px 11px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-color:rgba(var(--ticket-accent-rgb),.42);
+  color:var(--ticket-accent);
+  background:rgba(var(--ticket-accent-rgb),.095);
+  font-size:.7rem;
+  font-weight:850;
+  letter-spacing:.3px;
+  white-space:nowrap;
+}
+.inv-ref-wrap {
+  min-height:58px;
+  padding:8px 16px;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+  flex:0 0 auto;
+  text-align:left;
+  border-bottom:1px solid rgba(var(--ticket-accent-rgb),.13);
+  background:rgba(4,12,10,.4);
+}
+.inv-ref-label { color:var(--muted); font-size:.62rem; font-weight:800; letter-spacing:1.35px; white-space:nowrap; }
+.inv-ref-line { min-width:0; display:contents; }
+.inv-ref-num { min-width:0; margin:0; color:var(--ticket-accent); font-size:clamp(1.35rem,4vw,1.62rem); line-height:1; letter-spacing:1.8px; overflow-wrap:anywhere; }
+.inv-copy-btn {
+  min-width:58px;
+  min-height:40px;
+  padding:7px 10px;
+  justify-content:center;
+  border-color:rgba(var(--ticket-accent-rgb),.38);
+  color:var(--ticket-accent);
+  background:rgba(var(--ticket-accent-rgb),.07);
+  border-radius:11px;
+  font-size:.73rem;
+  font-weight:850;
+}
+.inv-scroll-region {
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(var(--ticket-accent-rgb),.3) transparent;
+}
+.inv-ticket-summary {
+  margin:12px 14px;
+  display:block;
+  overflow:hidden;
+  border:1px solid rgba(var(--ticket-accent-rgb),.15);
+  border-radius:16px;
+  background:linear-gradient(150deg,rgba(var(--ticket-accent-rgb),.045),rgba(255,255,255,.008) 42%);
+  box-shadow:0 12px 32px rgba(0,0,0,.13);
+}
+.inv-session-card,.inv-customer-grid,.inv-payment-card,.inv-status-strip {
+  min-width:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  box-shadow:none;
+}
+.inv-session-card { padding:12px 14px; }
+.inv-section-label { margin-bottom:7px; color:var(--ticket-accent); font-size:.63rem; font-weight:900; letter-spacing:1.2px; text-transform:uppercase; }
+.inv-session-line { min-width:0; display:flex; align-items:baseline; justify-content:space-between; gap:14px; }
+.inv-session-line + .inv-session-line { margin-top:6px; }
+.inv-session-line strong { color:var(--text); font-size:.91rem; line-height:1.3; overflow-wrap:anywhere; }
+.inv-session-line span { color:var(--muted); font-size:.78rem; line-height:1.35; text-align:right; overflow-wrap:anywhere; }
+.inv-session-line--time strong { color:var(--ticket-accent); font-size:1rem; }
+.inv-customer-grid {
+  padding:0 14px;
+  display:grid;
+  grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);
+  gap:0 16px;
+  border-top:1px solid rgba(var(--ticket-accent-rgb),.105);
+}
+.inv-field { min-width:0; padding:10px 0; }
+.inv-field--wide { grid-column:1/-1; border-top:1px solid rgba(var(--ticket-accent-rgb),.09); }
+.inv-field dt { color:var(--muted); font-size:.62rem; font-weight:750; letter-spacing:.7px; text-transform:uppercase; }
+.inv-field dd { min-width:0; margin:3px 0 0; color:var(--text); font-size:.8rem; font-weight:750; line-height:1.3; overflow-wrap:anywhere; }
+.i-row .vl { min-width:0; max-width:none; overflow-wrap:anywhere; }
+.inv-amount-wrap {
+  margin:0;
+  padding:12px 14px;
+  text-align:left;
+  border-top:1px solid rgba(var(--ticket-accent-rgb),.105);
+}
+.inv-payment-top { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; }
+.inv-amt-total { color:var(--muted); font-size:.63rem; letter-spacing:1.05px; }
+.inv-amt-val { color:var(--ticket-accent); font-size:1.9rem; line-height:1; white-space:nowrap; }
+.inv-payment-meta {
+  margin-top:9px;
+  padding-top:9px;
+  border-top:1px solid rgba(var(--ticket-accent-rgb),.1);
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px 16px;
+}
+.inv-payment-row { min-width:0; display:grid; gap:2px; font-size:.73rem; line-height:1.3; }
+.inv-payment-row span:first-child { color:var(--muted); font-size:.62rem; text-transform:uppercase; letter-spacing:.55px; }
+.inv-payment-row strong { min-width:0; color:var(--text); text-align:left; overflow-wrap:anywhere; }
+.inv-amt-down-wrap {
+  margin-top:9px;
+  padding-top:9px;
+  border-top:1px dashed rgba(var(--ticket-accent-rgb),.22);
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:10px;
+}
+.inv-amount-wrap.is-full-payment .inv-amt-down-wrap { display:none; }
+.inv-amt-down-label { color:var(--muted); font-size:.62rem; letter-spacing:.75px; }
+.inv-amt-down-val { color:var(--ticket-accent); font-size:1.18rem; white-space:nowrap; }
+.inv-amt-down-note { margin-top:8px; color:var(--muted); font-size:.72rem; line-height:1.4; overflow-wrap:anywhere; }
+.inv-amt-down-note:empty { display:none; }
+.inv-status-strip {
+  padding:11px 14px 12px;
+  display:grid;
+  gap:9px;
+  border-top:1px solid rgba(var(--ticket-accent-rgb),.105);
+  background:rgba(var(--ticket-accent-rgb),.025);
+}
+.inv-timeline { margin:0; padding:0; border:0; background:transparent; }
+.inv-card[data-invoice-state="confirmed"] .inv-timeline,
+.inv-card[data-invoice-state="rejected"] .inv-timeline { display:none; }
+.inv-timeline-title { margin-bottom:7px; color:var(--muted); font-size:.61rem; font-weight:900; letter-spacing:1px; text-transform:uppercase; }
+.inv-timeline-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
+.inv-timeline-step { position:relative; min-width:0; display:grid; justify-items:center; align-content:start; gap:4px; text-align:center; color:var(--muted); font-size:.63rem; }
+.inv-timeline-step:not(:last-child)::after { content:''; position:absolute; top:9px; left:calc(50% + 11px); width:calc(100% - 18px); height:1px; background:var(--border); }
+.inv-timeline-step.done:not(:last-child)::after { background:rgba(var(--ticket-accent-rgb),.45); }
+.inv-timeline-dot { width:20px; height:20px; flex:0 0 20px; border-color:rgba(var(--ticket-accent-rgb),.26); font-size:.62rem; z-index:1; }
+.inv-timeline-step.done .inv-timeline-dot,.inv-timeline-step.active .inv-timeline-dot { border-color:rgba(var(--ticket-accent-rgb),.48); color:var(--ticket-accent); }
+.inv-timeline-label { line-height:1.2; }
+.inv-guidance { padding-top:9px; border-top:1px solid rgba(var(--ticket-accent-rgb),.1); display:grid; gap:5px; }
+.inv-card[data-invoice-state="confirmed"] .inv-guidance,
+.inv-card[data-invoice-state="rejected"] .inv-guidance { padding-top:0; border-top:0; }
+.inv-next { margin:0; padding:0; border:0; background:transparent; color:var(--text); font-size:.8rem; font-weight:750; line-height:1.4; overflow-wrap:anywhere; }
+.inv-email-note { margin:0; color:var(--muted); font-size:.7rem; line-height:1.35; text-align:left; overflow-wrap:anywhere; }
+.inv-email-note:empty,.inv-next:empty { display:none; }
+.inv-actions {
+  position:sticky;
+  bottom:0;
+  z-index:4;
+  flex:0 0 auto;
+  margin:0;
+  padding:10px 14px calc(11px + env(safe-area-inset-bottom));
+  gap:10px;
+  background:linear-gradient(180deg,rgba(7,16,14,.94),var(--card) 36%);
+  border-top:1px solid rgba(var(--ticket-accent-rgb),.13);
+}
+.inv-actions .btn-print,.inv-actions .btn-done { min-height:46px; padding:10px; border-radius:12px; }
+.inv-actions .btn-print { font-size:.82rem; }
+.inv-actions .btn-done { color:#071015; font-size:.86rem; font-weight:900; box-shadow:0 8px 24px rgba(var(--lime-rgb),.14); }
+
+@media(max-width:700px), (max-height:720px) {
+  #invModal { padding:10px; }
+  .inv-card { width:min(580px,100%); max-height:calc(100dvh - 20px); border-radius:19px; }
+  .inv-hero { min-height:96px; grid-template-columns:44px minmax(0,1fr); padding:13px 52px 12px 15px; gap:3px 11px; }
+  .inv-check-wrap { width:44px; height:44px; grid-row:1/3; box-shadow:0 0 0 4px rgba(var(--ticket-accent-rgb),.14),0 0 0 8px rgba(var(--ticket-accent-rgb),.055); }
+  .inv-check-icon { font-size:1.4rem; }
+  .inv-hero-title { font-size:1.4rem; }
+  .inv-hero-sub { margin-top:4px; font-size:.77rem; }
+  .inv-status-bdg { grid-column:2; justify-self:start; min-height:27px; margin-top:4px; padding:4px 9px; font-size:.67rem; }
+  .inv-ref-wrap { min-height:64px; padding:8px 13px 9px; grid-template-columns:minmax(0,1fr) auto; gap:3px 10px; }
+  .inv-ref-label { display:block; grid-column:1/-1; }
+  .inv-ref-num { font-size:1.45rem; }
+  .inv-ticket-summary { margin:10px 11px; }
+  .inv-session-card,.inv-amount-wrap { padding:11px 13px; }
+  .inv-customer-grid { padding:5px 13px; grid-template-columns:1fr; gap:0; }
+  .inv-field,.inv-field--wide { grid-column:auto; display:grid; grid-template-columns:76px minmax(0,1fr); align-items:center; gap:12px; padding:7px 0; border-top:0; }
+  .inv-field + .inv-field { border-top:1px solid rgba(var(--ticket-accent-rgb),.09); }
+  .inv-field dt { font-size:.65rem; }
+  .inv-field dd { margin:0; font-size:.81rem; text-align:right; }
+  .inv-status-strip { padding:10px 13px 11px; }
+  .inv-actions { padding:9px 11px calc(10px + env(safe-area-inset-bottom)); }
+}
+@media(max-width:420px) {
+  #invModal { align-items:center; padding:6px; }
+  .inv-card { width:100%; max-height:calc(100dvh - 12px); border-radius:18px; animation:invScaleIn .28s ease-out both; }
+  .inv-hero { min-height:94px; padding-left:14px; }
+  .inv-hero-title { font-size:1.31rem; }
+  .inv-hero-sub { font-size:.74rem; }
+  .inv-copy-btn { min-width:54px; min-height:42px; }
+  .inv-ticket-summary { margin:9px 10px; }
+  .inv-session-line { align-items:flex-start; gap:10px; }
+  .inv-session-line strong { font-size:.86rem; }
+  .inv-session-line span { font-size:.73rem; }
+  .inv-customer-grid { grid-template-columns:1fr; gap:0; }
+  .inv-field dd { font-size:.76rem; }
+  .inv-payment-meta { gap:7px 12px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .inv-card,.inv-check-wrap { animation:none !important; }
+}
+@media print {
+  #invModal.show { position:static; display:block; opacity:1; padding:0; background:#fff; }
+  #invModal.show .inv-card { width:100%; max-width:none; max-height:none; overflow:visible; border:1px solid #bbb; box-shadow:none; }
+  #invModal.show .inv-scroll-region { overflow:visible; }
+  #invModal.show .inv-close,#invModal.show .inv-actions { display:none !important; }
+}
+
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260729-advance-booking-v30&amp;rollback=deb2d66">
 </head>
@@ -3487,66 +3764,79 @@ try {
 </footer>
 
 <!-- INVOICE MODAL -->
-<div class="overlay" id="invModal" style="align-items:flex-end;padding:0;">
-  <div class="inv-card">
-    <!-- Hero -->
-    <div class="inv-hero">
-      <button onclick="closeModal()" style="position:absolute;top:14px;right:16px;background:rgba(255,255,255,.08);border:none;color:var(--muted);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;z-index:2;">✕</button>
-      <div class="inv-check-wrap"><span class="inv-check-icon">✓</span></div>
-      <div class="inv-hero-title" id="iTitle">Booking Received!</div>
-      <div class="inv-hero-sub" id="iHeroSub">Your slot is reserved — pending confirmation</div>
-      <span class="inv-status-bdg inv-status-pending" id="iStatus">Pending Confirmation</span>
-    </div>
+<div class="overlay" id="invModal" role="dialog" aria-modal="true" aria-labelledby="iTitle" aria-describedby="iHeroSub" aria-hidden="true">
+  <article class="inv-card" data-invoice-state="pending" data-payment-state="pending" tabindex="-1">
+    <header class="inv-hero">
+      <button class="inv-close" type="button" onclick="closeModal()" aria-label="Close booking confirmation"><span aria-hidden="true">✕</span></button>
+      <div class="inv-check-wrap" aria-hidden="true"><span class="inv-check-icon">✓</span></div>
+      <div class="inv-hero-copy">
+        <h2 class="inv-hero-title" id="iTitle">Booking Received!</h2>
+        <p class="inv-hero-sub" id="iHeroSub">Your booking was submitted successfully.</p>
+      </div>
+      <span class="inv-status-bdg inv-status-pending" id="iStatus" role="status" aria-live="polite" aria-atomic="true">Pending Confirmation</span>
+    </header>
 
-    <!-- Ref number -->
-    <div class="inv-ref-wrap">
+    <section class="inv-ref-wrap" aria-label="Booking reference">
       <div class="inv-ref-label">Booking Reference</div>
-      <div class="inv-ref-num" id="iRef">—</div>
-      <button class="inv-copy-btn" onclick="copyInvRef()">📋 Copy Ref</button>
-    </div>
+      <div class="inv-ref-line">
+        <div class="inv-ref-num" id="iRef">—</div>
+        <button class="inv-copy-btn" type="button" onclick="copyInvRef()" aria-label="Copy booking reference">Copy</button>
+      </div>
+    </section>
 
-    <!-- Perforated divider -->
-    <div class="inv-perf"></div>
+    <div class="inv-scroll-region">
+      <div class="inv-ticket-summary">
+        <section class="inv-session-card" aria-labelledby="iSessionLabel">
+          <div class="inv-section-label" id="iSessionLabel">Session</div>
+          <div class="inv-session-line">
+            <strong id="iCourt">—</strong>
+            <span id="iDate">—</span>
+          </div>
+          <div class="inv-session-line inv-session-line--time">
+            <strong id="iTime">—</strong>
+            <span id="iDur">—</span>
+          </div>
+        </section>
 
-    <!-- Details -->
-    <div class="inv-body">
-      <div class="i-row"><span class="lb">👤 Name</span><span class="vl" id="iName">—</span></div>
-      <div class="i-row"><span class="lb">📱 Contact</span><span class="vl" id="iContact">—</span></div>
-      <div class="i-row"><span class="lb">✉️ Email</span><span class="vl" id="iEmail">—</span></div>
-      <div class="i-row"><span class="lb">🏟️ Court</span><span class="vl" id="iCourt">—</span></div>
-      <div class="i-row"><span class="lb">📅 Date</span><span class="vl" id="iDate">—</span></div>
-      <div class="i-row"><span class="lb">⏰ Time</span><span class="vl" id="iTime">—</span></div>
-      <div class="i-row"><span class="lb">⌛ Duration</span><span class="vl" id="iDur">—</span></div>
-      <div class="i-row"><span class="lb">💳 Payment</span><span class="vl" id="iPay">—</span></div>
-      <div id="iGcashRefRow" class="i-row" style="display:none"><span class="lb">🔖 GCash Ref #</span><span class="vl" id="iGcashRef">—</span></div>
-    </div>
+        <section class="inv-payment-card inv-amount-wrap" aria-labelledby="iAmountLabel">
+          <div class="inv-payment-top">
+            <div>
+              <div class="inv-amt-total" id="iAmountLabel">Booking Total</div>
+              <div class="inv-amt-val" id="iTot">₱0.00</div>
+            </div>
+          </div>
+          <div class="inv-payment-meta">
+            <div class="inv-payment-row"><span>Payment</span><strong id="iPay">—</strong></div>
+            <div id="iGcashRefRow" class="inv-payment-row" style="display:none"><span id="iPaymentRefLabel">Reference</span><strong id="iGcashRef">—</strong></div>
+          </div>
+          <div class="inv-amt-down-wrap" id="iDownWrap">
+            <div class="inv-amt-down-label" id="iDownLabel">Amount Due</div>
+            <div class="inv-amt-down-val" id="iDown">₱0.00</div>
+          </div>
+          <div class="inv-amt-down-note" id="iDownNote"></div>
+        </section>
 
-    <!-- Amount -->
-    <div class="inv-amount-wrap">
-      <div class="inv-amt-total">Total Amount</div>
-      <div class="inv-amt-val" id="iTot">₱0.00</div>
-      <div class="inv-amt-down-wrap">
-        <div class="inv-amt-down-label" id="iDownLabel">Full Payment Due</div>
-        <div class="inv-amt-down-val" id="iDown">₱0.00</div>
-        <div class="inv-amt-down-note" id="iDownNote">—</div>
+        <dl class="inv-customer-grid" aria-label="Player details">
+          <div class="inv-field"><dt>Name</dt><dd id="iName">—</dd></div>
+          <div class="inv-field"><dt>Contact</dt><dd id="iContact">—</dd></div>
+          <div class="inv-field inv-field--wide"><dt>Email</dt><dd id="iEmail">—</dd></div>
+        </dl>
+
+        <section class="inv-status-strip" aria-label="Booking progress and next step">
+          <div class="inv-timeline" id="iTimeline"></div>
+          <div class="inv-guidance">
+            <div class="inv-next" id="iStatusSummary"></div>
+            <div class="inv-email-note" id="iEmailNote" hidden></div>
+          </div>
+        </section>
       </div>
     </div>
 
-    <!-- Status timeline -->
-    <div class="inv-timeline" id="iTimeline"></div>
-
-    <!-- What's next -->
-    <div class="inv-next" id="iNext"></div>
-
-    <!-- Email note -->
-    <div class="inv-email-note" id="iEmailNote"></div>
-
-    <!-- Actions -->
-    <div class="inv-actions">
-      <button class="btn-print" onclick="window.print()">🖨️ Print</button>
-      <button class="btn-done" onclick="closeModal()">Done ✓</button>
-    </div>
-  </div>
+    <footer class="inv-actions">
+      <button class="btn-print" type="button" onclick="window.print()">Print</button>
+      <button class="btn-done" type="button" onclick="closeModal()">Done ✓</button>
+    </footer>
+  </article>
 </div>
 
 <!-- OPEN PLAY SIGN-UP MODAL -->
@@ -8219,160 +8509,185 @@ function resetForm(options = {}) {
 /* =============================================
    INVOICE MODAL
    ============================================= */
+let invoiceReturnFocus = null;
+let invoiceBodyOverflow = '';
+
 function showInvoice(b) {
-  const set = (id, value) => { const el = $(id); if (el) el.textContent = value; };
-  const isConfirmed = b.status === 'confirmed';
-  const receiptStatus = b._receiptResult?.status || b.receiptStatus || '';
-  const isRejected = b.status === 'cancelled' || b.paymentStatus === 'rejected' || receiptStatus === 'rejected';
+  const set = (id, value) => { const el = $(id); if (el) el.textContent = value ?? '—'; };
+  const receiptStatus = String(b._receiptResult?.status || b.receiptStatus || '').toLowerCase();
+  const paymentStatus = String(b.paymentStatus || '').toLowerCase();
+  const isRejected = b.status === 'cancelled' || paymentStatus === 'rejected' || receiptStatus === 'rejected';
+  const isConfirmed = !isRejected && b.status === 'confirmed';
   const isDigitalPay = isDigitalPayMethod(b.paymentMethod);
   const isFullPay = b.downpayment >= b.total;
+  const isPaid = paymentStatus === 'paid';
+  const isDepositPaid = paymentStatus === 'downpayment_paid';
+  const isReceiptVerified = receiptStatus === 'auto_approved';
   const hostDeadline = b.hostBooking && !isFullPay
     ? (b.balanceDueAt ? new Date(b.balanceDueAt) : window.BookingBalance?.balanceDeadline?.(b))
     : null;
   const payLabel = paymentMethodName(b.paymentMethod === 'gotyme' ? 'gotyme' : b.paymentMethod || 'cash');
-
-  // Hero — base state (may be overridden by receipt result below)
-  const heroEl = $('invModal') && $('invModal').querySelector('.inv-hero');
-  const checkWrapEl = heroEl && heroEl.querySelector('.inv-check-wrap');
-  const checkIconEl = heroEl && heroEl.querySelector('.inv-check-icon');
-  if (heroEl) heroEl.classList.remove('inv-hero--rejected','inv-hero--approved');
-  if (heroEl && isRejected) heroEl.classList.add('inv-hero--rejected');
-
-  set('iTitle', isRejected ? 'Receipt Rejected' : isConfirmed ? 'Booking Confirmed!' : 'Booking Received!');
-  set('iHeroSub', isRejected ? 'Your receipt could not be verified. Please make a new booking.' : isConfirmed ? 'Your court is confirmed. See you on the court!' : isDigitalPay ? 'Payment received for review. We will confirm after verification.' : 'Your request is received. Staff will confirm after payment.');
-  const statusEl = $('iStatus');
-  if (statusEl) {
-    statusEl.textContent = isRejected ? 'Receipt Rejected' : isConfirmed ? 'Confirmed' : isDigitalPay ? 'Pending Verification' : 'Pending Confirmation';
-    statusEl.className = 'inv-status-bdg ' + (isRejected ? 'inv-status-rejected' : isConfirmed ? 'inv-status-confirmed' : isDigitalPay ? 'inv-status-review' : 'inv-status-pending');
+  const invoiceState = isRejected ? 'rejected' : isConfirmed ? 'confirmed' : 'pending';
+  const paymentState = isRejected ? 'rejected'
+    : isPaid || isDepositPaid ? 'paid'
+    : isReceiptVerified ? 'verified'
+    : isDigitalPay ? 'review'
+    : 'due';
+  const cardEl = $('invModal')?.querySelector('.inv-card');
+  const amountWrap = $('invModal')?.querySelector('.inv-amount-wrap');
+  if (cardEl) {
+    cardEl.dataset.invoiceState = invoiceState;
+    cardEl.dataset.paymentState = paymentState;
   }
-  if (checkIconEl) checkIconEl.textContent = isRejected ? '!' : '\u2713';
+  if (amountWrap) amountWrap.classList.toggle('is-full-payment', isFullPay);
 
-  // Ref & details
   set('iRef', b.ref);
   set('iName', b.fullName);
   set('iContact', b.contactNumber);
-  set('iEmail', b.email);
+  set('iEmail', b.email || 'Not provided');
   set('iCourt', b.courtName);
   set('iDate', fmtD(b.date));
   set('iTime', b.timeLabel || `${b.startTime} – ${b.endTime}`);
   set('iDur', `${b.duration} hr${b.duration !== 1 ? 's' : ''}`);
   set('iPay', payLabel);
-
-  if (b.gcashRef) {
-    if ($('iGcashRefRow')) $('iGcashRefRow').style.display = '';
-    set('iGcashRef', b.gcashRef);
-  } else {
-    if ($('iGcashRefRow')) $('iGcashRefRow').style.display = 'none';
-  }
-
-  // Amount
   set('iTot', fmt(b.total));
   set('iDown', fmt(b.downpayment));
-  const invoiceDownLabel = (!isFullPay && b.hostBooking) ? 'Full Booking Fee + 25% Court Fee Due' : 'Full Payment Due';
-  set('iDownLabel', isFullPay ? 'Full Payment' : invoiceDownLabel);
-  set('iDownNote', isRejected ? 'Receipt verification failed. The slot has been released.' :
-    isFullPay ? 'Fully paid. No balance due on arrival.' :
-    hostDeadline ? `Your remaining balance is due by ${window.BookingBalance.formatDeadline(hostDeadline)}. All payments are non-refundable.` :
-    b.gcashRef ? `${payLabel} ref submitted. Owner will verify shortly.` :
-    'Pay the full amount at the front desk before your session.');
 
-  if (b._receiptResult) {
-    const s = b._receiptResult.status;
-    const flags = b._receiptResult.flags || [];
-    const noteEl = $('iDownNote');
+  const paymentRefRow = $('iGcashRefRow');
+  if (paymentRefRow) paymentRefRow.style.display = b.gcashRef ? '' : 'none';
+  if (b.gcashRef) {
+    set('iPaymentRefLabel', `${payLabel} Reference`);
+    set('iGcashRef', b.gcashRef);
+  }
 
-    if (s === 'rejected') {
-      // Red hero
-      if (heroEl) heroEl.classList.add('inv-hero--rejected');
-      if (checkIconEl) checkIconEl.textContent = '✕';
-      set('iTitle', 'Receipt Rejected');
-      set('iHeroSub', 'Your receipt could not be verified — your booking has been cancelled.');
-      if (statusEl) {
-        statusEl.textContent = '⚠️ Receipt Rejected';
-        statusEl.className = 'inv-status-bdg inv-status-rejected';
-      }
-      if (noteEl) {
-        const flagText = flags.length ? ' Reason: ' + flags.map(f => f.replace(/_/g,' ')).join(', ') + '.' : '';
-        noteEl.textContent = '❌ Your booking has been cancelled. Please make a new booking and upload a valid GCash receipt.' + flagText;
-      }
-    } else if (s === 'auto_approved') {
-      if (heroEl) heroEl.classList.add('inv-hero--approved');
-      set('iTitle', 'Payment Verified!');
-      set('iHeroSub', 'Your receipt is verified — your slot is being confirmed.');
-      if (statusEl) {
-        statusEl.textContent = '✅ Payment Verified';
-        statusEl.className = 'inv-status-bdg inv-status-confirmed';
-      }
-      if (noteEl) noteEl.textContent = hostDeadline && !isFullPay
-        ? `Payment verified. Your remaining balance is due by ${window.BookingBalance.formatDeadline(hostDeadline)}. All payments are non-refundable.`
-        : 'Payment auto-verified from your receipt! Your slot is being confirmed.';
+  const partialBalance = Math.max(0, Number(b.total || 0) - Number(b.downpayment || 0));
+  const amountLabel = isRejected ? 'Booking Total'
+    : b.hostBooking && !isFullPay ? 'Booking Total'
+    : isPaid ? 'Fully Paid'
+    : isDepositPaid ? 'Booking Total'
+    : isDigitalPay && b.gcashRef ? 'Payment Submitted'
+    : b.paymentMethod === 'cash' ? 'Amount Due at Venue'
+    : 'Booking Total';
+  set('iAmountLabel', amountLabel);
+  set('iDownLabel', isDepositPaid ? 'Deposit Verified'
+    : b.hostBooking && !isFullPay ? 'Deposit Submitted'
+    : 'Payment Amount');
+
+  let title = 'Booking Received!';
+  let subtitle = isDigitalPay
+    ? 'Payment submitted for review.'
+    : 'Your booking is saved. Pay at the front desk.';
+  let badge = isDigitalPay ? 'Pending Review' : 'Payment Due';
+  let badgeClass = isDigitalPay ? 'inv-status-review' : 'inv-status-pending';
+  let icon = '✓';
+  let timelineSteps = isDigitalPay ? [
+    ['Submitted', 'done'],
+    ['Under review', 'active'],
+    ['Confirmation', 'pending'],
+  ] : [
+    ['Submitted', 'done'],
+    ['Pay at venue', 'active'],
+    ['Confirmation', 'pending'],
+  ];
+  let statusSummary = isDigitalPay
+    ? 'Keep this reference—do not pay again while verification is in progress.'
+    : 'Show this reference and pay at the front desk before your session.';
+  let amountNote = '';
+
+  if (isRejected) {
+    const flags = b._receiptResult?.flags || [];
+    const reason = flags.length ? ` Reason: ${flags.map(flag => String(flag).replace(/_/g, ' ')).join(', ')}.` : '';
+    title = 'Receipt Rejected';
+    subtitle = 'We could not verify this payment. The booking was cancelled and the slot released.';
+    badge = 'Receipt Rejected';
+    badgeClass = 'inv-status-rejected';
+    icon = '!';
+    timelineSteps = [['Submitted', 'done'], ['Rejected', 'bad'], ['Slot released', 'bad']];
+    statusSummary = 'The slot was released. Create a new booking with a valid receipt.';
+    amountNote = reason.trim();
+  } else if (isConfirmed) {
+    title = 'Booking Confirmed!';
+    subtitle = 'Your court is secured. See you on the court!';
+    badge = 'Confirmed';
+    badgeClass = 'inv-status-confirmed';
+    timelineSteps = [['Submitted', 'done'], ['Verified', 'done'], ['Confirmed', 'done']];
+    statusSummary = 'Your court is secured. Show this booking reference at check-in.';
+    if (isPaid) {
+      amountNote = '';
+    } else if (isDepositPaid && partialBalance > 0) {
+      amountNote = hostDeadline
+        ? `Balance ${fmt(partialBalance)} is due by ${window.BookingBalance.formatDeadline(hostDeadline)}. All payments are non-refundable.`
+        : `Deposit verified. Remaining balance: ${fmt(partialBalance)}.`;
+    } else if (b.paymentMethod === 'cash') {
+      amountNote = '';
     } else {
-      // manual_review
-      if (statusEl) {
-        statusEl.textContent = '🕓 Pending Verification';
-        statusEl.className = 'inv-status-bdg inv-status-review';
-      }
-      if (noteEl) noteEl.textContent = '🕓 Receipt received — the owner will verify your payment shortly.';
+      amountNote = '';
     }
+  } else if (b._receiptResult) {
+    if (receiptStatus === 'auto_approved') {
+      title = 'Payment Verified!';
+      subtitle = 'Payment verified. Final booking confirmation is in progress.';
+      badge = 'Awaiting Confirmation';
+      badgeClass = 'inv-status-confirmed';
+      timelineSteps = [['Submitted', 'done'], ['Verified', 'done'], ['Confirmation', 'active']];
+      statusSummary = 'Keep this reference while the owner completes final confirmation.';
+    }
+  }
+
+  if (!amountNote) {
+    if (b.hostBooking && !isFullPay && partialBalance > 0) {
+      const deadlineCopy = hostDeadline ? ` by ${window.BookingBalance.formatDeadline(hostDeadline)}` : '';
+      amountNote = isReceiptVerified
+        ? `Payment verified. If confirmed, balance ${fmt(partialBalance)} is due${deadlineCopy}. All payments are non-refundable.`
+        : `Receipt submitted for review. If approved, balance ${fmt(partialBalance)} is due${deadlineCopy}. All payments are non-refundable.`;
+    } else {
+      amountNote = '';
+    }
+  }
+
+  set('iTitle', title);
+  set('iHeroSub', subtitle);
+  set('iDownNote', amountNote);
+  set('iStatusSummary', statusSummary);
+  const checkIcon = $('invModal')?.querySelector('.inv-check-icon');
+  if (checkIcon) checkIcon.textContent = icon;
+  const statusEl = $('iStatus');
+  if (statusEl) {
+    statusEl.textContent = badge;
+    statusEl.className = `inv-status-bdg ${badgeClass}`;
+    statusEl.setAttribute('aria-live', isRejected ? 'assertive' : 'polite');
   }
 
   const timelineEl = $('iTimeline');
   if (timelineEl) {
-    const timelineSteps = isRejected ? [
-      ['Booking submitted', 'done'],
-      ['Payment rejected', 'bad'],
-      ['Slot released', 'bad'],
-    ] : isConfirmed ? [
-      ['Booking submitted', 'done'],
-      ['Payment verified', 'done'],
-      ['Booking confirmed', 'done'],
-    ] : isDigitalPay ? [
-      ['Booking submitted', 'done'],
-      ['Payment review', 'active'],
-      ['Admin confirmation', 'pending'],
-    ] : [
-      ['Booking submitted', 'done'],
-      ['Pay front desk', 'active'],
-      ['Admin confirmation', 'pending'],
-    ];
-    timelineEl.innerHTML = '<div class="inv-timeline-title">Status</div><div class="inv-timeline-list">' +
-      timelineSteps.map(([label, state], idx) => {
-        const dot = state === 'done' ? '✓' : state === 'bad' ? '!' : String(idx + 1);
+    timelineEl.innerHTML = '<div class="inv-timeline-title">Progress</div><div class="inv-timeline-list">' +
+      timelineSteps.map(([label, state], index) => {
+        const dot = state === 'done' ? '✓' : state === 'bad' ? '!' : String(index + 1);
         return `<div class="inv-timeline-step ${state}"><span class="inv-timeline-dot">${dot}</span><span class="inv-timeline-label">${label}</span></div>`;
       }).join('') +
       '</div>';
   }
 
-  // What's next steps
-  const nextEl = $('iNext');
-  if (nextEl) {
-    const steps = isRejected ? [
-      ['The payment receipt was not accepted.', '1'],
-      ['The slot has been released for other players.', '2'],
-      ['Please create a new booking with a valid receipt.', '3'],
-    ] : b.gcashRef ? [
-      ['Show this booking ref to the front desk.', '1'],
-      [`Your ${payLabel} ref # has been submitted for verification.`, '2'],
-      ['You\'ll receive a confirmation once the owner verifies payment.', '3'],
-    ] : b.paymentMethod === 'cash' ? [
-      ['Show this booking ref to the front desk.', '1'],
-      [`Pay the ${isFullPay ? 'full amount' : 'full booking fee plus 25% court fee'} of <strong>${fmt(b.downpayment)}</strong> in cash on arrival.`, '2'],
-      ['Your slot will be confirmed after payment.', '3'],
-    ] : [
-      ['Show this booking ref to the front desk.', '1'],
-      ['Your booking is awaiting confirmation.', '2'],
-    ];
-    nextEl.innerHTML = `<div class="inv-next-title">What's Next</div>` +
-      steps.map(([txt, n]) => `<div class="inv-next-step"><div class="inv-next-num">${n}</div><div class="inv-next-txt">${txt}</div></div>`).join('');
+  const emailNoteEl = $('iEmailNote');
+  if (emailNoteEl) {
+    emailNoteEl.hidden = !b.email;
+    emailNoteEl.textContent = !b.email ? ''
+      : isRejected ? `A cancellation notice was sent to ${b.email}.`
+      : isConfirmed ? `Confirmation details were sent to ${b.email}.`
+      : `Updates will be sent to ${b.email}.`;
   }
 
-  // Email note
-  set('iEmailNote', !b.email ? '' :
-    isRejected ? `A payment rejection and cancellation notice was sent to ${b.email}` :
-    isConfirmed ? `Confirmation details sent to ${b.email}` :
-    `We will email ${b.email} after owner confirmation.`);
-
-  if ($('invModal')) $('invModal').classList.add('show');
+  const modal = $('invModal');
+  if (modal) {
+    invoiceReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    invoiceBodyOverflow = document.body.style.overflow;
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+    const scrollRegion = modal.querySelector('.inv-scroll-region');
+    if (scrollRegion) scrollRegion.scrollTop = 0;
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(() => cardEl?.focus({ preventScroll: true }));
+  }
 }
 
 function copyInvRef() {
@@ -8387,7 +8702,14 @@ function copyInvRef() {
 }
 
 function closeModal() {
-  $('invModal').classList.remove('show');
+  const modal = $('invModal');
+  if (!modal || !modal.classList.contains('show')) return;
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = invoiceBodyOverflow;
+  const returnFocus = invoiceReturnFocus;
+  invoiceReturnFocus = null;
+  requestAnimationFrame(() => returnFocus?.focus?.({ preventScroll: true }));
 }
 
 function applyHostChrome() {
@@ -8968,6 +9290,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('bDate').min = todayStr();
   initBookingValidationHighlights();
   $('invModal').addEventListener('click', e => { if (e.target === $('invModal')) closeModal(); });
+  $('invModal').addEventListener('keydown', e => {
+    if (e.key !== 'Tab' || !$('invModal').classList.contains('show')) return;
+    const focusable = [...$('invModal').querySelectorAll('button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+      .filter(el => !el.hidden && el.getClientRects().length > 0);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && (document.activeElement === first || !$('invModal').contains(document.activeElement))) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
   $('hostBookingsModal')?.addEventListener('click', e => { if (e.target === $('hostBookingsModal')) closeHostBookings(); });
   $('opModal').addEventListener('click', e => { if (e.target === $('opModal')) closeOpModal(); });
   $('hostApplyModal')?.addEventListener('click', e => { if (e.target === $('hostApplyModal')) closeHostApplyModal(); });
@@ -8975,7 +9312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initOpAnnounceSplash();
   initEasterSplash();
   initGrandSplash();
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAdvanceBookingNotice(); closeSharedDatePicker(); closeQrZoom(); closeFindTimeModal(); closeBookModal(); closeOpModal(); closeHostApplyModal(); closeHostSessionModal(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModal(); closeAdvanceBookingNotice(); closeSharedDatePicker(); closeQrZoom(); closeFindTimeModal(); closeBookModal(); closeOpModal(); closeHostApplyModal(); closeHostSessionModal(); } });
   initScrollReveal();
 });
 
