@@ -60,7 +60,6 @@ $publicFiles = @(
   "login.html",
   "finance-core.js",
   "open-play-rating.js",
-  "open-play-rotation.js",
   "play-manager.css",
   "play-manager.js",
   "player-live.css",

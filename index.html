@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <title>Paddle Rage Pickleball — Iponan, Cagayan de Oro</title>
 <meta name="description" content="Select a date, choose a court and time, then book at Paddle Rage Pickleball in Iponan, Cagayan de Oro." />
 <link rel="canonical" href="https://paddleragecdo.ph/" />
@@ -381,29 +381,11 @@ body.dark .shared-date-display {
   background:linear-gradient(135deg,var(--navy-dark),var(--navy));
   overflow:hidden; min-height:200px;
 }
-.cc-photo-fallback {
-  position:absolute; inset:0; z-index:0;
-  display:flex; align-items:center; justify-content:center;
-  background:linear-gradient(135deg,var(--navy-dark),var(--navy));
-  overflow:hidden;
-}
-.cc-photo-fallback svg { width:80px; height:auto; }
-.cc-photo.has-photo:not(.photo-loaded):not(.photo-error) .cc-photo-fallback::after {
-  content:''; position:absolute; inset:-30% -70%;
-  background:linear-gradient(110deg,transparent 38%,rgba(255,255,255,.09) 50%,transparent 62%);
-  animation:cc-photo-shimmer 1.45s ease-in-out infinite;
-}
-@keyframes cc-photo-shimmer { to { transform:translateX(48%); } }
-.cc-photo-img {
-  width:100%; height:100%; object-fit:cover; object-position:center;
-  display:block; position:absolute; inset:0; z-index:1;
-  opacity:0; transition:opacity .18s ease;
-}
-.cc-photo.photo-loaded .cc-photo-img { opacity:1; }
+.cc-photo img { width:100%; height:100%; object-fit:cover; display:block; }
 .cc-photo-avail {
   position:absolute; top:10px; left:10px;
   font-size:.7rem; font-weight:800; padding:4px 11px; border-radius:20px;
-  display:flex; align-items:center; gap:5px; letter-spacing:.3px; z-index:2;
+  display:flex; align-items:center; gap:5px; letter-spacing:.3px;
 }
 .cc-photo-avail.av  { background:var(--lime); color:var(--navy-dark); }
 .cc-photo-avail.full{ background:var(--red); color:#fff; }
@@ -412,7 +394,7 @@ body.dark .shared-date-display {
 .cc-photo-bar {
   position:absolute; bottom:0; left:0; right:0;
   background:linear-gradient(transparent,rgba(0,0,0,.82));
-  padding:26px 12px 12px; z-index:2;
+  padding:26px 12px 12px;
 }
 .cc-photo-name { font-family:'Bebas Neue',sans-serif; font-size:1.2rem; letter-spacing:1.5px; color:#fff; display:block; }
 .cc-photo-rate { font-size:.75rem; color:rgba(255,255,255,.7); margin-top:1px; }
@@ -511,18 +493,7 @@ body.dark .shared-date-display {
 @media(max-width:900px){ .cc-slots-grid{ grid-template-columns:repeat(4,minmax(0,1fr)); } }
 @media(max-width:700px){
   .cc { flex-direction:column; display:flex; }
-  .cc-photo {
-    display:block; width:100%; min-height:0; flex:none;
-    aspect-ratio:16 / 9;
-  }
-  .cc-photo-fallback svg { width:92px; }
-  .cc-photo-avail { top:12px; left:12px; padding:5px 10px; }
-  .cc-photo-bar {
-    padding:56px 14px 14px;
-    background:linear-gradient(180deg,transparent 0%,rgba(0,0,0,.2) 38%,rgba(0,0,0,.9) 100%);
-  }
-  .cc-photo-name { font-size:1.1rem; letter-spacing:1.4px; }
-  .cc-photo-rate { font-size:.72rem; color:rgba(255,255,255,.82); }
+  .cc-photo { display:none; }
   .cc-times { padding:10px 12px 12px; }
   .cc-times-head { display:none; }
   .cc-times-sub { display:none; }
@@ -574,10 +545,6 @@ body.dark .shared-date-display {
 .pb-loader-txt::after { content:''; animation:pb-dots 1.4s steps(4,end) infinite; }
 @keyframes pb-dots { 0%{content:'';} 25%{content:'.';} 50%{content:'..';} 75%{content:'...';} }
 @media (prefers-reduced-motion: reduce) { .pb-ball { animation-duration:2.4s; } }
-@media (prefers-reduced-motion: reduce) {
-  .cc-photo-img { transition:none; }
-  .cc-photo-fallback::after { animation:none !important; }
-}
 .pb-loader.mini {
   gap:8px; padding:14px 0;
 }
@@ -603,50 +570,17 @@ body.dark .shared-date-display {
 }
 .cc-slots-empty .pb-loader.mini { padding:4px 0; }
 
-/* Mobile court switcher keeps one premium photo-and-slots card in focus. */
-.court-tabs {
-  display:none;
-  gap:8px;
-  margin:0 0 12px;
-  padding:2px 0 6px;
-  overflow-x:auto;
-  overscroll-behavior-inline:contain;
-  scroll-snap-type:x proximity;
-  scrollbar-width:none;
-}
-.court-tabs::-webkit-scrollbar { display:none; }
-.court-tab {
-  flex:0 0 auto;
-  min-height:44px;
-  padding:9px 15px;
-  border:1px solid var(--border);
-  border-radius:999px;
-  background:var(--input);
-  color:var(--muted);
-  font:800 .78rem 'Outfit',sans-serif;
-  white-space:nowrap;
-  scroll-snap-align:start;
-  cursor:pointer;
-}
-.court-tab[aria-selected="true"] {
-  border-color:var(--accent);
-  background:var(--accent);
-  color:#10150b;
-  box-shadow:0 8px 24px rgba(var(--ac),.2);
-}
-@media(max-width:700px) {
-  .court-tabs { display:flex; }
-  .cc { display:none; }
-  .cc.active-mobile { display:flex; }
-}
-
 /* ── COMPACT COURT MOBILE HEADER ── */
 .cc-mobile-hd {
   display:none;
 }
 @media(max-width:700px) {
   .cc-mobile-hd {
-    display:none;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 14px;
+    background:linear-gradient(135deg,rgba(var(--ac),.10),rgba(var(--ac),.035));
+    border-bottom:1px solid rgba(var(--ac),.18);
+    gap:10px;
   }
   .cc-mobile-title {
     display:flex; flex-direction:column; gap:2px; min-width:0;
@@ -681,7 +615,6 @@ body.dark .shared-date-display {
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:3px; padding:10px 6px; border-radius:var(--r-sm);
   font-family:'Outfit',sans-serif; text-align:center;
-  appearance:none;
   cursor:pointer; user-select:none;
   transition: background .15s ease, box-shadow .15s ease, border-color .15s ease, opacity .15s ease;
   touch-action: manipulation;
@@ -2664,7 +2597,7 @@ body.host-mode .courts { padding-bottom:140px; }
 }
 
 </style>
-<link rel="stylesheet" href="brand-theme.css?v=20260830-book-court-v32">
+<link rel="stylesheet" href="brand-theme.css?v=20260729-advance-booking-v30">
 </head>
 <body class="dark">
 <script>
@@ -2676,8 +2609,6 @@ try {
   document.documentElement.style.colorScheme = savedPublicTheme;
 } catch (_) {}
 </script>
-
-<a class="skip-link" href="#courts" onclick="dismissSplash()">Skip to court booking</a>
 
 <div class="toasts" id="toasts"></div>
 
@@ -2758,7 +2689,7 @@ try {
 </div>
 
 <!-- SPLASH SCREEN -->
-<div id="splashScreen" role="dialog" aria-modal="true" aria-label="Welcome to Paddle Rage Pickleball" onclick="handleSplashBackgroundTap(event)">
+<div id="splashScreen" onclick="handleSplashBackgroundTap(event)">
   <img class="pr-splash-grunge-edge" src="paddle-rage-grunge-edge.png" alt="" aria-hidden="true" />
   <div class="pr-splash-content">
     <div class="pr-splash-logo-stage">
@@ -2781,12 +2712,26 @@ try {
       <span class="pr-splash-sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="pr-splash-sound-label">Play music</span>
     </button>
-    <button class="pr-splash-enter" type="button" onclick="event.stopPropagation();enterCourtBooking()">
-      <span class="pr-splash-enter-label">Book a Court</span>
+    <button class="pr-splash-enter" type="button" onclick="event.stopPropagation();openAdvanceBookingNotice()">
+      <span class="pr-splash-enter-label">Book September in Advance</span>
       <span class="pr-splash-enter-arrow" aria-hidden="true">&rarr;</span>
     </button>
   </div>
   <div class="pr-splash-footer">Court booking &nbsp;&middot;&nbsp; Open play &nbsp;&middot;&nbsp; Community</div>
+</div>
+
+<div class="advance-booking-notice" id="advanceBookingNotice" aria-hidden="true" onclick="advanceBookingNoticeBackdrop(event)">
+  <div class="advance-booking-card" role="dialog" aria-modal="true" aria-labelledby="advanceBookingTitle" aria-describedby="advanceBookingCopy">
+    <button class="advance-booking-close" type="button" onclick="closeAdvanceBookingNotice()" aria-label="Close advance booking notice">&times;</button>
+    <div class="advance-booking-kicker">Opening August 2026</div>
+    <h2 class="advance-booking-title" id="advanceBookingTitle">September bookings are open</h2>
+    <p class="advance-booking-copy" id="advanceBookingCopy">We&rsquo;re opening this August, and you can reserve your court in advance for September.</p>
+    <div class="advance-booking-highlight">Choose your preferred date, court, and time slot before the schedule fills up.</div>
+    <div class="advance-booking-actions">
+      <button class="advance-booking-primary" id="viewSeptemberSlotsButton" type="button" onclick="viewSeptemberTimeSlots()">View September Time Slots &rarr;</button>
+      <button class="advance-booking-secondary" type="button" onclick="closeAdvanceBookingNotice()">Maybe Later</button>
+    </div>
+  </div>
 </div>
 
 <!-- NAVBAR -->
@@ -2899,7 +2844,6 @@ try {
 </nav>
 
 <!-- COURTS -->
-<main id="mainContent">
 <div class="sec" id="courts" style="padding-top:24px">
   <div class="sec-hd">
     <h2>🏟️ SELECT A COURT</h2>
@@ -2924,7 +2868,6 @@ try {
       <input class="shared-date-native" type="date" id="courtSharedDate" onchange="onSharedCourtDate(this.value)" aria-label="Booking date" />
     </div>
   </div>
-  <div class="court-tabs" id="courtTabs" role="tablist" aria-label="Choose a court"></div>
   <div class="courts" id="courtsGrid">
     <div class="pb-loader">
       <div class="pb-ball" aria-hidden="true"></div>
@@ -3104,16 +3047,16 @@ try {
           <div class="frow">
             <div class="fg" style="margin:0">
               <label class="fl" for="bName">Full Name</label>
-              <input type="text" class="fi" id="bName" placeholder="First Name / Last Name" autocomplete="name" />
+              <input type="text" class="fi" id="bName" placeholder="First Name / Last Name" autocomplete="off" />
             </div>
             <div class="fg" style="margin:0">
               <label class="fl" for="bPhone">Contact Number</label>
-              <input type="tel" class="fi" id="bPhone" placeholder="09XX XXX XXXX" autocomplete="tel" inputmode="tel" />
+              <input type="tel" class="fi" id="bPhone" placeholder="09XX XXX XXXX" autocomplete="off" />
             </div>
           </div>
           <div class="fg">
             <label class="fl" for="bEmail">Email Address</label>
-            <input type="email" class="fi" id="bEmail" placeholder="youremail@gmail.com" autocomplete="email" />
+            <input type="email" class="fi" id="bEmail" placeholder="youremail@gmail.com" autocomplete="off" />
           </div>
           <div class="wiz-summary">
             <div class="wiz-summary-lbl">Booking Summary</div>
@@ -3346,7 +3289,7 @@ try {
 </div>
 
 <!-- HOW IT WORKS -->
-<div class="sec" id="how-it-works">
+<div class="sec">
   <div class="sec-hd"><h2>HOW IT WORKS</h2></div>
   <div class="how">
     <div class="hc"><div class="hc-ic">🏟️</div><div class="hc-tt">Pick a Court</div><div class="hc-ds">Browse courts and compare rates and features.</div></div>
@@ -3355,7 +3298,6 @@ try {
     <div class="hc"><div class="hc-ic">✅</div><div class="hc-tt">Get Confirmed</div><div class="hc-ds">Receive your booking reference and invoice instantly.</div></div>
   </div>
 </div>
-</main>
 
 <!-- FOOTER -->
 <footer>
@@ -3381,8 +3323,9 @@ try {
     <div class="ft-c">
       <h4>Support</h4>
       <ul>
-        <li><a href="mailto:bookings@paddleragecdo.ph">Contact Us</a></li>
-        <li><a href="#how-it-works">How booking works</a></li>
+        <li><a href="#">Contact Us</a></li>
+        <li><a href="#">FAQs</a></li>
+        <li><a href="#">Terms of Use</a></li>
         <li style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"><a href="host.html" style="color:var(--muted);font-size:.8rem">Open Play Host Portal</a></li>
         <li style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"><a href="login.html" style="color:var(--muted);font-size:.8rem">🔐 Staff Login</a></li>
       </ul>
@@ -3554,7 +3497,6 @@ try {
    STATE
    ============================================= */
 let court = null;
-let activeMobileCourtId = '';
 let selSlots = [];
 let wizStep = 1, wizStartStep = 1;
 let _lastSubmitAt = 0; // rate limiting — ms timestamp of last submission attempt
@@ -5345,7 +5287,6 @@ async function selectFindTimeResult(courtId, date, start, duration) {
     tiers: getPricingTiersForCourt(court),
   };
   refreshCardSelAlias();
-  selectMobileCourt(courtId);
   updateCardUI(courtId);
   const selectedCard = [...document.querySelectorAll('#courtsGrid .cc')]
     .find(el => String(el.dataset.id) === String(courtId));
@@ -5412,9 +5353,7 @@ function updateCardUI(courtId) {
   // Update button selected states
   grid.querySelectorAll('.cc-slot-btn').forEach(btn => {
     const h = parseInt(btn.dataset.h);
-    const selected = !!sel && sel.slots.includes(h);
-    btn.classList.toggle('selected', selected);
-    if (btn.matches('button')) btn.setAttribute('aria-pressed', String(selected));
+    btn.classList.toggle('selected', !!sel && sel.slots.includes(h));
   });
 
   // Show/hide Book Now bar
@@ -6223,8 +6162,7 @@ async function onCardDate(courtId, date, options = {}) {
     if (isBooked_) return `<div class="cc-slot-btn taken"><div class="csl-time">${timeRange}</div><div class="csl-name">Booked</div></div>`;
     if (isMaint_)  { const _ml=getMaintenanceLabel(date,h,courtId); return `<div class="cc-slot-btn maintenance"><div class="csl-time">${timeRange}</div><div class="csl-tag">${_ml.icon} ${_ml.text}</div></div>`; }
     if (isOpenPlay_) return '';
-    const slotRate = getRateForHourFromTiers(h, cTiers, c.rate);
-    return `<button type="button" class="cc-slot-btn" aria-pressed="false" aria-label="${esc(`${timeRange}, ₱${slotRate}, available`)}" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${courtId}','${date}',${h})"><span class="csl-time">${timeRange}</span><span class="csl-price">₱${slotRate}</span></button>`;
+    return `<div class="cc-slot-btn" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${courtId}','${date}',${h})"><div class="csl-time">${timeRange}</div><div class="csl-price">₱${getRateForHourFromTiers(h, cTiers, c.rate)}</div></div>`;
   }).join('');
 }
 
@@ -6239,55 +6177,6 @@ async function ensureCourt(courtId) {
 /* =============================================
    COURTS
    ============================================= */
-function syncMobileCourtAccessibility() {
-  const mobile = window.matchMedia('(max-width: 700px)').matches;
-  document.querySelectorAll('#courtsGrid .cc').forEach(panel => {
-    const active = String(panel.dataset.id) === String(activeMobileCourtId);
-    panel.classList.toggle('active-mobile', active);
-    if (mobile) {
-      panel.setAttribute('role', 'tabpanel');
-      panel.setAttribute('aria-labelledby', panel.dataset.tabId || '');
-      panel.hidden = !active;
-    } else {
-      panel.removeAttribute('role');
-      panel.removeAttribute('aria-labelledby');
-      panel.hidden = false;
-    }
-  });
-}
-
-const mobileCourtMedia = window.matchMedia('(max-width: 700px)');
-mobileCourtMedia.addEventListener?.('change', syncMobileCourtAccessibility);
-
-function selectMobileCourt(courtId, { focus = false } = {}) {
-  activeMobileCourtId = String(courtId || '');
-  const tabs = [...document.querySelectorAll('#courtTabs .court-tab')];
-  tabs.forEach(tab => {
-    const active = String(tab.dataset.courtId) === activeMobileCourtId;
-    tab.setAttribute('aria-selected', String(active));
-    tab.tabIndex = active ? 0 : -1;
-    if (active && focus) {
-      tab.focus({ preventScroll: true });
-      tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-    }
-  });
-  syncMobileCourtAccessibility();
-}
-
-function courtTabKeydown(event) {
-  const tabs = [...document.querySelectorAll('#courtTabs .court-tab')];
-  if (!tabs.length) return;
-  const current = Math.max(0, tabs.indexOf(event.currentTarget));
-  let next = current;
-  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (current + 1) % tabs.length;
-  else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (current - 1 + tabs.length) % tabs.length;
-  else if (event.key === 'Home') next = 0;
-  else if (event.key === 'End') next = tabs.length - 1;
-  else return;
-  event.preventDefault();
-  selectMobileCourt(tabs[next].dataset.courtId, { focus: true });
-}
-
 async function renderCourts() {
   const today = todayStr();
   const selectedDate = selectedCourtBrowseDate();
@@ -6302,16 +6191,6 @@ async function renderCourts() {
   const curHour = isSelectedToday ? nowHour() : (isSelectedPast ? 999 : -1);
   const courtsGrid = $('courtsGrid');
   if (!courtsGrid) return;
-  const courtTabs = $('courtTabs');
-  if (!courts.some(c => String(c.id) === String(activeMobileCourtId))) {
-    activeMobileCourtId = String((courts.find(c => !c.blocked) || courts[0] || {}).id || '');
-  }
-  if (courtTabs) {
-    courtTabs.innerHTML = courts.map((c, courtIndex) => {
-      const active = String(c.id) === activeMobileCourtId;
-      return `<button type="button" class="court-tab" id="courtTab_${courtIndex}" role="tab" aria-selected="${active}" aria-controls="courtPanel_${courtIndex}" tabindex="${active ? '0' : '-1'}" data-court-id="${esc(c.id)}" onclick="selectMobileCourt('${jsArg(c.id)}')" onkeydown="courtTabKeydown(event)">${esc(c.name || `Court ${courtIndex + 1}`)}</button>`;
-    }).join('');
-  }
   syncSharedCourtDateUI(selectedDate);
   const openPlayTodayByCourt = {};
   courts.forEach(c => {
@@ -6323,7 +6202,7 @@ async function renderCourts() {
     };
   });
 
-  courtsGrid.innerHTML = courts.map((c, courtIndex) => {
+  courtsGrid.innerHTML = courts.map(c => {
     const blk = c.blocked;
     const allSlots = Array.from({length: closeHour - openHour}, (_, i) => i + openHour);
 
@@ -6359,10 +6238,9 @@ async function renderCourts() {
       .trim() || String(c.name || 'Court');
     const courtTimesHeading = `<span class="court-heading-icon" aria-hidden="true"></span><span>${esc(compactCourtName)}</span><span class="court-heading-sep">·</span><span class="court-heading-label">Available Times</span>`;
 
-    const courtPhotoFallbackHtml = `<div class="cc-photo-fallback" aria-hidden="true"><svg viewBox="0 0 110 74" fill="none" focusable="false"><rect x="2" y="2" width="106" height="70" rx="3" stroke="rgba(var(--ac),.5)" stroke-width="1.8"/><line x1="55" y1="2" x2="55" y2="72" stroke="rgba(var(--ac),.4)" stroke-width="1.4"/><line x1="2" y1="37" x2="108" y2="37" stroke="rgba(var(--ac),.3)" stroke-width="1"/><circle cx="55" cy="37" r="6" stroke="rgba(var(--ac),.35)" stroke-width="1.5"/></svg></div>`;
     const courtPhotoHtml = c.photo
-      ? `${courtPhotoFallbackHtml}<img class="cc-photo-img" src="${esc(c.photo)}" alt="${esc(`Photo of ${c.name}`)}" ${courtIndex === 0 ? 'loading="eager" fetchpriority="high"' : 'loading="lazy"'} decoding="async" onload="this.closest('.cc-photo').classList.add('photo-loaded')" onerror="this.hidden=true;this.closest('.cc-photo').classList.add('photo-error')"/>`
-      : courtPhotoFallbackHtml;
+      ? `<img src="${esc(c.photo)}" alt="${esc(c.name)}" style="width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0"/>`
+      : `<div style="width:100%;height:100%;background:linear-gradient(135deg,var(--navy-dark),var(--navy));display:flex;align-items:center;justify-content:center;position:absolute;inset:0"><svg width="80" height="54" viewBox="0 0 110 74" fill="none"><rect x="2" y="2" width="106" height="70" rx="3" stroke="rgba(var(--ac),.5)" stroke-width="1.8"/><line x1="55" y1="2" x2="55" y2="72" stroke="rgba(var(--ac),.4)" stroke-width="1.4"/><line x1="2" y1="37" x2="108" y2="37" stroke="rgba(var(--ac),.3)" stroke-width="1"/><circle cx="55" cy="37" r="6" stroke="rgba(var(--ac),.35)" stroke-width="1.5"/></svg></div>`;
 
     const openPlayCardHtml = (!blk && todayOpenPlaySession)
       ? openPlaySessionHtml({
@@ -6390,8 +6268,7 @@ async function renderCourts() {
           if (isBooked_) return `<div class="cc-slot-btn taken"><div class="csl-time">${timeRange}</div><div class="csl-name">Booked</div></div>`;
           if (isMaint_)  { const _ml=getMaintenanceLabel(selectedDate,h,c.id); return `<div class="cc-slot-btn maintenance"><div class="csl-time">${timeRange}</div><div class="csl-tag">${esc(_ml.icon)} ${esc(_ml.text)}</div></div>`; }
           if (isOpenPlay_) return '';
-          const slotRate = _cRate(h);
-          return `<button type="button" class="cc-slot-btn${isSelectedSlot_ ? ' selected' : ''}" aria-pressed="${isSelectedSlot_ ? 'true' : 'false'}" aria-label="${esc(`${timeRange}, ₱${slotRate}, ${isSelectedSlot_ ? 'selected' : 'available'}`)}" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${jsArg(c.id)}','${jsArg(selectedDate)}',${h})"><span class="csl-time">${timeRange}</span><span class="csl-price">₱${slotRate}</span></button>`;
+          return `<div class="cc-slot-btn${isSelectedSlot_ ? ' selected' : ''}" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${jsArg(c.id)}','${jsArg(selectedDate)}',${h})"><div class="csl-time">${timeRange}</div><div class="csl-price">₱${_cRate(h)}</div></div>`;
         }).join('');
     const isSelectedCard = !blk && !!cardSelection && cardSelection.date === selectedDate && cardSelection.slots.length > 0;
     const selectedSummary = isSelectedCard
@@ -6399,7 +6276,7 @@ async function renderCourts() {
       : '';
 
     return `
-    <div class="cc${String(c.id) === activeMobileCourtId ? ' active-mobile' : ''}${blk?' blk':''}${isSelectedCard?' sel':''}" id="courtPanel_${courtIndex}" data-id="${esc(c.id)}" data-tab-id="courtTab_${courtIndex}" ${blk ? `onclick="toast('Court is under maintenance.','err')"` : ''}>
+    <div class="cc${blk?' blk':''}${isSelectedCard?' sel':''}" data-id="${esc(c.id)}" ${blk ? `onclick="toast('Court is under maintenance.','err')"` : ''}>
 
       <!-- MOBILE-ONLY HEADER -->
       <div class="cc-mobile-hd">
@@ -6413,7 +6290,7 @@ async function renderCourts() {
       </div>
 
       <!-- LEFT: Photo -->
-      <div class="cc-photo${c.photo ? ' has-photo' : ''}">
+      <div class="cc-photo">
         ${courtPhotoHtml}
         <div class="cc-photo-avail ${availBadgeCls}" id="cAvail_${esc(c.id)}">${esc(availBadgeTxt)}</div>
         <div class="cc-photo-bar">
@@ -6451,7 +6328,6 @@ async function renderCourts() {
 
     </div>`;
   }).join('');
-  syncMobileCourtAccessibility();
 
   const active = bookings.filter(b => window.BookingBalance?.holdsSlot?.(b));
   const totalRev = fmt(active.reduce((s,b) => s+b.total, 0));
@@ -8206,12 +8082,60 @@ function dismissSplash() {
   sp.addEventListener('transitionend', () => { sp.style.display = 'none'; }, { once: true });
 }
 
-function enterCourtBooking() {
+const ADVANCE_BOOKING_DATE = '2026-09-01';
+let advanceBookingNoticeFocus = null;
+
+function openAdvanceBookingNotice() {
+  const notice = document.getElementById('advanceBookingNotice');
+  if (!notice) return;
+  advanceBookingNoticeFocus = document.activeElement;
+  stopSplashSound();
+  notice.classList.add('show');
+  notice.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+  requestAnimationFrame(() => document.getElementById('viewSeptemberSlotsButton')?.focus());
+}
+
+function closeAdvanceBookingNotice({ restoreFocus = true } = {}) {
+  const notice = document.getElementById('advanceBookingNotice');
+  if (!notice) return;
+  notice.classList.remove('show');
+  notice.setAttribute('aria-hidden', 'true');
+  if (!splashIsVisible()) document.body.style.overflow = '';
+  if (restoreFocus && advanceBookingNoticeFocus instanceof HTMLElement) advanceBookingNoticeFocus.focus();
+}
+
+function advanceBookingNoticeBackdrop(event) {
+  if (event.target === document.getElementById('advanceBookingNotice')) closeAdvanceBookingNotice();
+}
+
+async function viewSeptemberTimeSlots() {
+  const button = document.getElementById('viewSeptemberSlotsButton');
+  if (button) {
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'Loading September Slots...';
+  }
+
+  closeAdvanceBookingNotice({ restoreFocus: false });
   dismissSplash();
-  window.setTimeout(() => {
+
+  try {
+    await onSharedCourtDate(ADVANCE_BOOKING_DATE);
+    window.setTimeout(() => {
+      document.getElementById('courts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      document.getElementById('courtSharedDateDisplay')?.focus({ preventScroll: true });
+    }, 720);
+  } catch (_) {
+    toast('Unable to load September slots. Please try again.', 'err');
     document.getElementById('courts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    document.getElementById('courtSharedDateDisplay')?.focus({ preventScroll: true });
-  }, 180);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.innerHTML = 'View September Time Slots &rarr;';
+    }
+  }
 }
 
 const splashAudio = {
@@ -8364,7 +8288,7 @@ function handleSplashBackgroundTap() {
     splashAudio.holdNextSplashClick = false;
     return;
   }
-  enterCourtBooking();
+  openAdvanceBookingNotice();
 }
 
 function unlockSplashMusicFromGesture(event) {
@@ -8425,7 +8349,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initOpAnnounceSplash();
   initEasterSplash();
   initGrandSplash();
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeSharedDatePicker(); closeQrZoom(); closeFindTimeModal(); closeBookModal(); closeOpModal(); closeHostApplyModal(); closeHostSessionModal(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAdvanceBookingNotice(); closeSharedDatePicker(); closeQrZoom(); closeFindTimeModal(); closeBookModal(); closeOpModal(); closeHostApplyModal(); closeHostSessionModal(); } });
   initScrollReveal();
 });
 
