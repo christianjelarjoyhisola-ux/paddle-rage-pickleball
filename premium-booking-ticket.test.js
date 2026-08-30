@@ -26,6 +26,11 @@ function sourceBetween(start, end) {
   return page.slice(from, to);
 }
 
+function ticketSessionModel(booking) {
+  const helpers = sourceBetween('function bookingTicketHourLabel', 'function renderBookingTicketSessions');
+  return new Function('booking', `${helpers}\nreturn bookingTicketSessionModel(booking);`)(booking);
+}
+
 test('premium booking ticket uses semantic dialog and compact information groups', () => {
   const modalTag = openingTagById('invModal');
   const titleTag = openingTagById('iTitle');
@@ -147,4 +152,95 @@ test('status changes remain accessible and empty email copy is hidden', () => {
   );
   assert.match(page, /\.i-row\s+\.vl\s*\{[^}]*overflow-wrap\s*:\s*anywhere/);
   assert.match(page, /\.inv-status-strip[^}]*\{|\.inv-status-strip\s*\{/);
+});
+
+test('multi-court tickets collapse identical schedules into one organized block', () => {
+  const model = ticketSessionModel({
+    courtName: '3 courts: Court 1, Court 2, Court 3',
+    timeLabel: 'flattened aggregate must not render',
+    date: '2026-09-01',
+    duration: 6,
+    groupItems: [
+      { courtName: 'Court 1', date: '2026-09-01', slots: [8, 9], timeLabel: '8:00 AM - 10:00 AM', duration: 2 },
+      { courtName: 'Court 2', date: '2026-09-01', slots: ['8', '9'], timeLabel: '8:00 AM - 10:00 AM', duration: 2 },
+      { courtName: 'Court 3', date: '2026-09-01', slots: [9, 8, 8], timeLabel: '8:00 AM - 10:00 AM', duration: 2 },
+    ],
+  });
+
+  assert.equal(model.isMulti, true);
+  assert.equal(model.groups.length, 1);
+  assert.deepEqual(model.groups[0].courts, ['Court 1', 'Court 2', 'Court 3']);
+  assert.equal(model.groups[0].timeLabel, '8:00 AM – 10:00 AM');
+  assert.equal(model.groups[0].durationLabel, '2 hrs each');
+  assert.equal(model.summary, '3 courts · 6 court-hours');
+  assert.doesNotMatch(JSON.stringify(model), /flattened aggregate must not render/);
+});
+
+test('different and nonconsecutive court schedules remain separate', () => {
+  const model = ticketSessionModel({
+    duration: 5,
+    groupItems: [
+      { courtName: 'Court 1', date: '2026-09-01', slots: [8, 9], timeLabel: '8:00 AM - 10:00 AM', duration: 2 },
+      { courtName: 'Court 2', date: '2026-09-01', slots: [8, 9], timeLabel: '8:00 AM - 10:00 AM', duration: 2 },
+      { courtName: 'Court 3', date: '2026-09-01', slots: [10], timeLabel: '10:00 AM - 11:00 AM', duration: 1 },
+    ],
+  });
+  assert.equal(model.groups.length, 2);
+  assert.deepEqual(model.groups.map(group => group.courts), [['Court 1', 'Court 2'], ['Court 3']]);
+  assert.equal(model.summary, '3 courts · 5 court-hours');
+
+  const disjoint = ticketSessionModel({
+    groupItems: [
+      { courtName: 'Court 1', date: '2026-09-01', slots: [8, 10], timeLabel: '8:00 AM - 9:00 AM, 10:00 AM - 11:00 AM', duration: 2 },
+      { courtName: 'Court 2', date: '2026-09-01', slots: [8, 9], timeLabel: '8:00 AM - 10:00 AM', duration: 2 },
+    ],
+  });
+  assert.equal(disjoint.groups.length, 2, 'different slot signatures must never be falsely merged');
+});
+
+test('single and legacy aggregate bookings keep safe organized fallbacks', () => {
+  const single = ticketSessionModel({
+    courtName: 'Court 1',
+    date: '2026-09-01',
+    timeLabel: '11:00 PM - 12:00 AM',
+    duration: 1,
+  });
+  assert.equal(single.isMulti, false);
+  assert.equal(single.groups.length, 1);
+  assert.equal(single.summary, '1 hr');
+
+  const legacy = ticketSessionModel({
+    courtName: '3 courts: Court 1, Court 2, Court 3',
+    date: '2026-09-01',
+    timeLabel: 'Court 1: 8:00 AM - 10:00 AM; Court 2: 8:00 AM - 10:00 AM; Court 3: 10:00 AM - 11:00 AM',
+    duration: 5,
+  });
+  assert.equal(legacy.items.length, 3);
+  assert.equal(legacy.groups.length, 2);
+  assert.deepEqual(legacy.groups[0].courts, ['Court 1', 'Court 2']);
+  assert.equal(legacy.summary, '3 courts · 5 court-hours');
+  assert.ok(legacy.groups.every(group => !group.timeLabel.includes(';')));
+
+  const opaque = ticketSessionModel({
+    courtName: '2 courts: East Championship Court, West Championship Court',
+    date: '2026-09-01',
+    timeLabel: 'Multiple time blocks',
+    duration: 4,
+  });
+  assert.equal(opaque.groups.length, 1);
+  assert.equal(opaque.groups[0].timeLabel, 'Multiple time blocks');
+});
+
+test('multi-session markup prevents squeezed duration and aggregate strings', () => {
+  const showInvoice = sourceBetween('function showInvoice(b)', 'function copyInvRef()');
+  for (const id of ['iSessionMeta', 'iSessionMulti', 'iSessionDate', 'iSessionList']) {
+    assert.ok(openingTagById(id), `missing ${id}`);
+  }
+  assert.match(showInvoice, /renderBookingTicketSessions\(b\)/);
+  assert.doesNotMatch(showInvoice, /set\(['"]iCourt['"]\s*,\s*b\.courtName/);
+  assert.doesNotMatch(showInvoice, /set\(['"]iTime['"]\s*,\s*b\.timeLabel/);
+  assert.match(page, /\.inv-session-slot-line\s*\{[^}]*grid-template-columns\s*:\s*minmax\(0,1fr\)\s+auto/);
+  assert.match(page, /\.inv-session-slot-duration\s*\{[^}]*white-space\s*:\s*nowrap/);
+  assert.match(page, /\.inv-session-courts\s*\{[^}]*flex-wrap\s*:\s*wrap/);
+  assert.match(page, /group\.courts\.map\([^)]*=>\s*`<span[^`]*\$\{esc\(courtName\)\}/);
 });

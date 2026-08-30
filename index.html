@@ -2880,13 +2880,94 @@ body.host-mode .courts { padding-bottom:140px; }
   background:transparent;
   box-shadow:none;
 }
-.inv-session-card { padding:12px 14px; }
+.inv-session-card { padding:12px 14px; overflow:hidden; }
+.inv-session-card [hidden] { display:none !important; }
 .inv-section-label { margin-bottom:7px; color:var(--ticket-accent); font-size:.63rem; font-weight:900; letter-spacing:1.2px; text-transform:uppercase; }
+.inv-session-heading { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.inv-session-heading .inv-section-label { margin-bottom:0; }
+.inv-session-meta {
+  min-width:0;
+  padding:3px 7px;
+  border:1px solid rgba(var(--ticket-accent-rgb),.19);
+  border-radius:999px;
+  color:var(--ticket-accent);
+  background:rgba(var(--ticket-accent-rgb),.055);
+  font-size:.61rem;
+  font-weight:850;
+  letter-spacing:.4px;
+  line-height:1.25;
+  text-align:right;
+  white-space:nowrap;
+}
+.inv-session-simple { margin-top:7px; }
 .inv-session-line { min-width:0; display:flex; align-items:baseline; justify-content:space-between; gap:14px; }
 .inv-session-line + .inv-session-line { margin-top:6px; }
 .inv-session-line strong { color:var(--text); font-size:.91rem; line-height:1.3; overflow-wrap:anywhere; }
 .inv-session-line span { color:var(--muted); font-size:.78rem; line-height:1.35; text-align:right; overflow-wrap:anywhere; }
 .inv-session-line--time strong { color:var(--ticket-accent); font-size:1rem; }
+.inv-session-line--time span { flex:0 0 auto; white-space:nowrap; overflow-wrap:normal; }
+.inv-session-multi { min-width:0; margin-top:7px; }
+.inv-session-multi-date {
+  display:block;
+  min-width:0;
+  color:var(--text);
+  font-size:.75rem;
+  font-weight:750;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+.inv-session-list {
+  min-width:0;
+  margin-top:8px;
+  padding-top:1px;
+  border-top:1px solid rgba(var(--ticket-accent-rgb),.1);
+}
+.inv-session-group { min-width:0; padding:8px 0 1px; }
+.inv-session-group + .inv-session-group { margin-top:7px; border-top:1px solid rgba(var(--ticket-accent-rgb),.085); }
+.inv-session-group-date {
+  margin-bottom:4px;
+  color:var(--muted);
+  font-size:.65rem;
+  font-weight:750;
+  letter-spacing:.35px;
+}
+.inv-session-slot-line {
+  min-width:0;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:baseline;
+  gap:10px;
+}
+.inv-session-slot-time {
+  min-width:0;
+  color:var(--ticket-accent);
+  font-size:.91rem;
+  font-weight:850;
+  line-height:1.3;
+  overflow-wrap:anywhere;
+}
+.inv-session-slot-duration {
+  color:var(--muted);
+  font-size:.64rem;
+  font-weight:800;
+  letter-spacing:.35px;
+  line-height:1.25;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.inv-session-courts { min-width:0; margin-top:6px; display:flex; flex-wrap:wrap; gap:5px; }
+.inv-session-court-chip {
+  min-width:0;
+  padding:3px 7px;
+  border:1px solid rgba(var(--ticket-accent-rgb),.16);
+  border-radius:999px;
+  color:var(--text);
+  background:rgba(var(--ticket-accent-rgb),.04);
+  font-size:.63rem;
+  font-weight:800;
+  line-height:1.25;
+  overflow-wrap:anywhere;
+}
 .inv-customer-grid {
   padding:0 14px;
   display:grid;
@@ -3008,6 +3089,42 @@ body.host-mode .courts { padding-bottom:140px; }
   .inv-customer-grid { grid-template-columns:1fr; gap:0; }
   .inv-field dd { font-size:.76rem; }
   .inv-payment-meta { gap:7px 12px; }
+}
+@media(max-height:720px) {
+  #invModal { padding:4px; }
+  .inv-card { max-height:calc(100dvh - 8px); }
+  .inv-hero { min-height:82px; padding:9px 48px 8px 12px; grid-template-columns:40px minmax(0,1fr); gap:2px 9px; }
+  .inv-check-wrap { width:40px; height:40px; }
+  .inv-check-icon { font-size:1.28rem; }
+  .inv-hero-title { font-size:1.24rem; }
+  .inv-hero-sub { margin-top:2px; font-size:.72rem; line-height:1.3; }
+  .inv-status-bdg { min-height:24px; margin-top:2px; padding:3px 8px; font-size:.64rem; }
+  .inv-close { top:9px; right:10px; width:38px; height:38px; }
+  .inv-ref-wrap { min-height:52px; padding:5px 10px 6px; gap:2px 8px; }
+  .inv-ref-label { font-size:.58rem; }
+  .inv-ref-num { font-size:1.3rem; }
+  .inv-copy-btn { min-height:40px; }
+  .inv-ticket-summary { margin:6px 8px; }
+  .inv-session-card,.inv-amount-wrap { padding:8px 11px; }
+  .inv-session-simple,.inv-session-multi { margin-top:5px; }
+  .inv-session-multi-date { font-size:.71rem; }
+  .inv-session-list { margin-top:5px; }
+  .inv-session-group { padding-top:6px; }
+  .inv-session-group + .inv-session-group { margin-top:4px; }
+  .inv-session-courts { margin-top:4px; }
+  .inv-session-court-chip { padding:2px 6px; }
+  .inv-amount-wrap { padding-top:8px; padding-bottom:8px; }
+  .inv-amt-val { font-size:1.68rem; }
+  .inv-payment-meta { margin-top:6px; padding-top:6px; }
+  .inv-customer-grid { padding:2px 11px; }
+  .inv-field,.inv-field--wide { padding:5px 0; }
+  .inv-status-strip { padding:7px 11px 8px; gap:6px; }
+  .inv-timeline-title { margin-bottom:4px; }
+  .inv-timeline-step { gap:3px; }
+  .inv-guidance { padding-top:6px; gap:3px; }
+  .inv-email-note { display:none; }
+  .inv-actions { padding:6px 8px calc(7px + env(safe-area-inset-bottom)); }
+  .inv-actions .btn-print,.inv-actions .btn-done { min-height:44px; padding:8px; }
 }
 @media(prefers-reduced-motion:reduce) {
   .inv-card,.inv-check-wrap { animation:none !important; }
@@ -3787,14 +3904,23 @@ try {
     <div class="inv-scroll-region">
       <div class="inv-ticket-summary">
         <section class="inv-session-card" aria-labelledby="iSessionLabel">
-          <div class="inv-section-label" id="iSessionLabel">Session</div>
-          <div class="inv-session-line">
-            <strong id="iCourt">—</strong>
-            <span id="iDate">—</span>
+          <div class="inv-session-heading">
+            <div class="inv-section-label" id="iSessionLabel">Session</div>
+            <span class="inv-session-meta" id="iSessionMeta" hidden></span>
           </div>
-          <div class="inv-session-line inv-session-line--time">
-            <strong id="iTime">—</strong>
-            <span id="iDur">—</span>
+          <div class="inv-session-simple" id="iSessionSimple">
+            <div class="inv-session-line">
+              <strong id="iCourt">—</strong>
+              <span id="iDate">—</span>
+            </div>
+            <div class="inv-session-line inv-session-line--time">
+              <strong id="iTime">—</strong>
+              <span id="iDur">—</span>
+            </div>
+          </div>
+          <div class="inv-session-multi" id="iSessionMulti" hidden>
+            <time class="inv-session-multi-date" id="iSessionDate">—</time>
+            <div class="inv-session-list" id="iSessionList" role="list"></div>
           </div>
         </section>
 
@@ -8509,6 +8635,202 @@ function resetForm(options = {}) {
 /* =============================================
    INVOICE MODAL
    ============================================= */
+function bookingTicketHourLabel(value, { courtHours = false, each = false } = {}) {
+  const hours = Number(value);
+  if (!Number.isFinite(hours) || hours <= 0) return '';
+  const amount = Number.isInteger(hours) ? String(hours) : String(Number(hours.toFixed(1)));
+  if (courtHours) return `${amount} court-hour${hours === 1 ? '' : 's'}`;
+  return `${amount} hr${hours === 1 ? '' : 's'}${each ? ' each' : ''}`;
+}
+
+function bookingTicketTimeDisplay(value) {
+  return String(value || '').trim().replace(/\s+-\s+/g, ' – ');
+}
+
+function bookingTicketSessionItems(booking = {}) {
+  const structured = Array.isArray(booking.groupItems) && booking.groupItems.length
+    ? booking.groupItems
+    : Array.isArray(booking.items) && booking.items.length
+      ? booking.items
+      : Array.isArray(booking.allItems) && booking.allItems.length
+        ? booking.allItems
+        : null;
+
+  const normalizeItem = (item = {}, index = 0, durationFallback = 0) => {
+    const slots = Array.isArray(item.slots)
+      ? [...new Set(item.slots.map(Number).filter(slot => Number.isInteger(slot) && slot >= 0 && slot <= 23))].sort((a, b) => a - b)
+      : [];
+    const durationValue = Number(item.duration);
+    const duration = Number.isFinite(durationValue) && durationValue > 0
+      ? durationValue
+      : slots.length || durationFallback;
+    const courtName = String(item.courtName || (item.courtId ? `Court ${item.courtId}` : '') || `Court ${index + 1}`).trim();
+    const derivedTime = item.timeLabel
+      || (slots.length ? slotsTimeLabel(slots) : '')
+      || (item.startTime && item.endTime ? `${item.startTime} – ${item.endTime}` : '');
+    return {
+      courtName,
+      date: String(item.date || booking.date || '').trim(),
+      timeLabel: bookingTicketTimeDisplay(derivedTime || booking.timeLabel || 'Time to be confirmed'),
+      duration,
+      slots,
+      sourceIndex: index,
+    };
+  };
+
+  if (structured) return structured.map((item, index) => normalizeItem(item, index));
+
+  const aggregateCourtText = String(booking.courtName || 'Court').trim();
+  const courtText = aggregateCourtText.replace(/^\s*\d+\s+courts?\s*:\s*/i, '');
+  const courtNames = courtText.split(/\s*,\s*/).map(name => name.trim()).filter(Boolean);
+  const aggregateTime = String(booking.timeLabel || '').trim();
+  const timeSegments = aggregateTime.split(/\s*;\s*/).map(segment => segment.trim()).filter(Boolean);
+  const parsedSegments = timeSegments.map(segment => {
+    const match = segment.match(/^([^:]+):\s*(.+)$/);
+    return match ? { courtName: match[1].trim(), timeLabel: match[2].trim() } : null;
+  }).filter(Boolean);
+  const totalDuration = Number(booking.duration);
+
+  if (parsedSegments.length > 1) {
+    const durationEach = Number.isFinite(totalDuration) && totalDuration > 0
+      ? totalDuration / parsedSegments.length
+      : 0;
+    return parsedSegments.map((segment, index) => normalizeItem({
+      ...booking,
+      courtName: segment.courtName,
+      timeLabel: segment.timeLabel,
+      duration: durationEach,
+      slots: [],
+    }, index, durationEach));
+  }
+
+  if (courtNames.length > 1) {
+    const durationEach = Number.isFinite(totalDuration) && totalDuration > 0
+      ? totalDuration / courtNames.length
+      : 0;
+    return courtNames.map((courtName, index) => normalizeItem({
+      ...booking,
+      courtName,
+      timeLabel: aggregateTime || 'Multiple time blocks',
+      duration: durationEach,
+      slots: [],
+    }, index, durationEach));
+  }
+
+  return [normalizeItem(booking, 0, Number.isFinite(totalDuration) ? totalDuration : 0)];
+}
+
+function bookingTicketSessionModel(booking = {}) {
+  const items = bookingTicketSessionItems(booking);
+  const orderedItems = items.slice().sort((left, right) => {
+    const dateOrder = String(left.date).localeCompare(String(right.date));
+    if (dateOrder) return dateOrder;
+    const leftSlot = left.slots.length ? left.slots[0] : Number.POSITIVE_INFINITY;
+    const rightSlot = right.slots.length ? right.slots[0] : Number.POSITIVE_INFINITY;
+    if (leftSlot !== rightSlot) return leftSlot - rightSlot;
+    return left.sourceIndex - right.sourceIndex;
+  });
+  const groups = [];
+  const groupByKey = new Map();
+
+  orderedItems.forEach(item => {
+    const scheduleKey = item.slots.length
+      ? `slots:${item.slots.join(',')}`
+      : `time:${item.timeLabel.toLowerCase().replace(/\s+/g, ' ')}`;
+    const key = `${item.date}|${scheduleKey}`;
+    let group = groupByKey.get(key);
+    if (!group) {
+      group = {
+        date: item.date,
+        timeLabel: item.timeLabel,
+        slots: item.slots,
+        courts: [],
+        durations: [],
+      };
+      groupByKey.set(key, group);
+      groups.push(group);
+    }
+    if (!group.courts.some(name => name.toLowerCase() === item.courtName.toLowerCase())) {
+      group.courts.push(item.courtName);
+    }
+    if (Number(item.duration) > 0) group.durations.push(Number(item.duration));
+  });
+
+  groups.forEach(group => {
+    const firstDuration = group.durations[0] || 0;
+    const sameDuration = group.durations.length > 0
+      && group.durations.every(duration => Math.abs(duration - firstDuration) < 0.001);
+    const groupDuration = group.durations.reduce((sum, duration) => sum + duration, 0);
+    group.durationLabel = sameDuration
+      ? bookingTicketHourLabel(firstDuration, { each: group.courts.length > 1 })
+      : bookingTicketHourLabel(groupDuration, { courtHours: group.courts.length > 1 });
+  });
+
+  const courts = [];
+  items.forEach(item => {
+    if (!courts.some(name => name.toLowerCase() === item.courtName.toLowerCase())) courts.push(item.courtName);
+  });
+  const dates = [...new Set(items.map(item => item.date).filter(Boolean))];
+  const itemDuration = items.reduce((sum, item) => sum + (Number(item.duration) || 0), 0);
+  const bookingDuration = Number(booking.duration);
+  const totalDuration = itemDuration > 0
+    ? itemDuration
+    : Number.isFinite(bookingDuration) && bookingDuration > 0 ? bookingDuration : 0;
+  const isMulti = items.length > 1 || courts.length > 1 || groups.length > 1;
+  const totalDurationLabel = bookingTicketHourLabel(totalDuration, { courtHours: courts.length > 1 });
+  const summary = courts.length > 1
+    ? [`${courts.length} courts`, totalDurationLabel].filter(Boolean).join(' · ')
+    : groups.length > 1
+      ? `${groups.length} time blocks · ${bookingTicketHourLabel(totalDuration)}`
+      : bookingTicketHourLabel(totalDuration);
+
+  return { items, groups, courts, dates, totalDuration, isMulti, summary };
+}
+
+function renderBookingTicketSessions(booking = {}) {
+  const model = bookingTicketSessionModel(booking);
+  const first = model.items[0] || {};
+  const setValue = (id, value) => { const element = $(id); if (element) element.textContent = value || '—'; };
+
+  setValue('iCourt', first.courtName || booking.courtName);
+  setValue('iDate', first.date ? fmtD(first.date) : booking.date ? fmtD(booking.date) : '—');
+  setValue('iTime', first.timeLabel || booking.timeLabel);
+  setValue('iDur', bookingTicketHourLabel(first.duration || booking.duration));
+
+  const simple = $('iSessionSimple');
+  const multi = $('iSessionMulti');
+  const meta = $('iSessionMeta');
+  if (simple) simple.hidden = model.isMulti;
+  if (multi) multi.hidden = !model.isMulti;
+  if (meta) {
+    meta.hidden = !model.isMulti;
+    meta.textContent = model.isMulti ? model.summary : '';
+  }
+  if (!model.isMulti) return model;
+
+  const dateElement = $('iSessionDate');
+  if (dateElement) {
+    dateElement.textContent = model.dates.length === 1
+      ? fmtD(model.dates[0])
+      : `${model.dates.length} booking dates`;
+    dateElement.dateTime = model.dates.length === 1 ? model.dates[0] : '';
+  }
+  const list = $('iSessionList');
+  if (list) {
+    const showGroupDates = model.dates.length > 1;
+    list.innerHTML = model.groups.map(group => `
+      <div class="inv-session-group" role="listitem">
+        ${showGroupDates ? `<div class="inv-session-group-date">${esc(fmtD(group.date))}</div>` : ''}
+        <div class="inv-session-slot-line">
+          <strong class="inv-session-slot-time">${esc(group.timeLabel || 'Time to be confirmed')}</strong>
+          ${group.durationLabel ? `<span class="inv-session-slot-duration">${esc(group.durationLabel)}</span>` : ''}
+        </div>
+        <div class="inv-session-courts" aria-label="Courts">${group.courts.map(courtName => `<span class="inv-session-court-chip">${esc(courtName)}</span>`).join('')}</div>
+      </div>`).join('');
+  }
+  return model;
+}
+
 let invoiceReturnFocus = null;
 let invoiceBodyOverflow = '';
 
@@ -8545,10 +8867,7 @@ function showInvoice(b) {
   set('iName', b.fullName);
   set('iContact', b.contactNumber);
   set('iEmail', b.email || 'Not provided');
-  set('iCourt', b.courtName);
-  set('iDate', fmtD(b.date));
-  set('iTime', b.timeLabel || `${b.startTime} – ${b.endTime}`);
-  set('iDur', `${b.duration} hr${b.duration !== 1 ? 's' : ''}`);
+  renderBookingTicketSessions(b);
   set('iPay', payLabel);
   set('iTot', fmt(b.total));
   set('iDown', fmt(b.downpayment));
