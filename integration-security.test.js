@@ -464,13 +464,16 @@ test('receipt clients preserve only a persisted canonical auto-verification resu
   );
 });
 
-test('public court schedules use compact stacked court headings without filter buttons', () => {
+test('public court schedules use accessible mobile court tabs and compact headings', () => {
   const page = read('index.html');
-  assert.doesNotMatch(page, /id="courtTabs"|class="court-tab"|function switchCourtTab/);
+  assert.match(page, /id="courtTabs" role="tablist" aria-label="Choose a court"/);
+  assert.match(page, /class="court-tab"[^>]*role="tab"[^>]*aria-selected=/);
+  assert.match(page, /function courtTabKeydown\(event\)[\s\S]*?ArrowRight[\s\S]*?ArrowLeft/);
+  assert.match(page, /function syncMobileCourtAccessibility\(\)[\s\S]*?role', 'tabpanel'/);
   assert.doesNotMatch(page, /🕐\s*Available times|📍\s*\$\{esc\(c\.name\)\}/);
   assert.match(
     page,
-    /@media\(max-width:700px\)\{[\s\S]*?\.cc \{ flex-direction:column; display:flex; \}/
+    /@media\(max-width:700px\) \{[\s\S]*?\.court-tabs \{ display:flex; \}[\s\S]*?\.cc\.active-mobile \{ display:flex; \}/
   );
   assert.match(
     page,

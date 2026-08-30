@@ -31,6 +31,8 @@
   const SHARE_TOKEN_STORE = "paddle_rage_play_manager_share_tokens_v1";
   const DEFAULT_SKILL_LEVEL = 3;
   const PERFORMANCE = window.PBOpenPlayRating;
+  const ROTATION = window.OpenPlayRotation;
+  const ADAPTIVE_COMPETITIVE_MODE = "adaptive_competitive_mixer";
   const RANKING_MODE_PERFORMANCE = PERFORMANCE?.RANKING_MODE_PERFORMANCE || "performance";
   const RANKING_MODE_WIN_PERCENTAGE = PERFORMANCE?.RANKING_MODE_WIN_PERCENTAGE || "win_percentage";
   const RANKING_MODE_COMPETITIVE = PERFORMANCE?.RANKING_MODE_COMPETITIVE || "competitive";
@@ -79,6 +81,10 @@
 
   function isCompetitiveMode(mode = sessionRankingMode()) {
     return normalizeRankingMode(mode) === RANKING_MODE_COMPETITIVE;
+  }
+
+  function isAdaptiveCompetitiveRotation(session = state.session) {
+    return String(session?.mode || "") === ADAPTIVE_COMPETITIVE_MODE;
   }
 
   function formatWinPercentage(value) {
@@ -141,12 +147,14 @@
   function standingRankLabel(row) {
     if (!row?.eligible) return "P";
     if (requiresPodiumDecider(row)) return "TBD";
+    if (row?.sharedRank) return `T${row.rank}`;
     return row?.rank || "—";
   }
 
   function standingRankDescription(row) {
     if (!row?.eligible) return "Provisional";
     if (requiresPodiumDecider(row)) return "Podium decider required";
+    if (row?.sharedRank) return `Tied at rank ${row.rank}`;
     return `Rank ${row?.rank}`;
   }
 
@@ -476,6 +484,8 @@
   }
 
   function averageGameDuration() {
+    const minimumReportableSeconds = 2 * 60;
+    const maximumReportableSeconds = 2 * 60 * 60;
     const durations = [];
     state.rounds.forEach(round => {
       liveAssignments(round).forEach(game => {
@@ -487,7 +497,13 @@
           const startedAt = Date.parse(result.startedAt || "");
           const resultAt = Date.parse(result.resultAt || "");
           if (Number.isFinite(startedAt) && Number.isFinite(resultAt) && resultAt >= startedAt) {
-            durations.push(Math.floor((resultAt - startedAt) / 1000));
+            const durationSeconds = Math.floor((resultAt - startedAt) / 1000);
+            if (
+              durationSeconds >= minimumReportableSeconds &&
+              durationSeconds <= maximumReportableSeconds
+            ) {
+              durations.push(durationSeconds);
+            }
           }
         });
       });
@@ -547,7 +563,72 @@
     return state.courts.slice(0, Math.min(2, state.courts.length)).map(court => asId(court.id));
   }
 
+  function adaptiveRotationPlayers(playerIds = activePlayers().map(player => asId(player.id))) {
+    const wanted = new Set((playerIds || []).map(asId));
+    const standingsById = new Map(
+      standingsRows(completedMatches()).map(row => [asId(row.id), row])
+    );
+    return activePlayers()
+      .filter(player => wanted.has(asId(player.id)))
+      .map((player, index) => {
+        const standing = standingsById.get(asId(player.id));
+        return {
+          ...player,
+          id: asId(player.id),
+          seed_order: Number(player.seed_order ?? index),
+          skill_level: playerSkillLevel(player),
+          rating_exact: Number(
+            standing?.ratingExact ??
+            standing?.rating ??
+            player.performance_seed_rating ??
+            PERFORMANCE?.seedRating?.(playerSkillLevel(player)) ??
+            1000
+          ),
+          points_exact: Number(standing?.pointsExact ?? standing?.points ?? 0),
+          competitive_rank: standing?.eligible ? Number(standing.rank || 0) || null : null,
+          games: Number(standing?.games || 0),
+        };
+      });
+  }
+
+  function adaptiveRotationAssignments(playerIds, courtIds) {
+    if (!ROTATION?.generateAssignments) {
+      throw new Error("The Adaptive Competitive rotation engine did not load.");
+    }
+    const selectedCourtIds = (courtIds || []).map(asId);
+    const courtNames = Object.fromEntries(selectedCourtIds.map((courtId, index) => {
+      const court = state.courts.find(item => asId(item.id) === courtId);
+      return [courtId, court?.name || `Court ${index + 1}`];
+    }));
+    return ROTATION.generateAssignments({
+      active: adaptiveRotationPlayers(playerIds),
+      courtIds: selectedCourtIds,
+      courtNames,
+      rounds: state.rounds,
+      format: "doubles",
+      style: "adaptive_competitive",
+      random: Math.random,
+    });
+  }
+
   function generateAssignments() {
+    if (isAdaptiveCompetitiveRotation()) {
+      const generated = adaptiveRotationAssignments(
+        activePlayers().map(player => asId(player.id)),
+        sessionCourtIds()
+      );
+      const startedAt = new Date().toISOString();
+      return {
+        assignments: generated.assignments.map(game => ({
+          ...game,
+          startedAt,
+          matchId: createMatchId(),
+        })),
+        queueSnapshot: generated.queueSnapshot,
+        history: buildHistory(),
+      };
+    }
+
     const players = activePlayers().map((player, index) => ({
       id: asId(player.id),
       seedOrder: Number(player.seed_order ?? index),
@@ -859,7 +940,7 @@
           </div>
           <strong class="pm2-skill-text" id="pm2SkillText">${selectedInfo ? escapeHtml(selectedInfo.label) : "Set skill"}</strong>
         </div>
-        <small id="pm2SkillHelp">New players start at 1-star Beginner.</small>
+        <small id="pm2SkillHelp">New players start at 3-star Intermediate.</small>
       </fieldset>
     `;
   }
@@ -1318,7 +1399,7 @@
     const selectedSet = new Set(selectedIds);
     const date = state.prefill?.date || state.session?.date || localDateValue();
     const timeLabel = state.session?.time_label || "6PM–10PM";
-    const mode = state.session?.mode || "smart_random_mixer";
+    const mode = state.prefill?.mode || state.session?.mode || ADAPTIVE_COMPETITIVE_MODE;
     const rankingMode = state.session
       ? sessionRankingMode(state.session)
       : RANKING_MODE_COMPETITIVE;
@@ -1342,7 +1423,7 @@
         <div>
           <span class="pm2-eyebrow">Session setup</span>
           <h1>Build today’s open play.</h1>
-          <p>Choose the courts, load the roster, and launch a balanced rotation. Results and queue changes save to the existing Paddle Rage game-manager records.</p>
+          <p>Choose the courts, load the roster, and launch a balanced rotation. Results and queue changes save to the Paddle Rage game-manager records.</p>
         </div>
         ${state.session ? `<button class="pm2-btn pm2-btn-light" type="button" data-pm-action="continue-live" ${state.rounds.length ? "" : "disabled"}>Continue Live</button>` : ""}
       </div>
@@ -1377,9 +1458,13 @@
             <fieldset class="pm2-field pm2-field-wide pm2-mode-field">
               <legend class="pm2-label">Rotation style</legend>
               <div class="pm2-mode-options">
+                <label class="pm2-mode-option is-featured">
+                  <input type="radio" name="mode" value="${ADAPTIVE_COMPETITIVE_MODE}" ${mode === ADAPTIVE_COMPETITIVE_MODE ? "checked" : ""}>
+                  <span><strong>Adaptive Competitive Mixer <em>Recommended</em></strong><small>Equalizes games first, blocks recent partner repeats, builds closely balanced teams, and schedules tied players as opponents.</small></span>
+                </label>
                 <label class="pm2-mode-option">
-                  <input type="radio" name="mode" value="smart_random_mixer" ${mode !== "all_rotate" ? "checked" : ""}>
-                  <span><strong>Fair Random <em>Recommended</em></strong><small>Prioritizes fewer games, then queue order. Randomizes matchups and reduces repeat partners.</small></span>
+                  <input type="radio" name="mode" value="smart_random_mixer" ${mode === "smart_random_mixer" ? "checked" : ""}>
+                  <span><strong>Fair Random</strong><small>Prioritizes fewer games, then queue order. Randomizes matchups and reduces repeat partners.</small></span>
                 </label>
                 <label class="pm2-mode-option">
                   <input type="radio" name="mode" value="all_rotate" ${mode === "all_rotate" ? "checked" : ""}>
@@ -1507,6 +1592,25 @@
     `;
   }
 
+  function matchQualityMarkup(quality, compact = false) {
+    if (!quality || typeof quality !== "object") return "";
+    const expectedA = Math.max(0, Math.min(100, Number(quality.expectedTeamA) || 50));
+    const expectedB = Math.max(0, Math.min(100, Number(quality.expectedTeamB) || (100 - expectedA)));
+    const gameCounts = (quality.gameCounts || []).map(Number).filter(Number.isFinite);
+    const gamesBalanced = !gameCounts.length || Math.max(...gameCounts) - Math.min(...gameCounts) <= 1;
+    const partnerLabel = Number(quality.recentPartnerRepeats || 0) === 0
+      ? "New partners"
+      : "Best available partners";
+    return `
+      <div class="pm2-match-quality ${compact ? "is-compact" : ""}" aria-label="Adaptive match quality">
+        <span class="is-balance">${expectedA}%&ndash;${expectedB}% balance</span>
+        <span>${escapeHtml(partnerLabel)}</span>
+        ${gamesBalanced ? "<span>Games balanced</span>" : ""}
+        ${quality.challenge ? '<span class="is-challenge">Ranking challenge</span>' : ""}
+      </div>
+    `;
+  }
+
   function readyCourtCard(game, index, sessionStatus) {
     const complete = hasReadyMatch(game);
     const active = sessionStatus === "active";
@@ -1524,6 +1628,7 @@
           class="pm2-ready-court"
           aria-label="${complete ? "Next match is ready" : "Choose four players for the next match"}"
         >
+          ${matchQualityMarkup(game.readyMatch?.matchQuality, true)}
           <div class="pm2-ready-actions">
             <button
               class="pm2-ready-start"
@@ -1615,6 +1720,7 @@
             </div>
           </div>
         </div>
+        ${matchQualityMarkup(game.matchQuality)}
         <div class="pm2-result-actions">
           ${winner ? `
             <div class="pm2-result-note">${winner === "A" ? "Team 1" : "Team 2"} won${pastGames ? ` · ${pastGames + 1} games completed here` : ""}</div>
@@ -1665,22 +1771,58 @@
         teamA: (game.readyMatch?.teamA || []).map(asId),
         teamB: (game.readyMatch?.teamB || []).map(asId),
         reservedAt: game.readyMatch?.reservedAt || game.resultAt || "",
+        matchQuality: game.readyMatch?.matchQuality || null,
       }));
 
     const previewCount = Math.max(0, slotCount - ready.length);
-    const previews = Array.from({ length: previewCount }, (_, index) => {
-      const playerIds = queue.slice(index * 4, index * 4 + 4).map(asId);
-      const teams = dispatchSplit(playerIds, history);
-      return {
-        kind: playerIds.length === 4 ? "preview" : "waiting",
+    let previews;
+    if (isAdaptiveCompetitiveRotation() && previewCount && queue.length >= 4) {
+      const previewCourtIds = Array.from(
+        { length: Math.min(previewCount, Math.floor(queue.length / 4)) },
+        (_, index) => `preview-${index + 1}`
+      );
+      const generated = adaptiveRotationAssignments(queue, previewCourtIds);
+      previews = generated.assignments.map(match => ({
+        kind: "preview",
         courtIndex: null,
         courtName: "",
-        playerIds,
-        teamA: teams.teamA,
-        teamB: teams.teamB,
+        playerIds: [...match.teamA, ...match.teamB].map(asId),
+        teamA: match.teamA.map(asId),
+        teamB: match.teamB.map(asId),
         reservedAt: "",
-      };
-    });
+        matchQuality: match.matchQuality || null,
+      }));
+      while (previews.length < previewCount) {
+        const used = new Set(previews.flatMap(slot => slot.playerIds));
+        const playerIds = queue.filter(id => !used.has(asId(id))).slice(0, 4).map(asId);
+        const teams = dispatchSplit(playerIds, history);
+        previews.push({
+          kind: playerIds.length === 4 ? "preview" : "waiting",
+          courtIndex: null,
+          courtName: "",
+          playerIds,
+          teamA: teams.teamA,
+          teamB: teams.teamB,
+          reservedAt: "",
+          matchQuality: null,
+        });
+      }
+    } else {
+      previews = Array.from({ length: previewCount }, (_, index) => {
+        const playerIds = queue.slice(index * 4, index * 4 + 4).map(asId);
+        const teams = dispatchSplit(playerIds, history);
+        return {
+          kind: playerIds.length === 4 ? "preview" : "waiting",
+          courtIndex: null,
+          courtName: "",
+          playerIds,
+          teamA: teams.teamA,
+          teamB: teams.teamB,
+          reservedAt: "",
+          matchQuality: null,
+        };
+      });
+    }
 
     return [...ready, ...previews].map((slot, index) => ({
       ...slot,
@@ -1757,6 +1899,7 @@
           ${dispatchTeamMarkup("Team 1", slot.teamA)}
           ${dispatchTeamMarkup("Team 2", slot.teamB)}
         </div>
+        ${matchQualityMarkup(slot.matchQuality, true)}
         <footer class="pm2-dispatch-footer">
           <span class="pm2-dispatch-detail">${escapeHtml(detail)}</span>
           ${ready ? `
@@ -1865,12 +2008,26 @@
       throw new Error("The Open Play ranking engine did not load.");
     }
     const activeIds = new Set(activePlayers().map(player => asId(player.id)));
-    return PERFORMANCE
+    const rows = PERFORMANCE
       .calculateStandings(state.players, matches, {
         minGames: PERFORMANCE.MIN_PODIUM_GAMES,
         mode: sessionRankingMode(),
       })
       .filter(row => activeIds.has(asId(row.id)) || row.games > 0);
+    const eligibleRankCounts = new Map();
+    rows.forEach(row => {
+      if (!row.eligible || !row.rank) return;
+      const rankKey = String(row.rank);
+      eligibleRankCounts.set(rankKey, (eligibleRankCounts.get(rankKey) || 0) + 1);
+    });
+    return rows.map(row => ({
+      ...row,
+      sharedRank: Boolean(
+        row.eligible &&
+        row.rank &&
+        eligibleRankCounts.get(String(row.rank)) > 1
+      ),
+    }));
   }
 
   function standingsMarkup(rows) {
@@ -1951,7 +2108,9 @@
     if (!remaining.length) {
       return `<div class="pm2-empty pm2-final-empty">The podium contains the full leaderboard.</div>`;
     }
+    const hasSharedRanks = remaining.some(row => row.sharedRank);
     return `
+      ${hasSharedRanks ? `<p class="pm2-rank-legend"><strong>T</strong> means players share the same competitive rank.</p>` : ""}
       <div
         class="pm2-final-list pm2-scroll-region"
         data-pm-scroll-key="final-standings"
@@ -2368,7 +2527,7 @@
     return {
       date: element?.querySelector("#pm2Date")?.value || localDateValue(),
       timeLabel: element?.querySelector("#pm2Time")?.value.trim() || "Open Play",
-      mode: element?.querySelector('input[name="mode"]:checked')?.value || "smart_random_mixer",
+      mode: element?.querySelector('input[name="mode"]:checked')?.value || ADAPTIVE_COMPETITIVE_MODE,
       rankingMode: normalizeRankingMode(
         element?.querySelector('input[name="rankingMode"]:checked')?.value
       ),
@@ -2937,6 +3096,45 @@
         return leftOrder - rightOrder || left.courtIndex - right.courtIndex;
       });
 
+    if (
+      typeof isAdaptiveCompetitiveRotation === "function" &&
+      isAdaptiveCompetitiveRotation() &&
+      openCourts.length &&
+      queueSnapshot.length >= 4
+    ) {
+      const availableCourtCount = Math.min(openCourts.length, Math.floor(queueSnapshot.length / 4));
+      const availableCourts = openCourts.slice(0, availableCourtCount);
+      const generated = adaptiveRotationAssignments(
+        queueSnapshot,
+        availableCourts.map(({ game, courtIndex }) => asId(game.courtId || `court-${courtIndex + 1}`))
+      );
+      const selectedIds = new Set();
+      generated.assignments.forEach((match, matchIndex) => {
+        const target = availableCourts[matchIndex];
+        if (!target) return;
+        const nextIds = [...match.teamA, ...match.teamB].map(asId);
+        nextIds.forEach(id => selectedIds.add(id));
+        nextAssignments[target.courtIndex] = {
+          ...target.game,
+          readyMatch: {
+            matchId: createMatchId(),
+            teamA: match.teamA.map(asId),
+            teamB: match.teamB.map(asId),
+            queueOrder: queueSnapshot.filter(id => nextIds.includes(asId(id))),
+            reservedAt: target.game.resultAt || reservedAt,
+            matchQuality: match.matchQuality || null,
+          },
+        };
+        newlyReady.push({
+          courtIndex: target.courtIndex,
+          courtName: target.game.courtName || `Court ${target.courtIndex + 1}`,
+          playerIds: nextIds,
+        });
+      });
+      queueSnapshot = queueSnapshot.filter(id => !selectedIds.has(asId(id)));
+      return { assignments: nextAssignments, queueSnapshot, newlyReady };
+    }
+
     openCourts.forEach(({ game, courtIndex }) => {
       if (queueSnapshot.length < 4) return;
       const nextIds = queueSnapshot.slice(0, 4);
@@ -3151,6 +3349,7 @@
       teamB: (readyMatch.teamB || []).map(asId),
       startedAt,
       matchId: readyMatch.matchId || createMatchId(),
+      ...(readyMatch.matchQuality ? { matchQuality: readyMatch.matchQuality } : {}),
       completedGames: [...completedGames, finishedResult],
     };
     const assignments = liveAssignments(round).map((assignment, index) =>
@@ -3650,19 +3849,19 @@
   }
 
   function drawResultStat(context, x, y, width, value, label) {
-    resultCanvasRoundRect(context, x, y, width, 96, 18);
-    context.fillStyle = "rgba(255,255,255,.075)";
+    resultCanvasRoundRect(context, x, y, width, 94, 18);
+    context.fillStyle = "rgba(255,255,255,.07)";
     context.fill();
-    context.strokeStyle = "rgba(255,255,255,.12)";
-    context.lineWidth = 2;
+    context.strokeStyle = "rgba(255,255,255,.14)";
+    context.lineWidth = 1.5;
     context.stroke();
     context.textAlign = "left";
     context.fillStyle = "#ffffff";
-    context.font = '900 36px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(String(value), x + 18, y + 41);
-    context.fillStyle = "#9fb0c4";
-    context.font = '800 18px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(String(label).toUpperCase(), x + 18, y + 73);
+    context.font = '950 34px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(String(value), x + 20, y + 42);
+    context.fillStyle = "#9eacc0";
+    context.font = '850 16px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(String(label).toUpperCase(), x + 20, y + 73);
   }
 
   function drawResultPodiumCard(context, row, rank, x, y, width, height) {
@@ -3763,6 +3962,111 @@
     context.restore();
   }
 
+  function drawModernResultPodiumCard(context, row, rank, x, y, width, height) {
+    if (!row) return;
+    const display = standingDisplay(row);
+    const decider = requiresPodiumDecider(row);
+    const accent = decider ? "#e7a11a" : rank === 1 ? "#d5a900" : rank === 2 ? "#8e9caf" : "#b76b3b";
+    const rankFill = decider ? "#fff1c2" : rank === 1 ? "#f7d85f" : rank === 2 ? "#d9e0e9" : "#d79668";
+    const place = decider ? "PODIUM DECIDER" : rank === 1 ? "CHAMPION" : rank === 2 ? "RUNNER-UP" : "THIRD PLACE";
+    const medalText = decider ? "#9a6700" : rank === 1 ? "#987500" : rank === 2 ? "#59687b" : "#95552f";
+    const avatarStart = decider ? "#d18a0b" : rank === 1 ? "#b88a00" : rank === 2 ? "#66758a" : "#96542e";
+    const avatarEnd = decider ? "#f4bd42" : rank === 1 ? "#f0c92d" : rank === 2 ? "#aab5c3" : "#d28a5c";
+
+    context.save();
+    context.shadowColor = "rgba(15,23,42,.08)";
+    context.shadowBlur = 22;
+    context.shadowOffsetY = 10;
+    resultCanvasRoundRect(context, x, y, width, height, 22);
+    context.fillStyle = rank === 1 ? "#fffdf5" : "#ffffff";
+    context.fill();
+    context.shadowColor = "transparent";
+    context.strokeStyle = accent;
+    context.lineWidth = 2;
+    context.stroke();
+
+    context.save();
+    resultCanvasRoundRect(context, x, y, width, height, 22);
+    context.clip();
+    context.fillStyle = accent;
+    context.fillRect(x, y, width, 8);
+    context.restore();
+
+    if (decider) {
+      resultCanvasRoundRect(context, x + 22, y + 24, 72, 44, 22);
+    } else {
+      context.beginPath();
+      context.arc(x + 44, y + 46, 22, 0, Math.PI * 2);
+    }
+    context.fillStyle = rankFill;
+    context.fill();
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = decider || rank === 1 ? "#493800" : "#273244";
+    context.font = `950 ${decider ? 15 : 19}px "DM Sans", "Segoe UI", sans-serif`;
+    context.fillText(String(standingRankLabel(row)), decider ? x + 58 : x + 44, y + 47);
+
+    context.textAlign = "left";
+    context.textBaseline = "alphabetic";
+    context.fillStyle = "#758297";
+    context.font = '900 16px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(place, x + 78, y + 52);
+
+    const avatarRadius = 38;
+    const heightAdjustment = Math.max(0, height - 300);
+    const avatarY = y + 105 + heightAdjustment * .25;
+    const nameY = y + 170 + heightAdjustment * .45;
+    const scoreY = y + 229 + heightAdjustment * .65;
+    const avatarGradient = context.createLinearGradient(
+      x + width / 2 - avatarRadius,
+      avatarY - avatarRadius,
+      x + width / 2 + avatarRadius,
+      avatarY + avatarRadius
+    );
+    avatarGradient.addColorStop(0, avatarStart);
+    avatarGradient.addColorStop(1, avatarEnd);
+    context.beginPath();
+    context.arc(x + width / 2, avatarY, avatarRadius, 0, Math.PI * 2);
+    context.fillStyle = avatarGradient;
+    context.fill();
+    context.strokeStyle = "#ffffff";
+    context.lineWidth = 5;
+    context.stroke();
+    context.fillStyle = "#ffffff";
+    context.font = '900 26px "DM Sans", "Segoe UI", sans-serif';
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(playerInitials(row.name), x + width / 2, avatarY + 1);
+
+    context.textBaseline = "alphabetic";
+    context.fillStyle = "#172033";
+    context.font = '950 31px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(resultCanvasFitText(context, row.name, width - 42), x + width / 2, nameY);
+
+    const scoreFontSize = 46;
+    context.font = `950 ${scoreFontSize}px "DM Sans", "Segoe UI", sans-serif`;
+    const pointsText = display.score;
+    const pointsWidth = context.measureText(pointsText).width;
+    context.font = '800 18px "DM Sans", "Segoe UI", sans-serif';
+    const pointsLabel = display.label.toLowerCase();
+    const pointsLabelWidth = context.measureText(pointsLabel).width;
+    const scoreStart = x + (width - pointsWidth - pointsLabelWidth - 11) / 2;
+    context.textAlign = "left";
+    context.fillStyle = medalText;
+    context.font = `950 ${scoreFontSize}px "DM Sans", "Segoe UI", sans-serif`;
+    context.fillText(pointsText, scoreStart, scoreY);
+    context.fillStyle = "#7b8798";
+    context.font = '800 18px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(pointsLabel, scoreStart + pointsWidth + 11, scoreY - 2);
+
+    context.textAlign = "center";
+    context.fillStyle = medalText;
+    context.font = '900 24px "DM Sans", "Segoe UI", sans-serif';
+    const podiumMeta = `${row.games} ${row.games === 1 ? "game" : "games"} • ${display.meta}`;
+    context.fillText(resultCanvasFitText(context, podiumMeta, width - 36), x + width / 2, y + height - 26);
+    context.restore();
+  }
+
   async function downloadBrandedResult() {
     if (String(state.session?.status || "") !== "completed") {
       throw new Error("End the session before downloading the final result.");
@@ -3785,11 +4089,11 @@
     ];
     const remaining = displayedStandings.filter(row => !featuredPodiumIds.has(asId(row.id)));
     const canvasWidth = 1440;
-    const listTop = 964;
-    const rowHeight = 90;
-    const footerHeight = 96;
+    const listTop = 986;
+    const rowHeight = 82;
+    const footerHeight = 110;
     const listHeight = remaining.length ? remaining.length * rowHeight : 104;
-    const canvasHeight = Math.max(1480, listTop + listHeight + footerHeight + 48);
+    const canvasHeight = Math.max(1490, listTop + listHeight + footerHeight + 42);
     const canvas = document.createElement("canvas");
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
@@ -3799,65 +4103,87 @@
     context.fillStyle = "#f1f3f6";
     context.fillRect(0, 0, canvasWidth, canvasHeight);
 
-    const headerGradient = context.createLinearGradient(0, 0, canvasWidth, 420);
-    headerGradient.addColorStop(0, "#0d1728");
-    headerGradient.addColorStop(.62, "#152238");
+    const headerGradient = context.createLinearGradient(0, 0, canvasWidth, 360);
+    headerGradient.addColorStop(0, "#0c1728");
+    headerGradient.addColorStop(.66, "#14233a");
     headerGradient.addColorStop(1, "#10302d");
     context.fillStyle = headerGradient;
-    context.fillRect(0, 0, canvasWidth, 420);
+    context.fillRect(0, 0, canvasWidth, 360);
 
     context.beginPath();
-    context.arc(1320, 20, 210, 0, Math.PI * 2);
-    context.strokeStyle = "rgba(201,243,29,.12)";
-    context.lineWidth = 48;
+    context.arc(1360, -30, 190, 0, Math.PI * 2);
+    context.strokeStyle = "rgba(201,243,29,.10)";
+    context.lineWidth = 38;
     context.stroke();
 
     const logo = await loadResultBrandLogo();
     if (logo) {
-      context.drawImage(logo, 70, 46, 112, 112);
+      context.drawImage(logo, 64, 28, 112, 112);
     } else {
       context.beginPath();
-      context.arc(126, 102, 52, 0, Math.PI * 2);
+      context.arc(120, 84, 52, 0, Math.PI * 2);
       context.fillStyle = "#c9f31d";
       context.fill();
       context.textAlign = "center";
       context.textBaseline = "middle";
       context.fillStyle = "#111827";
-      context.font = '950 24px "DM Sans", "Segoe UI", sans-serif';
-      context.fillText("PR", 126, 103);
+      context.font = '950 25px "DM Sans", "Segoe UI", sans-serif';
+      context.fillText("PR", 120, 85);
     }
 
     context.textAlign = "left";
     context.textBaseline = "alphabetic";
     context.fillStyle = "#ffffff";
-    context.font = '950 31px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("PADDLE RAGE PICKLEBALL", 205, 91);
+    context.font = '950 34px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("PADDLE RAGE PICKLEBALL", 198, 78);
     context.fillStyle = "#c9f31d";
-    context.font = '900 20px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("OFFICIAL OPEN PLAY RESULTS", 207, 124);
+    context.font = '900 19px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("OFFICIAL OPEN PLAY RESULTS", 199, 109);
 
-    drawResultStat(context, 850, 54, 150, matches.length, "Matches");
-    drawResultStat(context, 1018, 54, 150, standings.length, "Players");
-    drawResultStat(context, 1186, 54, 184, averageGameDuration(), "Avg. game");
+    drawResultStat(context, 856, 28, 160, matches.length, "Matches");
+    drawResultStat(context, 1024, 28, 160, standings.length, "Players");
+    drawResultStat(context, 1192, 28, 160, averageGameDuration(), "Avg. game");
 
-    context.fillStyle = "#ffffff";
-    context.font = '950 64px "DM Sans", "Segoe UI", sans-serif';
+    context.beginPath();
+    context.moveTo(64, 143);
+    context.lineTo(1376, 143);
+    context.strokeStyle = "rgba(255,255,255,.10)";
+    context.lineWidth = 1;
+    context.stroke();
+
+    resultCanvasRoundRect(context, 72, 164, 276, 34, 17);
+    context.fillStyle = "rgba(201,243,29,.12)";
+    context.fill();
+    context.fillStyle = "#dfff73";
+    context.font = '900 15px "DM Sans", "Segoe UI", sans-serif';
     context.fillText(
       isCompetitiveMode()
-        ? "SESSION COMPETITIVE PODIUM"
+        ? "COMPETITIVE SESSION RESULTS"
         : isWinPercentageMode()
-          ? "SESSION WIN % PODIUM"
-          : "SESSION PERFORMANCE PODIUM",
-      70,
-      241
+          ? "WIN PERCENTAGE SESSION RESULTS"
+          : "PERFORMANCE SESSION RESULTS",
+      90,
+      187
+    );
+
+    context.fillStyle = "#ffffff";
+    context.font = '950 52px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(
+      isCompetitiveMode()
+        ? "Competitive Open Play"
+        : isWinPercentageMode()
+          ? "Win Percentage Open Play"
+          : "Performance Open Play",
+      72,
+      252
     );
     context.fillStyle = "#b8c4d5";
-    context.font = '700 27px "DM Sans", "Segoe UI", sans-serif';
+    context.font = '700 23px "DM Sans", "Segoe UI", sans-serif';
     resultCanvasWrapText(context, sessionTitle(), 1250, 2).forEach((line, index) => {
-      context.fillText(line, 72, 294 + index * 34);
+      context.fillText(line, 72, 292 + index * 30);
     });
-    context.fillStyle = "#dfff73";
-    context.font = '850 24px "DM Sans", "Segoe UI", sans-serif';
+    context.fillStyle = "#aab8ca";
+    context.font = '800 17px "DM Sans", "Segoe UI", sans-serif';
     context.fillText(
       isCompetitiveMode()
         ? "Exact Elo • Win % • Wins • Head-to-head • Opponent strength • Best upset"
@@ -3865,98 +4191,117 @@
           ? "Individual Win Percentage • Every win counts equally"
           : "Individual Session Points • Opponent strength matters",
       72,
-      382
+      333
     );
 
     context.fillStyle = "#172033";
-    context.font = '950 34px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(hasPodiumDecider ? "PODIUM DECIDER REQUIRED" : "PODIUM LEADERS", 72, 450);
+    context.font = '950 30px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(hasPodiumDecider ? "Podium decider required" : "Podium leaders", 72, 416);
     context.fillStyle = "#718096";
-    context.font = '750 21px "DM Sans", "Segoe UI", sans-serif';
+    context.font = '750 18px "DM Sans", "Segoe UI", sans-serif';
     context.fillText(
       hasPodiumDecider ? "Official places remain TBD until one separating result is recorded." : "Paddle Rage podium",
       72,
-      480
+      447
     );
 
-    drawResultPodiumCard(context, featuredPodium[1], featuredPodium[1]?.rank || 2, 72, 560, 400, 300);
-    drawResultPodiumCard(context, featuredPodium[0], featuredPodium[0]?.rank || 1, 520, 510, 400, 350);
-    drawResultPodiumCard(context, featuredPodium[2], featuredPodium[2]?.rank || 3, 968, 560, 400, 300);
+    drawModernResultPodiumCard(context, featuredPodium[1], featuredPodium[1]?.rank || 2, 72, 506, 408, 340);
+    drawModernResultPodiumCard(context, featuredPodium[0], featuredPodium[0]?.rank || 1, 516, 466, 408, 380);
+    drawModernResultPodiumCard(context, featuredPodium[2], featuredPodium[2]?.rank || 3, 960, 546, 408, 300);
 
     context.fillStyle = "#172033";
-    context.font = '950 34px "DM Sans", "Segoe UI", sans-serif';
+    context.font = '950 30px "DM Sans", "Segoe UI", sans-serif';
     const leaderboardTitle = displayedStandings.length > 10
       ? "TOP 10 + PODIUM TIES"
       : `TOP ${displayedStandings.length} LEADERBOARD`;
-    context.fillText(leaderboardTitle, 72, 900);
+    const modernLeaderboardTitle = leaderboardTitle
+      .replace("TOP", "Top")
+      .replace("LEADERBOARD", "leaderboard")
+      .replace("PODIUM TIES", "podium ties");
+    context.fillText(modernLeaderboardTitle, 72, 906);
     context.textAlign = "right";
     context.fillStyle = "#718096";
-    context.font = '750 21px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(`Showing ${displayedStandings.length} of ${standings.length} players`, 1368, 900);
+    context.font = '750 18px "DM Sans", "Segoe UI", sans-serif';
+    const resultCountLabel = `Showing ${displayedStandings.length} of ${standings.length} players`;
+    const hasSharedRanks = displayedStandings.some(row => row.sharedRank);
+    context.fillText(
+      hasSharedRanks ? `${resultCountLabel} • T = tied rank` : resultCountLabel,
+      1368,
+      906
+    );
     context.textAlign = "left";
     context.fillStyle = "#718096";
-    context.font = '800 20px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("RANK", 86, 950);
-    context.fillText("PLAYER", 180, 950);
+    context.font = '800 16px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("RANK", 90, 962);
+    context.fillText("PLAYER", 190, 962);
     context.textAlign = "right";
-    context.fillText(scoring.summary.toUpperCase(), 1354, 950);
+    context.fillText(scoring.summary.toUpperCase(), 1350, 962);
 
     if (!remaining.length) {
-      resultCanvasRoundRect(context, 72, listTop, 1296, 86, 18);
+      resultCanvasRoundRect(context, 72, listTop, 1296, 74, 14);
       context.fillStyle = "#ffffff";
       context.fill();
       context.textAlign = "center";
       context.fillStyle = "#718096";
-      context.font = '750 24px "DM Sans", "Segoe UI", sans-serif';
-      context.fillText("The podium contains the full leaderboard.", 720, listTop + 59);
+      context.font = '750 21px "DM Sans", "Segoe UI", sans-serif';
+      context.fillText("The podium contains the full leaderboard.", 720, listTop + 49);
     } else {
       remaining.forEach((row, index) => {
         const rank = standingRankLabel(row);
         const display = standingDisplay(row);
         const y = listTop + index * rowHeight;
-        resultCanvasRoundRect(context, 72, y, 1296, 80, 14);
-        context.fillStyle = index % 2 ? "#f8fafc" : "#ffffff";
+        resultCanvasRoundRect(context, 72, y, 1296, 72, 13);
+        context.fillStyle = "#ffffff";
         context.fill();
-        context.strokeStyle = "#e1e6ec";
-        context.lineWidth = 2;
+        context.strokeStyle = "#dde4ec";
+        context.lineWidth = 1.5;
         context.stroke();
 
         context.textAlign = "center";
-        context.fillStyle = "#516071";
+        resultCanvasRoundRect(context, 88, y + 14, 48, 44, 12);
+        context.fillStyle = "#eef2f6";
+        context.fill();
+        context.fillStyle = "#46556a";
         const rankText = String(rank);
-        context.font = `950 ${rankText.length > 2 ? 22 : 32}px "DM Sans", "Segoe UI", sans-serif`;
-        context.fillText(rankText, 112, y + 53);
+        context.font = `950 ${rankText.length > 2 ? 18 : 24}px "DM Sans", "Segoe UI", sans-serif`;
+        context.fillText(rankText, 112, y + 45);
 
         context.beginPath();
-        context.arc(162, y + 42, 24, 0, Math.PI * 2);
+        context.arc(166, y + 36, 22, 0, Math.PI * 2);
         context.fillStyle = "#334155";
         context.fill();
         context.fillStyle = "#ffffff";
-        context.font = '900 15px "DM Sans", "Segoe UI", sans-serif';
+        context.font = '900 13px "DM Sans", "Segoe UI", sans-serif';
         context.textBaseline = "middle";
-        context.fillText(playerInitials(row.name), 162, y + 43);
+        context.fillText(playerInitials(row.name), 166, y + 37);
 
         context.textAlign = "left";
         context.textBaseline = "alphabetic";
         context.fillStyle = "#253044";
-        context.font = '900 32px "DM Sans", "Segoe UI", sans-serif';
-        context.fillText(resultCanvasFitText(context, row.name, 760), 200, y + 38);
+        context.font = '900 27px "DM Sans", "Segoe UI", sans-serif';
+        context.fillText(resultCanvasFitText(context, row.name, 760), 202, y + 32);
         context.fillStyle = "#8490a0";
-        context.font = '750 22px "DM Sans", "Segoe UI", sans-serif';
-        context.fillText(`${row.games} ${row.games === 1 ? "game" : "games"} played`, 200, y + 68);
+        context.font = '750 17px "DM Sans", "Segoe UI", sans-serif';
+        context.fillText(`${row.games} ${row.games === 1 ? "game" : "games"} played`, 202, y + 57);
 
         context.textAlign = "right";
-        context.fillStyle = "#087f73";
-        context.font = '950 32px "DM Sans", "Segoe UI", sans-serif';
-        context.fillText(display.compactScore, 1350, y + 38);
+        context.fillStyle = display.tone === "is-negative"
+          ? "#b53b4c"
+          : display.tone === "is-neutral"
+            ? "#46556a"
+            : "#087f73";
+        context.font = '950 27px "DM Sans", "Segoe UI", sans-serif';
+        context.fillText(display.compactScore, 1350, y + 32);
         context.fillStyle = "#8490a0";
-        context.font = '750 22px "DM Sans", "Segoe UI", sans-serif';
+        context.font = '750 17px "DM Sans", "Segoe UI", sans-serif';
         const rowStatus = requiresPodiumDecider(row)
           ? "DECIDER REQUIRED"
-          : row.eligible
+          : row.sharedRank
+            ? "TIED RANK"
+            : row.eligible
             ? "Qualified"
             : "Provisional";
-        context.fillText(`${rowStatus} • ${display.meta}`, 1350, y + 68);
+        context.fillText(`${rowStatus} • ${display.meta}`, 1350, y + 57);
       });
     }
 
@@ -3965,37 +4310,37 @@
     context.fillRect(0, footerY, canvasWidth, footerHeight);
     context.textAlign = "left";
     context.fillStyle = "#c9f31d";
-    context.font = '900 22px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText("PADDLE RAGE PICKLEBALL", 72, footerY + 40);
+    context.font = '950 24px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText("PADDLE RAGE PICKLEBALL", 72, footerY + 43);
     context.fillStyle = "#91a0b4";
-    context.font = '700 20px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(hasPodiumDecider ? "Podium pending • Decider required" : "Official session result", 72, footerY + 68);
+    context.font = '750 19px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(hasPodiumDecider ? "Podium pending • Decider required" : "Official session result", 72, footerY + 76);
     const poweredLabel = "Powered by ";
     const poweredBrand = "Paddle Rage Pickleball CDO";
-    context.font = '700 18px "DM Sans", "Segoe UI", sans-serif';
+    context.font = '750 20px "DM Sans", "Segoe UI", sans-serif';
     const poweredLabelWidth = context.measureText(poweredLabel).width;
-    context.font = '850 18px "DM Sans", "Segoe UI", sans-serif';
+    context.font = '900 20px "DM Sans", "Segoe UI", sans-serif';
     const poweredBrandWidth = context.measureText(poweredBrand).width;
     let poweredX = (canvasWidth - poweredLabelWidth - poweredBrandWidth) / 2;
     context.textAlign = "left";
     context.fillStyle = "#91a0b4";
-    context.font = '700 18px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(poweredLabel, poweredX, footerY + 56);
+    context.font = '750 20px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(poweredLabel, poweredX, footerY + 62);
     poweredX += poweredLabelWidth;
     context.fillStyle = "#c9f31d";
-    context.font = '850 18px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(poweredBrand, poweredX, footerY + 56);
+    context.font = '900 20px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(poweredBrand, poweredX, footerY + 62);
     context.textAlign = "right";
     context.fillStyle = "#91a0b4";
-    context.font = '700 20px "DM Sans", "Segoe UI", sans-serif';
-    context.fillText(formatDate(state.session?.date || localDateValue()), 1368, footerY + 54);
+    context.font = '750 20px "DM Sans", "Segoe UI", sans-serif';
+    context.fillText(formatDate(state.session?.date || localDateValue()), 1368, footerY + 62);
 
     const resultBlob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
     if (!resultBlob) throw new Error("The result image could not be prepared.");
     const resultUrl = URL.createObjectURL(resultBlob);
     const link = document.createElement("a");
     link.href = resultUrl;
-    link.download = `paddle-rage-results-${state.session?.date || localDateValue()}.png`;
+    link.download = `paddle-rage-open-play-results-${state.session?.date || localDateValue()}.png`;
     document.body.appendChild(link);
     link.click();
     link.remove();
