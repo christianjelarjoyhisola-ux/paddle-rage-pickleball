@@ -9,7 +9,7 @@ const client = read('supabase-config.js');
 const edge = read('supabase/functions/verify-gcash-receipt/index.ts');
 const admin = read('admin.html');
 
-test('court receipt must finish its consent-gated upload before Continue', () => {
+test('court receipt starts uploading immediately and must finish before Continue', () => {
   const picker = page.slice(
     page.indexOf('function onReceiptPicked'),
     page.indexOf('function clearReceipt'),
@@ -20,15 +20,15 @@ test('court receipt must finish its consent-gated upload before Continue', () =>
   );
 
   assert.match(picker, /beginAutomaticReceiptUpload\(f\)/);
-  assert.match(automaticUpload, /bookingPolicyAgree[\s\S]*?checked/);
-  assert.ok(
-    automaticUpload.indexOf('bookingPolicyAgree') < automaticUpload.indexOf('DB.stageBookingReceipt'),
-    'affirmative payment-policy consent must be checked before upload starts',
-  );
+  assert.doesNotMatch(automaticUpload, /bookingPolicyAgree/);
+  assert.match(page, /Tap to attach — uploads automatically/);
   assert.match(page, /button\.disabled = locked/);
-  assert.match(page, /\['waiting_consent', 'uploading', 'failed'\]\.includes\(kind\)/);
+  assert.match(page, /\['uploading', 'failed'\]\.includes\(kind\)/);
+  assert.match(page, /if \(ready && consentAgreed\) button\.disabled = false/);
+  assert.match(page, /Agree Below to Continue/);
   assert.match(page, /Continue — Verify Payment/);
   assert.match(page, /Upload complete\. Continue to verify your payment/);
+  assert.match(page, /!\$\('bookingPolicyAgree'\)\?\.checked[\s\S]*?Please agree to the booking and payment policy/);
   assert.match(
     automaticUpload,
     /const stale(?:BeforeUpload)? = sequence !== _receiptUploadSequence \|\|[\s\S]*?file !== _receiptFile \|\|[\s\S]*?bookingRef !== _reservedRef \|\|[\s\S]*?paymentMethod !==/,
@@ -179,7 +179,12 @@ test('court CTA serializes discard, replacement upload, and uncertain-result rec
     'replacement upload must wait for the prior exact-path discard',
   );
   assert.match(page, /function pickPay\(m\)[\s\S]*?previousMethod !== m[\s\S]*?invalidateBookingReceiptUpload\(\{ discard: true \}\)/);
-  assert.match(page, /policy\.checked[\s\S]*?else if \(_receiptFile[\s\S]*?invalidateBookingReceiptUpload\(\{ discard: true \}\)/);
+  const policyListener = page.slice(
+    page.indexOf("const policy = $('bookingPolicyAgree');"),
+    page.indexOf('function wizGoTo', page.indexOf("const policy = $('bookingPolicyAgree');")),
+  );
+  assert.match(policyListener, /setBookingReceiptContinueState\(_receiptUploadState\?\.status \|\| 'idle'\)/);
+  assert.doesNotMatch(policyListener, /invalidateBookingReceiptUpload/);
   assert.match(clearing, /_bookingSubmissionInFlight && !options\.force/);
   assert.match(clearing, /invalidateBookingReceiptUpload\(\{ discard: options\.discard !== false \}\)/);
   assert.match(submit, /Object\.freeze\(\{[\s\S]*?bookingRef: _reservedRef[\s\S]*?paymentMethod: payMethod[\s\S]*?stagedReceiptPath/);

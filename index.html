@@ -3245,7 +3245,7 @@ try {
                 </label>
                 <label id="bReceiptDrop" class="bpay-receipt-drop"
                   onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-                  📷 Tap to attach your receipt screenshot
+                  📷 Tap to attach — uploads automatically
                   <input type="file" accept="image/jpeg,image/png,image/webp" id="bReceiptImg" style="display:none" onchange="onReceiptPicked(event)" />
                 </label>
                 <div id="bReceiptPreviewWrap" class="bpay-receipt-preview">
@@ -3255,6 +3255,7 @@ try {
                 </div>
                 <div id="bReceiptStatus" role="status" aria-live="polite" style="display:none;margin-top:8px;font-size:.78rem;font-weight:700;border-radius:8px;padding:8px 10px;line-height:1.5"></div>
                 <div id="bReceiptRequired" class="bpay-help">
+                  Selecting a receipt starts its secure upload for payment verification.<br>
                   GCash to GCash only.<br>BDO Pay/InstaPay receipts will be rejected.<br>Please choose the correct payment method before paying.
                 </div>
               </div>
@@ -5999,23 +6000,10 @@ function initBookingValidationHighlights() {
       }
       if (policy.checked) {
         clearBookingInvalid(policy.closest('.booking-policy-check'));
-        if (_receiptFile && !bookingReceiptUploadReady(_receiptFile, _reservedRef, $('bPay')?.value || '')) {
-          beginAutomaticReceiptUpload(_receiptFile);
-        }
-      } else if (_receiptFile && isDigitalPayMethod($('bPay')?.value || '')) {
-        invalidateBookingReceiptUpload({ discard: true });
-        _receiptUploadState = {
-          file: _receiptFile,
-          bookingRef: _reservedRef,
-          paymentMethod: $('bPay')?.value || '',
-          status: 'waiting_consent',
-        };
-        setBookingReceiptUploadMessage(
-          'waiting_consent',
-          'Agree to the booking and payment policy below to securely upload this receipt.',
-        );
-        setBookingReceiptContinueState('waiting_consent');
       }
+      // File selection stages the private receipt immediately. This agreement
+      // gates OCR verification and final booking submission, not the upload.
+      setBookingReceiptContinueState(_receiptUploadState?.status || 'idle');
     });
   }
 }
@@ -7595,7 +7583,6 @@ function setBookingReceiptUploadMessage(kind, message) {
   const status = $('bReceiptStatus');
   if (!status) return;
   const styles = {
-    waiting_consent: ['rgba(184,126,0,.12)', '#b87e00'],
     uploading: ['rgba(74,154,220,.1)', '#4b5563'],
     uploaded: ['rgba(var(--ac),.12)', 'var(--accent)'],
     failed: ['rgba(229,57,53,.1)', '#e53935'],
@@ -7624,13 +7611,11 @@ function bookingReceiptUploadReady(
   file = _receiptFile,
   bookingRef = _reservedRef,
   paymentMethod = $('bPay')?.value || '',
-  consentAgreed = !!$('bookingPolicyAgree')?.checked,
 ) {
   return !!(
     file &&
     bookingRef &&
     isDigitalPayMethod(paymentMethod) &&
-    consentAgreed &&
     _receiptUploadState?.file === file &&
     _receiptUploadState?.bookingRef === bookingRef &&
     _receiptUploadState?.paymentMethod === paymentMethod &&
@@ -7691,36 +7676,34 @@ function setBookingReceiptContinueState(kind = 'idle') {
   const paymentMethod = $('bPay')?.value || '';
   const consentAgreed = !!$('bookingPolicyAgree')?.checked;
   const contextMatches = receiptUploadStateMatchesCurrentContext(_receiptUploadState);
-  const ready = bookingReceiptUploadReady(file, bookingRef, paymentMethod, consentAgreed);
-  const retryableFailure = contextMatches && _receiptUploadState?.status === 'failed' && consentAgreed;
-  const locked = ['waiting_consent', 'uploading', 'failed'].includes(kind);
+  const ready = bookingReceiptUploadReady(file, bookingRef, paymentMethod);
+  const retryableFailure = contextMatches && _receiptUploadState?.status === 'failed';
+  const locked = ['uploading', 'failed'].includes(kind);
   button.disabled = locked;
   if (retryableFailure) button.disabled = false;
-  if (ready) button.disabled = false;
+  if (ready && consentAgreed) button.disabled = false;
   if (!file) {
     button.disabled = true;
     button.textContent = 'Attach Receipt to Continue';
   } else if (!bookingRef) {
     button.disabled = true;
     button.textContent = 'Preparing Secure Upload...';
-  } else if (!consentAgreed) {
+  } else if (contextMatches && _receiptUploadState?.status === 'uploading') {
     button.disabled = true;
-    button.textContent = 'Agree Below to Upload';
+    button.textContent = 'Uploading receipt...';
   } else if (retryableFailure) {
     button.textContent = 'Retry Receipt Upload';
+  } else if (ready && !consentAgreed) {
+    button.disabled = true;
+    button.textContent = 'Agree Below to Continue';
   } else if (ready) {
     button.textContent = _receiptFinalRetryNeeded
       ? 'Retry — Verify Payment'
       : 'Continue — Verify Payment';
-  } else if (contextMatches && _receiptUploadState?.status === 'uploading') {
-    button.disabled = true;
-    button.textContent = 'Uploading receipt...';
   } else {
     button.disabled = true;
-    button.textContent = kind === 'waiting_consent'
-      ? 'Agree Below to Upload'
-      : kind === 'uploading'
-    ? 'Uploading receipt...'
+    button.textContent = kind === 'uploading'
+      ? 'Uploading receipt...'
       : 'Waiting for Secure Upload';
   }
 }
@@ -7734,15 +7717,6 @@ function beginAutomaticReceiptUpload(file = _receiptFile) {
   }
   if (!file || !isDigitalPayMethod(paymentMethod)) {
     setBookingReceiptContinueState('idle');
-    return Promise.resolve(null);
-  }
-  if (!$('bookingPolicyAgree')?.checked) {
-    _receiptUploadState = { file, bookingRef, paymentMethod, status: 'waiting_consent' };
-    setBookingReceiptUploadMessage(
-      'waiting_consent',
-      'Agree to the booking and payment policy below to securely upload this receipt.',
-    );
-    setBookingReceiptContinueState('waiting_consent');
     return Promise.resolve(null);
   }
   if (
@@ -7771,8 +7745,7 @@ function beginAutomaticReceiptUpload(file = _receiptFile) {
     const staleBeforeUpload = sequence !== _receiptUploadSequence ||
       file !== _receiptFile ||
       bookingRef !== _reservedRef ||
-      paymentMethod !== ($('bPay')?.value || '') ||
-      !$('bookingPolicyAgree')?.checked;
+      paymentMethod !== ($('bPay')?.value || '');
     if (staleBeforeUpload) return null;
     return DB.stageBookingReceipt({
       bookingRef,
@@ -7784,8 +7757,7 @@ function beginAutomaticReceiptUpload(file = _receiptFile) {
     const stale = sequence !== _receiptUploadSequence ||
       file !== _receiptFile ||
       bookingRef !== _reservedRef ||
-      paymentMethod !== ($('bPay')?.value || '') ||
-      !$('bookingPolicyAgree')?.checked;
+      paymentMethod !== ($('bPay')?.value || '');
     if (stale) {
       // Return the durable result to the serialized invalidation chain. That
       // chain owns deletion and completes before a replacement stage begins.
@@ -7808,8 +7780,7 @@ function beginAutomaticReceiptUpload(file = _receiptFile) {
     const stale = sequence !== _receiptUploadSequence ||
       file !== _receiptFile ||
       bookingRef !== _reservedRef ||
-      paymentMethod !== ($('bPay')?.value || '') ||
-      !$('bookingPolicyAgree')?.checked;
+      paymentMethod !== ($('bPay')?.value || '');
     if (stale) return null;
     _receiptUploadState = {
       sequence,
