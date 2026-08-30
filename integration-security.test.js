@@ -633,6 +633,64 @@ test('booking quick confirm is a dedicated responsive row action using the canon
   );
 });
 
+test('duplicate payment risk survives a lookup narrowed to one booking group', async () => {
+  const admin = read('admin.html');
+  const helpersStart = admin.indexOf('function bookingStartHour');
+  const helpersEnd = admin.indexOf('async function updateBookingGroupByRef', helpersStart);
+  assert.ok(helpersStart >= 0 && helpersEnd > helpersStart, 'missing active booking-group helpers');
+
+  const bookings = [
+    {
+      ref: 'PB-GROUP-A-1', groupRef: 'PB-GROUP-A-G', courtId: 'c1', courtName: 'Court 1',
+      date: '2026-09-01', slots: [8], startTime: '8:00 AM', endTime: '9:00 AM', duration: 1,
+      total: 350, downpayment: 350, paymentMethod: 'gcash', gcashRef: '1234567890123',
+      paymentStatus: 'for_verification', status: 'pending', receiptImageUrl: 'receipts/a.jpg',
+      createdAt: '2026-08-30T01:00:00.000Z',
+    },
+    {
+      ref: 'PB-GROUP-B-1', groupRef: 'PB-GROUP-B-G', courtId: 'c2', courtName: 'Court 2',
+      date: '2026-09-02', slots: [9], startTime: '9:00 AM', endTime: '10:00 AM', duration: 1,
+      total: 350, downpayment: 350, paymentMethod: 'gcash', gcashRef: '1234567890123',
+      paymentStatus: 'for_verification', status: 'pending', receiptImageUrl: 'receipts/b.jpg',
+      createdAt: '2026-08-30T02:00:00.000Z',
+    },
+  ];
+  const DB = {
+    getBookingByRef: async ref => bookings.find(booking => booking.ref === ref) || null,
+    getBookings: async () => bookings,
+  };
+  const model = new Function(
+    'DB',
+    'fmtD',
+    'receivedAccountKey',
+    `${admin.slice(helpersStart, helpersEnd)}\nreturn { groupBookings, getBookingGroupByRef };`,
+  )(DB, value => value, () => 'gcash');
+
+  const allGroups = model.groupBookings(bookings);
+  assert.equal(allGroups.length, 2, 'fixture must remain two independent booking groups');
+  assert.ok(
+    allGroups.every(group => group.duplicatePaymentRef),
+    'the complete booking collection must flag both groups sharing the reference',
+  );
+
+  const filteredGroups = model.groupBookings([bookings[0]], bookings);
+  assert.equal(filteredGroups.length, 1, 'fixture must simulate one visible group');
+  assert.equal(
+    filteredGroups[0].duplicatePaymentRef,
+    true,
+    'filtering the visible rows must not erase duplicate risk from the full booking scope',
+  );
+  assert.equal(filteredGroups[0].duplicatePaymentRefCount, 2);
+
+  const visibleGroup = await model.getBookingGroupByRef('PB-GROUP-A-1');
+  assert.deepEqual(visibleGroup.refs, ['PB-GROUP-A-1'], 'lookup must return only the requested group');
+  assert.equal(
+    visibleGroup.duplicatePaymentRef,
+    true,
+    'duplicate risk must not disappear merely because only one booking group is returned to the caller',
+  );
+});
+
 test('row and verify-modal confirmation reuse one guarded booking transaction', () => {
   const admin = read('admin.html');
   const quickButton = functionSource(admin, 'bookingQuickConfirmButton');

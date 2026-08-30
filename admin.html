@@ -5438,7 +5438,7 @@ function bookingGroupBreakdownHtml(items = []) {
       <strong style="color:var(--text)">${fmt(b.total || 0)}</strong>
     </div>`).join('');
 }
-function groupBookings(bookings = []) {
+function groupBookings(bookings = [], duplicateScope = bookings) {
   const map = new Map();
   bookings.forEach(b => {
     const key = bookingGroupKey(b);
@@ -5505,10 +5505,16 @@ function groupBookings(bookings = []) {
     };
   });
   const refCounts = new Map();
-  groups.forEach(g => {
-    const key = normalizedPaymentRefKey(g);
+  const paymentRefsByGroup = new Map();
+  duplicateScope.forEach(b => {
+    const key = normalizedPaymentRefKey(b);
     if (!key) return;
-    refCounts.set(key, (refCounts.get(key) || 0) + 1);
+    const groupKey = bookingGroupKey(b);
+    if (!paymentRefsByGroup.has(groupKey)) paymentRefsByGroup.set(groupKey, new Set());
+    paymentRefsByGroup.get(groupKey).add(key);
+  });
+  paymentRefsByGroup.forEach(keys => {
+    keys.forEach(key => refCounts.set(key, (refCounts.get(key) || 0) + 1));
   });
   return groups.map(g => {
     const key = normalizedPaymentRefKey(g);
@@ -5524,7 +5530,7 @@ async function getBookingGroupByRef(ref) {
   const first = await DB.getBookingByRef(ref);
   if (!first) return null;
   const all = await DB.getBookings();
-  return groupBookings(all.filter(b => bookingGroupKey(b) === bookingGroupKey(first)))[0] || { ...first, items: [first], refs: [first.ref], primaryRef: first.ref };
+  return groupBookings(all).find(b => b.groupKey === bookingGroupKey(first)) || { ...first, items: [first], refs: [first.ref], primaryRef: first.ref };
 }
 async function updateBookingGroupByRef(ref, updates) {
   const group = await getBookingGroupByRef(ref);
@@ -6593,6 +6599,7 @@ async function renderBookings(){
   // carries the real customer email, so any row still on reserve@hold.internal is
   // just an in-progress or abandoned hold and adds no value to the admin list.
   bks=bks.filter(b=>b.email!=='reserve@hold.internal');
+  const duplicateScopeBookings = bks;
   const allGroups = groupBookings(bks);
   const allCount = allGroups.length;
   const hostCount = allGroups.filter(b => b.hostBooking).length;
@@ -6602,13 +6609,13 @@ async function renderBookings(){
   if ($('bookingCountHost')) $('bookingCountHost').textContent = String(hostCount);
   if (_bookingType === 'host') bks = bks.filter(b => b.hostBooking);
   else if (_bookingType === 'court') bks = bks.filter(b => !b.hostBooking);
-  const totalRawBookings = groupBookings(bks).length;
+  const totalRawBookings = groupBookings(bks, duplicateScopeBookings).length;
   const { q, fd, fs, fp } = bookingFilters();
   if(q) bks=bks.filter(b=>[b.ref,b.groupRef,b.fullName,b.email,b.courtName,b.gcashRef].some(v=>String(v||'').toLowerCase().includes(q)));
   if(fd) bks=bks.filter(b=>b.date===fd);
   if(fs) bks=bks.filter(b=>b.status===fs);
   if(fp) bks=bks.filter(b=>b.paymentStatus===fp);
-  const filteredBookings = groupBookings(bks);
+  const filteredBookings = groupBookings(bks, duplicateScopeBookings);
   const filteredCount = filteredBookings.length;
   updateBookingPagination(filteredCount);
   const pageStart = (_bookingPage - 1) * _bookingPageSize;
