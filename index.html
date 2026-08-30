@@ -2664,7 +2664,7 @@ body.host-mode .courts { padding-bottom:140px; }
 }
 
 </style>
-<link rel="stylesheet" href="brand-theme.css?v=20260830-original-splash-v31">
+<link rel="stylesheet" href="brand-theme.css?v=20260830-book-court-v32">
 </head>
 <body class="dark">
 <script>
@@ -2781,26 +2781,12 @@ try {
       <span class="pr-splash-sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="pr-splash-sound-label">Play music</span>
     </button>
-    <button class="pr-splash-enter" type="button" onclick="event.stopPropagation();openAdvanceBookingNotice()">
-      <span class="pr-splash-enter-label">Book September in Advance</span>
+    <button class="pr-splash-enter" type="button" onclick="event.stopPropagation();enterCourtBooking()">
+      <span class="pr-splash-enter-label">Book a Court</span>
       <span class="pr-splash-enter-arrow" aria-hidden="true">&rarr;</span>
     </button>
   </div>
   <div class="pr-splash-footer">Court booking &nbsp;&middot;&nbsp; Open play &nbsp;&middot;&nbsp; Community</div>
-</div>
-
-<div class="advance-booking-notice" id="advanceBookingNotice" aria-hidden="true" onclick="advanceBookingNoticeBackdrop(event)">
-  <div class="advance-booking-card" role="dialog" aria-modal="true" aria-labelledby="advanceBookingTitle" aria-describedby="advanceBookingCopy">
-    <button class="advance-booking-close" type="button" onclick="closeAdvanceBookingNotice()" aria-label="Close advance booking notice">&times;</button>
-    <div class="advance-booking-kicker">Opening August 2026</div>
-    <h2 class="advance-booking-title" id="advanceBookingTitle">September bookings are open</h2>
-    <p class="advance-booking-copy" id="advanceBookingCopy">We&rsquo;re opening this August, and you can reserve your court in advance for September.</p>
-    <div class="advance-booking-highlight">Choose your preferred date, court, and time slot before the schedule fills up.</div>
-    <div class="advance-booking-actions">
-      <button class="advance-booking-primary" id="viewSeptemberSlotsButton" type="button" onclick="viewSeptemberTimeSlots()">View September Time Slots &rarr;</button>
-      <button class="advance-booking-secondary" type="button" onclick="closeAdvanceBookingNotice()">Maybe Later</button>
-    </div>
-  </div>
 </div>
 
 <!-- NAVBAR -->
@@ -8220,60 +8206,12 @@ function dismissSplash() {
   sp.addEventListener('transitionend', () => { sp.style.display = 'none'; }, { once: true });
 }
 
-const ADVANCE_BOOKING_DATE = '2026-09-01';
-let advanceBookingNoticeFocus = null;
-
-function openAdvanceBookingNotice() {
-  const notice = document.getElementById('advanceBookingNotice');
-  if (!notice) return;
-  advanceBookingNoticeFocus = document.activeElement;
-  stopSplashSound();
-  notice.classList.add('show');
-  notice.setAttribute('aria-hidden', 'false');
-  document.body.style.overflow = 'hidden';
-  requestAnimationFrame(() => document.getElementById('viewSeptemberSlotsButton')?.focus());
-}
-
-function closeAdvanceBookingNotice({ restoreFocus = true } = {}) {
-  const notice = document.getElementById('advanceBookingNotice');
-  if (!notice) return;
-  notice.classList.remove('show');
-  notice.setAttribute('aria-hidden', 'true');
-  if (!splashIsVisible()) document.body.style.overflow = '';
-  if (restoreFocus && advanceBookingNoticeFocus instanceof HTMLElement) advanceBookingNoticeFocus.focus();
-}
-
-function advanceBookingNoticeBackdrop(event) {
-  if (event.target === document.getElementById('advanceBookingNotice')) closeAdvanceBookingNotice();
-}
-
-async function viewSeptemberTimeSlots() {
-  const button = document.getElementById('viewSeptemberSlotsButton');
-  if (button) {
-    button.disabled = true;
-    button.setAttribute('aria-busy', 'true');
-    button.textContent = 'Loading September Slots...';
-  }
-
-  closeAdvanceBookingNotice({ restoreFocus: false });
+function enterCourtBooking() {
   dismissSplash();
-
-  try {
-    await onSharedCourtDate(ADVANCE_BOOKING_DATE);
-    window.setTimeout(() => {
-      document.getElementById('courts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      document.getElementById('courtSharedDateDisplay')?.focus({ preventScroll: true });
-    }, 720);
-  } catch (_) {
-    toast('Unable to load September slots. Please try again.', 'err');
+  window.setTimeout(() => {
     document.getElementById('courts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.removeAttribute('aria-busy');
-      button.innerHTML = 'View September Time Slots &rarr;';
-    }
-  }
+    document.getElementById('courtSharedDateDisplay')?.focus({ preventScroll: true });
+  }, 180);
 }
 
 const splashAudio = {
@@ -8426,7 +8364,7 @@ function handleSplashBackgroundTap() {
     splashAudio.holdNextSplashClick = false;
     return;
   }
-  openAdvanceBookingNotice();
+  enterCourtBooking();
 }
 
 function unlockSplashMusicFromGesture(event) {
@@ -8487,7 +8425,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initOpAnnounceSplash();
   initEasterSplash();
   initGrandSplash();
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeAdvanceBookingNotice(); closeSharedDatePicker(); closeQrZoom(); closeFindTimeModal(); closeBookModal(); closeOpModal(); closeHostApplyModal(); closeHostSessionModal(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeSharedDatePicker(); closeQrZoom(); closeFindTimeModal(); closeBookModal(); closeOpModal(); closeHostApplyModal(); closeHostSessionModal(); } });
   initScrollReveal();
 });
 
