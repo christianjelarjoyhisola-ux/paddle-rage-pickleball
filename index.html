@@ -2664,7 +2664,7 @@ body.host-mode .courts { padding-bottom:140px; }
 }
 
 </style>
-<link rel="stylesheet" href="brand-theme.css?v=20260729-advance-booking-v30">
+<link rel="stylesheet" href="brand-theme.css?v=20260830-original-splash-v31">
 </head>
 <body class="dark">
 <script>
@@ -2674,11 +2674,6 @@ try {
   document.body.classList.toggle('light', savedPublicTheme === 'light');
   document.body.dataset.theme = savedPublicTheme;
   document.documentElement.style.colorScheme = savedPublicTheme;
-} catch (_) {}
-try {
-  if (sessionStorage.getItem('paddle_rage_intro_seen_v1') === '1') {
-    document.body.classList.add('splash-seen');
-  }
 } catch (_) {}
 </script>
 
@@ -2763,35 +2758,33 @@ try {
 </div>
 
 <!-- SPLASH SCREEN -->
-<div id="splashScreen" role="dialog" aria-modal="true" aria-label="Welcome to Paddle Rage Pickleball">
+<div id="splashScreen" role="dialog" aria-modal="true" aria-label="Welcome to Paddle Rage Pickleball" onclick="handleSplashBackgroundTap(event)">
+  <img class="pr-splash-grunge-edge" src="paddle-rage-grunge-edge.png" alt="" aria-hidden="true" />
   <div class="pr-splash-content">
     <div class="pr-splash-logo-stage">
-      <img class="pr-splash-logo" src="paddleragelogo.jpg" alt="Paddle Rage Pickleball Logo" width="512" height="512" />
+      <img class="pr-splash-logo" src="paddleragelogo-transparent.png" alt="Paddle Rage Pickleball Logo" />
     </div>
     <div class="pr-splash-location">Iponan, Cagayan de Oro</div>
     <h1 class="pr-splash-title" aria-label="Paddle Rage">
       <span class="pr-splash-title-word pr-splash-title-paddle">
-        <span class="pr-splash-title-art" aria-hidden="true">Paddle</span>
+        <img class="pr-splash-title-art" src="paddle-rage-word-paddle.png" alt="" aria-hidden="true" />
       </span>
       <span class="pr-splash-title-word pr-splash-title-rage">
-        <span class="pr-splash-title-art" aria-hidden="true">Rage</span>
+        <img class="pr-splash-title-art" src="paddle-rage-word-rage.png" alt="" aria-hidden="true" />
       </span>
     </h1>
     <div class="pr-splash-sport">Pickleball</div>
     <div class="pr-splash-rule" aria-hidden="true"></div>
     <p class="pr-splash-copy">Feel the rage. Live the game.</p>
-    <audio id="splashWelcomeMusic" src="splash-music.mp3" preload="none" loop playsinline aria-hidden="true" onplay="this.volume=Math.min(this.volume,0.52)"></audio>
+    <audio id="splashWelcomeMusic" src="splash-music.mp3" preload="auto" autoplay loop playsinline aria-hidden="true" onplay="this.volume=Math.min(this.volume,0.52)"></audio>
     <button id="splashSoundToggle" class="pr-splash-sound" type="button" aria-label="Play welcome music" aria-pressed="false" onclick="event.stopPropagation();toggleSplashSound()">
       <span class="pr-splash-sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="pr-splash-sound-label">Play music</span>
     </button>
-    <div class="pr-splash-actions">
-      <button class="pr-splash-enter" type="button" onclick="dismissSplashAndBook()">
-        <span class="pr-splash-enter-label">Book a court</span>
-        <span class="pr-splash-enter-arrow" aria-hidden="true">&rarr;</span>
-      </button>
-      <button class="pr-splash-skip" type="button" onclick="dismissSplash()">Skip intro</button>
-    </div>
+    <button class="pr-splash-enter" type="button" onclick="event.stopPropagation();openAdvanceBookingNotice()">
+      <span class="pr-splash-enter-label">Book September in Advance</span>
+      <span class="pr-splash-enter-arrow" aria-hidden="true">&rarr;</span>
+    </button>
   </div>
   <div class="pr-splash-footer">Court booking &nbsp;&middot;&nbsp; Open play &nbsp;&middot;&nbsp; Community</div>
 </div>
@@ -8221,19 +8214,10 @@ function animateStat(el, final) {
 function dismissSplash() {
   const sp = document.getElementById('splashScreen');
   if (!sp || sp.classList.contains('dismissed')) return;
-  try { sessionStorage.setItem('paddle_rage_intro_seen_v1', '1'); } catch (_) {}
   stopSplashSound();
   sp.classList.add('dismissed');
   document.body.style.overflow = '';
   sp.addEventListener('transitionend', () => { sp.style.display = 'none'; }, { once: true });
-}
-
-function dismissSplashAndBook() {
-  dismissSplash();
-  window.setTimeout(() => {
-    document.getElementById('courts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    document.getElementById('courtSharedDateDisplay')?.focus({ preventScroll: true });
-  }, 180);
 }
 
 const ADVANCE_BOOKING_DATE = '2026-09-01';
@@ -8295,6 +8279,8 @@ async function viewSeptemberTimeSlots() {
 const splashAudio = {
   active: false,
   starting: false,
+  autoBlocked: false,
+  holdNextSplashClick: false,
   fadeFrame: 0,
   targetVolume: 0.52
 };
@@ -8388,7 +8374,7 @@ splashReducedMotion.addEventListener?.('change', event => {
   else if (splashAudio.active) startRageBeatAnimation();
 });
 
-async function startSplashSound() {
+async function startSplashSound(automatic = false) {
   const audio = document.getElementById('splashWelcomeMusic');
   if (!audio || splashAudio.active || splashAudio.starting || !splashIsVisible()) return splashAudio.active;
   splashAudio.starting = true;
@@ -8398,13 +8384,19 @@ async function startSplashSound() {
   try {
     await audio.play();
     splashAudio.active = true;
+    splashAudio.autoBlocked = false;
     fadeSplashMusic(audio, audio.volume, splashAudio.targetVolume, 650);
     updateSplashSoundButton(true);
     startRageBeatAnimation();
     return true;
   } catch (_) {
     splashAudio.active = false;
+    if (automatic) splashAudio.autoBlocked = true;
     updateSplashSoundButton(false);
+    if (automatic) {
+      const label = document.querySelector('.pr-splash-sound-label');
+      if (label) label.textContent = 'Tap for music';
+    }
     return false;
   } finally {
     splashAudio.starting = false;
@@ -8426,14 +8418,51 @@ function stopSplashSound() {
 
 function toggleSplashSound() {
   if (splashAudio.active) stopSplashSound();
-  else startSplashSound();
+  else startSplashSound(false);
 }
+
+function handleSplashBackgroundTap() {
+  if (splashAudio.holdNextSplashClick) {
+    splashAudio.holdNextSplashClick = false;
+    return;
+  }
+  openAdvanceBookingNotice();
+}
+
+function unlockSplashMusicFromGesture(event) {
+  if (!splashIsVisible() || splashAudio.active || splashAudio.starting) return;
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest('.pr-splash-sound, .pr-splash-enter')) return;
+  splashAudio.holdNextSplashClick = event.type === 'pointerdown' || event.type === 'touchstart';
+  startSplashSound(false);
+}
+
+function attemptSplashAutoplay() {
+  if (splashIsVisible() && !splashAudio.active) startSplashSound(true);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const audio = document.getElementById('splashWelcomeMusic');
+  if (audio) {
+    audio.defaultMuted = false;
+    audio.muted = false;
+    audio.addEventListener('canplay', attemptSplashAutoplay, { once: true });
+  }
+  attemptSplashAutoplay();
+}, { once: true });
+
+window.addEventListener('load', attemptSplashAutoplay, { once: true });
+window.addEventListener('pageshow', attemptSplashAutoplay);
+document.addEventListener('pointerdown', unlockSplashMusicFromGesture, { capture: true });
+document.addEventListener('touchstart', unlockSplashMusicFromGesture, { capture: true, passive: true });
+document.addEventListener('keydown', unlockSplashMusicFromGesture, { capture: true });
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) stopSplashSound();
+  else attemptSplashAutoplay();
 });
 // Lock scroll while splash is showing
-document.body.style.overflow = splashIsVisible() ? 'hidden' : '';
+document.body.style.overflow = 'hidden';
 
 document.addEventListener('DOMContentLoaded', async () => {
   initDark();

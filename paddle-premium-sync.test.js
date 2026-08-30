@@ -12,18 +12,19 @@ const supabase = read('supabase-config.js');
 const localServer = read('tools/local-server.js');
 const pagesDeploy = read('deploy-cloudflare-pages.ps1');
 
-test('public booking keeps a zoomable, explicit, first-session intro', () => {
+test('public booking keeps the original branded splash and a zoomable entry', () => {
   assert.match(index, /name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/);
   assert.doesNotMatch(index, /maximum-scale|user-scalable\s*=\s*no/i);
-  assert.match(index, /id="splashWelcomeMusic"[^>]*preload="none"[^>]*loop/);
-  assert.doesNotMatch(index.match(/<audio id="splashWelcomeMusic"[^>]*>/)?.[0] || '', /autoplay/i);
-  assert.doesNotMatch(index, /attemptSplashAutoplay|unlockSplashMusicFromGesture/);
-  assert.match(index, /sessionStorage\.getItem\('paddle_rage_intro_seen_v1'\)/);
-  assert.match(index, /sessionStorage\.setItem\('paddle_rage_intro_seen_v1', '1'\)/);
-  assert.match(index, /class="pr-splash-enter"[^>]*onclick="dismissSplashAndBook\(\)"/);
-  assert.match(index, /class="pr-splash-skip"[^>]*onclick="dismissSplash\(\)"/);
-  assert.match(index, /class="pr-splash-logo" src="paddleragelogo\.jpg"/);
-  assert.doesNotMatch(index, /paddle-rage-grunge-edge\.png|paddle-rage-word-(?:paddle|rage)\.png/);
+  assert.match(index, /id="splashScreen"[^>]*onclick="handleSplashBackgroundTap\(event\)"/);
+  assert.match(index, /id="splashWelcomeMusic"[^>]*preload="auto"[^>]*autoplay[^>]*loop/);
+  assert.match(index, /attemptSplashAutoplay|unlockSplashMusicFromGesture/);
+  assert.doesNotMatch(index, /paddle_rage_intro_seen_v1|dismissSplashAndBook/);
+  assert.match(index, /class="pr-splash-enter"[^>]*onclick="event\.stopPropagation\(\);openAdvanceBookingNotice\(\)"/);
+  assert.match(index, /class="pr-splash-logo" src="paddleragelogo-transparent\.png"/);
+  assert.match(index, /paddle-rage-grunge-edge\.png/);
+  assert.match(index, /paddle-rage-word-paddle\.png/);
+  assert.match(index, /paddle-rage-word-rage\.png/);
+  assert.match(theme, /\.pr-splash-logo\s*\{[\s\S]*?border-radius:\s*0;[\s\S]*?background:\s*transparent;/);
 });
 
 test('public booking exposes keyboard and autofill affordances', () => {
