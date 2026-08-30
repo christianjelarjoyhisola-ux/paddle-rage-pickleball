@@ -42,11 +42,12 @@ test('receipt verification preserves authorization, resource, and settlement bou
   const finalizer = read(
     'supabase/migrations/20260728120000_gcash_receipt_auto_verification.sql'
   );
-  const storage = edge.indexOf('db.storage.from("receipts").upload');
+  const verifyStart = edge.indexOf('// ── verify a freshly-uploaded receipt');
+  const storage = edge.indexOf('db.storage.from("receipts").upload', verifyStart);
   const vision = edge.indexOf('const ocr = await runOCR');
   const dimensionGate = edge.indexOf('if (!receiptImageSafeToDecode(bytes, contentType))');
   const imageDecode = edge.indexOf('Image.decode(bytes)');
-  const persistedBranch = edge.indexOf('if (persistedRow) {');
+  const persistedBranch = edge.indexOf('if (persistedRow) {', verifyStart);
   const persistedAuthorization = edge.indexOf(
     'canViewBookingReceipt(caller.account, caller.userId, booking)',
     persistedBranch,

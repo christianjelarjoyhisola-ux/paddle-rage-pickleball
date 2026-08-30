@@ -218,9 +218,10 @@ test('receipt and confirmation delivery use recoverable single-worker leases', (
   const confirmationLease = read('supabase/migrations/20260719120000_confirmation_email_delivery_leases.sql');
   assert.match(receiptLease, /claim_receipt_verification_lease/);
   assert.match(receiptLease, /lease_expires_at <= clock_timestamp\(\)/);
+  const verifyStart = receiptEdge.indexOf('// ── verify a freshly-uploaded receipt');
   assert.ok(
-    receiptEdge.indexOf('claim_receipt_verification_lease') <
-      receiptEdge.indexOf('db.storage.from("receipts").upload'),
+    receiptEdge.indexOf('claim_receipt_verification_lease', verifyStart) <
+      receiptEdge.indexOf('db.storage.from("receipts").upload', verifyStart),
   );
   assert.match(receiptEdge, /release_receipt_verification_lease/);
   assert.match(receiptEdge, /flags\.push\("REF_UNREADABLE"\)/);

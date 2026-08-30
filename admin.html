@@ -6879,6 +6879,7 @@ async function renderPaymentReview() {
     DB.getOpenPlayHostSessions(),
   ]);
   const bookingItems = groupBookings(bookings.filter(b => b.email !== 'reserve@hold.internal' && isDigitalPayment(b.paymentMethod)))
+    .filter(b => !!b.receiptImageUrl)
     .map(b => ({
       type: 'booking',
       id: b.primaryRef || b.ref,
@@ -13338,7 +13339,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260729-head-to-head-v1&amp;rollback=deb2d66"></script>
+<script src="supabase-config.js?v=20260830-receipt-stage-v1&amp;rollback=deb2d66"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>
 </body>

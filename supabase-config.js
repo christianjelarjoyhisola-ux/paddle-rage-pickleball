@@ -10,6 +10,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const PB_REQUEST_TIMEOUT_MS = 45000;
 const PB_RECEIPT_TIMEOUT_MS = 90000;
+const _pbLocalStagedReceipts = new Map();
 
 function normalizeOpenPlaySkillLevel(value, fallback = 1) {
   const level = Number(value);
@@ -305,7 +306,7 @@ async function _pbPrepareReceiptImage(file) {
 async function _pbVerifyReceiptBase64Fallback(fnUrl, payload, imageFile, authHeader = '') {
   const imageBase64 = await _pbFileToDataUrl(imageFile);
   const fallbackPayload = {
-    action: 'verify',
+    action: String(payload?.action || 'verify'),
     bookingRef: String(payload?.bookingRef || ''),
     provider: String(payload?.provider || 'gcash'),
     contentType: imageFile?.type || payload?.contentType || 'image/jpeg',
@@ -325,7 +326,60 @@ async function _pbVerifyReceiptBase64Fallback(fnUrl, payload, imageFile, authHea
   const txt = await res.text();
   const json = _safeJsonParse(txt);
   if (!res.ok) throw new Error(json?.error || txt || `HTTP ${res.status}`);
-  if (!json) throw new Error('Receipt verification returned an invalid response.');
+  if (!json) throw new Error('Receipt service returned an invalid response.');
+  return json;
+}
+
+function _pbCanFallbackReceiptTransport(error, startedAt) {
+  const elapsedMs = Math.max(0, Date.now() - Number(startedAt || 0));
+  const name = String(error?.name || '');
+  const code = String(error?.code || '');
+  const message = String(error?.message || error || '');
+  if (
+    name === 'AbortError' ||
+    code === 'PB_REQUEST_TIMEOUT' ||
+    /timed out|timeout|aborted/i.test(message)
+  ) return false;
+
+  // A later network failure is ambiguous: the multipart request may already
+  // have reached Storage. Retry only failures that surface immediately and
+  // look like a browser/FormData transport incompatibility.
+  return elapsedMs <= 1000 && (
+    name === 'TypeError' ||
+    /failed to fetch|network request failed|load failed|formdata|multipart/i.test(message)
+  );
+}
+
+async function _pbReceiptCheckpointRequest(action, payload = {}) {
+  const bookingRef = String(payload?.bookingRef || '').trim();
+  if (!bookingRef) throw new Error('Booking reference is required.');
+  const storedBookingToken = _pbBookingAccessToken(bookingRef, false);
+  const sessionResult = await _sb.auth.getSession();
+  const userAccessToken = sessionResult?.data?.session?.access_token || '';
+  const authHeader = `Bearer ${userAccessToken || SUPABASE_ANON_KEY}`;
+  const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/verify-gcash-receipt`;
+  const requestPayload = {
+    ...(payload || {}),
+    action,
+    bookingRef,
+    ...(storedBookingToken ? { bookingAccessToken: storedBookingToken } : {}),
+  };
+  const res = await _pbFetchWithTimeout(fnUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': authHeader,
+    },
+    body: JSON.stringify(requestPayload),
+  }, PB_RECEIPT_TIMEOUT_MS);
+  const txt = await res.text();
+  const json = _safeJsonParse(txt);
+  if (!res.ok) throw _pbApiError(
+    String(json?.error || txt || `HTTP ${res.status}`),
+    String(json?.code || `HTTP_${res.status}`),
+  );
+  if (!json) throw new Error('Receipt checkpoint service returned an invalid response.');
   return json;
 }
 
@@ -1851,6 +1905,111 @@ window.DB = {
     return _invokeEdgeFunction('integration-status', { action: 'status' }, { allowFailure: true });
   },
 
+  // Upload a court-booking receipt to its private, token-authorized checkpoint.
+  // OCR and booking settlement happen only after the customer continues.
+  async stageBookingReceipt(payload) {
+    const bookingRef = String(payload?.bookingRef || '').trim();
+    if (!bookingRef) throw new Error('Booking reference is required before receipt upload.');
+    if (!payload?.imageFile) throw new Error('Receipt screenshot is required.');
+
+    const storedBookingToken = _pbBookingAccessToken(bookingRef, false);
+    const requestPayload = {
+      ...(payload || {}),
+      action: 'stage',
+      ...(storedBookingToken ? { bookingAccessToken: storedBookingToken } : {}),
+    };
+    const sessionResult = await _sb.auth.getSession();
+    const userAccessToken = sessionResult?.data?.session?.access_token || '';
+    const authHeader = `Bearer ${userAccessToken || SUPABASE_ANON_KEY}`;
+    const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/verify-gcash-receipt`;
+    const imageFile = await _pbPrepareReceiptImage(requestPayload.imageFile);
+    const finishStage = result => {
+      if (!result?.stagedReceiptPath) {
+        throw new Error('Receipt upload returned without a secure storage checkpoint.');
+      }
+      _pbClearFastCache(['bookings']);
+      return result;
+    };
+    let form;
+    try {
+      form = new FormData();
+      form.append('action', 'stage');
+      form.append('bookingRef', bookingRef);
+      form.append('provider', String(requestPayload.provider || 'gcash'));
+      form.append('contentType', imageFile.type || requestPayload.contentType || 'image/jpeg');
+      if (requestPayload.bookingAccessToken) form.append('bookingAccessToken', requestPayload.bookingAccessToken);
+      form.append('receipt', imageFile, imageFile.name || 'receipt.jpg');
+    } catch (_) {
+      return finishStage(await _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader));
+    }
+
+    const transportStartedAt = Date.now();
+    let res;
+    try {
+      res = await _pbFetchWithTimeout(fnUrl, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': authHeader,
+        },
+        body: form,
+      }, PB_RECEIPT_TIMEOUT_MS);
+    } catch (transportError) {
+      if (_pbCanFallbackReceiptTransport(transportError, transportStartedAt)) {
+        return finishStage(await _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader));
+      }
+      throw transportError;
+    }
+    const txt = await res.text();
+    const json = _safeJsonParse(txt);
+    if (!res.ok) {
+      const reason = String(json?.error || txt || `HTTP ${res.status}`);
+      const missingMultipartImage = [400, 415, 422].includes(res.status) &&
+        /receipt file|multipart body|empty image/i.test(reason);
+      if (missingMultipartImage) {
+        return finishStage(await _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader));
+      }
+      throw _pbApiError(reason, String(json?.code || `HTTP_${res.status}`));
+    }
+    return finishStage(json);
+  },
+
+  async recoverBookingReceipt(bookingRef) {
+    const normalizedRef = String(bookingRef || '').trim();
+    const result = await _pbReceiptCheckpointRequest('recover-stage', {
+      bookingRef: normalizedRef,
+    });
+    const stagedReceiptPath = String(
+      result?.stagedReceiptPath || result?.receiptImageUrl || '',
+    ).trim();
+    if (!stagedReceiptPath) return null;
+    return {
+      ...result,
+      ok: result.ok !== false,
+      bookingRef: String(result.bookingRef || normalizedRef),
+      stagedReceiptPath,
+      receiptImageUrl: String(result.receiptImageUrl || stagedReceiptPath),
+      receiptImageHash: result.receiptImageHash || null,
+      contentType: String(result.contentType || ''),
+      size: Number(result.size || 0),
+      stagedAt: result.stagedAt || null,
+    };
+  },
+
+  async discardBookingReceipt(payload = {}) {
+    const bookingRef = String(payload?.bookingRef || '').trim();
+    const stagedReceiptPath = String(payload?.stagedReceiptPath || '').trim();
+    if (!bookingRef || !stagedReceiptPath) {
+      throw new Error('Booking reference and staged receipt path are required.');
+    }
+    const result = await _pbReceiptCheckpointRequest('discard-stage', {
+      bookingRef,
+      stagedReceiptPath,
+    });
+    _pbClearFastCache(['bookings']);
+    return result;
+  },
+
   // Verify an uploaded GCash/GoTyme/PNB receipt image via the Edge Function.
   // payload: { bookingRef, provider, imageFile, contentType }.
   // For a saved public booking, its browser-only bearer token is attached here
@@ -2898,21 +3057,34 @@ window.DB = {
         .filter(b => !opts.activeOnly || (b.status !== 'cancelled' && b.status !== 'forfeited'))
         .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     },
-    async addBooking(booking) {
-      const db = readDb();
-      const existing = db.bookings
-        .filter(b => String(b.courtId) === String(booking.courtId) && b.date === booking.date && b.status !== 'cancelled' && b.status !== 'forfeited');
-      if (hasSlotConflict(existing, booking)) {
-        throw new Error('One or more time slots are no longer available. Please refresh and choose a different time.');
+    async addBookings(bookings) {
+      const batch = Array.isArray(bookings) ? bookings.filter(Boolean) : [];
+      if (batch.length < 1 || batch.length > 8) {
+        throw new Error('Choose between one and eight booking items.');
       }
-      const row = {
-        ...booking,
-        ref: booking.ref || localRef('PB'),
-        receivedAccount: receivedAccountForBooking(booking),
-        createdAt: booking.createdAt || nowIso(),
-      };
-      db.bookings.push(row);
+
+      const db = readDb();
+      const rows = [];
+      for (const booking of batch) {
+        const existing = [...db.bookings, ...rows]
+          .filter(b => String(b.courtId) === String(booking.courtId) && b.date === booking.date && b.status !== 'cancelled' && b.status !== 'forfeited');
+        if (hasSlotConflict(existing, booking)) {
+          throw new Error('One or more time slots are no longer available. Please refresh and choose a different time.');
+        }
+        rows.push({
+          ...booking,
+          ref: booking.ref || localRef('PB'),
+          receivedAccount: receivedAccountForBooking(booking),
+          createdAt: booking.createdAt || nowIso(),
+        });
+      }
+
+      db.bookings.push(...rows);
       writeDb(db);
+      return rows.map(row => row.ref);
+    },
+    async addBooking(booking) {
+      return this.addBookings([booking]);
     },
     async getBookingByRef(ref) { return readDb().bookings.find(b => String(b.ref) === String(ref)) || null; },
     async updateBooking(ref, updates) {
@@ -4014,8 +4186,204 @@ window.DB = {
         ],
       };
     },
-    async verifyGcashReceipt() {
-      return { ok: true, status: 'manual_review', flags: ['local_data_mode'], extracted: {}, confidence: 0, message: 'Local data mode: receipt OCR is not sent to Supabase.' };
+    async stageBookingReceipt(payload) {
+      const bookingRef = String(payload?.bookingRef || '').trim();
+      if (!bookingRef || !payload?.imageFile) throw new Error('Booking reference and receipt are required.');
+      const imageFile = await _pbPrepareReceiptImage(payload.imageFile);
+      const stagedReceiptPath = `local:${bookingRef}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+      const contentType = imageFile.type || payload.contentType || 'image/jpeg';
+      const size = Number(imageFile.size || 0);
+      const stagedAt = nowIso();
+      const receiptImageUrl = await _pbFileToDataUrl(imageFile);
+      const db = readDb();
+      const target = db.bookings.find(booking => String(booking.ref) === bookingRef);
+      if (!target) throw new Error('Booking not found.');
+      const groupRef = String(target.groupRef || target.bookingGroupRef || '');
+      db.bookings = db.bookings.map(booking => {
+        const sameBooking = String(booking.ref) === bookingRef;
+        const sameGroup = groupRef && String(booking.groupRef || booking.bookingGroupRef || '') === groupRef;
+        return sameBooking || sameGroup
+          ? {
+            ...booking,
+            receiptImageUrl,
+            receiptImageHash: null,
+            receiptStatus: 'manual_review',
+            receiptFlags: [],
+            receiptExtracted: null,
+            receiptConfidence: null,
+            receiptVerifiedAt: null,
+            receiptStagedPath: stagedReceiptPath,
+            receiptStagedAt: stagedAt,
+            receiptContentType: contentType,
+            receiptImageSize: size,
+          }
+          : booking;
+      });
+      writeDb(db);
+      _pbLocalStagedReceipts.set(stagedReceiptPath, {
+        bookingRef,
+        imageFile,
+        receiptImageUrl,
+        contentType,
+        size,
+        stagedAt,
+      });
+      return {
+        ok: true,
+        found: true,
+        bookingRef,
+        stagedReceiptPath,
+        receiptImageUrl,
+        receiptImageHash: null,
+        receiptStatus: 'manual_review',
+        receiptFlags: [],
+        receiptVerifiedAt: null,
+        verified: false,
+        contentType,
+        size,
+        stagedAt,
+      };
+    },
+    async recoverBookingReceipt(bookingRef) {
+      const normalizedRef = String(bookingRef || '').trim();
+      if (!normalizedRef) throw new Error('Booking reference is required.');
+      const db = readDb();
+      const target = db.bookings.find(booking => String(booking.ref) === normalizedRef);
+      if (!target) return null;
+      const groupRef = String(target.groupRef || target.bookingGroupRef || '');
+      const stagedBooking = db.bookings.find(booking => {
+        const sameBooking = String(booking.ref) === normalizedRef;
+        const sameGroup = groupRef && String(booking.groupRef || booking.bookingGroupRef || '') === groupRef;
+        return (sameBooking || sameGroup) &&
+          !!booking.receiptStagedPath &&
+          !booking.receiptVerifiedAt;
+      });
+      if (!stagedBooking) return null;
+      const stagedReceiptPath = String(stagedBooking.receiptStagedPath || '');
+      const memoryStage = _pbLocalStagedReceipts.get(stagedReceiptPath) || {};
+      const receiptImageUrl = String(
+        memoryStage.receiptImageUrl || stagedBooking.receiptImageUrl || '',
+      );
+      if (!memoryStage.bookingRef && receiptImageUrl) {
+        _pbLocalStagedReceipts.set(stagedReceiptPath, {
+          bookingRef: normalizedRef,
+          imageFile: null,
+          receiptImageUrl,
+          contentType: stagedBooking.receiptContentType || '',
+          size: Number(stagedBooking.receiptImageSize || 0),
+          stagedAt: stagedBooking.receiptStagedAt || null,
+        });
+      }
+      return {
+        ok: true,
+        found: true,
+        bookingRef: normalizedRef,
+        stagedReceiptPath,
+        receiptImageUrl,
+        receiptImageHash: stagedBooking.receiptImageHash || null,
+        receiptStatus: String(stagedBooking.receiptStatus || 'manual_review'),
+        receiptFlags: Array.isArray(stagedBooking.receiptFlags) ? stagedBooking.receiptFlags : [],
+        receiptVerifiedAt: null,
+        verified: false,
+        contentType: String(memoryStage.contentType || stagedBooking.receiptContentType || ''),
+        size: Number(memoryStage.size || stagedBooking.receiptImageSize || 0),
+        stagedAt: memoryStage.stagedAt || stagedBooking.receiptStagedAt || null,
+      };
+    },
+    async discardBookingReceipt(payload = {}) {
+      const bookingRef = String(payload?.bookingRef || '').trim();
+      const stagedReceiptPath = String(payload?.stagedReceiptPath || '').trim();
+      if (!bookingRef || !stagedReceiptPath) {
+        throw new Error('Booking reference and staged receipt path are required.');
+      }
+      const db = readDb();
+      const target = db.bookings.find(booking => String(booking.ref) === bookingRef);
+      const groupRef = String(target?.groupRef || target?.bookingGroupRef || '');
+      let discarded = false;
+      db.bookings = db.bookings.map(booking => {
+        const sameBooking = String(booking.ref) === bookingRef;
+        const sameGroup = groupRef && String(booking.groupRef || booking.bookingGroupRef || '') === groupRef;
+        const unverifiedStage = (sameBooking || sameGroup) &&
+          String(booking.receiptStagedPath || '') === stagedReceiptPath &&
+          !booking.receiptVerifiedAt;
+        if (!unverifiedStage) return booking;
+        discarded = true;
+        return {
+          ...booking,
+          receiptImageUrl: null,
+          receiptImageHash: null,
+          receiptStatus: 'none',
+          receiptFlags: [],
+          receiptExtracted: null,
+          receiptConfidence: null,
+          receiptVerifiedAt: null,
+          receiptStagedPath: null,
+          receiptStagedAt: null,
+          receiptContentType: null,
+          receiptImageSize: null,
+        };
+      });
+      if (discarded) writeDb(db);
+      _pbLocalStagedReceipts.delete(stagedReceiptPath);
+      return { ok: true, bookingRef, stagedReceiptPath, discarded };
+    },
+    async verifyGcashReceipt(payload = {}) {
+      const bookingRef = String(payload?.bookingRef || '').trim();
+      let imageFile = payload?.imageFile || null;
+      const stagedReceiptPath = String(payload?.stagedReceiptPath || '');
+      let receiptImageUrl = '';
+      if (stagedReceiptPath) {
+        const staged = _pbLocalStagedReceipts.get(stagedReceiptPath);
+        const db = readDb();
+        const target = db.bookings.find(booking => String(booking.ref) === bookingRef);
+        const persistedStageMatches = target &&
+          String(target.receiptStagedPath || '') === stagedReceiptPath &&
+          !target.receiptVerifiedAt;
+        if ((!staged || staged.bookingRef !== bookingRef) && !persistedStageMatches) {
+          throw new Error('The staged receipt is no longer available.');
+        }
+        imageFile = staged?.imageFile || null;
+        receiptImageUrl = String(staged?.receiptImageUrl || target?.receiptImageUrl || '');
+      }
+      if (!receiptImageUrl && imageFile) receiptImageUrl = await _pbFileToDataUrl(imageFile);
+      if (!receiptImageUrl) throw new Error('Receipt screenshot is required.');
+      if (stagedReceiptPath) _pbLocalStagedReceipts.delete(stagedReceiptPath);
+      const receiptVerifiedAt = nowIso();
+      const db = readDb();
+      const target = db.bookings.find(b => String(b.ref) === bookingRef);
+      const groupRef = target?.groupRef || target?.bookingGroupRef || '';
+      db.bookings = db.bookings.map(booking => {
+        const sameBooking = String(booking.ref) === bookingRef;
+        const sameGroup = groupRef && String(booking.groupRef || booking.bookingGroupRef || '') === String(groupRef);
+        return sameBooking || sameGroup
+          ? {
+            ...booking,
+            status: 'pending',
+            paymentStatus: 'for_verification',
+            receiptImageUrl,
+            receiptStatus: 'manual_review',
+            receiptFlags: ['local_data_mode'],
+            receiptExtracted: {},
+            receiptConfidence: 0,
+            receiptVerifiedAt,
+            receiptStagedPath: null,
+            receiptStagedAt: null,
+            receiptContentType: null,
+            receiptImageSize: null,
+          }
+          : booking;
+      });
+      writeDb(db);
+      return {
+        ok: true,
+        status: 'manual_review',
+        flags: ['local_data_mode'],
+        extracted: {},
+        confidence: 0,
+        receiptImageUrl,
+        receiptVerifiedAt,
+        message: 'Local data mode: receipt stored for manual review; OCR is not sent to Supabase.',
+      };
     },
     async getReceiptSignedUrl() { throw new Error('No stored receipt in local data mode.'); },
     async getOpenPlayReceiptSignedUrl() { throw new Error('No stored receipt in local data mode.'); },

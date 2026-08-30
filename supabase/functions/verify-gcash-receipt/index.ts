@@ -3,6 +3,9 @@
 // Server-side GCash / BDO Pay / GoTyme / PNB receipt verification + fraud detection.
 //
 // Actions (POST JSON):
+//   multipart { action: "stage", bookingRef, bookingAccessToken, provider, receipt }
+//     -> stores a private, token-authorized receipt checkpoint without OCR or
+//        changing booking/payment state.
 //   multipart { action: "verify", bookingRef, provider, receipt, contentType }
 //   JSON { action: "verify", bookingRef, provider, imageBase64, contentType }
 //     -> OCR (Google Vision) + fraud checks + confidence routing.
@@ -830,6 +833,136 @@ function bookingUpdateQuery(
   return query;
 }
 
+const ACTIVE_RECEIPT_BOOKING_STATUSES = ["verifying", "pending"];
+const ACTIVE_RECEIPT_PAYMENT_STATUSES = [
+  "unpaid",
+  "pending",
+  "for_verification",
+];
+
+type AttachedReceiptMetadata = {
+  path: string;
+  hash: string;
+  contentType: ReceiptImageContentType;
+};
+
+function receiptEvidenceWasVerified(row: Record<string, unknown>): boolean {
+  const status = String(row.receipt_status || "").toLowerCase();
+  const flags = Array.isArray(row.receipt_flags) ? row.receipt_flags : [];
+  return !!row.receipt_verified_at ||
+    ["auto_approved", "rejected"].includes(status) ||
+    !!String(row.receipt_phash || "") ||
+    row.receipt_extracted != null ||
+    row.receipt_confidence != null ||
+    flags.length > 0;
+}
+
+function receiptMetadataKey(row: Record<string, unknown>): string {
+  return JSON.stringify([
+    String(row.payment_method || "").toLowerCase(),
+    String(row.payment_flow || "").toLowerCase(),
+    String(row.receipt_image_url || ""),
+    String(row.receipt_image_hash || "").toLowerCase(),
+    String(row.receipt_status || "none").toLowerCase(),
+    String(row.receipt_verified_at || ""),
+  ]);
+}
+
+function attachedReceiptMetadata(
+  row: Record<string, unknown>,
+  allowedBookingRefs: Set<string>,
+): AttachedReceiptMetadata | null {
+  const path = String(row.receipt_image_url || "").trim();
+  const hash = String(row.receipt_image_hash || "").trim().toLowerCase();
+  if (!path && !hash) return null;
+  const match = path.match(
+    /^([A-Za-z0-9._-]+)\/([0-9a-f]{64})\.(jpg|jpeg|png|webp)$/,
+  );
+  if (!match || !allowedBookingRefs.has(match[1]) || match[2] !== hash) {
+    throw new Error("Attached receipt metadata is inconsistent");
+  }
+  const contentType: ReceiptImageContentType = match[3] === "png"
+    ? "image/png"
+    : match[3] === "webp"
+    ? "image/webp"
+    : "image/jpeg";
+  return { path, hash, contentType };
+}
+
+async function loadScopedReceiptBookingRows(
+  db: any,
+  booking: Record<string, unknown>,
+  scope: BookingMutationScope,
+): Promise<Array<Record<string, unknown>>> {
+  const groupRef = String(booking.booking_group_ref || "").trim();
+  let query = db.from("bookings").select(
+    "ref,booking_group_ref,status,payment_status,payment_method,payment_flow,created_at,receipt_image_url,receipt_image_hash,receipt_phash,receipt_status,receipt_flags,receipt_extracted,receipt_confidence,receipt_verified_at",
+  );
+  query = groupRef
+    ? query.eq("booking_group_ref", groupRef)
+    : query.eq("ref", String(booking.ref || ""));
+  if (scope.customerAccessTokenHash) {
+    query = query.eq(
+      "customer_access_token_hash",
+      scope.customerAccessTokenHash,
+    );
+  } else if (scope.hostUserId) {
+    query = query.eq("host_user_id", scope.hostUserId);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []) as Array<Record<string, unknown>>;
+}
+
+function receiptGroupIsActive(rows: Array<Record<string, unknown>>): boolean {
+  return rows.length > 0 && rows.every((row) => {
+    const status = String(row.status || "");
+    const paymentStatus = String(row.payment_status || "");
+    const createdAt = new Date(String(row.created_at || ""));
+    const ageMs = Date.now() - createdAt.getTime();
+    return ACTIVE_RECEIPT_BOOKING_STATUSES.includes(status) &&
+      ACTIVE_RECEIPT_PAYMENT_STATUSES.includes(paymentStatus) &&
+      Number.isFinite(createdAt.getTime()) && ageMs >= -60_000 &&
+      ageMs <= PAYMENT_WINDOW_MINUTES * 60_000;
+  });
+}
+
+function receiptGroupMetadataIsConsistent(
+  rows: Array<Record<string, unknown>>,
+): boolean {
+  return new Set(rows.map(receiptMetadataKey)).size <= 1;
+}
+
+function clearedReceiptMetadata(): Record<string, unknown> {
+  return {
+    receipt_image_url: null,
+    receipt_image_hash: null,
+    receipt_phash: null,
+    receipt_status: "none",
+    receipt_flags: [],
+    receipt_extracted: null,
+    receipt_confidence: null,
+    receipt_verified_at: null,
+  };
+}
+
+function receiptMetadataSnapshot(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    payment_method: row.payment_method || null,
+    payment_flow: row.payment_flow || null,
+    receipt_image_url: row.receipt_image_url || null,
+    receipt_image_hash: row.receipt_image_hash || null,
+    receipt_phash: row.receipt_phash || null,
+    receipt_status: String(row.receipt_status || "none"),
+    receipt_flags: Array.isArray(row.receipt_flags) ? row.receipt_flags : [],
+    receipt_extracted: row.receipt_extracted ?? null,
+    receipt_confidence: row.receipt_confidence ?? null,
+    receipt_verified_at: row.receipt_verified_at || null,
+  };
+}
+
 // Best-effort "looks like a real GCash receipt" heuristic (soft signal only).
 function looksLikeGcashReceipt(text: string): boolean {
   const t = text.toLowerCase();
@@ -1105,6 +1238,7 @@ Deno.serve(async (req) => {
         bookingRef: String(form.get("bookingRef") || ""),
         bookingAccessToken: String(form.get("bookingAccessToken") || ""),
         provider: String(form.get("provider") || "gcash"),
+        stagedReceiptPath: String(form.get("stagedReceiptPath") || ""),
         contentType: uploadedImage?.type ||
           String(form.get("contentType") || "image/jpeg"),
         ...(bookingData ? { bookingData } : {}),
@@ -1120,6 +1254,540 @@ Deno.serve(async (req) => {
     }, 400);
   }
   const action = (body.action as string) || "verify";
+
+  // ── customer/staff: durable, private pre-verification evidence ────────────
+  if (["stage", "recover-stage", "discard-stage"].includes(action)) {
+    let actionLeaseKey = "";
+    let actionLeaseToken = "";
+    try {
+      const bookingRef = String(body.bookingRef || "").trim();
+      const bookingAccessToken = String(body.bookingAccessToken || "");
+      const requestedStagedPath = String(body.stagedReceiptPath || "").trim();
+      const provider = paymentMethodProvider(body.provider);
+      const imageBase64 = String(body.imageBase64 || "");
+      if (!bookingRef) return json({ error: "bookingRef required" }, 400);
+      if (!/^[a-z0-9][a-z0-9-]{2,79}$/i.test(bookingRef)) {
+        return json({ error: "Invalid bookingRef" }, 400);
+      }
+      if (action === "stage" && !provider) {
+        return json({
+          error: "A supported digital payment method is required",
+        }, 400);
+      }
+      if (action === "stage" && !imageBase64 && !uploadedImage) {
+        return json({ error: "receipt file or imageBase64 required" }, 400);
+      }
+
+      const { data: loadedBooking, error: bookingError } = await db.from(
+        "bookings",
+      )
+        .select(
+          "ref,booking_group_ref,status,payment_status,payment_method,payment_flow,created_at,receipt_image_url,receipt_image_hash,receipt_phash,receipt_status,receipt_flags,receipt_extracted,receipt_confidence,receipt_verified_at,customer_access_token_hash,host_booking,host_user_id,created_by_user_id",
+        )
+        .eq("ref", bookingRef)
+        .maybeSingle();
+      if (bookingError) {
+        return json({ error: "Booking could not be loaded" }, 500);
+      }
+      if (!loadedBooking) return json({ error: "Booking not found" }, 404);
+      const booking = loadedBooking as Record<string, unknown>;
+
+      const storedAccessTokenHash = String(
+        booking.customer_access_token_hash || "",
+      );
+      const customerTokenAuthorized = await bookingAccessTokenMatches(
+        bookingAccessToken,
+        storedAccessTokenHash,
+      );
+      let caller: ReceiptCaller | null = null;
+      if (!customerTokenAuthorized) {
+        try {
+          caller = await loadReceiptCaller(req, db);
+        } catch (error) {
+          console.error("receipt staging caller lookup failed:", errMsg(error));
+          return json({
+            error: "Receipt authorization could not be checked",
+          }, 500);
+        }
+      }
+      const authorizedReceiptCaller = !!caller &&
+        canViewBookingReceipt(caller.account, caller.userId, booking);
+      if (!customerTokenAuthorized && !authorizedReceiptCaller) {
+        return json({
+          error: "Receipt access is not authorized for this booking",
+        }, 403);
+      }
+
+      const bookingMutationScope: BookingMutationScope = {};
+      if (/^[0-9a-f]{64}$/.test(storedAccessTokenHash)) {
+        bookingMutationScope.customerAccessTokenHash = storedAccessTokenHash;
+      } else if (booking.host_booking === true && booking.host_user_id) {
+        bookingMutationScope.hostUserId = String(booking.host_user_id);
+      }
+
+      let groupRows = await loadScopedReceiptBookingRows(
+        db,
+        booking,
+        bookingMutationScope,
+      );
+      if (!groupRows.some((row) => String(row.ref || "") === bookingRef)) {
+        return json({ error: "Receipt booking scope is invalid" }, 403);
+      }
+      if (!receiptGroupMetadataIsConsistent(groupRows)) {
+        return json({
+          error: "Receipt metadata is inconsistent across this booking group",
+          code: "RECEIPT_GROUP_INCONSISTENT",
+        }, 409);
+      }
+
+      let targetRow = groupRows.find((row) =>
+        String(row.ref || "") === bookingRef
+      )!;
+      let allowedBookingRefs = new Set(
+        groupRows.map((row) => String(row.ref || "")).filter(Boolean),
+      );
+      let attached: AttachedReceiptMetadata | null;
+      try {
+        attached = attachedReceiptMetadata(targetRow, allowedBookingRefs);
+      } catch {
+        return json({
+          error: "Attached receipt metadata is invalid",
+          code: "ATTACHED_RECEIPT_METADATA_INVALID",
+        }, 409);
+      }
+
+      if (action === "recover-stage") {
+        const verified = groupRows.some(receiptEvidenceWasVerified);
+        if (!attached) {
+          if (verified) {
+            return json({
+              error: "Verified receipt metadata is incomplete",
+              code: "ATTACHED_RECEIPT_METADATA_INVALID",
+            }, 409);
+          }
+          return json({
+            ok: true,
+            found: false,
+            bookingRef,
+            stagedReceiptPath: null,
+            receiptImageUrl: null,
+            receiptImageHash: null,
+            receiptStatus: String(targetRow.receipt_status || "none"),
+            receiptVerifiedAt: null,
+            verified: false,
+            bookingStatus: String(targetRow.status || "") || null,
+            paymentStatus: String(targetRow.payment_status || "") || null,
+          });
+        }
+        return json({
+          ok: true,
+          found: true,
+          bookingRef,
+          stagedReceiptPath: attached.path,
+          receiptImageUrl: attached.path,
+          receiptImageHash: attached.hash,
+          contentType: attached.contentType,
+          receiptStatus: String(targetRow.receipt_status || "manual_review"),
+          receiptVerifiedAt: targetRow.receipt_verified_at || null,
+          verified,
+          bookingStatus: String(targetRow.status || "") || null,
+          paymentStatus: String(targetRow.payment_status || "") || null,
+        });
+      }
+
+      if (action === "stage") {
+        if (!receiptGroupIsActive(groupRows)) {
+          return json({
+            error: "This booking no longer accepts receipt uploads",
+          }, 409);
+        }
+        if (groupRows.some(receiptEvidenceWasVerified)) {
+          return json({
+            error: "Verified receipt evidence cannot be replaced",
+            code: "RECEIPT_ALREADY_VERIFIED",
+          }, 409);
+        }
+        const { data: methodReady, error: methodReadyError } = await db.rpc(
+          "public_payment_method_ready",
+          { p_method: provider },
+        );
+        if (methodReadyError) {
+          return json({
+            error: "Payment method availability could not be checked.",
+            code: "PAYMENT_METHOD_CHECK_UNAVAILABLE",
+          }, 503);
+        }
+        if (methodReady !== true) {
+          return json({
+            error: "This payment method is not currently enabled.",
+            code: "PAYMENT_METHOD_DISABLED",
+          }, 409);
+        }
+      }
+
+      actionLeaseKey = String(booking.booking_group_ref || bookingRef).trim();
+      const { data: leaseRows, error: leaseError } = await db.rpc(
+        "claim_receipt_verification_lease",
+        { p_booking_key: actionLeaseKey, p_lease_seconds: 600 },
+      );
+      const lease = Array.isArray(leaseRows) ? leaseRows[0] : leaseRows;
+      if (leaseError) {
+        console.error("receipt staging lease failed:", errMsg(leaseError));
+        return json({
+          error:
+            "Receipt evidence could not be changed safely. Please try again shortly.",
+          code: "RECEIPT_LEASE_UNAVAILABLE",
+        }, 503);
+      }
+      if (!lease?.claimed || !lease?.claim_token) {
+        return json({
+          error:
+            "This receipt is already being processed. Please wait and do not upload or pay again.",
+          code: "RECEIPT_VERIFICATION_IN_PROGRESS",
+          retryAfterSeconds: 15,
+        }, 409);
+      }
+      actionLeaseToken = String(lease.claim_token);
+
+      // Re-read after claiming. A verifier may have completed between the
+      // authorization read and the lease claim; never replace or discard it.
+      groupRows = await loadScopedReceiptBookingRows(
+        db,
+        booking,
+        bookingMutationScope,
+      );
+      if (
+        !groupRows.some((row) => String(row.ref || "") === bookingRef) ||
+        !receiptGroupMetadataIsConsistent(groupRows)
+      ) {
+        return json({
+          error: "Receipt metadata changed while the request was starting",
+          code: "RECEIPT_GROUP_INCONSISTENT",
+        }, 409);
+      }
+      if (groupRows.some(receiptEvidenceWasVerified)) {
+        return json({
+          error: "Verified receipt evidence cannot be changed",
+          code: "RECEIPT_ALREADY_VERIFIED",
+        }, 409);
+      }
+      if (action === "stage" && !receiptGroupIsActive(groupRows)) {
+        return json({
+          error: "This booking no longer accepts receipt uploads",
+        }, 409);
+      }
+
+      targetRow = groupRows.find((row) =>
+        String(row.ref || "") === bookingRef
+      )!;
+      allowedBookingRefs = new Set(
+        groupRows.map((row) => String(row.ref || "")).filter(Boolean),
+      );
+      try {
+        attached = attachedReceiptMetadata(targetRow, allowedBookingRefs);
+      } catch {
+        return json({
+          error: "Attached receipt metadata is invalid",
+          code: "ATTACHED_RECEIPT_METADATA_INVALID",
+        }, 409);
+      }
+      const previousMetadata = receiptMetadataSnapshot(targetRow);
+
+      if (action === "discard-stage") {
+        if (!attached) {
+          return json({
+            ok: true,
+            discarded: false,
+            stale: !!requestedStagedPath,
+            bookingRef,
+            stagedReceiptPath: null,
+            receiptImageUrl: null,
+            receiptImageHash: null,
+            receiptStatus: String(targetRow.receipt_status || "none"),
+            receiptVerifiedAt: null,
+            verified: false,
+            bookingStatus: String(targetRow.status || "") || null,
+            paymentStatus: String(targetRow.payment_status || "") || null,
+          });
+        }
+        if (attached.path !== requestedStagedPath) {
+          return json({
+            ok: true,
+            discarded: false,
+            stale: true,
+            bookingRef,
+            stagedReceiptPath: null,
+            receiptImageUrl: null,
+            receiptImageHash: null,
+            receiptStatus: String(targetRow.receipt_status || "none"),
+            receiptVerifiedAt: targetRow.receipt_verified_at || null,
+            verified: false,
+            bookingStatus: String(targetRow.status || "") || null,
+            paymentStatus: String(targetRow.payment_status || "") || null,
+          });
+        }
+        let clearQuery = bookingUpdateQuery(
+          db,
+          booking,
+          clearedReceiptMetadata(),
+          bookingMutationScope,
+        )
+          .is("receipt_verified_at", null)
+          .in("receipt_status", ["none", "manual_review"]);
+        clearQuery = attached
+          ? clearQuery.eq("receipt_image_url", attached.path).eq(
+            "receipt_image_hash",
+            attached.hash,
+          )
+          : clearQuery.is("receipt_image_url", null).is(
+            "receipt_image_hash",
+            null,
+          );
+        const { data: clearedRows, error: clearError } = await clearQuery.select(
+          "ref",
+        );
+        if (clearError || clearedRows?.length !== groupRows.length) {
+          console.error(
+            "receipt discard metadata clear failed:",
+            clearError ? errMsg(clearError) : "not every scoped row was cleared",
+          );
+          return json({
+            error: "Receipt evidence could not be discarded safely",
+            code: "RECEIPT_DISCARD_FAILED",
+          }, 500);
+        }
+
+        if (attached) {
+          const { error: removeError } = await db.storage.from("receipts")
+            .remove([attached.path]);
+          if (removeError) {
+            const clearedRefs = (clearedRows || []).map((row: { ref: string }) =>
+              row.ref
+            );
+            const { data: restoredRows, error: restoreError } =
+              await bookingUpdateQuery(
+                db,
+                booking,
+                previousMetadata,
+                bookingMutationScope,
+              )
+                .in("ref", clearedRefs)
+                .is("receipt_image_url", null)
+                .is("receipt_image_hash", null)
+                .is("receipt_verified_at", null)
+                .eq("receipt_status", "none")
+                .select("ref");
+            console.error("receipt discard object removal failed:", {
+              removeError: errMsg(removeError),
+              restoreError: restoreError ? errMsg(restoreError) : null,
+              restoredRows: restoredRows?.length || 0,
+            });
+            return json({
+              error:
+                "Receipt evidence could not be removed safely. Please try again.",
+              code: "RECEIPT_DISCARD_STORAGE_FAILED",
+            }, 500);
+          }
+        }
+        return json({
+          ok: true,
+          discarded: !!attached,
+          stale: false,
+          bookingRef,
+          stagedReceiptPath: null,
+          receiptImageUrl: null,
+          receiptImageHash: null,
+          receiptStatus: "none",
+          receiptVerifiedAt: null,
+          verified: false,
+          bookingStatus: String(targetRow.status || "") || null,
+          paymentStatus: String(targetRow.payment_status || "") || null,
+        });
+      }
+
+      let bytes: Uint8Array;
+      try {
+        bytes = uploadedImage
+          ? new Uint8Array(await uploadedImage.arrayBuffer())
+          : base64ToBytes(imageBase64);
+      } catch {
+        return json({ error: "Receipt image encoding is invalid" }, 400);
+      }
+      if (bytes.length === 0) return json({ error: "Empty image" }, 400);
+      if (bytes.length > MAX_BYTES) {
+        return json({ error: "Image too large (max 5 MB)" }, 400);
+      }
+      const contentType = detectReceiptImageContentType(bytes);
+      if (!contentType) {
+        return json({
+          error: "Receipt must be a valid JPG, PNG, or WebP image",
+        }, 415);
+      }
+      if (!receiptImageSafeToDecode(bytes, contentType)) {
+        return json({ error: "Receipt image dimensions are too large" }, 400);
+      }
+
+      const imageHash = await sha256Hex(bytes);
+      const ext = contentType === "image/png"
+        ? "png"
+        : contentType === "image/webp"
+        ? "webp"
+        : "jpg";
+      const stagedReceiptPath = `${bookingRef}/${imageHash}.${ext}`;
+      const { error: uploadError } = await db.storage.from("receipts").upload(
+        stagedReceiptPath,
+        bytes,
+        { contentType, upsert: true },
+      );
+      if (uploadError) {
+        console.error("receipt staging failed:", errMsg(uploadError));
+        return json({
+          error: "Receipt image could not be stored. Please upload it again.",
+        }, 500);
+      }
+
+      const stagedMetadata: Record<string, unknown> = {
+        // Public court holds use GCash as a temporary insert-time placeholder.
+        // The enabled method selected for this exact receipt becomes
+        // authoritative atomically with the durable evidence checkpoint.
+        payment_method: provider,
+        payment_flow: provider,
+        receipt_image_url: stagedReceiptPath,
+        receipt_image_hash: imageHash,
+        receipt_phash: null,
+        receipt_status: "manual_review",
+        receipt_flags: [],
+        receipt_extracted: null,
+        receipt_confidence: null,
+        receipt_verified_at: null,
+      };
+      let attachQuery = bookingUpdateQuery(
+        db,
+        booking,
+        stagedMetadata,
+        bookingMutationScope,
+      )
+        .in("status", ACTIVE_RECEIPT_BOOKING_STATUSES)
+        .in("payment_status", ACTIVE_RECEIPT_PAYMENT_STATUSES)
+        .is("receipt_verified_at", null)
+        .in("receipt_status", ["none", "manual_review"]);
+      attachQuery = attached
+        ? attachQuery.eq("receipt_image_url", attached.path).eq(
+          "receipt_image_hash",
+          attached.hash,
+        )
+        : attachQuery.is("receipt_image_url", null).is(
+          "receipt_image_hash",
+          null,
+        );
+      const { data: attachedRows, error: attachError } = await attachQuery
+        .select("ref");
+      const attachedCount = attachedRows?.length || 0;
+      if (attachError || attachedCount !== groupRows.length) {
+        let restored = !!attachError || attachedCount === 0;
+        if (!restored) {
+          const partiallyAttachedRefs = attachedRows!.map(
+            (row: { ref: string }) => row.ref,
+          );
+          const { data: restoredRows, error: restoreError } =
+            await bookingUpdateQuery(
+              db,
+              booking,
+              previousMetadata,
+              bookingMutationScope,
+            )
+              .in("ref", partiallyAttachedRefs)
+              .eq("receipt_image_url", stagedReceiptPath)
+              .eq("receipt_image_hash", imageHash)
+              .is("receipt_verified_at", null)
+              .eq("receipt_status", "manual_review")
+              .select("ref");
+          restored = !restoreError &&
+            restoredRows?.length === attachedCount;
+          if (restoreError || !restored) {
+            console.error(
+              "receipt staging rollback failed:",
+              restoreError
+                ? errMsg(restoreError)
+                : "not every partially attached row was restored",
+            );
+          }
+        }
+        if (restored && attached?.path !== stagedReceiptPath) {
+          const { error: cleanupError } = await db.storage.from("receipts")
+            .remove([stagedReceiptPath]);
+          if (cleanupError) {
+            console.error(
+              "receipt staging failed-upload cleanup failed:",
+              errMsg(cleanupError),
+            );
+          }
+        }
+        console.error(
+          "receipt staging metadata attach failed:",
+          attachError ? errMsg(attachError) : "not every scoped row was attached",
+        );
+        return json({
+          error:
+            "Receipt was uploaded but could not be attached safely. Please try again.",
+          code: "RECEIPT_STAGE_ATTACH_FAILED",
+        }, 500);
+      }
+
+      let cleanupWarning: string | null = null;
+      if (attached && attached.path !== stagedReceiptPath) {
+        const { error: priorRemoveError } = await db.storage.from("receipts")
+          .remove([attached.path]);
+        if (priorRemoveError) {
+          cleanupWarning = "The previous private checkpoint needs cleanup.";
+          console.error(
+            "receipt staging prior-object cleanup failed:",
+            errMsg(priorRemoveError),
+          );
+        }
+      }
+      console.log("receipt checkpoint: durably staged", {
+        bookingRef,
+        rows: attachedCount,
+        bytes: bytes.length,
+        contentType,
+        stagedReceiptPath,
+        replaced: !!attached && attached.path !== stagedReceiptPath,
+      });
+      return json({
+        ok: true,
+        found: true,
+        stagedReceiptPath,
+        receiptImageHash: imageHash,
+        contentType,
+        size: bytes.length,
+        receiptStatus: "manual_review",
+        receiptVerifiedAt: null,
+        verified: false,
+        replaced: !!attached && attached.path !== stagedReceiptPath,
+        ...(cleanupWarning ? { warning: cleanupWarning } : {}),
+      });
+    } catch (error) {
+      console.error(`receipt ${action} error:`, errMsg(error));
+      return json({ error: errMsg(error) }, 500);
+    } finally {
+      if (actionLeaseKey && actionLeaseToken) {
+        const { error: releaseError } = await db.rpc(
+          "release_receipt_verification_lease",
+          {
+            p_booking_key: actionLeaseKey,
+            p_claim_token: actionLeaseToken,
+          },
+        );
+        if (releaseError) {
+          console.error(
+            `receipt ${action} lease release failed:`,
+            errMsg(releaseError),
+          );
+        }
+      }
+    }
+  }
 
   // ── admin-only: mint a signed URL to view a stored receipt ────────────────
   if (action === "sign") {
@@ -1227,6 +1895,7 @@ Deno.serve(async (req) => {
     const bookingAccessToken = String(body.bookingAccessToken || "");
     let provider = normalizedProvider(String(body.provider || "gcash"));
     let imageBase64 = String(body.imageBase64 || "");
+    const stagedReceiptPath = String(body.stagedReceiptPath || "").trim();
     // Optional inline data supports pre-save Open Play registration receipts.
     // A matching saved booking still takes precedence over every inline field.
     const inlineBookingData =
@@ -1237,29 +1906,34 @@ Deno.serve(async (req) => {
     if (!/^[a-z0-9][a-z0-9-]{2,79}$/i.test(bookingRef)) {
       return json({ error: "Invalid bookingRef" }, 400);
     }
-    if (!imageBase64 && !uploadedImage) {
-      return json({ error: "receipt file or imageBase64 required" }, 400);
+    if (!imageBase64 && !uploadedImage && !stagedReceiptPath) {
+      return json({
+        error: "receipt file, staged receipt, or imageBase64 required",
+      }, 400);
     }
 
-    let bytes: Uint8Array;
-    try {
-      bytes = uploadedImage
-        ? new Uint8Array(await uploadedImage.arrayBuffer())
-        : base64ToBytes(imageBase64);
-    } catch {
-      return json({ error: "Receipt image encoding is invalid" }, 400);
-    }
-    if (bytes.length === 0) return json({ error: "Empty image" }, 400);
-    if (bytes.length > MAX_BYTES) {
-      return json({ error: "Image too large (max 5 MB)" }, 400);
-    }
-    // Never trust a browser-supplied MIME label. Detect the actual file type
-    // before storing the upload or sending it to the billable OCR API.
-    const contentType = detectReceiptImageContentType(bytes);
-    if (!contentType) {
-      return json({
-        error: "Receipt must be a valid JPG, PNG, or WebP image",
-      }, 415);
+    let bytes: Uint8Array | null = null;
+    let contentType: ReceiptImageContentType | null = null;
+    if (!stagedReceiptPath) {
+      try {
+        bytes = uploadedImage
+          ? new Uint8Array(await uploadedImage.arrayBuffer())
+          : base64ToBytes(imageBase64);
+      } catch {
+        return json({ error: "Receipt image encoding is invalid" }, 400);
+      }
+      if (bytes.length === 0) return json({ error: "Empty image" }, 400);
+      if (bytes.length > MAX_BYTES) {
+        return json({ error: "Image too large (max 5 MB)" }, 400);
+      }
+      // Never trust a browser-supplied MIME label. Detect the actual file type
+      // before storing the upload or sending it to the billable OCR API.
+      contentType = detectReceiptImageContentType(bytes);
+      if (!contentType) {
+        return json({
+          error: "Receipt must be a valid JPG, PNG, or WebP image",
+        }, 415);
+      }
     }
     // A saved court booking is always authoritative. Inline data exists for
     // pre-save Open Play registrations; it must never override a persisted
@@ -1426,6 +2100,7 @@ Deno.serve(async (req) => {
       }, 409);
     }
 
+    let persistedAttachedHash = "";
     if (hasPersistedBooking) {
       receiptLeaseKey = String(booking.booking_group_ref || bookingRef).trim();
       const { data: leaseRows, error: leaseError } = await db.rpc(
@@ -1450,6 +2125,129 @@ Deno.serve(async (req) => {
         }, 409);
       }
       receiptLeaseToken = String(lease.claim_token);
+
+      // The initial row can become stale while a prior verifier owns the
+      // lease. Re-read after claiming before trusting or downloading evidence.
+      const { data: currentReceiptRow, error: currentReceiptError } = await db
+        .from("bookings")
+        .select(
+          "status,payment_status,receipt_image_url,receipt_image_hash,receipt_phash,receipt_status,receipt_flags,receipt_extracted,receipt_confidence,receipt_verified_at",
+        )
+        .eq("ref", bookingRef)
+        .maybeSingle();
+      if (currentReceiptError) {
+        return json({ error: "Current receipt state could not be loaded" }, 500);
+      }
+      if (!currentReceiptRow) return json({ error: "Booking not found" }, 404);
+      booking = {
+        ...booking,
+        ...(currentReceiptRow as Record<string, unknown>),
+      };
+
+      const currentStatus = String(booking.status || "");
+      const currentPaymentStatus = String(booking.payment_status || "");
+      const terminalAfterLease =
+        ["confirmed", "cancelled", "completed", "forfeited"].includes(
+          currentStatus,
+        ) ||
+        ["paid", "downpayment_paid", "deposit_retained", "rejected"].includes(
+          currentPaymentStatus,
+        );
+      if (terminalAfterLease || receiptEvidenceWasVerified(booking)) {
+        const storedReceiptStatus = String(booking.receipt_status || "");
+        const finalStatus = storedReceiptStatus === "rejected" ||
+            currentStatus === "cancelled" || currentPaymentStatus === "rejected"
+          ? "rejected"
+          : storedReceiptStatus === "manual_review"
+          ? "manual_review"
+          : "auto_approved";
+        const storedFlags = Array.isArray(booking.receipt_flags)
+          ? booking.receipt_flags as string[]
+          : [];
+        return json({
+          ok: true,
+          status: finalStatus,
+          flags: storedFlags,
+          publicReason: publicReceiptMessage(finalStatus, storedFlags),
+          extracted: booking.receipt_extracted || null,
+          confidence: booking.receipt_confidence ?? null,
+          receiptImageUrl: booking.receipt_image_url || null,
+          receiptImageHash: booking.receipt_image_hash || null,
+          receiptPhash: booking.receipt_phash || null,
+          receiptVerifiedAt: booking.receipt_verified_at || null,
+          paymentStatus: currentPaymentStatus || null,
+          bookingStatus: currentStatus || null,
+          message: "This booking receipt has already been processed.",
+        });
+      }
+
+      const persistedAttachedPath = String(
+        booking.receipt_image_url || "",
+      ).trim();
+      persistedAttachedHash = String(
+        booking.receipt_image_hash || "",
+      ).trim().toLowerCase();
+      if (stagedReceiptPath) {
+        if (stagedReceiptPath !== persistedAttachedPath) {
+          return json({
+            error:
+              "The staged receipt is not the current checkpoint for this booking.",
+            code: "STAGED_RECEIPT_NOT_CURRENT",
+          }, 409);
+        }
+      } else if (persistedAttachedPath || persistedAttachedHash) {
+        return json({
+          error:
+            "Use the current staged receipt checkpoint to verify this booking.",
+          code: "STAGED_RECEIPT_REQUIRED",
+        }, 409);
+      }
+    }
+
+    if (stagedReceiptPath) {
+      if (!hasPersistedBooking) {
+        return json({ error: "A staged receipt requires a saved booking" }, 400);
+      }
+      const expectedPrefix = `${bookingRef}/`;
+      const stagedName = stagedReceiptPath.startsWith(expectedPrefix)
+        ? stagedReceiptPath.slice(expectedPrefix.length)
+        : "";
+      if (!/^[0-9a-f]{64}\.(?:jpg|png|webp)$/.test(stagedName)) {
+        return json({ error: "Invalid staged receipt checkpoint" }, 400);
+      }
+      const stagedHash = stagedName.slice(0, 64);
+      if (persistedAttachedHash !== stagedHash) {
+        return json({
+          error: "The staged receipt hash is not attached to this booking.",
+          code: "STAGED_RECEIPT_HASH_MISMATCH",
+        }, 409);
+      }
+      const { data: stagedObject, error: stagedDownloadError } = await db.storage
+        .from("receipts")
+        .download(stagedReceiptPath);
+      if (stagedDownloadError || !stagedObject) {
+        return json({
+          error: "The uploaded receipt checkpoint is no longer available.",
+        }, 409);
+      }
+      try {
+        bytes = new Uint8Array(await stagedObject.arrayBuffer());
+      } catch {
+        return json({ error: "Stored receipt image is invalid" }, 400);
+      }
+      if (bytes.length === 0) return json({ error: "Empty image" }, 400);
+      if (bytes.length > MAX_BYTES) {
+        return json({ error: "Image too large (max 5 MB)" }, 400);
+      }
+      contentType = detectReceiptImageContentType(bytes);
+      if (!contentType) {
+        return json({
+          error: "Receipt must be a valid JPG, PNG, or WebP image",
+        }, 415);
+      }
+    }
+    if (!bytes || !contentType) {
+      return json({ error: "Receipt image could not be prepared" }, 500);
     }
 
     // Save the evidence before pricing, perceptual hashing, or OCR. Large
@@ -1462,20 +2260,27 @@ Deno.serve(async (req) => {
       ? "webp"
       : "jpg";
     const objectPath = `${bookingRef}/${imageHash}.${ext}`;
+    if (stagedReceiptPath && stagedReceiptPath !== objectPath) {
+      return json({
+        error: "Staged receipt checkpoint did not match its contents",
+      }, 400);
+    }
     console.log("receipt checkpoint: storing", {
       bookingRef,
       bytes: bytes.length,
       contentType,
     });
-    const { error: upErr } = await db.storage.from("receipts").upload(
-      objectPath,
-      bytes,
-      {
-        contentType,
-        // The hash-derived path makes a customer retry idempotent.
-        upsert: true,
-      },
-    );
+    const upErr = stagedReceiptPath
+      ? null
+      : (await db.storage.from("receipts").upload(
+        objectPath,
+        bytes,
+        {
+          contentType,
+          // The hash-derived path makes a customer retry idempotent.
+          upsert: true,
+        },
+      )).error;
     if (upErr) {
       console.error("receipt upload failed:", errMsg(upErr));
       return json({
@@ -1485,7 +2290,7 @@ Deno.serve(async (req) => {
     }
 
     if (hasPersistedBooking) {
-      const { data: safeRows, error: safeStateErr } = await bookingUpdateQuery(
+      let safeStateQuery = bookingUpdateQuery(
         db,
         booking,
         {
@@ -1495,11 +2300,23 @@ Deno.serve(async (req) => {
           receipt_image_hash: imageHash,
           receipt_status: "manual_review",
           receipt_flags: [],
+          receipt_verified_at: null,
         },
         bookingMutationScope,
       )
-        .in("status", ["verifying", "pending"])
-        .in("payment_status", ["unpaid", "pending", "for_verification"])
+        .in("status", ACTIVE_RECEIPT_BOOKING_STATUSES)
+        .in("payment_status", ACTIVE_RECEIPT_PAYMENT_STATUSES)
+        .is("receipt_verified_at", null);
+      safeStateQuery = stagedReceiptPath
+        ? safeStateQuery.eq("receipt_image_url", stagedReceiptPath).eq(
+          "receipt_image_hash",
+          imageHash,
+        )
+        : safeStateQuery.is("receipt_image_url", null).is(
+          "receipt_image_hash",
+          null,
+        );
+      const { data: safeRows, error: safeStateErr } = await safeStateQuery
         .select("ref");
       if (safeStateErr || !safeRows?.length) {
         console.error(

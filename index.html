@@ -3246,14 +3246,14 @@ try {
                 <label id="bReceiptDrop" class="bpay-receipt-drop"
                   onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
                   📷 Tap to attach your receipt screenshot
-                  <input type="file" accept="image/*" id="bReceiptImg" style="display:none" onchange="onReceiptPicked(event)" />
+                  <input type="file" accept="image/jpeg,image/png,image/webp" id="bReceiptImg" style="display:none" onchange="onReceiptPicked(event)" />
                 </label>
                 <div id="bReceiptPreviewWrap" class="bpay-receipt-preview">
                   <img id="bReceiptPreview" alt="Receipt preview" />
                   <span id="bReceiptName" style="font-size:.76rem;color:var(--text);flex:1;word-break:break-all"></span>
                   <button type="button" onclick="clearReceipt()" style="background:none;border:none;color:#e53935;font-size:.74rem;font-weight:700;cursor:pointer">✕ Remove</button>
                 </div>
-                <div id="bReceiptStatus" style="display:none;margin-top:8px;font-size:.78rem;font-weight:700;border-radius:8px;padding:8px 10px;line-height:1.5"></div>
+                <div id="bReceiptStatus" role="status" aria-live="polite" style="display:none;margin-top:8px;font-size:.78rem;font-weight:700;border-radius:8px;padding:8px 10px;line-height:1.5"></div>
                 <div id="bReceiptRequired" class="bpay-help">
                   GCash to GCash only.<br>BDO Pay/InstaPay receipts will be rejected.<br>Please choose the correct payment method before paying.
                 </div>
@@ -5569,6 +5569,7 @@ async function maybeResumeGuestBooking() {
 
 function cancelReservedBookings(refs = reservedRefs()) {
   const uniqueRefs = [...new Set((refs || []).filter(Boolean))];
+  invalidateBookingReceiptUpload({ discard: true });
   clearReservationState();
   return Promise.allSettled(uniqueRefs.map(ref =>
     DB.updateBooking(ref, { status: 'cancelled', paymentStatus: 'rejected' }).catch(() => {})
@@ -5880,15 +5881,29 @@ async function proceedToBook(courtId = null) {
   startSlotCountdown();
 }
 
-function closeBookModal() {
+function closeBookModal(options = {}) {
+  if (_bookingSubmissionInFlight && !options.force) {
+    toast('Please wait while your receipt and booking are being finalized.', 'inf');
+    return false;
+  }
   const itemsToRelease = activeBookingItems();
+  if (!options.skipReceiptClear) clearReceipt({ force: true, discard: true });
+  const receiptCleanup = _receiptDiscardPromise.catch(() => null);
+  const hasReservedBookings = reservedRefs().length > 0;
   $('bookModal').classList.remove('active');
   document.body.style.overflow = '';
   stopSlotCountdown();
   // Cancel the reservation if the user closes without submitting, then refresh
-  // the affected grids so temporary "Processing..." slots become available.
-  if (reservedRefs().length) releaseReservedBookingViews(itemsToRelease).catch(() => {});
+  // the affected grids so temporary "Processing..." slots become available. Keep
+  // the anonymous hold token until any in-flight stage has settled and its private
+  // checkpoint has been discarded; cancellation forgets that browser credential.
+  if (hasReservedBookings) {
+    receiptCleanup
+      .then(() => releaseReservedBookingViews(itemsToRelease))
+      .catch(() => {});
+  }
   else clearSelectedBookingUi();
+  return true;
 }
 
 function startSlotCountdown(initialSeconds = null) {
@@ -5977,7 +5992,30 @@ function initBookingValidationHighlights() {
   const policy = $('bookingPolicyAgree');
   if (policy) {
     policy.addEventListener('change', () => {
-      if (policy.checked) clearBookingInvalid(policy.closest('.booking-policy-check'));
+      if (_bookingSubmissionInFlight) {
+        policy.checked = !!_bookingSubmissionSnapshot?.consentAgreed;
+        toast('Please wait while your receipt and booking are being finalized.', 'inf');
+        return;
+      }
+      if (policy.checked) {
+        clearBookingInvalid(policy.closest('.booking-policy-check'));
+        if (_receiptFile && !bookingReceiptUploadReady(_receiptFile, _reservedRef, $('bPay')?.value || '')) {
+          beginAutomaticReceiptUpload(_receiptFile);
+        }
+      } else if (_receiptFile && isDigitalPayMethod($('bPay')?.value || '')) {
+        invalidateBookingReceiptUpload({ discard: true });
+        _receiptUploadState = {
+          file: _receiptFile,
+          bookingRef: _reservedRef,
+          paymentMethod: $('bPay')?.value || '',
+          status: 'waiting_consent',
+        };
+        setBookingReceiptUploadMessage(
+          'waiting_consent',
+          'Agree to the booking and payment policy below to securely upload this receipt.',
+        );
+        setBookingReceiptContinueState('waiting_consent');
+      }
     });
   }
 }
@@ -6004,6 +6042,7 @@ function wizGoTo(n) {
   if (n === 5) {
     updatePrice();
     preparePaymentStep();
+    setBookingReceiptContinueState(_receiptUploadState?.status || 'idle');
   }
   const body = document.querySelector('.bk-modal-body');
   if (body) body.scrollTop = 0;
@@ -6035,21 +6074,30 @@ async function wizNext() {
     if (!paymentMethods[payMethod]) { bookingValidationError('Selected payment method is no longer available.', 'payMethodBlock', 4); return; }
     wizGoTo(5);
   } else if (wizStep === 5) {
+    const payMethod = $('bPay')?.value || '';
+    const retryableUpload = isDigitalPayMethod(payMethod) &&
+      _receiptUploadState?.status === 'failed' &&
+      receiptUploadStateMatchesCurrentContext(_receiptUploadState);
+    if (retryableUpload) {
+      await beginAutomaticReceiptUpload(_receiptFile);
+      return;
+    }
     try {
       await submitBooking();
     } catch (err) {
       console.error('Unexpected booking submission error:', err);
-      const submitBtn = $('wizNextBtn');
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Confirm Booking';
-      }
+      _bookingSubmissionInFlight = false;
+      setBookingReceiptContinueState(_receiptUploadState?.status || 'idle');
       toast(`Could not submit booking: ${extractErrMsg(err)}`, 'err');
     }
   }
 }
 
 function wizBack() {
+  if (_bookingSubmissionInFlight) {
+    toast('Please wait while your receipt and booking are being finalized.', 'inf');
+    return;
+  }
   if (wizStep <= wizStartStep) { closeBookModal(); return; }
   wizGoTo(wizStep - 1);
 }
@@ -6642,11 +6690,22 @@ function updatePrice() {
    PAYMENT
    ============================================= */
 function pickPay(m) {
+  if (_bookingSubmissionInFlight) {
+    toast('Please wait while your receipt and booking are being finalized.', 'inf');
+    return;
+  }
   if (!paymentMethods[m]) {
     toast('This payment method is currently unavailable.', 'err');
     return;
   }
+  const previousMethod = $('bPay')?.value || '';
   const digitalPay = isDigitalPayMethod(m);
+  if (previousMethod && previousMethod !== m && _receiptFile) {
+    // A digital-to-digital change reuses the same private hash path but must
+    // establish a fresh, method-bound client checkpoint. Cleanup is serialized
+    // before any replacement upload so an identical hash path stays intact.
+    invalidateBookingReceiptUpload({ discard: true });
+  }
   document.querySelectorAll('.pay-opt').forEach(el => el.classList.toggle('on', el.dataset.m === m));
   $('bPay').value = m;
   clearBookingInvalid('payMethodBlock');
@@ -6699,6 +6758,14 @@ function pickPay(m) {
   else $('bGcashRef')?.removeAttribute('required');
   syncBookingRefUi(m);
   updatePaymentAmountUI();
+  if (digitalPay && _receiptFile && previousMethod !== m) {
+    beginAutomaticReceiptUpload(_receiptFile);
+  } else if (!digitalPay && _receiptFile && previousMethod !== m) {
+    // The checkpoint cleanup was scheduled above. Clear the now-irrelevant
+    // attachment without scheduling a duplicate discard operation.
+    clearReceipt({ force: true, discard: false });
+  }
+  setBookingReceiptContinueState(_receiptUploadState?.status || 'idle');
   saveGuestBookingResume();
 }
 
@@ -6919,6 +6986,10 @@ function updatePaymentAmountUI() {
 }
 
 function setPayAmount(mode) {
+  if (_bookingSubmissionInFlight) {
+    toast('Please wait while your receipt and booking are being finalized.', 'inf');
+    return;
+  }
   mode = isVerifiedHostBooking() && hostBookingDepositEligible() ? 'half' : 'full';
   payFull = (mode === 'full');
   ['gc','gt','pn'].forEach(p => {
@@ -7204,7 +7275,7 @@ async function submitBookingLegacy(e) {
 async function submitBooking(e) {
   if (e) e.preventDefault();
   const submitBtn = $('wizNextBtn');
-  if (submitBtn?.disabled) return;
+  if (_bookingSubmissionInFlight || submitBtn?.disabled) return;
 
   const now = Date.now();
   const cooldown = 30000;
@@ -7212,11 +7283,6 @@ async function submitBooking(e) {
     const wait = Math.ceil((cooldown - (now - _lastSubmitAt)) / 1000);
     toast(`Please wait ${wait}s before trying again.`, 'inf');
     return;
-  }
-
-  if (submitBtn) {
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Saving booking...';
   }
 
   const items = uniqueBookingSelections(activeBookingItems());
@@ -7251,6 +7317,12 @@ async function submitBooking(e) {
       if (drop) markBookingInvalid(drop, 5);
       return 'Please upload your receipt screenshot before confirming.';
     }, 'bReceiptDrop', 5],
+    [digitalPay && !bookingReceiptUploadReady(_receiptFile, _reservedRef, payMethod), () => {
+      const uploadFailed = _receiptUploadState?.status === 'failed';
+      return uploadFailed
+        ? 'Receipt upload failed. Tap Retry Receipt Upload and wait for Upload complete.'
+        : 'Please wait until the receipt says Upload complete before continuing.';
+    }, 'bReceiptPreviewWrap', 5],
     [!!repairItem, `${repairItem?.courtName || 'Court'} is closed for repairs on this date. Please choose a different date or another court.`, 'bDate', 2],
   ];
 
@@ -7258,9 +7330,25 @@ async function submitBooking(e) {
     if (fail) {
       const message = typeof msg === 'function' ? msg() : msg;
       bookingValidationError(message, target, step);
-      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Confirm Booking'; }
+      setBookingReceiptContinueState(_receiptUploadState?.status || 'idle');
       return;
     }
+  }
+  const receiptSnapshot = digitalPay
+    ? Object.freeze({
+      file: _receiptFile,
+      bookingRef: _reservedRef,
+      paymentMethod: payMethod,
+      consentAgreed: !!$('bookingPolicyAgree')?.checked,
+      result: Object.freeze({ ...(_receiptUploadState?.result || {}) }),
+    })
+    : null;
+  _bookingSubmissionInFlight = true;
+  _bookingSubmissionSnapshot = receiptSnapshot;
+  setBookingSubmissionControlsLocked(true);
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving booking...';
   }
   _lastSubmitAt = now;
 
@@ -7313,9 +7401,31 @@ async function submitBooking(e) {
     downpayment: groupDownpayment,
   };
 
+  if (digitalPay && booking.ref !== receiptSnapshot?.bookingRef) {
+    _bookingSubmissionInFlight = false;
+    _bookingSubmissionSnapshot = null;
+    setBookingSubmissionControlsLocked(false);
+    invalidateBookingReceiptUpload({ discard: true });
+    setBookingReceiptUploadMessage(
+      'failed',
+      'Your reservation changed before the receipt could be finalized. Tap Retry Receipt Upload.',
+    );
+    _receiptUploadState = {
+      file: receiptSnapshot?.file || _receiptFile,
+      bookingRef: _reservedRef,
+      paymentMethod: payMethod,
+      status: 'failed',
+      error: new Error('Receipt reservation reference changed.'),
+    };
+    _lastSubmitAt = 0;
+    setBookingReceiptContinueState('failed');
+    return;
+  }
+
   stopSlotCountdown();
 
   let bookingSaved = false;
+  let receiptEvidenceProven = !digitalPay;
   try {
     const missingRows = [];
     for (const row of itemBookings) {
@@ -7346,52 +7456,46 @@ async function submitBooking(e) {
       }
     }
     if (missingRows.length) await DB.addBookings(missingRows);
-    clearReservationState();
     bookingSaved = true;
 
-    DB.notifyBookingSubmitted(booking).catch(() => {});
-
-    if (_receiptFile && digitalPay) {
+    let submissionToast = 'Booking submitted successfully!';
+    if (digitalPay) {
+      let receiptFailure = null;
       try {
-        if (submitBtn) submitBtn.textContent = 'Uploading receipt...';
-        booking._receiptResult = await verifyUploadedReceipt(booking.ref, payMethod);
+        if (submitBtn) submitBtn.textContent = 'Verifying payment...';
+        booking._receiptResult = await verifyUploadedReceipt(
+          receiptSnapshot.bookingRef,
+          receiptSnapshot.paymentMethod,
+          null,
+          receiptSnapshot.file,
+          receiptSnapshot.result,
+        );
       } catch(err) {
-        const receiptError = extractErrMsg(err);
-        // Do not overwrite server state after a timeout/network error: the
-        // Edge Function may finish successfully after the WebView disconnects.
-        booking.status = 'pending';
-        booking.paymentStatus = 'for_verification';
-        itemBookings.forEach(row => { row.status = 'pending'; row.paymentStatus = 'for_verification'; });
-        DB.notifyBookingUpdate(booking, 'payment_review_needed', `Receipt request uncertain: ${receiptError}`).catch(() => {});
-        showInvoice(booking);
-        resetForm();
-        toast(`Booking saved as ${booking.ref}. Receipt verification is still pending; please do not pay again.`, 'inf');
-        await refreshBookingItemViews(itemBookings);
-        return;
+        receiptFailure = err;
+      }
+
+      if (!booking._receiptResult?.receiptImageUrl) {
+        booking._receiptResult = await recoverStoredBookingReceipt(receiptSnapshot.bookingRef);
       }
       if (!booking._receiptResult?.receiptImageUrl) {
-        booking.status = 'pending';
-        booking.paymentStatus = 'for_verification';
-        itemBookings.forEach(row => { row.status = 'pending'; row.paymentStatus = 'for_verification'; });
-        DB.notifyBookingUpdate(booking, 'payment_review_needed', 'Receipt verification returned without a stored image path.').catch(() => {});
-        showInvoice(booking);
-        resetForm();
-        toast(`Booking saved as ${booking.ref}. The receipt needs manual review; please do not pay again.`, 'inf');
-        await refreshBookingItemViews(itemBookings);
+        keepBookingReceiptForRetry(
+          receiptSnapshot,
+          `Your booking is still reserved, but receipt storage could not be confirmed${receiptFailure ? `: ${extractErrMsg(receiptFailure)}` : '.'} Tap Retry — Verify Payment before the timer ends.`,
+        );
         return;
       }
+
+      receiptEvidenceProven = true;
+      _receiptFinalRetryNeeded = false;
       const ocrStatus = booking._receiptResult?.status;
       if (ocrStatus === 'rejected') {
         booking.status = 'cancelled';
         booking.paymentStatus = 'rejected';
         itemBookings.forEach(row => { row.status = 'cancelled'; row.paymentStatus = 'rejected'; });
         DB.notifyBookingUpdate(booking, 'payment_rejected', receiptReasonFromFlags(booking._receiptResult?.flags || [])).catch(() => {});
-        showInvoice(booking);
-        resetForm();
         await refreshBookingItemViews(itemBookings);
-        return;
-      }
-      if (ocrStatus === 'auto_approved') {
+        submissionToast = '';
+      } else if (ocrStatus === 'auto_approved') {
         const verifiedState = await canonicalAutoReceiptState(
           booking.ref,
           booking._receiptResult,
@@ -7427,17 +7531,33 @@ async function submitBooking(e) {
       }
     }
 
+    // Cash needs no receipt. Digital submissions reach this point only after
+    // the private checkpoint is proven on the canonical booking row.
+    DB.notifyBookingSubmitted(booking).catch(() => {});
     showInvoice(booking);
-    resetForm();
-    toast('Booking submitted successfully!');
+    resetForm({ preserveReceiptEvidence: receiptEvidenceProven });
+    if (submissionToast) toast(submissionToast);
   } catch(err) {
-    if (bookingSaved) toast(`Booking saved, but post-processing failed: ${extractErrMsg(err)}`, 'err');
-    else toast(`Failed to save booking: ${extractErrMsg(err)}`, 'err');
-  } finally {
-    if (submitBtn) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'Confirm Booking';
+    if (bookingSaved && receiptEvidenceProven) {
+      DB.notifyBookingSubmitted(booking).catch(() => {});
+      showInvoice(booking);
+      resetForm({ preserveReceiptEvidence: true });
+      toast(`Booking saved, but post-processing failed: ${extractErrMsg(err)}`, 'err');
+    } else if (digitalPay && receiptSnapshot) {
+      keepBookingReceiptForRetry(
+        receiptSnapshot,
+        `Your reservation is still open. ${bookingSaved ? 'Receipt finalization' : 'Booking save'} failed: ${extractErrMsg(err)} Tap Retry — Verify Payment before the timer ends.`,
+      );
+    } else {
+      _lastSubmitAt = 0;
+      startSlotCountdown(reservationSecondsLeft());
+      toast(`Failed to save booking: ${extractErrMsg(err)}`, 'err');
     }
+  } finally {
+    _bookingSubmissionInFlight = false;
+    _bookingSubmissionSnapshot = null;
+    setBookingSubmissionControlsLocked(false);
+    setBookingReceiptContinueState(_receiptUploadState?.status || 'idle');
   }
 }
 
@@ -7445,6 +7565,278 @@ async function submitBooking(e) {
    RECEIPT UPLOAD + AUTO-VERIFICATION
    ============================================= */
 let _receiptFile = null;
+let _receiptPreviewUrl = '';
+let _receiptUploadState = null;
+let _receiptUploadSequence = 0;
+let _bookingSubmissionInFlight = false;
+let _bookingSubmissionSnapshot = null;
+let _receiptFinalRetryNeeded = false;
+let _receiptDiscardPromise = Promise.resolve(null);
+
+function setBookingSubmissionControlsLocked(locked) {
+  const backButton = $('wizBackBtn');
+  if (backButton) backButton.disabled = !!locked;
+  const receiptInput = $('bReceiptImg');
+  if (receiptInput) receiptInput.disabled = !!locked;
+  const removeButton = document.querySelector('#bReceiptPreviewWrap button');
+  if (removeButton) removeButton.disabled = !!locked;
+  const policy = $('bookingPolicyAgree');
+  if (policy) policy.disabled = !!locked;
+  const paymentReference = $('bGcashRef');
+  if (paymentReference) paymentReference.disabled = !!locked;
+  document.querySelectorAll('.bpay-methods .pay-opt, .pay-amount-toggle .pat-btn').forEach(option => {
+    option.setAttribute('aria-disabled', locked ? 'true' : 'false');
+    option.style.pointerEvents = locked ? 'none' : '';
+    option.style.opacity = locked ? '.58' : '';
+  });
+}
+
+function setBookingReceiptUploadMessage(kind, message) {
+  const status = $('bReceiptStatus');
+  if (!status) return;
+  const styles = {
+    waiting_consent: ['rgba(184,126,0,.12)', '#b87e00'],
+    uploading: ['rgba(74,154,220,.1)', '#4b5563'],
+    uploaded: ['rgba(var(--ac),.12)', 'var(--accent)'],
+    failed: ['rgba(229,57,53,.1)', '#e53935'],
+  };
+  const [background, color] = styles[kind] || styles.uploading;
+  status.style.display = '';
+  status.style.background = background;
+  status.style.color = color;
+  status.textContent = message;
+}
+
+function receiptUploadStateMatchesCurrentContext(state = _receiptUploadState) {
+  const paymentMethod = $('bPay')?.value || '';
+  return !!(
+    state &&
+    _receiptFile &&
+    _reservedRef &&
+    isDigitalPayMethod(paymentMethod) &&
+    state.file === _receiptFile &&
+    state.bookingRef === _reservedRef &&
+    state.paymentMethod === paymentMethod
+  );
+}
+
+function bookingReceiptUploadReady(
+  file = _receiptFile,
+  bookingRef = _reservedRef,
+  paymentMethod = $('bPay')?.value || '',
+  consentAgreed = !!$('bookingPolicyAgree')?.checked,
+) {
+  return !!(
+    file &&
+    bookingRef &&
+    isDigitalPayMethod(paymentMethod) &&
+    consentAgreed &&
+    _receiptUploadState?.file === file &&
+    _receiptUploadState?.bookingRef === bookingRef &&
+    _receiptUploadState?.paymentMethod === paymentMethod &&
+    _receiptUploadState?.status === 'uploaded' &&
+    _receiptUploadState?.result?.stagedReceiptPath
+  );
+}
+
+function discardBookingReceiptCheckpoint(state = _receiptUploadState, result = state?.result) {
+  const bookingRef = String(state?.bookingRef || '').trim();
+  const stagedReceiptPath = String(result?.stagedReceiptPath || '').trim();
+  if (!bookingRef || !stagedReceiptPath || typeof DB?.discardBookingReceipt !== 'function') {
+    return Promise.resolve(null);
+  }
+  return Promise.resolve(DB.discardBookingReceipt({
+    bookingRef,
+    provider: state?.paymentMethod || 'gcash',
+    stagedReceiptPath,
+  })).catch(error => {
+    console.warn('Private receipt checkpoint cleanup skipped:', error);
+    return null;
+  });
+}
+
+function invalidateBookingReceiptUpload(options = {}) {
+  const previous = _receiptUploadState;
+  if (options.discard !== false) {
+    const priorDiscard = _receiptDiscardPromise.catch(() => null);
+    _receiptDiscardPromise = priorDiscard
+      .then(() => previous?.promise || previous?.result || null)
+      .catch(() => null)
+      .then(result => discardBookingReceiptCheckpoint(previous, previous?.result || result))
+      .catch(error => {
+        console.warn('Private receipt checkpoint cleanup skipped:', error);
+        return null;
+      });
+  }
+  _receiptUploadSequence += 1;
+  _receiptUploadState = null;
+  _receiptFinalRetryNeeded = false;
+  return previous;
+}
+
+function setBookingReceiptContinueState(kind = 'idle') {
+  const button = $('wizNextBtn');
+  if (!button || wizStep !== 5) return;
+  if (_bookingSubmissionInFlight) {
+    button.disabled = true;
+    return;
+  }
+  if (!isDigitalPayMethod($('bPay')?.value || '')) {
+    button.disabled = false;
+    button.textContent = '🎾 Confirm Booking';
+    return;
+  }
+  const file = _receiptFile;
+  const bookingRef = _reservedRef;
+  const paymentMethod = $('bPay')?.value || '';
+  const consentAgreed = !!$('bookingPolicyAgree')?.checked;
+  const contextMatches = receiptUploadStateMatchesCurrentContext(_receiptUploadState);
+  const ready = bookingReceiptUploadReady(file, bookingRef, paymentMethod, consentAgreed);
+  const retryableFailure = contextMatches && _receiptUploadState?.status === 'failed' && consentAgreed;
+  const locked = ['waiting_consent', 'uploading', 'failed'].includes(kind);
+  button.disabled = locked;
+  if (retryableFailure) button.disabled = false;
+  if (ready) button.disabled = false;
+  if (!file) {
+    button.disabled = true;
+    button.textContent = 'Attach Receipt to Continue';
+  } else if (!bookingRef) {
+    button.disabled = true;
+    button.textContent = 'Preparing Secure Upload...';
+  } else if (!consentAgreed) {
+    button.disabled = true;
+    button.textContent = 'Agree Below to Upload';
+  } else if (retryableFailure) {
+    button.textContent = 'Retry Receipt Upload';
+  } else if (ready) {
+    button.textContent = _receiptFinalRetryNeeded
+      ? 'Retry — Verify Payment'
+      : 'Continue — Verify Payment';
+  } else if (contextMatches && _receiptUploadState?.status === 'uploading') {
+    button.disabled = true;
+    button.textContent = 'Uploading receipt...';
+  } else {
+    button.disabled = true;
+    button.textContent = kind === 'waiting_consent'
+      ? 'Agree Below to Upload'
+      : kind === 'uploading'
+    ? 'Uploading receipt...'
+      : 'Waiting for Secure Upload';
+  }
+}
+
+function beginAutomaticReceiptUpload(file = _receiptFile) {
+  const bookingRef = _reservedRef;
+  const paymentMethod = $('bPay')?.value || 'gcash';
+  if (_bookingSubmissionInFlight) {
+    toast('Please wait while your receipt and booking are being finalized.', 'inf');
+    return Promise.resolve(null);
+  }
+  if (!file || !isDigitalPayMethod(paymentMethod)) {
+    setBookingReceiptContinueState('idle');
+    return Promise.resolve(null);
+  }
+  if (!$('bookingPolicyAgree')?.checked) {
+    _receiptUploadState = { file, bookingRef, paymentMethod, status: 'waiting_consent' };
+    setBookingReceiptUploadMessage(
+      'waiting_consent',
+      'Agree to the booking and payment policy below to securely upload this receipt.',
+    );
+    setBookingReceiptContinueState('waiting_consent');
+    return Promise.resolve(null);
+  }
+  if (
+    receiptUploadStateMatchesCurrentContext(_receiptUploadState) &&
+    _receiptUploadState?.status === 'uploading'
+  ) {
+    return _receiptUploadState.promise || Promise.resolve(null);
+  }
+  if (bookingReceiptUploadReady(file, bookingRef, paymentMethod)) {
+    setBookingReceiptContinueState('uploaded');
+    return Promise.resolve(_receiptUploadState.result);
+  }
+  if (!bookingRef || typeof DB.stageBookingReceipt !== 'function') {
+    _receiptUploadState = { file, bookingRef, paymentMethod, status: 'failed' };
+    setBookingReceiptUploadMessage('failed', 'Upload could not start. Tap Retry Receipt Upload.');
+    setBookingReceiptContinueState('failed');
+    return Promise.resolve(null);
+  }
+
+  const sequence = ++_receiptUploadSequence;
+  _receiptFinalRetryNeeded = false;
+  setBookingReceiptUploadMessage('uploading', 'Uploading receipt securely… Please wait.');
+  setBookingReceiptContinueState('uploading');
+  const discardBarrier = _receiptDiscardPromise.catch(() => null);
+  const promise = discardBarrier.then(() => {
+    const staleBeforeUpload = sequence !== _receiptUploadSequence ||
+      file !== _receiptFile ||
+      bookingRef !== _reservedRef ||
+      paymentMethod !== ($('bPay')?.value || '') ||
+      !$('bookingPolicyAgree')?.checked;
+    if (staleBeforeUpload) return null;
+    return DB.stageBookingReceipt({
+      bookingRef,
+      provider: paymentMethod,
+      imageFile: file,
+      contentType: file.type || 'image/jpeg',
+    });
+  }).then(result => {
+    const stale = sequence !== _receiptUploadSequence ||
+      file !== _receiptFile ||
+      bookingRef !== _reservedRef ||
+      paymentMethod !== ($('bPay')?.value || '') ||
+      !$('bookingPolicyAgree')?.checked;
+    if (stale) {
+      // Return the durable result to the serialized invalidation chain. That
+      // chain owns deletion and completes before a replacement stage begins.
+      return result || null;
+    }
+    if (!result?.stagedReceiptPath) throw new Error('Receipt upload did not finish.');
+    _receiptUploadState = {
+      sequence,
+      file,
+      bookingRef,
+      paymentMethod,
+      status: 'uploaded',
+      result,
+      promise: Promise.resolve(result),
+    };
+    setBookingReceiptUploadMessage('uploaded', '✓ Upload complete. Continue to verify your payment.');
+    setBookingReceiptContinueState('uploaded');
+    return result;
+  }).catch(error => {
+    const stale = sequence !== _receiptUploadSequence ||
+      file !== _receiptFile ||
+      bookingRef !== _reservedRef ||
+      paymentMethod !== ($('bPay')?.value || '') ||
+      !$('bookingPolicyAgree')?.checked;
+    if (stale) return null;
+    _receiptUploadState = {
+      sequence,
+      file,
+      bookingRef,
+      paymentMethod,
+      status: 'failed',
+      error,
+      promise: Promise.resolve(null),
+    };
+    setBookingReceiptUploadMessage(
+      'failed',
+      `Upload failed: ${extractErrMsg(error)} Tap Retry Receipt Upload.`,
+    );
+    setBookingReceiptContinueState('failed');
+    return null;
+  });
+  _receiptUploadState = {
+    sequence,
+    file,
+    bookingRef,
+    paymentMethod,
+    status: 'uploading',
+    promise,
+  };
+  return promise;
+}
 
 async function canonicalAutoReceiptState(bookingRef, receiptResult) {
   const canonical = result => {
@@ -7460,13 +7852,82 @@ async function canonicalAutoReceiptState(bookingRef, receiptResult) {
   return canonical(saved);
 }
 
+function normalizeStoredBookingReceipt(result) {
+  const receiptImageUrl = String(result?.receiptImageUrl || result?.receipt_image_url || '').trim();
+  if (!receiptImageUrl) return null;
+  const bookingStatus = String(result?.bookingStatus || result?.booking_status || result?.status || '').toLowerCase();
+  const paymentStatus = String(result?.paymentStatus || result?.payment_status || '').toLowerCase();
+  const storedReceiptStatus = String(result?.receiptStatus || result?.receipt_status || '').toLowerCase();
+  const status = ['auto_approved', 'manual_review', 'rejected'].includes(String(result?.status || '').toLowerCase())
+    ? String(result.status).toLowerCase()
+    : storedReceiptStatus === 'auto_approved' || (bookingStatus === 'confirmed' && ['paid', 'downpayment_paid'].includes(paymentStatus))
+    ? 'auto_approved'
+    : storedReceiptStatus === 'rejected' || bookingStatus === 'cancelled' || paymentStatus === 'rejected'
+    ? 'rejected'
+    : 'manual_review';
+  return {
+    status,
+    message: result?.publicReason || result?.message || 'Receipt safely stored for owner review.',
+    flags: result?.flags || result?.receiptFlags || result?.receipt_flags || [],
+    extracted: result?.extracted || result?.receiptExtracted || result?.receipt_extracted || null,
+    confidence: result?.confidence ?? result?.receiptConfidence ?? result?.receipt_confidence ?? null,
+    receiptImageUrl,
+    receiptImageHash: result?.receiptImageHash || result?.receipt_image_hash || null,
+    receiptPhash: result?.receiptPhash || result?.receipt_phash || null,
+    receiptVerifiedAt: result?.receiptVerifiedAt || result?.receipt_verified_at || null,
+    paymentStatus: paymentStatus || null,
+    bookingStatus: bookingStatus || null,
+  };
+}
+
+async function recoverStoredBookingReceipt(bookingRef) {
+  if (typeof DB?.recoverBookingReceipt === 'function') {
+    try {
+      const recovered = await DB.recoverBookingReceipt(bookingRef);
+      const normalized = normalizeStoredBookingReceipt(recovered);
+      if (normalized) return normalized;
+    } catch (error) {
+      console.warn('Stored receipt recovery did not complete:', error);
+    }
+  }
+  const stored = await DB.getBookingByRef(bookingRef).catch(() => null);
+  return normalizeStoredBookingReceipt(stored);
+}
+
+function keepBookingReceiptForRetry(snapshot, message) {
+  _receiptUploadState = {
+    sequence: _receiptUploadSequence,
+    file: snapshot.file,
+    bookingRef: snapshot.bookingRef,
+    paymentMethod: snapshot.paymentMethod,
+    status: 'uploaded',
+    result: snapshot.result,
+    promise: Promise.resolve(snapshot.result),
+  };
+  _receiptFinalRetryNeeded = true;
+  _lastSubmitAt = 0;
+  setBookingReceiptUploadMessage('failed', message);
+  wizGoTo(5);
+  saveGuestBookingResume({ receiptUploadIncomplete: true });
+  startSlotCountdown(reservationSecondsLeft());
+  toast(message, 'err');
+}
+
 function onReceiptPicked(e) {
+  if (_bookingSubmissionInFlight) {
+    e.target.value = '';
+    toast('Please wait while your receipt and booking are being finalized.', 'inf');
+    return;
+  }
   const f = e.target.files && e.target.files[0];
   if (!f) return;
-  if (!f.type.startsWith('image/')) { toast('Please choose an image file.', 'err'); e.target.value = ''; return; }
-  if (f.size > 5 * 1024 * 1024) { toast('Image too large (max 5 MB).', 'err'); e.target.value = ''; return; }
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) { toast('Please choose a JPG, PNG, or WebP receipt.', 'err'); e.target.value = ''; return; }
+  if (f.size > 20 * 1024 * 1024) { toast('Image too large (max 20 MB before secure resizing).', 'err'); e.target.value = ''; return; }
+  invalidateBookingReceiptUpload({ discard: true });
   _receiptFile = f;
-  const prev = $('bReceiptPreview'); if (prev) prev.src = URL.createObjectURL(f);
+  if (_receiptPreviewUrl) URL.revokeObjectURL(_receiptPreviewUrl);
+  _receiptPreviewUrl = URL.createObjectURL(f);
+  const prev = $('bReceiptPreview'); if (prev) prev.src = _receiptPreviewUrl;
   if ($('bReceiptName')) $('bReceiptName').textContent = f.name;
   if ($('bReceiptPreviewWrap')) $('bReceiptPreviewWrap').style.display = 'flex';
   const drop = $('bReceiptDrop');
@@ -7474,26 +7935,56 @@ function onReceiptPicked(e) {
     clearBookingInvalid(drop);
     drop.style.display = 'none';
   }
+  beginAutomaticReceiptUpload(f);
 }
 
-function clearReceipt() {
+function clearReceipt(options = {}) {
+  if (_bookingSubmissionInFlight && !options.force) {
+    toast('Please wait while your receipt and booking are being finalized.', 'inf');
+    return false;
+  }
+  invalidateBookingReceiptUpload({ discard: options.discard !== false });
   _receiptFile = null;
+  if (_receiptPreviewUrl) URL.revokeObjectURL(_receiptPreviewUrl);
+  _receiptPreviewUrl = '';
   if ($('bReceiptImg')) $('bReceiptImg').value = '';
+  if ($('bReceiptPreview')) $('bReceiptPreview').removeAttribute('src');
+  if ($('bReceiptName')) $('bReceiptName').textContent = '';
   if ($('bReceiptPreviewWrap')) $('bReceiptPreviewWrap').style.display = 'none';
   const drop = $('bReceiptDrop'); if (drop) drop.style.display = '';
   const st = $('bReceiptStatus'); if (st) st.style.display = 'none';
+  setBookingReceiptContinueState('idle');
+  return true;
 }
 
-async function verifyUploadedReceipt(bookingRef, method, inlineData = null) {
+async function verifyUploadedReceipt(
+  bookingRef,
+  method,
+  inlineData = null,
+  receiptFile = _receiptFile,
+  stagedResult = null,
+) {
   const st = $('bReceiptStatus');
   if (st) { st.style.display = ''; st.style.background = 'rgba(74,154,220,.1)'; st.style.color = '#4b5563'; st.textContent = '🔎 Verifying your receipt…'; }
   try {
-    if (!_receiptFile) throw new Error('Receipt screenshot is required.');
+    if (!receiptFile) throw new Error('Receipt screenshot is required.');
+    const staged = stagedResult?.stagedReceiptPath
+      ? stagedResult
+      : bookingReceiptUploadReady(receiptFile, bookingRef, method)
+      ? _receiptUploadState.result
+      : null;
     const payload = {
       bookingRef,
       provider: method,
-      imageFile: _receiptFile,
-      contentType: _receiptFile.type || 'image/jpeg',
+      ...(staged?.stagedReceiptPath
+        ? {
+          stagedReceiptPath: staged.stagedReceiptPath,
+          contentType: staged.contentType || receiptFile.type || 'image/jpeg',
+        }
+        : {
+          imageFile: receiptFile,
+          contentType: receiptFile.type || 'image/jpeg',
+        }),
     };
     if (inlineData) payload.bookingData = inlineData;
     const res = await DB.verifyGcashReceipt(payload);
@@ -7534,10 +8025,13 @@ function sendCustomerConfirmationEmail(booking) {
   DB.sendConfirmationEmail(booking, { allowFailure: true }).catch(() => {});
 }
 
-function resetForm() {
+function resetForm(options = {}) {
   clearAllBookingInvalids();
   $('bookForm').reset();
-  clearReceipt();
+  clearReceipt({
+    force: true,
+    discard: options.preserveReceiptEvidence !== true,
+  });
   stopSlotCountdown();
   clearReservationState();
   court = null;
@@ -7569,7 +8063,7 @@ function resetForm() {
   if ($('bookingPolicyAgree')) $('bookingPolicyAgree').checked = false;
   gcashSettings.checkoutVisited = false;
   document.querySelectorAll('.pay-opt').forEach(el => el.classList.remove('on'));
-  closeBookModal();
+  closeBookModal({ force: true, skipReceiptClear: true });
   updatePrice();
   wizGoTo(1);
   renderCourts();
@@ -9013,7 +9507,7 @@ async function submitOpenPlay() {
 }
 </script>
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20260719-payment-policy-v4&amp;rollback=deb2d66"></script>
+<script src="supabase-config.js?v=20260830-receipt-stage-v1&amp;rollback=deb2d66"></script>
 
 <!-- MOBILE STICKY BOOK NOW BAR -->
 <div id="mobileBookBar" class="mobile-book-bar" style="display:none">
