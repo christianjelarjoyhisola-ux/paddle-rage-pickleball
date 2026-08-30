@@ -171,6 +171,7 @@ try {
     "create-payment-session",
     "payment-webhook",
     "verify-gcash-receipt",
+    "host-booking-balance-payment",
     "host-application",
     "manage-account",
     "send-confirmation-email",

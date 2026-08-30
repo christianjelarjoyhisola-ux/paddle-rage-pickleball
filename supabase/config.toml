@@ -14,6 +14,9 @@ verify_jwt = false
 [functions.verify-gcash-receipt]
 verify_jwt = true
 
+[functions.host-booking-balance-payment]
+verify_jwt = true
+
 [functions.host-application]
 verify_jwt = true
 

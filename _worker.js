@@ -12,7 +12,13 @@ export default {
     // binding. Redirecting /host to /host.html here conflicts with Pages'
     // canonical /host.html -> /host redirect and creates a redirect loop.
     const response = await env.ASSETS.fetch(request);
-    const isSharedRuntime = url.pathname === '/supabase-config.js';
+    const releaseCoupledRuntime = new Set([
+      '/booking-balance.js',
+      '/host-balance-payment.js',
+      '/host-balance-admin.js',
+    ]);
+    const isSharedRuntime = url.pathname === '/supabase-config.js' ||
+      releaseCoupledRuntime.has(url.pathname);
     const isHtmlEntry = url.pathname === '/' ||
       url.pathname.endsWith('.html') ||
       ['/admin', '/host', '/login', '/player-live'].includes(url.pathname);
@@ -21,7 +27,8 @@ export default {
     // Pages' advanced-mode asset binding can attach a four-hour cache policy
     // even when _headers asks for revalidation. Keep HTML and its shared DB
     // adapter in the same release so a newly deployed UI never calls an older
-    // runtime API from the browser cache.
+    // runtime API from the browser cache. Host balance UI, adapter, deadline
+    // rules, and review controls are one release-coupled runtime set.
     const headers = new Headers(response.headers);
     headers.set('Cache-Control', 'no-store, max-age=0');
     return new Response(response.body, {

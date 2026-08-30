@@ -10,6 +10,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const PB_REQUEST_TIMEOUT_MS = 45000;
 const PB_RECEIPT_TIMEOUT_MS = 90000;
+const PB_PRIVATE_DATA_SURFACE = /^\/(?:admin|signature-view)(?:\.html)?\/?$/i.test(location.pathname);
 const _pbLocalStagedReceipts = new Map();
 
 function normalizeOpenPlaySkillLevel(value, fallback = 1) {
@@ -967,8 +968,8 @@ window.DB = {
     const opts = filters || {};
     return _pbCached('bookings', opts, PB_FAST_CACHE_MS.bookings, async () => {
       const accountRole = await _pbCurrentAccountRole();
-      const canReadFullRows = ['owner', 'court_owner', 'staff'].includes(accountRole)
-        || (accountRole === 'host' && !!opts.hostUserId);
+      const canReadFullRows = PB_PRIVATE_DATA_SURFACE
+        && ['owner', 'court_owner', 'staff'].includes(accountRole);
 
       if (!canReadFullRows) {
         const { data, error } = await _sb.rpc('get_public_booking_availability', {
@@ -997,6 +998,49 @@ window.DB = {
       }
       return data.map(rowToBooking);
     });
+  },
+
+  async getMyHostBookings() {
+    if (!(await _pbHasActiveAccount())) {
+      throw new Error('Your host session has expired. Please log in again.');
+    }
+    const { data, error } = await _sb.rpc('get_my_host_bookings');
+    if (error) {
+      console.error('getMyHostBookings:', error);
+      throw error;
+    }
+    return (data || []).map(rowToBooking);
+  },
+
+  async markHostBookingGroupFullyPaid(bookingRef) {
+    const ref = String(bookingRef || '').trim();
+    if (!ref) throw new Error('A booking reference is required.');
+    const { data, error } = await _sb.rpc('mark_host_booking_group_fully_paid', {
+      p_booking_ref: ref,
+    });
+    if (error) {
+      console.error('markHostBookingGroupFullyPaid:', error);
+      throw error;
+    }
+    _pbClearFastCache(['bookings']);
+    return data || {};
+  },
+
+  async restoreForfeitedHostBookingAsFullyPaid(bookingRef, reason) {
+    const ref = String(bookingRef || '').trim();
+    const note = String(reason || '').trim();
+    if (!ref) throw new Error('A booking reference is required.');
+    if (note.length < 10) throw new Error('Enter a correction reason of at least 10 characters.');
+    const { data, error } = await _sb.rpc('restore_forfeited_host_booking_as_fully_paid', {
+      p_booking_ref: ref,
+      p_reason: note,
+    });
+    if (error) {
+      console.error('restoreForfeitedHostBookingAsFullyPaid:', error);
+      throw error;
+    }
+    _pbClearFastCache(['bookings']);
+    return data || {};
   },
 
   async addBookings(bookings) {
@@ -3101,6 +3145,50 @@ window.DB = {
         .filter(b => !opts.hostUserId || String(b.hostUserId) === String(opts.hostUserId))
         .filter(b => !opts.activeOnly || (b.status !== 'cancelled' && b.status !== 'forfeited'))
         .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    },
+    async getMyHostBookings() {
+      const session = window.Auth?.getSession?.();
+      if (!session || session.role !== 'host' || (session.status && session.status !== 'active')) {
+        throw new Error('An active host account is required to load bookings.');
+      }
+      return readDb().bookings
+        .filter(booking => booking.hostBooking && booking.email !== 'reserve@hold.internal')
+        .filter(booking => String(booking.hostUserId || booking.createdByUserId || '') === String(session.id || ''))
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    },
+    async markHostBookingGroupFullyPaid(bookingRef) {
+      const db = readDb();
+      const primary = db.bookings.find(booking => String(booking.ref) === String(bookingRef) || String(booking.groupRef || '') === String(bookingRef));
+      if (!primary) throw new Error('Booking not found.');
+      const rows = primary.groupRef ? db.bookings.filter(booking => String(booking.groupRef || '') === String(primary.groupRef)) : [primary];
+      if (rows.some(booking => !booking.hostBooking || booking.status !== 'confirmed' || !['downpayment_paid', 'paid'].includes(booking.paymentStatus))) {
+        throw new Error('Every row must be an active confirmed host booking.');
+      }
+      const refs = new Set(rows.map(booking => String(booking.ref)));
+      const paidAt = new Date().toISOString();
+      db.bookings = db.bookings.map(booking => refs.has(String(booking.ref)) ? {
+        ...booking, paymentStatus: 'paid', downpayment: booking.total, paidAt: booking.paidAt || paidAt,
+      } : booking);
+      writeDb(db);
+      return { status: 'confirmed', paymentStatus: 'paid', paidAt, refs: [...refs] };
+    },
+    async restoreForfeitedHostBookingAsFullyPaid(bookingRef, reason) {
+      if (String(reason || '').trim().length < 10) throw new Error('Enter a correction reason of at least 10 characters.');
+      const db = readDb();
+      const primary = db.bookings.find(booking => String(booking.ref) === String(bookingRef) || String(booking.groupRef || '') === String(bookingRef));
+      if (!primary) throw new Error('Booking not found.');
+      const rows = primary.groupRef ? db.bookings.filter(booking => String(booking.groupRef || '') === String(primary.groupRef)) : [primary];
+      if (rows.some(booking => !booking.hostBooking || booking.status !== 'forfeited' || booking.paymentStatus !== 'deposit_retained')) {
+        throw new Error('Every row must still be forfeited with its deposit retained.');
+      }
+      const refs = new Set(rows.map(booking => String(booking.ref)));
+      const paidAt = new Date().toISOString();
+      db.bookings = db.bookings.map(booking => refs.has(String(booking.ref)) ? {
+        ...booking, status: 'confirmed', paymentStatus: 'paid', downpayment: booking.total,
+        paidAt: booking.paidAt || paidAt, forfeitedAt: null, forfeitureReason: null,
+      } : booking);
+      writeDb(db);
+      return { status: 'confirmed', paymentStatus: 'paid', paidAt, refs: [...refs] };
     },
     async addBookings(bookings) {
       const batch = Array.isArray(bookings) ? bookings.filter(Boolean) : [];

@@ -1960,7 +1960,13 @@ Deno.serve(async (req) => {
 
     let booking: Record<string, unknown>;
     let bookingMutationScope: BookingMutationScope = {};
-    let inlinePricingKind: "open_play" | "host_session" | null = null;
+    let inlinePricingKind:
+      | "open_play"
+      | "host_session"
+      | "host_booking_balance"
+      | null = null;
+    let hostBalancePayment: Record<string, unknown> | null = null;
+    const isHostBalanceReference = /^HBAL-[A-F0-9]{32}$/.test(bookingRef);
     let authorizedReceiptCaller = false;
     const hasPersistedBooking = !!persistedRow;
     if (persistedRow) {
@@ -2044,6 +2050,59 @@ Deno.serve(async (req) => {
       if (!booking.date && inlineBookingData?.date) {
         booking.date = inlineBookingData.date;
       }
+    } else if (isHostBalanceReference) {
+      if (
+        !caller || caller.account?.role !== "host" ||
+        caller.account?.status !== "active"
+      ) {
+        return json({
+          error: "Only the active host who owns this balance payment can verify its receipt",
+        }, 403);
+      }
+      const nowIso = new Date().toISOString();
+      const { data: balanceRow, error: balanceError } = await db
+        .from("host_booking_balance_payments")
+        .select(
+          "id,verification_ref,booking_key,booking_ref,booking_group_ref,booking_refs,host_user_id,status,expected_amount,total_amount,original_paid_amount,balance_due_at,expires_at,payment_provider,payment_reference,customer_name,customer_email,booking_date,court_label,schedule_label,created_at",
+        )
+        .eq("verification_ref", bookingRef)
+        .eq("host_user_id", caller.userId)
+        .eq("status", "created")
+        .gt("expires_at", nowIso)
+        .gt("balance_due_at", nowIso)
+        .maybeSingle();
+      if (balanceError) {
+        console.error(
+          "host balance verification lookup failed:",
+          errMsg(balanceError),
+        );
+        return json({ error: "Balance payment could not be loaded" }, 500);
+      }
+      if (!balanceRow) {
+        return json({
+          error:
+            "This balance payment request expired or is no longer available. Please start again from My Bookings.",
+        }, 410);
+      }
+      const balanceAmount = Math.round(
+        Number(balanceRow.expected_amount ?? -1) * 100,
+      ) / 100;
+      if (!Number.isFinite(balanceAmount) || balanceAmount <= 0) {
+        return json({ error: "Balance payment amount is invalid" }, 400);
+      }
+      hostBalancePayment = balanceRow as Record<string, unknown>;
+      booking = {
+        ref: bookingRef,
+        total: balanceAmount,
+        downpayment: balanceAmount,
+        payment_method: balanceRow.payment_provider,
+        gcash_ref: balanceRow.payment_reference,
+        date: balanceRow.booking_date,
+        full_name: balanceRow.customer_name,
+        email: balanceRow.customer_email,
+        created_at: balanceRow.created_at,
+      };
+      inlinePricingKind = "host_booking_balance";
     } else {
       if (!inlineBookingData) return json({ error: "Booking not found" }, 404);
       const hasCourtShape = !!(
@@ -2360,7 +2419,15 @@ Deno.serve(async (req) => {
     let autoPaymentStatus: "paid" | "downpayment_paid" | null = null;
     let bookingGroup: Array<Record<string, unknown>> = [booking];
     try {
-      if (inlinePricingKind === "host_session") {
+      if (inlinePricingKind === "host_booking_balance") {
+        expectedTotal = Math.round(
+          Number(hostBalancePayment?.expected_amount ?? -1) * 100,
+        ) / 100;
+        expectedAmount = expectedTotal;
+        if (!Number.isFinite(expectedAmount) || expectedAmount <= 0) {
+          throw new Error("Balance payment amount is invalid");
+        }
+      } else if (inlinePricingKind === "host_session") {
         const amounts = await expectedHostSessionAmounts(db, booking);
         expectedTotal = amounts.total;
         expectedAmount = amounts.due;
@@ -2652,7 +2719,10 @@ Deno.serve(async (req) => {
               String(row.payment_status || ""),
             )
           );
-        if (!groupPaymentConsistent || !autoPaymentStatus) {
+        if (
+          inlinePricingKind !== "host_booking_balance" &&
+          (!groupPaymentConsistent || !autoPaymentStatus)
+        ) {
           flags.push("BOOKING_GROUP_PAYMENT_MISMATCH");
         }
       } else if (provider === "bdopay") {
@@ -2779,6 +2849,15 @@ Deno.serve(async (req) => {
         flags.push("SUSPECTED_FAKE");
       }
     }
+    // A host balance is server-locked. Overpayment is no more eligible for
+    // automatic approval than underpayment; retain the evidence for review.
+    if (
+      hostBalancePayment && extractedAmount != null &&
+      !closeMoney(extractedAmount, expectedAmount) &&
+      !flags.includes("AMOUNT_MISMATCH")
+    ) {
+      flags.push("AMOUNT_MISMATCH");
+    }
     if (editedBySoftware(bytes)) flags.push("EDITED_METADATA");
 
     // Auto-verifying GCash requires a high-quality OCR read.
@@ -2886,6 +2965,9 @@ Deno.serve(async (req) => {
       hasPersistedBooking &&
       autoPaymentStatus !== null &&
       flags.length === 0;
+    const hostBalanceCanAutoApprove = provider === "gcash" &&
+      inlinePricingKind === "host_booking_balance" &&
+      flags.length === 0;
     let result: "auto_approved" | "manual_review" | "rejected" =
       gcashCanAutoApprove ? "auto_approved" : provider === "gcash"
         // GCash OCR mismatches are preserved for an owner instead of releasing
@@ -2895,6 +2977,7 @@ Deno.serve(async (req) => {
         : hasHard
         ? "rejected"
         : "manual_review";
+    if (hostBalanceCanAutoApprove) result = "auto_approved";
 
     let confidence = result === "auto_approved"
       ? ocrConfidence
@@ -2970,6 +3053,21 @@ Deno.serve(async (req) => {
           ? null
           : expectedNumber || null,
       expectedReceiverName: expectedName || null,
+      verificationContext: hasPersistedBooking
+        ? "court_booking"
+        : inlinePricingKind === "host_session"
+        ? "host_session"
+        : inlinePricingKind === "host_booking_balance"
+        ? "host_booking_balance"
+        : "open_play",
+      ...(inlinePricingKind === "host_booking_balance"
+        ? { balancePaymentId: String(hostBalancePayment?.id || "") }
+        : {}),
+      submittedReference: typedRef,
+      dedupeKeys: dedupeKeys.map(({ key, providerKey }) => ({
+        key,
+        providerKey,
+      })),
     };
 
     // ── persist outcome on the booking ──────────────────────────────────────
@@ -3261,8 +3359,11 @@ Deno.serve(async (req) => {
     }
 
     // ── audit trail (immutable) ─────────────────────────────────────────────
+    let receiptVerificationId: number | null = null;
     if (!auditPersisted) {
-      const { error: auditError } = await db.from("receipt_verifications")
+      const { data: auditRow, error: auditError } = await db.from(
+        "receipt_verifications",
+      )
         .insert({
           booking_ref: bookingRef,
           result,
@@ -3272,12 +3373,21 @@ Deno.serve(async (req) => {
           image_hash: imageHash,
           phash,
           raw_ocr_text: ocrText || null,
-        });
+        })
+        .select("id")
+        .single();
       if (auditError) {
         console.error(
           "receipt verification audit insert failed:",
           errMsg(auditError),
         );
+        if (inlinePricingKind === "host_booking_balance") {
+          throw new Error(
+            "Balance receipt verification could not be recorded. Please upload the receipt again.",
+          );
+        }
+      } else {
+        receiptVerificationId = Number(auditRow?.id) || null;
       }
     }
 
@@ -3388,6 +3498,7 @@ Deno.serve(async (req) => {
       receiptImageHash: imageHash,
       receiptPhash: phash,
       receiptVerifiedAt: metadataUpdate.receipt_verified_at,
+      ...(receiptVerificationId ? { receiptVerificationId } : {}),
       paymentStatus: hasPersistedBooking ? finalPaymentStatus || null : null,
       bookingStatus: hasPersistedBooking ? finalBookingStatus || null : null,
       ...(finalUpdateError
