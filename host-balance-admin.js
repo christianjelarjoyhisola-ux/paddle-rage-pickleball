@@ -144,6 +144,8 @@
       .hba-modal-body{padding:18px}
       .hba-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:14px}
       .hba-summary>div{padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--input);font-size:.77rem;overflow-wrap:anywhere}
+      .hba-explainer{margin:0 0 14px;padding:11px 12px;border:1px solid rgba(201,207,67,.22);border-radius:11px;background:rgba(201,207,67,.07);color:var(--text2);font-size:.75rem;line-height:1.5}
+      .hba-explainer strong{color:var(--pickle-lime)}
       .hba-proof{min-height:220px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:12px;background:#050a07;overflow:hidden}
       .hba-proof img{display:none;width:100%;max-height:420px;object-fit:contain}
       .hba-proof-status{padding:20px;color:var(--muted);font-size:.8rem;text-align:center}
@@ -234,6 +236,8 @@
     const body = make('div', 'hba-modal-body');
     const summary = make('div', 'hba-summary');
     summary.id = 'hostBalanceReviewSummary';
+    const explainer = make('div', 'hba-explainer');
+    explainer.innerHTML = '<strong>Court already reserved.</strong> The deposit confirmed the reservation. Approving this new receipt marks only the remaining balance fully paid.';
     const proof = make('div', 'hba-proof');
     const proofStatus = make('div', 'hba-proof-status', 'Loading receipt proof…');
     proofStatus.id = 'hostBalanceProofStatus';
@@ -260,7 +264,7 @@
     approve.type = 'button';
     approve.addEventListener('click', () => decide('approve'));
     actions.append(reject, approve);
-    body.append(summary, proof, flags, reason, actions);
+    body.append(summary, explainer, proof, flags, reason, actions);
     modal.append(head, body);
     overlay.appendChild(modal);
     overlay.addEventListener('mousedown', event => { if (event.target === overlay) closeModal(); });

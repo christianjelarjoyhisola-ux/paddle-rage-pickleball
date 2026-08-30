@@ -623,13 +623,13 @@ test('booking quick confirm is a dedicated responsive row action using the canon
   assert.ok(detailsAt > quickAt, 'mobile quick confirm must stay above the collapsed Details section');
   assert.match(mobileCard, /bookingQuickConfirmButton\(b[\s\S]*?mb-book-pay/);
 
-  const desktopStatusCell = renderBookings.match(/<td\s+data-label=["']Status["'][^>]*>[\s\S]*?<\/td>/)?.[0] || '';
+  const desktopStatusCell = renderBookings.match(/<td\s+data-label=["'](?:Status|Reservation)["'][^>]*>[\s\S]*?<\/td>/)?.[0] || '';
   assert.match(desktopStatusCell, /booking-status-stack/);
   assert.match(desktopStatusCell, /bookingQuickConfirmButton\(b/);
   assert.doesNotMatch(
     activeActions,
     /bookingQuickConfirmButton/,
-    'desktop quick confirm belongs in the Status cell, not the crowded Actions cell',
+    'desktop quick confirm belongs in the Reservation cell, not the crowded Actions cell',
   );
 });
 

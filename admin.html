@@ -579,6 +579,18 @@ tr:hover td { background: var(--bg2); }
 .btn-d:hover { background: var(--red); color: #fff; }
 .btn-sm { padding: 5px 12px; font-size: 12px; }
 .pay-state-stack { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; min-width: 0; }
+.booking-payment-review {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  min-width: 168px; padding: 8px 10px; border: 1px solid rgba(255,193,7,.34);
+  border-radius: 10px; background: linear-gradient(135deg,rgba(255,193,7,.12),rgba(255,193,7,.035));
+}
+.booking-payment-review strong { color: var(--yellow); font-size: .69rem; font-weight: 950; letter-spacing: .055em; }
+.booking-payment-review span { color: var(--text); font-size: .72rem; font-weight: 800; line-height: 1.35; }
+.booking-reservation-state { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.booking-reservation-state small { color: var(--muted); font-size: .65rem; font-weight: 750; line-height: 1.3; }
+.booking-deposit-accepted { color: var(--green); font-size: .67rem; font-weight: 850; }
+.booking-review-wait { color: var(--yellow); font-size: .69rem; font-weight: 850; line-height: 1.35; }
+.host-balance-mobile-review { width: 100%; min-height: 44px; margin-top: 10px; justify-content: center; }
 .receipt-badge {
   margin-top: 0; font-size: .66rem; font-weight: 700; border-radius: 6px;
   padding: 3px 8px; display: inline-block; max-width: 230px;
@@ -1013,14 +1025,14 @@ tr:hover td { background: var(--bg2); }
     padding-top: 2px;
   }
   .tbl-scroll td:empty { display: none; }
-  .tbl-scroll td[data-label="Pay State"], .tbl-scroll td[data-label="Actions"] { display: block; }
-  .tbl-scroll td[data-label="Pay State"]::before, .tbl-scroll td[data-label="Actions"]::before {
+  .tbl-scroll td[data-label="Pay State"], .tbl-scroll td[data-label="Payment"], .tbl-scroll td[data-label="Payment Status"], .tbl-scroll td[data-label="Actions"] { display: block; }
+  .tbl-scroll td[data-label="Pay State"]::before, .tbl-scroll td[data-label="Payment"]::before, .tbl-scroll td[data-label="Payment Status"]::before, .tbl-scroll td[data-label="Actions"]::before {
     display: block; min-width: 0; margin-bottom: 6px;
   }
   .tbl-scroll td[data-label="Actions"] { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border); }
-  .tbl-scroll td[data-label="Pay State"] .pay-state-stack { width: 100%; }
-  .tbl-scroll td[data-label="Pay State"] .fi { width: 100% !important; max-width: 220px; }
-  .tbl-scroll td[data-label="Pay State"] .receipt-badge { max-width: 100%; width: fit-content; }
+  .tbl-scroll td[data-label="Pay State"] .pay-state-stack, .tbl-scroll td[data-label="Payment"] .pay-state-stack, .tbl-scroll td[data-label="Payment Status"] .pay-state-stack { width: 100%; }
+  .tbl-scroll td[data-label="Pay State"] .fi, .tbl-scroll td[data-label="Payment"] .fi, .tbl-scroll td[data-label="Payment Status"] .fi { width: 100% !important; max-width: 220px; }
+  .tbl-scroll td[data-label="Pay State"] .receipt-badge, .tbl-scroll td[data-label="Payment"] .receipt-badge, .tbl-scroll td[data-label="Payment Status"] .receipt-badge { max-width: 100%; width: fit-content; }
   .tbl-scroll td[data-label="Actions"] > div { width: 100%; gap: 6px !important; }
   .tbl-scroll td[data-label="Amount"] .amount-stack { width: 100%; }
   .tbl-scroll td[data-label="Amount to Remit"] { display: block; }
@@ -3700,7 +3712,7 @@ body.admin-booting .admin-boot-splash {
           </div>
           <div class="tbl-scroll booking-table-scroll">
             <table>
-              <thead><tr><th>Ref</th><th>Customer</th><th>Court</th><th>Schedule</th><th>Booked On</th><th>Amount</th><th>Payment</th><th>Pay State</th><th>Status</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Ref</th><th>Customer</th><th>Court</th><th>Schedule</th><th>Booked On</th><th>Amount</th><th>Method</th><th>Payment Status</th><th>Reservation</th><th>Actions</th></tr></thead>
               <tbody id="bookBody"><tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px">No bookings.</td></tr></tbody>
             </table>
           </div>
@@ -5895,7 +5907,7 @@ function hostBalanceReviewState(b){
 }
 function hostBalancePendingBadge(b){
   return hostBalanceReviewState(b) === 'pending'
-    ? '<span class="hba-booking-pending">🧾 Balance receipt pending</span>'
+    ? '<span class="hba-booking-pending">🧾 Review needed</span>'
     : '';
 }
 function hostBalanceReviewBadge(b){
@@ -5904,10 +5916,26 @@ function hostBalanceReviewBadge(b){
   if (state === 'unknown') return '<span class="hba-booking-pending">⚠ Balance review unavailable</span>';
   return '';
 }
-function hostBalanceReviewButton(b){
+function hostBalancePendingAmount(b){
+  const payment = hostBalancePendingPayment(b);
+  const amount = Number(payment?.balanceAmount ?? payment?.balance_amount ?? payment?.expectedAmount ?? payment?.expected_amount);
+  if (Number.isFinite(amount) && amount > 0) return amount;
+  const total = Number(b?.total || 0);
+  const paid = window.BookingBalance?.paidAmount?.(b) || Number(b?.downpayment || 0);
+  return Math.max(0, total - paid);
+}
+function hostBalanceBookingStatus(b){
+  if (hostBalanceReviewState(b) === 'pending') {
+    return '<div class="booking-reservation-state"><span class="bdg bdg-c">COURT RESERVED</span><small>Payment not final</small></div>';
+  }
+  return statusBdg(b.status);
+}
+function hostBalanceReviewButton(b, mobile = false){
   if (!hostBalancePendingPayment(b)) return '';
   const actionRef = b.primaryRef || b.ref;
-  return `<button type="button" class="btn btn-p btn-sm" onclick="reviewHostBalanceForBooking('${jsArg(actionRef)}',this)">Review Balance</button>`;
+  const amount = hostBalancePendingAmount(b);
+  const label = amount > 0 ? `Verify ${fmt(amount)}` : 'Review Payment';
+  return `<button type="button" class="btn btn-p btn-sm${mobile?' host-balance-mobile-review':''}" onclick="reviewHostBalanceForBooking('${jsArg(actionRef)}',this)">${label}</button>`;
 }
 async function reviewHostBalanceForBooking(ref, trigger){
   try {
@@ -5917,7 +5945,7 @@ async function reviewHostBalanceForBooking(ref, trigger){
     toast(error?.message || 'Could not open the balance receipt.', 'err');
   }
 }
-function bookingActionsHtml(b, canDelete){
+function bookingActionsHtml(b, canDelete, includeBalanceReview = true){
   const grouped = Array.isArray(b.items) && b.items.length > 1;
   const actionRef = b.primaryRef || b.ref;
   const forfeited = b.status === 'forfeited' || b.paymentStatus === 'deposit_retained';
@@ -5927,13 +5955,13 @@ function bookingActionsHtml(b, canDelete){
   const canRecordManualPayment = hasBalance && !balanceReviewLocked && ['owner','court_owner'].includes(String(sess?.role || ''));
   const canCorrectForfeiture = forfeited && b.hostBooking && ['owner','court_owner'].includes(String(sess?.role || ''));
   return `${bookingDetailsButton(b)}
-    ${hostBalanceReviewButton(b)}
+    ${includeBalanceReview ? hostBalanceReviewButton(b) : ''}
     ${!balanceReviewLocked && !grouped && !['cancelled','forfeited'].includes(b.status)?`<button class="btn btn-sm" style="background:rgba(74,154,220,.12);color:#5a9ad4;border:1px solid rgba(74,154,220,.3)" onclick="openRescheduleModal('${jsArg(actionRef)}')">Reschedule</button>`:''}
     ${b.email && (forfeited || (hasBalance && balanceReviewState === 'clear'))?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Notice':'Balance Reminder'}</button>`:''}
     ${b.status==='confirmed' && b.email && !hasBalance?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendConfirmationEmail('${jsArg(actionRef)}')">Resend Email</button>`:''}
     ${canRecordManualPayment?`<button class="btn btn-p btn-sm" onclick="updatePaymentStatus('${jsArg(actionRef)}','paid')">Record Fully Paid</button>`:''}
     ${canCorrectForfeiture?`<button class="btn btn-p btn-sm" onclick="restoreForfeitedHostBooking('${jsArg(actionRef)}')">Restore Fully Paid</button>`:''}
-    <select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" ${forfeited?'disabled title="Forfeited records are permanent"':balanceReviewLocked?'disabled title="Resolve the pending balance review first"':''} onchange="updateStatus('${jsArg(actionRef)}',this.value)">
+    ${balanceReviewState === 'pending' ? '' : `<select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" ${forfeited?'disabled title="Forfeited records are permanent"':balanceReviewLocked?'disabled title="Balance review status is unavailable"':''} onchange="updateStatus('${jsArg(actionRef)}',this.value)">
       ${b.status==='mixed'?'<option value="mixed" selected disabled>Mixed</option>':''}
       <option value="pending" ${b.status==='pending'?'selected':''}>Pending</option>
       <option value="confirmed" ${b.status==='confirmed'?'selected':''}>Confirmed</option>
@@ -5941,14 +5969,14 @@ function bookingActionsHtml(b, canDelete){
       <option value="completed" ${b.status==='completed'?'selected':''}>Completed</option>
       <option value="cancelled" ${b.status==='cancelled'?'selected':''}>Cancelled</option>
       ${(b.hostBooking && (b.paymentStatus==='downpayment_paid' || b.status==='forfeited')) ? `<option value="forfeited" ${b.status==='forfeited'?'selected':''}>Forfeited</option>` : ''}
-    </select>
+    </select>`}
     ${canDelete && !forfeited && !balanceReviewLocked?`<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>`:''}`;
 }
 function bookingPayStateSelect(b){
   const actionRef = b.primaryRef || b.ref;
   if (b.status === 'forfeited' || b.paymentStatus === 'deposit_retained') return payStatusBdg('deposit_retained');
   if (hostBalancePendingPayment(b)) {
-    return `<div>${payStatusBdg('downpayment_paid')}${hostBalancePendingBadge(b)}</div>`;
+    return `<div class="booking-payment-review"><strong>PAYMENT REVIEW NEEDED</strong><span>${fmt(hostBalancePendingAmount(b))} receipt submitted</span></div>`;
   }
   if (hostBalanceReviewState(b) === 'unknown') {
     return `<div>${payStatusBdg('downpayment_paid')}${hostBalanceReviewBadge(b)}</div>`;
@@ -6013,17 +6041,21 @@ function bookingAmountSummaryHtml(b) {
   const paid = window.BookingBalance?.paidAmount?.(b) || 0;
   const balance = Math.max(0, total - paid);
   const forfeited = b.status === 'forfeited' || b.paymentStatus === 'deposit_retained';
+  const pendingBalance = hostBalancePendingPayment(b);
+  const pendingAmount = pendingBalance ? hostBalancePendingAmount(b) : 0;
   const deadline = b.hostBooking ? (b.balanceDueAt ? new Date(b.balanceDueAt) : window.BookingBalance?.balanceDeadline?.(b)) : null;
   const state = window.BookingBalance?.deadlineState?.(b) || {};
   const detail = forfeited
     ? `<div class="amount-down" style="color:var(--red)">${fmt(paid)} retained · ${fmt(balance)} unpaid</div>`
     : b.paymentStatus === 'paid'
       ? '<div class="amount-down">Fully paid</div>'
+      : pendingBalance
+        ? `<div class="amount-down">${fmt(paid)} deposit accepted · ${fmt(pendingAmount)} submitted</div>`
       : b.hostBooking && b.paymentStatus === 'downpayment_paid'
         ? `<div class="amount-down">${fmt(paid)} paid · ${fmt(balance)} balance</div>`
         : `<div class="amount-down">${fmt(Number(b.downpayment || 0))} payment requested</div>`;
   return `<div class="amount-stack"><div class="amount-main">${fmt(total)}</div>${detail}
-    ${deadline && balance > 0 ? `<div class="amount-deadline ${esc(state.code || '')}">${forfeited?'Forfeited':'Due'} ${esc(window.BookingBalance.formatDeadline(deadline))}${state.label && !forfeited ? ` · ${esc(state.label)}` : ''}</div>` : ''}
+    ${pendingBalance ? '<div class="booking-review-wait">Awaiting owner verification</div>' : deadline && balance > 0 ? `<div class="amount-deadline ${esc(state.code || '')}">${forfeited?'Forfeited':'Due'} ${esc(window.BookingBalance.formatDeadline(deadline))}${state.label && !forfeited ? ` · ${esc(state.label)}` : ''}</div>` : ''}
     ${b.hostBooking ? `<div style="font-size:.7rem;color:var(--muted);font-weight:700">Host: ${esc(b.hostName || b.hostEmail || 'Open Play Host')}</div>` : ''}
     ${b.gcashRef ? `<div class="amount-ref">Ref: <code>${esc(b.gcashRef)}</code></div>` : ''}${duplicatePaymentRefBadge(b)}</div>`;
 }
@@ -6036,6 +6068,7 @@ function mobileBookingCard(b, canDelete){
   const timeLabel = b.timeLabel || `${b.startTime || ''}-${b.endTime || ''}`;
   const courtLabel = b.courtName || 'Court';
   const deadlineState = window.BookingBalance?.deadlineState?.(b) || {};
+  const pendingBalance = hostBalancePendingPayment(b);
   const bookedOn = b.createdAt ? (() => {
     const d = new Date(b.createdAt);
     return Number.isNaN(d.getTime()) ? '--' : `${d.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})} ${d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true})}`;
@@ -6043,7 +6076,7 @@ function mobileBookingCard(b, canDelete){
   return `<div class="mb-book">
     <div class="mb-book-top">
       <code class="mb-book-ref">${esc(refLabel)}</code>
-      ${statusBdg(b.status)}
+      ${hostBalanceBookingStatus(b)}
     </div>
     <div class="mb-book-meta">
       <div class="mb-book-line">
@@ -6058,14 +6091,13 @@ function mobileBookingCard(b, canDelete){
       <div class="mb-book-summary">
         <span class="mb-book-chip amount">${fmt(b.total)}</span>
         <span class="mb-book-chip">${esc(payMethod)}</span>
-        <span class="mb-book-chip ${['unpaid','rejected','failed'].includes(String(b.paymentStatus || '').toLowerCase()) ? 'warn' : ''}">${esc(payState)}</span>
-        ${hostBalanceReviewBadge(b)}
-        ${deadlineState.label ? `<span class="mb-book-chip warn">${esc(deadlineState.label)}</span>` : ''}
+        ${pendingBalance ? `<span class="mb-book-chip warn">Payment review needed</span>` : `<span class="mb-book-chip ${['unpaid','rejected','failed'].includes(String(b.paymentStatus || '').toLowerCase()) ? 'warn' : ''}">${esc(payState)}</span>`}
+        ${!pendingBalance && deadlineState.label ? `<span class="mb-book-chip warn">${esc(deadlineState.label)}</span>` : ''}
         ${bookingSourceBadge(b)}
       </div>
       ${duplicatePaymentRefBadge(b)}
     </div>
-    ${bookingQuickConfirmButton(b, true)}
+    ${pendingBalance ? hostBalanceReviewButton(b, true) : bookingQuickConfirmButton(b, true)}
     <details class="mb-book-pay">
       <summary>Actions</summary>
       <div class="mb-book-detail-grid">
@@ -6076,11 +6108,11 @@ function mobileBookingCard(b, canDelete){
         <div class="mb-book-detail-row"><span>Booked</span><span>${esc(bookedOn)}</span></div>
         <div class="mb-book-detail-row"><span>Source</span><span>${esc(bookingSourceMeta(b))}</span></div>
         ${deadlineState.deadline ? `<div class="mb-book-detail-row"><span>Balance due</span><span>${esc(window.BookingBalance.formatDeadline(deadlineState.deadline))}</span></div>` : ''}
-        <div class="mb-book-detail-row"><span>Pay State</span><span>${bookingPayStateSelect(b)}</span></div>
+        <div class="mb-book-detail-row"><span>Payment status</span><span>${bookingPayStateSelect(b)}</span></div>
         ${b.duplicatePaymentRef ? `<div class="mb-book-detail-row"><span>Warning</span><span>${duplicatePaymentRefBadge(b)}</span></div>` : ''}
-        ${b.receiptStatus && b.receiptStatus !== 'none' ? `<div class="mb-book-detail-row"><span>Receipt</span><span>${receiptBadge(b)}</span></div>` : ''}
+        ${pendingBalance ? '<div class="mb-book-detail-row"><span>Deposit</span><span class="booking-deposit-accepted">✓ Deposit accepted</span></div>' : b.receiptStatus && b.receiptStatus !== 'none' ? `<div class="mb-book-detail-row"><span>Receipt</span><span>${receiptBadge(b)}</span></div>` : ''}
       </div>
-      <div class="mb-book-actions">${bookingActionsHtml(b, canDelete)}</div>
+      <div class="mb-book-actions">${bookingActionsHtml(b, canDelete, !pendingBalance)}</div>
     </details>
   </div>`;
 }
@@ -6116,6 +6148,7 @@ async function openBookingDetails(ref) {
     const historicalBalance = Math.max(0, total - paid);
     const forfeited = b.status === 'forfeited' || b.paymentStatus === 'deposit_retained';
     const balanceReviewState = hostBalanceReviewState(b);
+    const pendingBalance = hostBalancePendingPayment(b);
     const currentDue = forfeited ? 0 : historicalBalance;
     const deadlineState = window.BookingBalance?.deadlineState?.(b) || {};
     const deadline = b.balanceDueAt ? new Date(b.balanceDueAt) : deadlineState.deadline;
@@ -6124,12 +6157,12 @@ async function openBookingDetails(ref) {
     body.innerHTML = `
       <div class="booking-detail-hero">
         <div><div class="booking-detail-ref">${esc(b.displayRef || b.ref)}</div><div class="booking-detail-name">${esc(b.fullName || 'Guest')}</div><div class="booking-detail-sub">${esc(b.email || '--')} · ${esc(b.contactNumber || '--')}</div></div>
-        <div class="booking-detail-badges">${statusBdg(b.status)} ${payStatusBdg(b.paymentStatus)} <span class="bdg ${bookingSlotLabel(b)==='Released'?'bdg-x':'bdg-c'}">Slot ${bookingSlotLabel(b)}</span></div>
+        <div class="booking-detail-badges">${hostBalanceBookingStatus(b)} ${pendingBalance ? '<span class="bdg bdg-p">PAYMENT REVIEW NEEDED</span>' : payStatusBdg(b.paymentStatus)} <span class="bdg ${bookingSlotLabel(b)==='Released'?'bdg-x':'bdg-c'}">Slot ${bookingSlotLabel(b)}</span></div>
       </div>
       <div class="booking-detail-grid">
         <div class="booking-detail-card money"><span>Total booking</span><strong>${fmt(total)}</strong></div>
         <div class="booking-detail-card money"><span>${forfeited?'Payment retained':'Verified paid'}</span><strong>${fmt(paid)}</strong></div>
-        <div class="booking-detail-card ${forfeited?'danger':currentDue>0?'warn':''}"><span>${forfeited?'Unpaid at forfeiture':'Current amount due'}</span><strong>${fmt(forfeited?historicalBalance:currentDue)}</strong></div>
+        <div class="booking-detail-card ${forfeited?'danger':currentDue>0?'warn':''}"><span>${forfeited?'Unpaid at forfeiture':pendingBalance?'Submitted for review':'Current amount due'}</span><strong>${fmt(forfeited?historicalBalance:pendingBalance?hostBalancePendingAmount(b):currentDue)}</strong></div>
         ${forfeited ? `<div class="booking-detail-card"><span>Current collectible</span><strong>${fmt(0)}</strong></div><div class="booking-detail-card"><span>Refund issued</span><strong>${fmt(0)}</strong></div>` : ''}
         ${b.hostBooking ? `<div class="booking-detail-card ${deadlineState.code==='final'||deadlineState.code==='overdue'?'danger':''}"><span>Balance deadline</span><strong>${esc(deadlineLabel)}</strong></div>` : ''}
       </div>
@@ -6138,13 +6171,14 @@ async function openBookingDetails(ref) {
         <div class="booking-detail-row"><span>Court</span><strong>${esc(b.courtName || '--')}</strong></div>
         <div class="booking-detail-row"><span>Schedule</span><strong>${esc(b.scheduleLabel || `${fmtD(b.date)} · ${b.startTime || ''}-${b.endTime || ''}`)}</strong></div>
         <div class="booking-detail-row"><span>Booked on</span><strong>${b.createdAt ? esc(window.BookingBalance.formatDeadline(b.createdAt)) : '--'}</strong></div>
-        ${deadlineState.label && !forfeited ? `<div class="booking-detail-row"><span>Time remaining</span><strong>${esc(deadlineState.label)}</strong></div>` : ''}
+        ${deadlineState.label && !forfeited && !pendingBalance ? `<div class="booking-detail-row"><span>Time remaining</span><strong>${esc(deadlineState.label)}</strong></div>` : ''}
+        ${pendingBalance ? '<div class="booking-detail-row"><span>Review state</span><strong>Receipt submitted · awaiting owner verification</strong></div>' : ''}
         ${forfeited ? `<div class="booking-detail-row"><span>Forfeited on</span><strong>${b.forfeitedAt ? esc(window.BookingBalance.formatDeadline(b.forfeitedAt)) : '--'}</strong></div><div class="booking-detail-row"><span>Reason</span><strong>${esc(b.forfeitureReason || 'Remaining balance was not paid by the deadline.')}</strong></div>` : ''}
       </div>
       <div class="booking-detail-section"><h3>Payment record</h3>
         <div class="booking-detail-row"><span>Payment method</span><strong>${esc(paymentMethodLabel(b.paymentMethod))}</strong></div>
         <div class="booking-detail-row"><span>Payment reference</span><strong>${esc(b.gcashRef || '--')}</strong></div>
-        <div class="booking-detail-row"><span>Payment state</span><strong>${esc(payStatusText(b.paymentStatus))}${hostBalanceReviewBadge(b)}</strong></div>
+        <div class="booking-detail-row"><span>Payment state</span><strong>${pendingBalance ? 'Balance receipt awaiting review' : esc(payStatusText(b.paymentStatus))}</strong></div>
         <div class="booking-detail-row"><span>Policy</span><strong>Final and non-refundable</strong></div>
       </div>
       ${b.hostBooking ? `<div class="booking-detail-section"><h3>Email history</h3><div class="booking-notice-list">${notices}</div></div>` : ''}`;
@@ -6770,8 +6804,8 @@ async function renderBookings(){
         ${b.gcashRef?`<div style="font-size:.7rem;margin-top:1px;font-weight:700">Ref: <code style="color:var(--text)">${esc(b.gcashRef)}</code></div>`:''}
         ${duplicatePaymentRefBadge(b)}
       </div></td>
-      <td data-label="Payment"><span style="font-size:.76rem;background:var(--input);border-radius:4px;padding:2px 7px">${esc(paymentMethodLabel(b.paymentMethod))}</span></td>
-      <td data-label="Pay State"><div class="pay-state-stack">${bookingPayStateSelect(b)}
+      <td data-label="Method"><span style="font-size:.76rem;background:var(--input);border-radius:4px;padding:2px 7px">${esc(paymentMethodLabel(b.paymentMethod))}</span></td>
+      <td data-label="Payment Status"><div class="pay-state-stack">${bookingPayStateSelect(b)}
         <select class="fi" style="display:none;padding:4px 7px;font-size:.76rem;width:auto" onchange="updatePaymentStatus('${jsArg(b.ref)}',this.value)">
           <option value="unpaid" ${(!b.paymentStatus||b.paymentStatus==='unpaid')?'selected':''}>Unpaid</option>
           <option value="downpayment_paid" ${b.paymentStatus==='downpayment_paid'?'selected':''}>Downpayment Paid</option>
@@ -6780,9 +6814,9 @@ async function renderBookings(){
           <option value="rejected" ${b.paymentStatus==='rejected'?'selected':''}>Rejected</option>
         </select>
         ${duplicatePaymentRefBadge(b)}
-        ${receiptBadge(b)}
+        ${hostBalancePendingPayment(b) ? '<span class="booking-deposit-accepted">✓ Deposit accepted</span>' : receiptBadge(b)}
       </div></td>
-      <td data-label="Status"><div class="booking-status-stack">${statusBdg(b.status)}${bookingQuickConfirmButton(b)}</div></td>
+      <td data-label="Reservation"><div class="booking-status-stack">${hostBalanceBookingStatus(b)}${bookingQuickConfirmButton(b)}</div></td>
       <td data-label="Actions"><div style="display:flex;gap:5px;flex-wrap:wrap">${bookingActionsHtml(b, canDelete)}</div></td>
     </tr>`).join('');
   const noCopy = bookingFiltersActive({ q, fd, fs, fp }) ? 'No bookings match these filters.' : 'No bookings yet.';
@@ -13650,6 +13684,6 @@ async function checkAgreementGate(session) {
 <script src="supabase-config.js?v=20260830-host-balance-v1"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>
-<script src="host-balance-admin.js?v=20260831-host-balance-v2"></script>
+<script src="host-balance-admin.js?v=20260831-host-balance-v3"></script>
 </body>
 </html>

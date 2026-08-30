@@ -23,8 +23,8 @@ test('late-binds Payment Review so the host balance wrapper runs on navigation',
 test('loads pending host balances into Bookings and exposes one-tap review', () => {
   assert.match(admin, /HostBalanceAdmin\?\.load\?\.\(false\)/);
   assert.match(admin, /function hostBalancePendingBadge\(b\)/);
-  assert.match(admin, /Balance receipt pending/);
-  assert.match(admin, /function hostBalanceReviewButton\(b\)/);
+  assert.match(admin, /PAYMENT REVIEW NEEDED/);
+  assert.match(admin, /function hostBalanceReviewButton\(b, mobile = false\)/);
   assert.match(admin, /reviewHostBalanceForBooking\('\$\{jsArg\(actionRef\)\}',this\)/);
   assert.match(admin, /const balanceReviewLocked = hasBalance && balanceReviewState !== 'clear'/);
   assert.match(admin, /const canRecordManualPayment = hasBalance && !balanceReviewLocked/);
@@ -42,7 +42,7 @@ test('paginates the complete pending queue and fails closed when it is unavailab
   assert.match(balanceEdge, /\.range\(offset, offset \+ limit - 1\)/);
   assert.match(balanceEdge, /nextOffset: payments\.length === limit/);
   assert.match(admin, /Balance review unavailable/);
-  assert.match(admin, /balanceReviewLocked\?'disabled title="Resolve the pending balance review first"'/);
+  assert.match(admin, /balanceReviewLocked\?'disabled title="Balance review status is unavailable"'/);
   assert.match(admin, /canDelete && !forfeited && !balanceReviewLocked/);
 });
 
@@ -51,7 +51,26 @@ test('refreshes balance indicators in realtime without changing canonical bookin
   assert.match(admin, /HostBalanceAdmin\?\.invalidate\?\.\(\)/);
   assert.match(hostBalanceAdmin, /function invalidate\(\)\s*{\s*state\.generation \+= 1;\s*state\.loadedAt = 0;/);
   assert.match(visibilityMigration, /alter publication supabase_realtime[\s\S]*?add table public\.host_booking_balance_payments/);
-  assert.doesNotMatch(admin, /Balance receipt pending[\s\S]{0,200}updatePaymentStatus/);
+  assert.doesNotMatch(admin, /PAYMENT REVIEW NEEDED[\s\S]{0,200}updatePaymentStatus/);
+});
+
+test('separates reservation state from pending balance review on desktop and mobile', () => {
+  assert.match(admin, /<th>Method<\/th><th>Payment Status<\/th><th>Reservation<\/th>/);
+  assert.match(admin, /COURT RESERVED/);
+  assert.match(admin, /Payment not final/);
+  assert.match(admin, /Verify \$\{fmt\(amount\)\}/);
+  assert.match(admin, /balanceReviewState === 'pending' \? '' : `<select/);
+  assert.match(admin, /deposit accepted · \$\{fmt\(pendingAmount\)\} submitted/);
+  assert.match(admin, /Awaiting owner verification/);
+  assert.match(admin, /pendingBalance \? hostBalanceReviewButton\(b, true\)/);
+  assert.match(admin, /hostBalancePendingPayment\(b\) \? '<span class="booking-deposit-accepted">✓ Deposit accepted<\/span>'/);
+  assert.match(admin, /<span>Payment status<\/span><span>\$\{bookingPayStateSelect\(b\)\}<\/span>/);
+  assert.match(admin, /pendingBalance \? '<div class="mb-book-detail-row"><span>Deposit<\/span><span class="booking-deposit-accepted">✓ Deposit accepted<\/span><\/div>'/);
+  const pendingBranch = admin.match(/if \(hostBalancePendingPayment\(b\)\) \{([\s\S]*?)\n  \}/)?.[1] || '';
+  assert.match(pendingBranch, /PAYMENT REVIEW NEEDED/);
+  assert.doesNotMatch(pendingBranch, /payStatusBdg\('downpayment_paid'\)/);
+  assert.match(hostBalanceAdmin, /Court already reserved/);
+  assert.match(hostBalanceAdmin, /Approving this new receipt marks only the remaining balance fully paid/);
 });
 
 test('blocks conflicting booking mutations and reminders during pending review', () => {
