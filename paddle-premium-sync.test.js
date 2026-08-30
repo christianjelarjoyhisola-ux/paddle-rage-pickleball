@@ -18,8 +18,11 @@ test('public booking keeps the original branded splash and a zoomable entry', ()
   assert.match(index, /id="splashScreen"[^>]*onclick="handleSplashBackgroundTap\(event\)"/);
   assert.match(index, /id="splashWelcomeMusic"[^>]*preload="auto"[^>]*autoplay[^>]*loop/);
   assert.match(index, /attemptSplashAutoplay|unlockSplashMusicFromGesture/);
-  assert.doesNotMatch(index, /paddle_rage_intro_seen_v1|dismissSplashAndBook/);
-  assert.match(index, /class="pr-splash-enter"[^>]*onclick="event\.stopPropagation\(\);openAdvanceBookingNotice\(\)"/);
+  assert.doesNotMatch(index, /paddle_rage_intro_seen_v1/);
+  assert.match(index, /class="pr-splash-enter"[^>]*onclick="event\.stopPropagation\(\);enterCourtBooking\(\)"/);
+  assert.match(index, /class="pr-splash-enter-label">Book a Court<\/span>/);
+  assert.match(index, /function enterCourtBooking\(\)[\s\S]*?scrollIntoView/);
+  assert.doesNotMatch(index, /Book September in Advance|advanceBookingNotice|viewSeptemberTimeSlots/);
   assert.match(index, /class="pr-splash-logo" src="paddleragelogo-transparent\.png"/);
   assert.match(index, /paddle-rage-grunge-edge\.png/);
   assert.match(index, /paddle-rage-word-paddle\.png/);
