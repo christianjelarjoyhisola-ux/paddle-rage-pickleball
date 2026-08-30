@@ -305,7 +305,7 @@
     image.addEventListener('load', () => {
       if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
       state.receiptLoaded = true;
-      image.style.display = '';
+      image.style.display = 'block';
       status.style.display = 'none';
       syncActions();
     });

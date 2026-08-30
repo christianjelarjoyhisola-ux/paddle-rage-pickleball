@@ -73,6 +73,17 @@ test('separates reservation state from pending balance review on desktop and mob
   assert.match(hostBalanceAdmin, /Approving this new receipt marks only the remaining balance fully paid/);
 });
 
+test('reveals a successfully loaded host balance receipt', () => {
+  const loadHandler = hostBalanceAdmin.match(
+    /image\.addEventListener\('load', \(\) => \{([\s\S]*?)\n\s*\}\);/,
+  )?.[1] || '';
+  assert.match(loadHandler, /state\.receiptLoaded = true/);
+  assert.match(loadHandler, /image\.style\.display = 'block'/);
+  assert.match(loadHandler, /status\.style\.display = 'none'/);
+  assert.doesNotMatch(loadHandler, /image\.style\.display = ''/);
+  assert.match(admin, /host-balance-admin\.js\?v=20260831-host-balance-v4/);
+});
+
 test('blocks conflicting booking mutations and reminders during pending review', () => {
   assert.match(admin, /historicalBalance > 0 && balanceReviewState === 'clear'/);
   assert.match(admin, /A balance receipt is already awaiting owner review/);
