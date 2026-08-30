@@ -64,6 +64,7 @@
   }
 
   function pendingForBooking(booking) {
+    if (state.loadState !== 'ready') return null;
     const candidates = bookingRefs(booking);
     if (!candidates.size) return null;
     return state.payments.find(payment => {
@@ -147,6 +148,7 @@
   function actualBookingRef(booking) {
     if (typeof booking === 'string') return booking.trim();
     return String(
+      booking?.bookingRef || booking?.booking_ref ||
       booking?.primaryRef || booking?.primary_ref || booking?.items?.[0]?.ref ||
       booking?.allItems?.[0]?.ref || booking?.ref || '',
     ).trim();
@@ -1115,6 +1117,7 @@
   function invalidate() {
     state.generation += 1;
     state.loadedAt = 0;
+    state.payments = [];
     if (state.loadState === 'ready') state.loadState = 'idle';
   }
 

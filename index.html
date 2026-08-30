@@ -24,8 +24,8 @@
 <meta name="twitter:image" content="https://paddleragecdo.ph/linkimage.jpg?v=20260717" />
 <meta name="twitter:image:alt" content="Paddle Rage Pickleball — Feel the Rage, Live the Game" />
 <link rel="icon" type="image/png" href="paddleragelogo.jpg">
-<script src="booking-balance.js?v=20260830-host-balance-v1"></script>
-<script src="host-balance-payment.js?v=20260830-host-balance-v1"></script>
+<script src="booking-balance.js?v=20260831-payment-state-v7"></script>
+<script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&family=Road+Rage&display=swap" rel="stylesheet" />
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2713,13 +2713,35 @@ body.host-mode .courts { padding-bottom:140px; }
 .host-booking-main span { display:block; color:var(--muted); font-size:.68rem; line-height:1.25; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .host-booking-side { display:flex; flex-direction:column; align-items:flex-end; gap:3px; min-width:86px; }
 .host-balance { color:var(--red); font-size:.84rem; font-weight:950; line-height:1; white-space:nowrap; }
-.host-status { max-width:104px; color:var(--muted); font-size:.6rem; font-weight:900; background:var(--input); border:1px solid var(--border); border-radius:999px; padding:3px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.host-balance.paid { color:var(--lime-ink); }
+.host-balance.review { color:var(--yellow); }
+.host-balance.retained,.host-balance.unavailable { color:var(--muted); }
+.host-status { max-width:132px; color:var(--muted); font-size:.6rem; font-weight:900; background:var(--input); border:1px solid var(--border); border-radius:999px; padding:3px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.host-status.review { color:var(--yellow); border-color:rgba(184,139,36,.28); background:rgba(184,139,36,.08); }
+.host-status.paid { color:var(--lime-ink); border-color:rgba(var(--lime-rgb),.25); background:rgba(var(--lime-rgb),.07); }
+.host-status.action { color:var(--red); border-color:rgba(200,61,38,.25); background:rgba(200,61,38,.07); }
 .host-booking-detail { border-top:1px solid var(--border); padding:8px 10px 10px; background:linear-gradient(180deg,var(--input),transparent); }
 .host-detail-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; overflow:hidden; border:1px solid var(--border); border-radius:10px; background:var(--border); }
 .host-detail-cell { background:var(--card); padding:7px 6px; min-width:0; }
 .host-detail-cell span { display:block; color:var(--muted); font-size:.55rem; text-transform:uppercase; letter-spacing:.4px; font-weight:900; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .host-detail-cell strong { display:block; color:var(--text); font-size:.74rem; line-height:1.1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .host-detail-cell.balance strong { color:var(--red); }
+.host-payment-ledger { display:grid; gap:1px; overflow:hidden; border:1px solid var(--border); border-radius:11px; background:var(--border); }
+.host-payment-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px 12px; align-items:center; min-height:45px; padding:8px 10px; background:var(--card); }
+.host-payment-name { min-width:0; display:flex; align-items:center; gap:7px; color:var(--text); font-size:.71rem; font-weight:850; }
+.host-payment-step { width:20px; height:20px; flex:0 0 auto; display:inline-flex; align-items:center; justify-content:center; border-radius:50%; color:var(--card); background:var(--text); font-size:.58rem; font-weight:950; }
+.host-payment-value { text-align:right; }
+.host-payment-value strong { display:block; color:var(--text); font-size:.74rem; line-height:1.05; }
+.host-payment-value em { display:block; margin-top:3px; color:var(--muted); font-size:.55rem; line-height:1.1; font-style:normal; font-weight:950; text-transform:uppercase; letter-spacing:.38px; }
+.host-payment-row.review .host-payment-step { color:var(--card); background:var(--yellow); }
+.host-payment-row.review .host-payment-value em { color:var(--yellow); }
+.host-payment-row.paid .host-payment-step { color:#071107; background:var(--lime); }
+.host-payment-row.paid .host-payment-value em { color:var(--lime-ink); }
+.host-payment-row.action .host-payment-step,.host-payment-row.action .host-payment-value em { color:var(--red); }
+.host-payment-row.action .host-payment-step { color:#fff; background:var(--red); }
+.host-booking-notice { margin-top:8px; padding:8px 10px; border:1px solid var(--border); border-radius:10px; color:var(--muted); background:var(--card); font-size:.66rem; line-height:1.4; font-weight:750; }
+.host-booking-notice.review { color:var(--yellow); border-color:rgba(184,139,36,.25); background:rgba(184,139,36,.065); }
+.host-booking-notice.action { color:var(--red); border-color:rgba(200,61,38,.25); background:rgba(200,61,38,.065); }
 .host-booking-meta { display:flex; flex-wrap:wrap; gap:4px; margin-top:7px; min-width:0; }
 .host-deadline { display:grid; grid-template-columns:auto minmax(0,1fr); gap:3px 10px; align-items:center; margin-top:8px; padding:8px 10px; border:1px solid rgba(184,139,36,.28); border-radius:10px; background:rgba(184,139,36,.08); }
 .host-deadline span { color:var(--muted); font-size:.64rem; font-weight:900; text-transform:uppercase; letter-spacing:.5px; }
@@ -3241,11 +3263,11 @@ try {
       <div class="host-bookings-summary">
         <div class="host-stat"><span>Total</span><strong id="hostBkTotal">0</strong></div>
         <div class="host-stat"><span>Upcoming</span><strong id="hostBkUpcoming">0</strong></div>
-        <div class="host-stat"><span>Balance</span><strong id="hostBkBalance">₱0</strong></div>
+        <div class="host-stat"><span>Due now</span><strong id="hostBkBalance">₱0</strong></div>
       </div>
       <div class="host-booking-tabs" role="tablist" aria-label="Host booking filters">
         <button type="button" class="host-booking-tab active" data-host-booking-filter="upcoming" onclick="setHostBookingFilter('upcoming')">Upcoming</button>
-        <button type="button" class="host-booking-tab" data-host-booking-filter="balance" onclick="setHostBookingFilter('balance')">Balance</button>
+        <button type="button" class="host-booking-tab" data-host-booking-filter="balance" onclick="setHostBookingFilter('balance')">Payments</button>
         <button type="button" class="host-booking-tab" data-host-booking-filter="forfeited" onclick="setHostBookingFilter('forfeited')">Forfeited</button>
         <button type="button" class="host-booking-tab" data-host-booking-filter="past" onclick="setHostBookingFilter('past')">Past</button>
       </div>
@@ -9162,19 +9184,72 @@ function hostBookingBelongsToSession(booking, host) {
     || (!!booking.hostBooking && String(booking.email || '').toLowerCase() === String(host.email || '').toLowerCase());
 }
 
-function hostBookingStatusLabel(booking) {
-  if (booking.status === 'forfeited' || booking.paymentStatus === 'deposit_retained') return 'Forfeited';
-  if (booking.status === 'cancelled' || booking.paymentStatus === 'rejected') return 'Cancelled';
-  if (booking.paymentStatus === 'paid') return 'Paid';
-  if (booking.paymentStatus === 'downpayment_paid') return 'Paid down';
-  if (booking.paymentStatus === 'for_verification') return 'Verifying';
-  if (booking.status === 'verifying') return 'Processing';
-  if (!booking.paymentStatus || booking.paymentStatus === 'unpaid') return 'Unpaid';
-  return 'Pending';
-}
-
 function hostBookingPaidAmount(booking) {
   return window.BookingBalance?.paidAmount?.(booking) || 0;
+}
+
+function hostBalanceAttemptStatus(booking) {
+  return String(booking?.balanceAttempt?.status || '').trim().toLowerCase();
+}
+
+function hostBookingPaymentView(booking) {
+  const total = Number(booking?.total || 0);
+  const paid = hostBookingPaidAmount(booking);
+  const balance = Math.max(0, total - paid);
+  const attempt = booking?.balanceAttempt || null;
+  const attemptState = hostBalanceAttemptStatus(booking);
+  const attemptBalance = Math.max(0, Number(attempt?.balanceAmount ?? balance) || 0);
+  const lookupUnavailable = booking?.balanceAttemptLookup === 'unavailable';
+  const forfeited = booking?.status === 'forfeited' || booking?.paymentStatus === 'deposit_retained';
+  const cancelled = booking?.status === 'cancelled' || booking?.paymentStatus === 'rejected';
+
+  if (forfeited) return {
+    key: 'forfeited', label: 'Slot released', tone: 'retained', headline: `${fmt(paid)} retained`,
+    payment2State: 'Not paid', payment2Tone: 'action', notice: 'The payment deadline passed and the reservation was released.',
+  };
+  if (cancelled) return {
+    key: 'cancelled', label: 'Booking cancelled', tone: 'action', headline: 'Cancelled',
+    payment2State: 'Cancelled', payment2Tone: 'action', notice: 'This booking is no longer active.',
+  };
+  if (attemptState === 'pending_review') return {
+    key: 'pending_review', label: 'Receipt under review', tone: 'review', headline: `${fmt(attemptBalance)} submitted`,
+    payment2State: 'Submitted · awaiting review', payment2Tone: 'review',
+    notice: 'Court reserved · Do not pay again while Payment 2 is being reviewed.', action: 'status',
+  };
+  if (attemptState === 'rejected') return {
+    key: 'rejected', label: 'Action required', tone: 'action', headline: `${fmt(balance)} still due`,
+    payment2State: 'Receipt not accepted', payment2Tone: 'action',
+    notice: attempt?.reviewReason ? `Payment 2 was not accepted: ${attempt.reviewReason}` : 'Payment 2 was not accepted. Submit a new receipt before the deadline.', action: 'retry',
+  };
+  if (attemptState === 'created') return {
+    key: 'created', label: 'Payment in progress', tone: 'review', headline: `${fmt(balance)} due`,
+    payment2State: 'Not submitted', payment2Tone: 'review',
+    notice: 'Your balance payment was started but no receipt has been submitted yet.', action: 'continue',
+  };
+  if (attemptState === 'approved' || booking?.paymentStatus === 'paid' || balance <= 0) return {
+    key: 'paid', label: 'Fully paid', tone: 'paid', headline: `${fmt(total)} paid`,
+    payment2State: attemptState === 'approved' ? 'Approved' : 'Not required', payment2Tone: 'paid',
+    notice: attemptState === 'approved' ? 'Payment 2 approved · No balance remaining.' : 'No balance remaining.',
+  };
+  if (lookupUnavailable) return {
+    key: 'unavailable', label: 'Status unavailable', tone: 'unavailable', headline: 'Refresh required',
+    payment2State: 'Status unavailable', payment2Tone: 'review',
+    notice: 'Payment status could not be refreshed. Paying is temporarily disabled to prevent a duplicate payment.',
+  };
+  if (booking?.paymentStatus === 'for_verification' || booking?.status === 'verifying') return {
+    key: 'deposit_review', label: 'Deposit under review', tone: 'review', headline: `${fmt(paid)} submitted`,
+    payment2State: 'Available after deposit review', payment2Tone: 'review', notice: 'Payment 1 is still being reviewed.',
+  };
+  return {
+    key: 'due', label: 'Balance due', tone: 'action', headline: `${fmt(balance)} due`,
+    payment2State: 'Due', payment2Tone: 'action', notice: 'Payment 1 accepted · Remaining balance is ready to pay.', action: 'pay',
+  };
+}
+
+function hostBookingDueNowAmount(booking) {
+  const view = hostBookingPaymentView(booking);
+  if (!['due', 'created', 'rejected'].includes(view.key)) return 0;
+  return Math.max(0, Number(booking?.total || 0) - hostBookingPaidAmount(booking));
 }
 
 function hostBookingCardHtml(booking) {
@@ -9187,11 +9262,26 @@ function hostBookingCardHtml(booking) {
   const courtDetail = isMultiCourt ? String(booking.courtName || '').replace(/^\d+\s*courts:\s*/i, '') : '';
   const subtitle = courtDetail ? `${courtDetail} | ${schedule}` : schedule;
   const ref = booking.displayRef || booking.ref || '';
-  const status = hostBookingStatusLabel(booking);
   const forfeited = booking.status === 'forfeited' || booking.paymentStatus === 'deposit_retained';
   const deadlineState = window.BookingBalance?.deadlineState?.(booking) || {};
   const balancePaymentEligibility = window.HostBalancePayment?.eligibility?.(booking, new Date()) || { eligible: false };
-  const amountHeadline = forfeited ? `${fmt(paid)} retained` : fmt(balance);
+  const paymentView = hostBookingPaymentView(booking);
+  const attempt = booking.balanceAttempt || null;
+  const hasAttemptSplit = attempt && Number.isFinite(Number(attempt.originalPaidAmount)) && Number.isFinite(Number(attempt.balanceAmount));
+  const payment1Amount = hasAttemptSplit ? Number(attempt.originalPaidAmount) : (paymentView.key === 'paid' ? total : paid);
+  const payment2Amount = hasAttemptSplit ? Number(attempt.balanceAmount) : Math.max(0, total - payment1Amount);
+  const payment1Name = paymentView.key === 'paid' && !hasAttemptSplit ? 'Payment received' : 'Reservation deposit';
+  const payment1State = forfeited ? 'Retained' : payment1Amount > 0 ? 'Accepted' : 'Not accepted';
+  const actionAllowed = balancePaymentEligibility.eligible && booking.balanceAttemptLookup !== 'unavailable';
+  const actionConfig = paymentView.action === 'status'
+    ? { label: 'View payment status', style: 'btn-g' }
+    : paymentView.action === 'continue' && actionAllowed
+      ? { label: 'Continue balance payment', style: 'btn-p' }
+      : paymentView.action === 'retry' && actionAllowed
+        ? { label: 'Submit a new receipt', style: 'btn-p' }
+        : paymentView.action === 'pay' && actionAllowed
+          ? { label: `Pay ${fmt(balancePaymentEligibility.balance)} balance`, style: 'btn-p' }
+          : null;
   return `
     <details class="host-booking-card">
       <summary>
@@ -9200,25 +9290,31 @@ function hostBookingCardHtml(booking) {
           <span>${esc(subtitle)}</span>
         </div>
         <div class="host-booking-side">
-          <div class="host-balance">${amountHeadline}</div>
-          <div class="host-status">${esc(status)}</div>
+          <div class="host-balance ${esc(paymentView.tone)}">${esc(paymentView.headline)}</div>
+          <div class="host-status ${esc(paymentView.tone)}">${esc(paymentView.label)}</div>
         </div>
       </summary>
       <div class="host-booking-detail">
-        <div class="host-detail-grid">
-          <div class="host-detail-cell"><span>Total</span><strong>${fmt(total)}</strong></div>
-          <div class="host-detail-cell"><span>Paid</span><strong>${fmt(paid)}</strong></div>
-          <div class="host-detail-cell balance"><span>${forfeited ? 'Unpaid at forfeiture' : 'Balance'}</span><strong>${fmt(balance)}</strong></div>
+        <div class="host-payment-ledger" aria-label="Payment history summary">
+          <div class="host-payment-row ${payment1Amount > 0 && !forfeited ? 'paid' : forfeited ? 'action' : ''}">
+            <div class="host-payment-name"><span class="host-payment-step">1</span><span>${esc(payment1Name)}</span></div>
+            <div class="host-payment-value"><strong>${fmt(payment1Amount)}</strong><em>${esc(payment1State)}</em></div>
+          </div>
+          <div class="host-payment-row ${esc(paymentView.payment2Tone || '')}">
+            <div class="host-payment-name"><span class="host-payment-step">2</span><span>Remaining balance</span></div>
+            <div class="host-payment-value"><strong>${fmt(payment2Amount)}</strong><em>${esc(paymentView.payment2State)}</em></div>
+          </div>
         </div>
-        ${deadlineState.deadline ? `<div class="host-deadline ${esc(deadlineState.code || '')}"><span>${forfeited ? 'Forfeited' : 'Balance deadline'}</span><strong>${esc(window.BookingBalance.formatDeadline(deadlineState.deadline))}</strong>${deadlineState.label ? `<em>${esc(deadlineState.label)}</em>` : ''}</div>` : ''}
+        <div class="host-booking-notice ${esc(paymentView.tone)}">${esc(paymentView.notice)}</div>
+        ${deadlineState.deadline && !['pending_review','paid'].includes(paymentView.key) ? `<div class="host-deadline ${esc(deadlineState.code || '')}"><span>${forfeited ? 'Forfeited' : 'Balance deadline'}</span><strong>${esc(window.BookingBalance.formatDeadline(deadlineState.deadline))}</strong>${deadlineState.label ? `<em>${esc(deadlineState.label)}</em>` : ''}</div>` : ''}
         <div class="host-booking-meta">
           <span class="host-chip">${esc(paymentMethodName(booking.paymentMethod || 'cash'))}</span>
-          ${booking.hostBooking ? `<span class="host-chip">${forfeited ? 'Deposit retained' : balance > 0 ? '25% reserved' : 'Fully paid'}</span>` : ''}
+          ${booking.hostBooking ? `<span class="host-chip">${forfeited ? 'Deposit retained' : paymentView.key === 'pending_review' ? 'Payment 2 submitted' : balance > 0 ? 'Payment 1 accepted' : 'Fully paid'}</span>` : ''}
           ${booking.courtCount > 1 ? `<span class="host-chip">${booking.duration} hrs</span>` : ''}
           ${ref ? `<span class="host-chip" title="${esc(ref)}">${esc(ref)}</span>` : ''}
-          ${booking.gcashRef ? `<span class="host-chip" title="${esc(booking.gcashRef)}">Pay ref ${esc(booking.gcashRef)}</span>` : ''}
+          ${booking.gcashRef ? `<span class="host-chip" title="${esc(booking.gcashRef)}">Payment 1 ref ${esc(booking.gcashRef)}</span>` : ''}
         </div>
-        ${balancePaymentEligibility.eligible ? `<button type="button" class="btn btn-p host-pay-balance-btn" onclick="event.preventDefault();event.stopPropagation();openHostBalancePayment('${jsArg(balancePaymentEligibility.bookingKey)}')">Pay ${esc(fmt(balancePaymentEligibility.balance))} Balance Now</button>` : ''}
+        ${actionConfig ? `<button type="button" class="btn ${actionConfig.style} host-pay-balance-btn" onclick="event.preventDefault();event.stopPropagation();openHostBalancePayment('${jsArg(balancePaymentEligibility.bookingKey || ref)}')">${esc(actionConfig.label)}</button>` : ''}
       </div>
     </details>`;
 }
@@ -9404,7 +9500,9 @@ async function openHostBalancePayment(key) {
     return;
   }
   const eligible = api.eligibility(booking, new Date());
-  if (!eligible.eligible) {
+  const knownAttemptState = hostBalanceAttemptStatus(booking);
+  const canInspectExisting = ['pending_review', 'approved'].includes(knownAttemptState);
+  if (!eligible.eligible && !canInspectExisting) {
     toast(eligible.reason === 'deadline_passed' ? 'The 11:59 PM balance deadline has passed.' : 'This booking is not currently eligible for balance payment.', 'err');
     await openHostBookings();
     return;
@@ -9429,11 +9527,11 @@ async function openHostBalancePayment(key) {
     const response = await api.invoke(hostBalancePaymentClient(), api.buildQuotePayload(booking));
     if (openToken !== _hostBalancePaymentOpenToken || !modal.classList.contains('show')) return;
     const quote = api.normalizeQuote(response, booking);
+    const existingState = hostBalancePaymentExistingAttemptState(quote);
+    if (existingState) { renderHostBalancePaymentResult(response, existingState); return; }
     if (quote.balance <= 0) throw new Error('This booking no longer has a remaining balance.');
     if (quote.deadline && new Date(quote.deadline).getTime() <= Date.now()) throw new Error('The 11:59 PM Philippine-time balance deadline has passed.');
     _hostBalancePaymentState.quote = quote;
-    const existingState = hostBalancePaymentExistingAttemptState(quote);
-    if (existingState) { renderHostBalancePaymentResult(response, existingState); return; }
     const enabledMethods = hostBalancePaymentEnabledMethods();
     const returnedMethod = String(quote.paymentProvider || '').toLowerCase();
     const originalMethod = String(booking.paymentMethod || '').toLowerCase();
@@ -9827,7 +9925,7 @@ function renderHostBookingsList() {
   if (!list) return;
   const rows = filteredHostBookings(_hostBookingsCache, _hostBookingFilter);
   const emptyText = _hostBookingFilter === 'balance'
-    ? 'No bookings with pending balance.'
+    ? 'No bookings with payment activity.'
     : _hostBookingFilter === 'forfeited'
       ? 'No forfeited bookings.'
       : _hostBookingFilter === 'past'
@@ -9871,21 +9969,39 @@ async function openHostBookings() {
   if ($('hostBkBalance')) $('hostBkBalance').textContent = '...';
   try {
     if (DB.clearCache) DB.clearCache();
-    const all = await loadMyHostBookingsForPage();
+    const paymentApi = hostBalancePaymentApi();
+    const [bookingResult, attemptResult] = await Promise.allSettled([
+      loadMyHostBookingsForPage(),
+      paymentApi?.listMyAttempts
+        ? paymentApi.listMyAttempts(hostBalancePaymentClient())
+        : Promise.reject(new Error('Payment status service is unavailable.')),
+    ]);
+    if (bookingResult.status === 'rejected') throw bookingResult.reason;
+    const all = bookingResult.value;
+    const attemptsAvailable = attemptResult.status === 'fulfilled';
+    const attempts = attemptsAvailable ? attemptResult.value : [];
     const bookings = (all || [])
       .filter(b => hostBookingBelongsToSession(b, host))
       .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     const groupedBookings = groupHostBookingRows(bookings)
+      .map(booking => ({
+        ...booking,
+        balanceAttempt: attemptsAvailable ? paymentApi.latestAttemptForBooking(booking, attempts) : null,
+        balanceAttemptLookup: attemptsAvailable ? 'ready' : 'unavailable',
+      }))
       .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     _hostBookingsCache = groupedBookings;
     const today = todayStr();
     const active = groupedBookings.filter(b => b.status !== 'cancelled' && b.status !== 'forfeited' && b.paymentStatus !== 'rejected');
     const upcoming = active.filter(b => String(b.date || '') >= today);
-    const openBalance = active.reduce((sum, b) => sum + Math.max(0, Number(b.total || 0) - hostBookingPaidAmount(b)), 0);
+    const dueNow = active.reduce((sum, b) => sum + hostBookingDueNowAmount(b), 0);
     if ($('hostBkTotal')) $('hostBkTotal').textContent = String(groupedBookings.length);
     if ($('hostBkUpcoming')) $('hostBkUpcoming').textContent = String(upcoming.length);
-    if ($('hostBkBalance')) $('hostBkBalance').textContent = fmt(openBalance);
+    if ($('hostBkBalance')) $('hostBkBalance').textContent = attemptsAvailable ? fmt(dueNow) : '--';
     renderHostBookingsList();
+    if (!attemptsAvailable) {
+      toast('Payment status could not be refreshed. Paying is temporarily disabled to prevent a duplicate payment.', 'err');
+    }
   } catch (e) {
     if (list) list.innerHTML = '<div class="host-empty">Could not load bookings. Please try again.</div>';
     if ($('hostBkTotal')) $('hostBkTotal').textContent = '--';
@@ -9908,6 +10024,7 @@ async function refreshLiveViews() {
 
   // Keep the legacy wizard slot grid live too.
   if (court && $('bDate').value) renderSlots();
+  if ($('hostBookingsModal')?.classList.contains('show')) await openHostBookings();
 }
 
 function startRealtime() {
@@ -9922,6 +10039,7 @@ function startRealtime() {
   };
   _supabase.channel('public-rt')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'host_booking_balance_payments' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'courts' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'blocked_dates' }, onChange)

@@ -6,6 +6,13 @@
   'use strict';
 
   const FUNCTION_NAME = 'host-booking-balance-payment';
+  const PAYMENT_TABLE = 'host_booking_balance_payments';
+  const HOST_ATTEMPT_COLUMNS = [
+    'id', 'booking_key', 'booking_ref', 'booking_group_ref', 'booking_refs',
+    'status', 'total_amount', 'original_paid_amount', 'expected_amount',
+    'balance_due_at', 'submitted_at', 'reviewed_at', 'approved_at',
+    'rejected_at', 'review_reason', 'created_at', 'updated_at',
+  ].join(',');
   const APPROVED_STATES = new Set(['approved', 'auto_approved', 'paid', 'completed', 'confirmed']);
   const PENDING_STATES = new Set(['pending', 'pending_review', 'manual_review', 'for_verification', 'verifying', 'processing', 'submitted']);
   const REJECTED_STATES = new Set(['rejected', 'failed', 'declined', 'cancelled', 'canceled', 'expired']);
@@ -109,6 +116,68 @@
         .map(cleanText).filter(Boolean).forEach(value => candidates.add(value));
     });
     return candidates.has(target);
+  }
+
+  function normalizeAttempt(value) {
+    const source = value && typeof value === 'object' ? value : {};
+    return {
+      paymentId: cleanText(source.paymentId ?? source.payment_id ?? source.id),
+      bookingKey: cleanText(source.bookingKey ?? source.booking_key),
+      bookingRef: cleanText(source.bookingRef ?? source.booking_ref),
+      bookingGroupRef: cleanText(source.bookingGroupRef ?? source.booking_group_ref),
+      bookingRefs: Array.isArray(source.bookingRefs ?? source.booking_refs)
+        ? [...(source.bookingRefs ?? source.booking_refs)].map(cleanText).filter(Boolean)
+        : [],
+      status: lower(source.status),
+      totalAmount: money(source.totalAmount ?? source.total_amount),
+      originalPaidAmount: money(source.originalPaidAmount ?? source.original_paid_amount),
+      balanceAmount: money(source.balanceAmount ?? source.expectedAmount ?? source.expected_amount),
+      balanceDueAt: source.balanceDueAt ?? source.balance_due_at ?? null,
+      submittedAt: source.submittedAt ?? source.submitted_at ?? null,
+      reviewedAt: source.reviewedAt ?? source.reviewed_at ?? null,
+      approvedAt: source.approvedAt ?? source.approved_at ?? null,
+      rejectedAt: source.rejectedAt ?? source.rejected_at ?? null,
+      reviewReason: cleanText(source.reviewReason ?? source.review_reason),
+      createdAt: source.createdAt ?? source.created_at ?? null,
+      updatedAt: source.updatedAt ?? source.updated_at ?? null,
+    };
+  }
+
+  function attemptMatchesBooking(booking, attempt) {
+    if (!booking || !attempt) return false;
+    const normalized = normalizeAttempt(attempt);
+    const refs = new Set([
+      normalized.bookingKey,
+      normalized.bookingRef,
+      normalized.bookingGroupRef,
+      ...normalized.bookingRefs,
+    ].map(cleanText).filter(Boolean));
+    for (const ref of refs) if (bookingMatchesKey(booking, ref)) return true;
+    return false;
+  }
+
+  function latestAttemptForBooking(booking, attempts) {
+    const matches = (Array.isArray(attempts) ? attempts : [])
+      .map(normalizeAttempt)
+      .filter(attempt => attemptMatchesBooking(booking, attempt));
+    matches.sort((a, b) => {
+      const aTime = Date.parse(a.updatedAt || a.createdAt || '') || 0;
+      const bTime = Date.parse(b.updatedAt || b.createdAt || '') || 0;
+      return bTime - aTime;
+    });
+    return matches[0] || null;
+  }
+
+  async function listMyAttempts(client) {
+    if (!client?.from) throw new Error('Secure payment status is unavailable. Refresh and try again.');
+    const { data, error } = await client
+      .from(PAYMENT_TABLE)
+      .select(HOST_ATTEMPT_COLUMNS)
+      .order('updated_at', { ascending: false })
+      .limit(1000);
+    if (error) throw new Error(errorMessage(error, 'Could not load your payment status.'));
+    if (!Array.isArray(data)) throw new Error('Payment status response is invalid.');
+    return data.map(normalizeAttempt);
   }
 
   function eligibility(booking, now = new Date()) {
@@ -292,6 +361,10 @@
     bookingKey,
     primaryBookingRef,
     bookingMatchesKey,
+    normalizeAttempt,
+    attemptMatchesBooking,
+    latestAttemptForBooking,
+    listMyAttempts,
     eligibility,
     buildQuotePayload,
     buildCreatePayload,

@@ -40,6 +40,21 @@ test('loads pending host balances and keeps Payment History available for every 
   assert.match(hostBalanceAdmin, /pendingForBooking,[\s\S]*?reviewForBooking,[\s\S]*?openHistoryForBooking,/);
 });
 
+test('resolves the real list_pending payment shape when Payment Review opens history', () => {
+  const resolverStart = hostBalanceAdmin.indexOf('function actualBookingRef(booking)');
+  const resolverEnd = hostBalanceAdmin.indexOf('\n  function humanizeFlag', resolverStart);
+  const resolver = hostBalanceAdmin.slice(resolverStart, resolverEnd);
+
+  assert.notEqual(resolverStart, -1, 'actualBookingRef must remain the single history ref resolver');
+  assert.match(balanceEdge, /bookingRef: row\.booking_ref/);
+  assert.match(
+    hostBalanceAdmin,
+    /review\.addEventListener\('click', event => openHistoryForBooking\(payment, event\.currentTarget\)\)/,
+  );
+  assert.match(resolver, /booking\?\.bookingRef/);
+  assert.match(resolver, /booking\?\.booking_ref/);
+});
+
 test('paginates the complete pending queue and fails closed when it is unavailable', () => {
   assert.match(hostBalanceAdmin, /apiCall\('list_pending', \{ limit: 100, offset \}\)/);
   assert.match(hostBalanceAdmin, /state\.loadState = 'error'/);
@@ -63,7 +78,7 @@ test('refreshes balance indicators in realtime without changing canonical bookin
 test('separates reservation state from pending balance review on desktop and mobile', () => {
   assert.match(admin, /<th>Method<\/th><th>Payment Status<\/th><th>Reservation<\/th>/);
   assert.match(admin, /COURT RESERVED/);
-  assert.match(admin, /Payment not final/);
+  assert.match(admin, /Awaiting Payment 2 review/);
   assert.match(admin, /Payment History — balance review needed/);
   assert.match(admin, /balanceReviewState === 'pending' \? '' : `<select/);
   assert.match(admin, /deposit accepted · \$\{fmt\(pendingAmount\)\} submitted/);
@@ -189,6 +204,31 @@ test('permits decisions only while viewing the loaded Payment 2 receipt', () => 
   assert.match(hostBalanceAdmin, /Approve Payment 2 — \$\{amount\} remaining balance/);
   assert.match(hostBalanceAdmin, /for \(const id of \['hostDepositProofImage', 'hostBalanceProofImage'\]\)[\s\S]*?removeAttribute\('src'\)/);
   assert.match(hostBalanceAdmin, /for \(const id of \['hostDepositProofLink', 'hostBalanceProofLink'\]\)[\s\S]*?removeAttribute\('href'\)/);
+});
+
+test('keeps owner review actions fail-closed until the Payment 2 image load event', () => {
+  const syncStart = hostBalanceAdmin.indexOf('function syncActions()');
+  const syncEnd = hostBalanceAdmin.indexOf('\n  function ensureModal', syncStart);
+  const syncActions = hostBalanceAdmin.slice(syncStart, syncEnd);
+  const modalStart = hostBalanceAdmin.indexOf('async function openModal(payment, trigger)');
+  const modalEnd = hostBalanceAdmin.indexOf('\n  function closeModal', modalStart);
+  const openModal = hostBalanceAdmin.slice(modalStart, modalEnd);
+  const decideStart = hostBalanceAdmin.indexOf('async function decide(decision)');
+  const decideEnd = hostBalanceAdmin.indexOf('\n  function renderCards', decideStart);
+  const decide = hostBalanceAdmin.slice(decideStart, decideEnd);
+
+  assert.notEqual(syncStart, -1, 'syncActions must own the visible action gate');
+  assert.notEqual(modalStart, -1, 'openModal must reset receipt state for each review');
+  assert.notEqual(decideStart, -1, 'decide must independently enforce the receipt gate');
+  assert.match(syncActions, /!state\.reviewable[\s\S]*?!state\.receiptLoaded[\s\S]*?!reviewingBalance/);
+  assert.match(openModal, /state\.receiptLoaded = false/);
+  assert.match(openModal, /onLoad\(\) \{\s*state\.receiptLoaded = true;\s*syncActions\(\);/);
+  assert.match(openModal, /onError\([^)]*\) \{\s*state\.receiptLoaded = false;\s*syncActions\(\);/);
+  assert.doesNotMatch(openModal, /balanceProof\.show\([^)]*\);\s*state\.receiptLoaded = true/);
+  assert.match(
+    decide,
+    /!state\.reviewable[\s\S]*?paymentStatus\(payment\) !== 'pending_review'[\s\S]*?!state\.receiptLoaded[\s\S]*?state\.activeReceipt !== 'balance'/,
+  );
 });
 
 test('blocks conflicting booking mutations and reminders during pending review', () => {

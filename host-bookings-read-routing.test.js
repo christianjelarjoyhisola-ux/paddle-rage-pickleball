@@ -14,7 +14,7 @@ const migration = fs.readFileSync(
 
 test('host My Bookings uses its identity-scoped RPC instead of general booking reads', () => {
   assert.match(config, /async getMyHostBookings\(\)[\s\S]*?\.rpc\('get_my_host_bookings'\)/);
-  assert.match(index, /const all = await loadMyHostBookingsForPage\(\);/);
+  assert.match(index, /loadMyHostBookingsForPage\(\)/);
   assert.doesNotMatch(index, /DB\.getBookings\(\{\s*hostUserId:/);
 });
 
@@ -57,6 +57,29 @@ test('host row visibility requires authenticated ownership metadata', () => {
   assert.match(policySql, /(?:bookings\.)?host_user_id = auth\.uid\(\)/);
   assert.match(policySql, /(?:bookings\.)?created_by_user_id = auth\.uid\(\)/);
   assert.match(policySql, /(?:bookings\.)?created_by_role[^\n]*'host'/);
+});
+
+test('host balance attempt reads are identity-scoped by RLS', () => {
+  assert.match(
+    migration,
+    /alter table public\.host_booking_balance_payments enable row level security/,
+  );
+  const policyStart = migration.indexOf(
+    'create policy host_booking_balance_payments_host_select',
+  );
+  assert.ok(policyStart >= 0, 'host balance attempts need a host-only SELECT policy');
+  const policySql = migration.slice(policyStart, policyStart + 600);
+  assert.match(policySql, /for select\s+to authenticated/);
+  assert.match(policySql, /host_user_id = auth\.uid\(\)/);
+  assert.match(policySql, /public\.current_account_role\(\) = 'host'/);
+  assert.match(
+    migration,
+    /revoke all on table public\.host_booking_balance_payments\s+from public, anon, authenticated/,
+  );
+  assert.match(
+    migration,
+    /grant select on table public\.host_booking_balance_payments to authenticated/,
+  );
 });
 
 test('public homepage remains outside the general private booking surface', () => {

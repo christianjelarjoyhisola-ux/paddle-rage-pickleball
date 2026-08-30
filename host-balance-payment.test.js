@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
+const vm = require('node:vm');
 const balancePayment = require('./host-balance-payment.js');
 
 const eligibleBooking = {
@@ -12,6 +13,59 @@ const eligibleBooking = {
   downpayment: 250,
   balanceDueAt: '2026-09-10T23:59:59.999+08:00',
 };
+
+function renderHostBookingCard(booking) {
+  const indexHtml = fs.readFileSync('index.html', 'utf8');
+  const start = indexHtml.indexOf('function hostBookingPaidAmount(booking)');
+  const end = indexHtml.indexOf('let _hostBalancePaymentState', start);
+  assert.ok(start >= 0 && end > start, 'host booking card renderer must remain available');
+
+  const context = {
+    input: booking,
+    result: '',
+    window: {
+      BookingBalance: {
+        paidAmount(value) {
+          const rows = Array.isArray(value?.items) && value.items.length ? value.items : [value];
+          return rows.reduce((sum, row) => {
+            const total = Number(row?.total || 0);
+            const status = String(row?.paymentStatus || row?.payment_status || '').toLowerCase();
+            if (status === 'paid') return sum + total;
+            if (status === 'downpayment_paid' || status === 'deposit_retained') {
+              return sum + Math.min(total, Number(row?.downpayment || 0));
+            }
+            return sum;
+          }, 0);
+        },
+        deadlineState() { return {}; },
+        formatDeadline() { return ''; },
+      },
+      HostBalancePayment: {
+        eligibility(value) {
+          const paid = context.window.BookingBalance.paidAmount(value);
+          return {
+            eligible: String(value?.paymentStatus) === 'downpayment_paid',
+            balance: Math.max(0, Number(value?.total || 0) - paid),
+            bookingKey: value?.groupRef || value?.ref || '',
+          };
+        },
+      },
+    },
+    fmt(value) {
+      return `₱${Number(value || 0).toLocaleString('en-PH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+    },
+    fmtD(value) { return String(value || ''); },
+    esc(value) { return String(value == null ? '' : value); },
+    jsArg(value) { return String(value == null ? '' : value); },
+    paymentMethodName(value) { return String(value || ''); },
+  };
+  vm.createContext(context);
+  vm.runInContext(`${indexHtml.slice(start, end)}\nresult = hostBookingCardHtml(input);`, context);
+  return context.result;
+}
 
 test('offers balance payment only for a confirmed paid-down host booking before its deadline', () => {
   const result = balancePayment.eligibility(
@@ -231,6 +285,156 @@ test('normalizes camel and snake quote fields together with a current grouped at
   assert.equal(normalized.paymentProvider, 'gcash');
   assert.equal(normalized.paymentReference, '1234567890123');
   assert.equal(balancePayment.statusState({ current_attempt: { status: 'submitted' } }), 'pending');
+});
+
+test('matches the host latest active attempt by grouped key or any child booking ref', () => {
+  const grouped = {
+    ref: 'PB-HOST-GROUP-001',
+    displayRef: 'PB-HOST-GROUP-001',
+    groupRef: 'PB-HOST-GROUP-001',
+    items: [
+      { ref: 'PB-HOST-001-A', groupRef: 'PB-HOST-GROUP-001' },
+      { ref: 'PB-HOST-001-B', groupRef: 'PB-HOST-GROUP-001' },
+    ],
+  };
+  const attempts = [
+    {
+      id: 'unrelated-newer',
+      booking_key: 'PB-HOST-OTHER',
+      booking_refs: ['PB-HOST-OTHER-A'],
+      status: 'pending_review',
+      submitted_at: '2026-09-02T12:00:00Z',
+      created_at: '2026-09-02T11:00:00Z',
+    },
+    {
+      id: 'child-ref-match',
+      booking_key: 'PB-HOST-LEGACY-KEY',
+      booking_ref: 'PB-HOST-001-A',
+      booking_refs: ['PB-HOST-001-A', 'PB-HOST-001-B'],
+      status: 'pending_review',
+      submitted_at: '2026-09-02T10:00:00Z',
+      created_at: '2026-09-02T09:00:00Z',
+    },
+  ];
+
+  assert.equal(
+    balancePayment.latestAttemptForBooking(grouped, attempts)?.paymentId,
+    'child-ref-match',
+  );
+  assert.equal(
+    balancePayment.latestAttemptForBooking(grouped, [{
+      id: 'group-key-match',
+      booking_key: 'PB-HOST-GROUP-001',
+      booking_refs: [],
+      status: 'created',
+      created_at: '2026-09-02T09:30:00Z',
+    }])?.paymentId,
+    'group-key-match',
+  );
+});
+
+test('host attempt loader requests only minimal fields under table RLS', async () => {
+  const calls = [];
+  const rows = [{
+    id: 'active-attempt',
+    booking_key: 'PB-HOST-GROUP-001',
+    booking_ref: 'PB-HOST-001-A',
+    booking_refs: ['PB-HOST-001-A'],
+    status: 'pending_review',
+    expected_amount: 3412.5,
+  }];
+  const query = {
+    select(columns) { calls.push(['select', columns]); return this; },
+    order(column, options) { calls.push(['order', column, options]); return this; },
+    limit(value) { calls.push(['limit', value]); return this; },
+    then(resolve, reject) {
+      return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+    },
+  };
+  const client = {
+    from(table) { calls.push(['from', table]); return query; },
+  };
+
+  assert.deepEqual(await balancePayment.listMyAttempts(client), [{
+    paymentId: 'active-attempt',
+    bookingKey: 'PB-HOST-GROUP-001',
+    bookingRef: 'PB-HOST-001-A',
+    bookingGroupRef: '',
+    bookingRefs: ['PB-HOST-001-A'],
+    status: 'pending_review',
+    totalAmount: 0,
+    originalPaidAmount: 0,
+    balanceAmount: 3412.5,
+    balanceDueAt: null,
+    submittedAt: null,
+    reviewedAt: null,
+    approvedAt: null,
+    rejectedAt: null,
+    reviewReason: '',
+    createdAt: null,
+    updatedAt: null,
+  }]);
+  assert.deepEqual(calls.find(call => call[0] === 'from'), [
+    'from',
+    'host_booking_balance_payments',
+  ]);
+  const select = calls.find(call => call[0] === 'select')?.[1] || '';
+  assert.ok(select && select !== '*', 'host cards must not fetch the complete payment audit row');
+  for (const field of ['booking_key', 'booking_ref', 'booking_refs', 'status', 'expected_amount']) {
+    assert.match(select, new RegExp(`\\b${field}\\b`));
+  }
+  assert.doesNotMatch(
+    select,
+    /receipt_extracted|receipt_image_hash|receipt_verification_id|reviewed_by_user_id/i,
+  );
+  assert.deepEqual(calls.find(call => call[0] === 'order'), [
+    'order',
+    'updated_at',
+    { ascending: false },
+  ]);
+  assert.equal(
+    calls.some(call => call[0] === 'eq' && call[1] === 'host_user_id'),
+    false,
+    'the browser must not accept a caller-supplied host id; table RLS derives auth.uid()',
+  );
+});
+
+test('pending Payment 2 is under review and cannot render another pay-now action', () => {
+  const html = renderHostBookingCard({
+    ...eligibleBooking,
+    ref: 'PB-HOST-PENDING-SECOND',
+    total: 4680,
+    downpayment: 1267.5,
+    balanceAttemptLookup: 'ready',
+    balanceAttempt: {
+      id: 'pending-second-payment',
+      bookingKey: 'PB-HOST-PENDING-SECOND',
+      status: 'pending_review',
+      expectedAmount: 3412.5,
+    },
+  });
+
+  assert.match(html, /under review|awaiting owner review/i);
+  assert.doesNotMatch(html, /Pay\s+[^<]*Balance Now/i);
+  assert.doesNotMatch(html, /due now/i);
+});
+
+test('fully paid collapsed card never presents a bare zero amount beside Paid', () => {
+  const html = renderHostBookingCard({
+    ...eligibleBooking,
+    ref: 'PB-HOST-FULLY-PAID',
+    paymentStatus: 'paid',
+    total: 4680,
+    downpayment: 4680,
+    balanceAttemptLookup: 'ready',
+    balanceAttempt: null,
+  });
+
+  assert.doesNotMatch(
+    html,
+    /<div class="host-balance">\s*₱0\.00\s*<\/div>\s*<div class="host-status">\s*Paid\s*<\/div>/i,
+  );
+  assert.match(html, /fully paid|₱4,680\.00\s+paid|₱0\.00\s+due/i);
 });
 
 test('invokes the dedicated authenticated balance endpoint', async () => {

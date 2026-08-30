@@ -6,8 +6,8 @@
 <title>Paddle Rage Pickleball — Admin Dashboard</title>
 <link rel="icon" type="image/png" href="paddleragelogo.jpg">
 <script src="chart.min.js"></script>
-<script src="booking-balance.js?v=20260830-host-balance-v1"></script>
-<script src="host-balance-payment.js?v=20260830-host-balance-v1"></script>
+<script src="booking-balance.js?v=20260831-payment-state-v7"></script>
+<script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
 <script src="finance-core.js?v=20260719-finance-v2"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -5755,13 +5755,10 @@ function hostDepositEvidenceBadge(b){
   const receiptState = String(b.receiptStatus || 'none').toLowerCase();
   const paymentState = String(b.paymentStatus || '').toLowerCase();
   if (receiptState === 'rejected') {
-    return '<span class="host-deposit-evidence flagged">⚠ Deposit flagged</span>';
-  }
-  if (receiptState === 'manual_review') {
-    return '<span class="host-deposit-evidence warn">● Deposit accepted · checks incomplete</span>';
+    return '<span class="host-deposit-evidence flagged">⚠ Payment 1 flagged</span>';
   }
   if (b.gcashRef || receiptState !== 'none' || ['downpayment_paid','paid','deposit_retained'].includes(paymentState)) {
-    return '<span class="host-deposit-evidence">✓ Deposit recorded</span>';
+    return '<span class="host-deposit-evidence">✓ Payment 1 accepted</span>';
   }
   return '';
 }
@@ -5955,7 +5952,7 @@ function hostBalancePendingAmount(b){
 }
 function hostBalanceBookingStatus(b){
   if (hostBalanceReviewState(b) === 'pending') {
-    return '<div class="booking-reservation-state"><span class="bdg bdg-c">COURT RESERVED</span><small>Payment not final</small></div>';
+    return '<div class="booking-reservation-state"><span class="bdg bdg-c">COURT RESERVED</span><small>Awaiting Payment 2 review</small></div>';
   }
   return statusBdg(b.status);
 }
@@ -13729,6 +13726,6 @@ async function checkAgreementGate(session) {
 <script src="supabase-config.js?v=20260830-host-balance-v1"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>
-<script src="host-balance-admin.js?v=20260831-host-balance-v6"></script>
+<script src="host-balance-admin.js?v=20260831-payment-state-v7"></script>
 </body>
 </html>
