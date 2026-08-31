@@ -113,7 +113,7 @@ test('shows a premium two-payment history without merging financial evidence', (
   assert.match(hostBalanceAdmin, /Remaining balance/);
   assert.match(hostBalanceAdmin, /appendMetric\(moneyStrip, 'Payment 1 · Accepted', depositAmount == null \? 'Amount unavailable' : money\(depositAmount\)/);
   assert.match(hostBalanceAdmin, /`Payment 2 · \$\{view\.metric\}`,[\s\S]*?view\.key === 'manual' \? 'No online receipt'/);
-  assert.match(hostBalanceAdmin, /Approve \$\{money\(balanceAmount \|\| 0\)\} Balance/);
+  assert.match(hostBalanceAdmin, /Confirm \$\{money\(balanceAmount \|\| 0\)\} Received/);
   assert.match(hostBalanceAdmin, /'Payment History'/);
   assert.match(hostBalanceAdmin, /status === 'approved'[\s\S]*?label: 'Fully paid'/);
   assert.match(hostBalanceAdmin, /status === 'rejected'[\s\S]*?label: 'Balance receipt rejected'/);
@@ -202,8 +202,8 @@ test('permits decisions only while viewing the loaded Payment 2 receipt', () => 
   assert.match(hostBalanceAdmin, /Payment 1 is read-only\. Select Payment 2/);
   assert.match(hostBalanceAdmin, /Read-only history\. Payment 2 was approved/);
   assert.match(hostBalanceAdmin, /Read-only history\. Payment 2 was rejected/);
-  assert.match(hostBalanceAdmin, /Reject Payment 2/);
-  assert.match(hostBalanceAdmin, /Approve Payment 2 — \$\{amount\} remaining balance/);
+  assert.match(hostBalanceAdmin, /Not Received/);
+  assert.match(hostBalanceAdmin, /Confirm Payment 2 received — \$\{amount\} remaining balance/);
   assert.match(hostBalanceAdmin, /for \(const id of \['hostDepositProofImage', 'hostBalanceProofImage'\]\)[\s\S]*?removeAttribute\('src'\)/);
   assert.match(hostBalanceAdmin, /for \(const id of \['hostDepositProofLink', 'hostBalanceProofLink'\]\)[\s\S]*?removeAttribute\('href'\)/);
 });

@@ -54,6 +54,10 @@ test('court receipt shows an accessible animated upload state', () => {
     page.indexOf('async function verifyUploadedReceipt'),
     page.indexOf('function sendCustomerConfirmationEmail'),
   );
+  const hostSessionVerifier = page.slice(
+    page.indexOf('async function verifyHostSessionReceipt'),
+    page.indexOf('async function submitHostSessionJoin'),
+  );
   const reducedMotionStart = page.indexOf(
     '@media(prefers-reduced-motion:reduce)',
     page.indexOf('@keyframes receiptStatePop'),
@@ -79,7 +83,12 @@ test('court receipt shows an accessible animated upload state', () => {
   assert.match(continueState, /button\.classList\.toggle\('is-receipt-uploading', uploadActive\)/);
   assert.match(continueState, /button\.setAttribute\('aria-busy', String\(uploadActive\)\)/);
   assert.match(clearing, /setBookingReceiptUploadMessage\('idle', ''\)/);
-  assert.match(verifier, /setBookingReceiptUploadMessage\('verifying', 'Checking payment details…'\)/);
+  assert.match(verifier, /setBookingReceiptUploadMessage\('verifying', 'Checking receipt details…'\)/);
+  assert.match(hostSessionVerifier, /st\.textContent = 'Checking receipt details…'/);
+  assert.doesNotMatch(page, /Analyzing (?:your )?receipt for (?:court-)?owner review/i);
+  assert.doesNotMatch(page, /Submitting for (?:court-)?owner review/i);
+  assert.match(verifier, /res\?\.status === 'auto_approved' \? 'auto_approved' : 'manual_review'/);
+  assert.doesNotMatch(verifier, /status === 'rejected'/);
 });
 
 test('leaving receipt upload restores the shared Next button on earlier wizard steps', () => {

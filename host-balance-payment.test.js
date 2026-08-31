@@ -487,10 +487,9 @@ test('uses Paddle payment providers and contains no Korte or Resend coupling', (
     'utf8',
   );
   const providerBlock = edge.match(/const ALLOWED_PROVIDERS\s*=\s*new Set\(\[[\s\S]*?\]\)/)?.[0] || '';
-  for (const provider of ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'pnb']) {
+  for (const provider of ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb']) {
     assert.match(providerBlock, new RegExp(`["']${provider}["']`));
   }
-  assert.doesNotMatch(providerBlock, /maribank/i);
   assert.doesNotMatch(edge, /Korte\s*DOS|kortedoscdo|RESEND_API_KEY/i);
 });
 

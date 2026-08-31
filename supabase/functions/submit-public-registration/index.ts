@@ -13,6 +13,7 @@ const DIGITAL_METHODS = new Set([
   "maya",
   "bpi",
   "gotyme",
+  "maribank",
   "pnb",
 ]);
 
@@ -25,6 +26,12 @@ function json(body: unknown, status = 200): Response {
 
 function text(value: unknown, max = 500): string {
   return String(value ?? "").trim().slice(0, max);
+}
+
+function positiveReceiptVerificationId(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function esc(value: unknown): string {
@@ -228,20 +235,49 @@ Deno.serve(async (req) => {
     });
 
     if (action === "open_play") {
-      const { data, error } = await db.rpc(
-        "submit_public_open_play_registration",
-        {
-          p_full_name: text(body.fullName, 150),
-          p_court_id: text(body.courtId, 100),
-          p_date: text(body.date, 10),
-          p_hour: Number(body.hour),
-          p_payment_type: "100%",
-          p_payment_method: paymentMethod,
-          p_gcash_ref: text(body.gcashRef, 100) || null,
-          p_receipt_image_url: text(body.receiptImageUrl, 300) || null,
-          p_client_receipt_status: text(body.receiptStatus || "none", 30),
-        },
-      );
+      const receiptVerificationId = paymentMethod === "cash"
+        ? null
+        : positiveReceiptVerificationId(body.receiptVerificationId);
+      const commonArgs = {
+        p_full_name: text(body.fullName, 150),
+        p_court_id: text(body.courtId, 100),
+        p_date: text(body.date, 10),
+        p_hour: Number(body.hour),
+        p_payment_type: "100%",
+        p_payment_method: paymentMethod,
+        p_gcash_ref: text(body.gcashRef, 100) || null,
+        p_receipt_image_url: text(body.receiptImageUrl, 300) || null,
+      };
+      let verifiedReceiptAccepted = false;
+      const response = receiptVerificationId
+        ? await db.rpc("submit_verified_public_open_play_registration", {
+          ...commonArgs,
+          p_receipt_verification_id: receiptVerificationId,
+        })
+        : await db.rpc("submit_public_open_play_registration", {
+          ...commonArgs,
+          p_client_receipt_status: paymentMethod === "cash"
+            ? "none"
+            : "manual_review",
+        });
+      if (receiptVerificationId && response.error) {
+        // Never start a second legacy insert after attempting a verified RPC.
+        // A lost response can be ambiguous even when PostgreSQL committed, so
+        // falling back here could create both a paid and a pending registration.
+        console.warn(
+          "Open Play verified registration failed:",
+          response.error.message,
+        );
+        return json({
+          ok: false,
+          error:
+            "Verified registration could not be finalized. Please retry the same submission.",
+          retryable: true,
+        }, 409);
+      } else if (receiptVerificationId) {
+        verifiedReceiptAccepted = true;
+      }
+      const { data, error } = response;
       if (error) return json({ ok: false, error: error.message }, 409);
       const saved = Array.isArray(data) ? data[0] : data;
       if (!saved?.id) {
@@ -251,7 +287,7 @@ Deno.serve(async (req) => {
       const { data: row, error: rowError } = await db
         .from("open_play_registrations")
         .select(
-          "id,full_name,court_id,court_name,date,hour,time_label,payment_type,payment_method,payment_status,amount,receipt_status,created_at",
+          "id,full_name,court_id,court_name,date,hour,time_label,payment_type,payment_method,payment_status,amount,receipt_status,receipt_verification_id,created_at",
         )
         .eq("id", saved.id)
         .single();
@@ -274,21 +310,52 @@ Deno.serve(async (req) => {
           skipped: true,
           reason: "Registration does not need payment review",
         };
-      return json({ ok: true, registration: row, notification });
+      return json({
+        ok: true,
+        registration: row,
+        notification,
+        verifiedReceiptAccepted,
+      });
     }
 
-    const { data, error } = await db.rpc(
-      "submit_public_host_session_registration",
-      {
-        p_session_id: text(body.sessionId, 50),
-        p_full_name: text(body.fullName, 150),
-        p_contact_number: text(body.contactNumber, 40) || null,
-        p_payment_method: paymentMethod,
-        p_gcash_ref: text(body.gcashRef, 100) || null,
-        p_receipt_image_url: text(body.receiptImageUrl, 300) || null,
-        p_client_receipt_status: text(body.receiptStatus || "none", 30),
-      },
-    );
+    const receiptVerificationId = paymentMethod === "cash"
+      ? null
+      : positiveReceiptVerificationId(body.receiptVerificationId);
+    const commonArgs = {
+      p_session_id: text(body.sessionId, 50),
+      p_full_name: text(body.fullName, 150),
+      p_contact_number: text(body.contactNumber, 40) || null,
+      p_payment_method: paymentMethod,
+      p_gcash_ref: text(body.gcashRef, 100) || null,
+      p_receipt_image_url: text(body.receiptImageUrl, 300) || null,
+    };
+    let verifiedReceiptAccepted = false;
+    const response = receiptVerificationId
+      ? await db.rpc("submit_verified_public_host_session_registration", {
+        ...commonArgs,
+        p_receipt_verification_id: receiptVerificationId,
+      })
+      : await db.rpc("submit_public_host_session_registration", {
+        ...commonArgs,
+        p_client_receipt_status: paymentMethod === "cash"
+          ? "none"
+          : "manual_review",
+      });
+    if (receiptVerificationId && response.error) {
+      console.warn(
+        "Host-session verified registration failed:",
+        response.error.message,
+      );
+      return json({
+        ok: false,
+        error:
+          "Verified registration could not be finalized. Please retry the same submission.",
+        retryable: true,
+      }, 409);
+    } else if (receiptVerificationId) {
+      verifiedReceiptAccepted = true;
+    }
+    const { data, error } = response;
     if (error) return json({ ok: false, error: error.message }, 409);
     const saved = Array.isArray(data) ? data[0] : data;
     if (!saved?.id) {
@@ -298,7 +365,7 @@ Deno.serve(async (req) => {
     const { data: registration, error: registrationError } = await db
       .from("open_play_host_session_registrations")
       .select(
-        "id,session_id,full_name,contact_number,payment_method,gcash_ref,payment_status,amount,receipt_status,created_at",
+        "id,session_id,full_name,contact_number,payment_method,gcash_ref,payment_status,amount,receipt_status,receipt_verification_id,created_at",
       )
       .eq("id", saved.id)
       .single();
@@ -333,7 +400,13 @@ Deno.serve(async (req) => {
         skipped: true,
         reason: "Registration does not need payment review",
       };
-    return json({ ok: true, registration, session, notification });
+    return json({
+      ok: true,
+      registration,
+      session,
+      notification,
+      verifiedReceiptAccepted,
+    });
   } catch (error) {
     console.error("submit-public-registration failed", error);
     return json(

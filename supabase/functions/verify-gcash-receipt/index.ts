@@ -1,6 +1,6 @@
 // verify-gcash-receipt
 // ----------------------------------------------------------------------------
-// Server-side GCash / BDO Pay / GoTyme / PNB receipt verification + fraud detection.
+// Server-side digital-payment receipt verification + fraud detection.
 //
 // Actions (POST JSON):
 //   multipart { action: "stage", bookingRef, bookingAccessToken, provider, receipt }
@@ -8,20 +8,19 @@
 //        changing booking/payment state.
 //   multipart { action: "verify", bookingRef, provider, receipt, contentType }
 //   JSON { action: "verify", bookingRef, provider, imageBase64, contentType }
-//     -> OCR (Google Vision) + fraud checks + confidence routing.
+//     -> OCR (Google Vision) + provider-specific evidence checks.
 //        Stores the image (private bucket), writes an audit row, advances
-//        payment_status on auto-approve, and alerts admin on review/reject.
+//        payment_status only for a clean auto-approval, and otherwise alerts
+//        the owner for review.
 //   { action: "sign", bookingRef }    (admin-only, requires a user JWT)
 //     -> returns a short-lived signed URL to view the stored receipt image.
 //
 // Decision lanes:
-//   auto_approved : a persisted GCash booking passes every dedicated check
-//   manual_review : any uncertain or mismatched GCash evidence
-//   rejected      : a proven reused GCash reference, or legacy provider hard flag
+//   auto_approved : a persisted booking passes every dedicated check
+//   manual_review : any uncertain, mismatched, duplicate, or unreadable evidence
 //
-// A GCash manual-review result always keeps the booking pending and its slot
-// held. Only a payment reference already claimed by another booking is allowed
-// to cancel a GCash booking automatically.
+// Automated verification never rejects or cancels a booking. An authorized
+// owner can still deliberately mark a pending receipt as not received.
 // ----------------------------------------------------------------------------
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -34,12 +33,17 @@ import {
   roundMoney,
   toNumber,
 } from "../_shared/booking-payment.ts";
-import {
-  compareGcashRecipient,
-  type GcashReceiptParse,
-  type GcashRecipientComparison,
-  parseGcashReceipt,
+import type {
+  GcashReceiptParse,
+  GcashRecipientComparison,
 } from "../_shared/gcash-receipt.ts";
+import {
+  isDedicatedReceiptProvider,
+  parseProviderReceipt,
+  type ProviderReceiptParse,
+  type ProviderReceiptVerificationEvidence,
+  verifyProviderReceipt,
+} from "../_shared/receipt-providers/index.ts";
 import {
   detectReceiptImageContentType,
   googleVisionOcr,
@@ -47,8 +51,6 @@ import {
   receiptImageSafeToDecode,
 } from "../_shared/google-vision.ts";
 import { extractReceiptAmount } from "../_shared/receipt-amount.ts";
-import { isEmailAddress, sendMailerooEmail } from "../_shared/maileroo.ts";
-import { renderBookingCancellationEmail } from "../_shared/paddle-rage-email.ts";
 import {
   activeReceiptRole,
   bookingAccessTokenMatches,
@@ -76,23 +78,14 @@ const MAX_BYTES = 5 * 1024 * 1024;
 const MAX_REQUEST_BYTES = 8 * 1024 * 1024;
 const PESO_TOLERANCE = 5; // allow ±₱5 rounding; underpay beyond this is a hard flag
 
-// Hard flags force a rejection; soft flags force manual review.
-const HARD_FLAGS = new Set([
-  "REF_FORMAT_INVALID",
-  "DUPLICATE_REF",
-  "DUPLICATE_INVOICE",
-  "DUPLICATE_INSTAPAY_REF",
-  "DUPLICATE_BPI_TRANSACTION_REF",
-  "METHOD_MISMATCH",
-  "REF_MISMATCH",
-  "DATE_NOT_TODAY",
-  "TIME_EXPIRED",
-  "TIME_FUTURE",
-  "WRONG_GCASH_NUMBER",
-  "AMOUNT_MISMATCH", // Only hard if significantly underpaid (>₱5)
-]);
-
-type PaymentProvider = "gcash" | "bdopay" | "maya" | "bpi" | "gotyme" | "pnb";
+type PaymentProvider =
+  | "gcash"
+  | "bdopay"
+  | "maya"
+  | "bpi"
+  | "gotyme"
+  | "maribank"
+  | "pnb";
 type OcrProvider = "google_vision" | "none";
 
 type OcrResult = {
@@ -509,6 +502,14 @@ function isBpiReceipt(text: string): boolean {
       /\binsta\s*pay\b/i.test(t));
 }
 
+function isGotymeReceipt(text: string): boolean {
+  return /\bgo\s*tyme\b|\bgotyme\b/i.test(text || "");
+}
+
+function isMaribankReceipt(text: string): boolean {
+  return /\bmari\s*bank\b|\bmaribank\b/i.test(text || "");
+}
+
 function hasGcashGxiDestination(text: string): boolean {
   return /\bgcash\s*\/\s*g-?xchange\b/i.test(text) ||
     /\bg-?xchange\b/i.test(text) ||
@@ -517,7 +518,10 @@ function hasGcashGxiDestination(text: string): boolean {
 
 function isGcashToGcashReceipt(text: string): boolean {
   const t = text || "";
-  if (isBdoPayReceipt(t) || isMayaReceipt(t) || isBpiReceipt(t)) return false;
+  if (
+    isBdoPayReceipt(t) || isMayaReceipt(t) || isBpiReceipt(t) ||
+    isGotymeReceipt(t) || isMaribankReceipt(t)
+  ) return false;
   return /\bsent\s+via\s+gcash\b/i.test(t) ||
     /\bsent\s+through\s+gcash\b/i.test(t) ||
     /\bgcash\s+receipt\b/i.test(t) ||
@@ -531,11 +535,33 @@ function selectedMethodMismatch(
   const bdoReceipt = isBdoPayReceipt(text);
   const mayaReceipt = isMayaReceipt(text);
   const bpiReceipt = isBpiReceipt(text);
+  const gotymeReceipt = isGotymeReceipt(text);
+  const maribankReceipt = isMaribankReceipt(text);
   const gcashReceipt = isGcashToGcashReceipt(text);
-  if (provider === "gcash") return bdoReceipt || mayaReceipt || bpiReceipt;
-  if (provider === "bdopay") return gcashReceipt || mayaReceipt || bpiReceipt;
-  if (provider === "maya") return gcashReceipt || bdoReceipt || bpiReceipt;
-  if (provider === "bpi") return gcashReceipt || bdoReceipt || mayaReceipt;
+  if (provider === "gcash") {
+    return bdoReceipt || mayaReceipt || bpiReceipt || gotymeReceipt ||
+      maribankReceipt;
+  }
+  if (provider === "bdopay") {
+    return gcashReceipt || mayaReceipt || bpiReceipt || gotymeReceipt ||
+      maribankReceipt;
+  }
+  if (provider === "maya") {
+    return gcashReceipt || bdoReceipt || bpiReceipt || gotymeReceipt ||
+      maribankReceipt;
+  }
+  if (provider === "bpi") {
+    return gcashReceipt || bdoReceipt || mayaReceipt || gotymeReceipt ||
+      maribankReceipt;
+  }
+  if (provider === "gotyme") {
+    return gcashReceipt || bdoReceipt || mayaReceipt || bpiReceipt ||
+      maribankReceipt;
+  }
+  if (provider === "maribank") {
+    return gcashReceipt || bdoReceipt || mayaReceipt || bpiReceipt ||
+      gotymeReceipt;
+  }
   return false;
 }
 
@@ -602,20 +628,16 @@ function extractAmount(text: string): number | null {
   return any ? parseFloat(any[1].replace(/,/g, "")) : null;
 }
 
-function normalizedProvider(raw: string): PaymentProvider {
-  const provider = raw.toLowerCase();
-  if (
-    provider === "bdopay" || provider === "maya" || provider === "bpi" ||
-    provider === "gotyme" || provider === "pnb"
-  ) return provider;
-  return "gcash";
+function normalizedProvider(raw: string): PaymentProvider | null {
+  return paymentMethodProvider(raw);
 }
 
 function paymentMethodProvider(raw: unknown): PaymentProvider | null {
   const method = String(raw || "").toLowerCase();
   if (
     method === "gcash" || method === "bdopay" || method === "maya" ||
-    method === "bpi" || method === "gotyme" || method === "pnb"
+    method === "bpi" || method === "gotyme" || method === "maribank" ||
+    method === "pnb"
   ) {
     return method as PaymentProvider;
   }
@@ -650,10 +672,13 @@ function expectedMerchantForProvider(
         settings.gcash_merchant_name || "",
     };
   }
-  if (provider === "gotyme") {
+  if (provider === "gotyme" || provider === "maribank") {
+    // Both bank routes are transfers to the configured GCash destination.
+    // Provider-specific sender settings must never weaken receiver matching.
     return {
-      number: settings.gotyme_merchant_number || "",
-      name: settings.gotyme_merchant_name || "",
+      number: settings.gcash_merchant_number || "",
+      name: settings.gcash_merchant_name ||
+        settings.payment_merchant_name || "",
     };
   }
   if (provider === "pnb") {
@@ -969,7 +994,7 @@ function looksLikeGcashReceipt(text: string): boolean {
   let score = 0;
   if (/ref(?:erence)?\s*(no|number|#)/.test(t)) score++;
   if (
-    /gcash|bdo\s*pay|gotyme|maya|bpi|paymongo|qrph|insta\s*pay|pesonet|g-?xchange|gxi/
+    /gcash|bdo\s*pay|gotyme|mari\s*bank|maribank|maya|bpi|paymongo|qrph|insta\s*pay|pesonet|g-?xchange|gxi/
       .test(t)
   ) score++;
   if (
@@ -996,19 +1021,23 @@ function ocrCriticalGaps(
   typedRef: string,
 ): string[] {
   if (!text) return ["text"];
-  if (provider === "gcash") {
-    const parsed = parseGcashReceipt(text, { typedReference: typedRef });
+  if (isDedicatedReceiptProvider(provider)) {
+    const parsed = parseProviderReceipt(provider, text, {
+      typedReference: typedRef,
+    });
+    const receipt = parsed.receipt;
     const gaps: string[] = [];
     if (
-      !parsed.reference.value ||
-      parsed.reference.source !== "ref_label" ||
-      parsed.reference.typedMatch !== "match"
+      !receipt.reference.value ||
+      receipt.reference.typedMatch !== "match"
     ) gaps.push("reference");
     if (
-      parsed.amount.amount == null || !parsed.amount.reliable ||
-      parsed.amount.ambiguous || parsed.amount.conflictingPrimaryAmounts
+      receipt.amount.amount == null || !receipt.amount.reliable ||
+      receipt.amount.ambiguous ||
+      (parsed.provider === "gcash" &&
+        parsed.receipt.amount.conflictingPrimaryAmounts)
     ) gaps.push("amount");
-    if (parsed.timestamp.completeness !== "date_time") gaps.push("date");
+    if (receipt.timestamp.completeness !== "date_time") gaps.push("date");
     return gaps;
   }
   const gaps: string[] = [];
@@ -1543,13 +1572,16 @@ Deno.serve(async (req) => {
             "receipt_image_hash",
             null,
           );
-        const { data: clearedRows, error: clearError } = await clearQuery.select(
-          "ref",
-        );
+        const { data: clearedRows, error: clearError } = await clearQuery
+          .select(
+            "ref",
+          );
         if (clearError || clearedRows?.length !== groupRows.length) {
           console.error(
             "receipt discard metadata clear failed:",
-            clearError ? errMsg(clearError) : "not every scoped row was cleared",
+            clearError
+              ? errMsg(clearError)
+              : "not every scoped row was cleared",
           );
           return json({
             error: "Receipt evidence could not be discarded safely",
@@ -1561,9 +1593,9 @@ Deno.serve(async (req) => {
           const { error: removeError } = await db.storage.from("receipts")
             .remove([attached.path]);
           if (removeError) {
-            const clearedRefs = (clearedRows || []).map((row: { ref: string }) =>
-              row.ref
-            );
+            const clearedRefs = (clearedRows || []).map((
+              row: { ref: string },
+            ) => row.ref);
             const { data: restoredRows, error: restoreError } =
               await bookingUpdateQuery(
                 db,
@@ -1725,7 +1757,9 @@ Deno.serve(async (req) => {
         }
         console.error(
           "receipt staging metadata attach failed:",
-          attachError ? errMsg(attachError) : "not every scoped row was attached",
+          attachError
+            ? errMsg(attachError)
+            : "not every scoped row was attached",
         );
         return json({
           error:
@@ -1894,6 +1928,12 @@ Deno.serve(async (req) => {
     const bookingRef = String(body.bookingRef || "");
     const bookingAccessToken = String(body.bookingAccessToken || "");
     let provider = normalizedProvider(String(body.provider || "gcash"));
+    if (!provider) {
+      return json({
+        error: "Unsupported payment provider.",
+        code: "UNSUPPORTED_PAYMENT_PROVIDER",
+      }, 400);
+    }
     let imageBase64 = String(body.imageBase64 || "");
     const stagedReceiptPath = String(body.stagedReceiptPath || "").trim();
     // Optional inline data supports pre-save Open Play registration receipts.
@@ -2056,7 +2096,8 @@ Deno.serve(async (req) => {
         caller.account?.status !== "active"
       ) {
         return json({
-          error: "Only the active host who owns this balance payment can verify its receipt",
+          error:
+            "Only the active host who owns this balance payment can verify its receipt",
         }, 403);
       }
       const nowIso = new Date().toISOString();
@@ -2195,7 +2236,10 @@ Deno.serve(async (req) => {
         .eq("ref", bookingRef)
         .maybeSingle();
       if (currentReceiptError) {
-        return json({ error: "Current receipt state could not be loaded" }, 500);
+        return json(
+          { error: "Current receipt state could not be loaded" },
+          500,
+        );
       }
       if (!currentReceiptRow) return json({ error: "Booking not found" }, 404);
       booking = {
@@ -2265,7 +2309,10 @@ Deno.serve(async (req) => {
 
     if (stagedReceiptPath) {
       if (!hasPersistedBooking) {
-        return json({ error: "A staged receipt requires a saved booking" }, 400);
+        return json(
+          { error: "A staged receipt requires a saved booking" },
+          400,
+        );
       }
       const expectedPrefix = `${bookingRef}/`;
       const stagedName = stagedReceiptPath.startsWith(expectedPrefix)
@@ -2281,7 +2328,8 @@ Deno.serve(async (req) => {
           code: "STAGED_RECEIPT_HASH_MISMATCH",
         }, 409);
       }
-      const { data: stagedObject, error: stagedDownloadError } = await db.storage
+      const { data: stagedObject, error: stagedDownloadError } = await db
+        .storage
         .from("receipts")
         .download(stagedReceiptPath);
       if (stagedDownloadError || !stagedObject) {
@@ -2509,10 +2557,9 @@ Deno.serve(async (req) => {
       // GCash auto-approval requires a configured full mobile number.
       flags.push("MERCHANT_CONFIG_MISSING");
     }
-    if (provider === "gotyme" || provider === "pnb") {
-      // These providers currently have only generic OCR extraction. Until
-      // recipient/method/date/time rules are provider-specific, never
-      // auto-approve them from generic text alone.
+    if (!isDedicatedReceiptProvider(provider)) {
+      // Legacy providers remain owner-review-only until each has a pure,
+      // provider-specific parser/verifier with the same evidence contract.
       flags.push("PROVIDER_REVIEW_REQUIRED");
     }
 
@@ -2562,17 +2609,19 @@ Deno.serve(async (req) => {
     }
 
     // ── field extraction ────────────────────────────────────────────────────
-    const gcashParse: GcashReceiptParse | null = provider === "gcash"
-      ? parseGcashReceipt(ocrText, { typedReference: typedRef })
+    const providerParse: ProviderReceiptParse | null =
+      isDedicatedReceiptProvider(provider)
+        ? parseProviderReceipt(provider, ocrText, {
+          typedReference: typedRef,
+        })
+        : null;
+    const gcashParse: GcashReceiptParse | null =
+      providerParse?.provider === "gcash" ? providerParse.receipt : null;
+    const bankParse = providerParse && providerParse.provider !== "gcash"
+      ? providerParse.receipt
       : null;
-    const gcashRecipient: GcashRecipientComparison | null = gcashParse
-      ? compareGcashRecipient(gcashParse.receiver, {
-        phone: expectedNumber,
-        name: expectedName,
-      })
-      : null;
-    const extractedRef = provider === "gcash"
-      ? gcashParse?.reference.value || null
+    const extractedRef = providerParse
+      ? providerParse.receipt.reference.value || null
       : extractReference(ocrText, provider, typedRef);
     const extractedInvoice = provider === "bdopay"
       ? extractBdoInvoiceNumber(ocrText)
@@ -2583,8 +2632,8 @@ Deno.serve(async (req) => {
     const extractedBpiTransactionRefNo = provider === "bpi"
       ? extractBpiTransactionRefNo(ocrText)
       : null;
-    const amountExtraction = provider === "gcash"
-      ? gcashParse?.amount || null
+    const amountExtraction = providerParse
+      ? providerParse.receipt.amount
       : provider === "maya"
       ? extractReceiptAmount(ocrText, { provider })
       : null;
@@ -2594,12 +2643,12 @@ Deno.serve(async (req) => {
       ? (amountExtraction.reliable ? amountExtraction.amount : null)
       : extractAmount(ocrText);
     const genericReceiptTimestamp = parseReceiptDateTime(ocrText);
-    const receiptDate = provider === "gcash"
-      ? gcashParse?.timestamp.date || null
+    const receiptDate = providerParse
+      ? providerParse.receipt.timestamp.date || null
       : genericReceiptTimestamp.date;
-    const receiptDateTime = provider === "gcash"
-      ? (gcashParse?.timestamp.instant
-        ? new Date(gcashParse.timestamp.instant)
+    const receiptDateTime = providerParse
+      ? (providerParse.receipt.timestamp.instant
+        ? new Date(providerParse.receipt.timestamp.instant)
         : null)
       : genericReceiptTimestamp.shifted;
     const bookingStartedWallClock = toPhWallClockDate(
@@ -2611,7 +2660,7 @@ Deno.serve(async (req) => {
       );
       return Number.isNaN(parsed.getTime()) ? null : parsed;
     })();
-    const bookingStartedAt = provider === "gcash"
+    const bookingStartedAt = providerParse
       ? bookingStartedInstant
       : bookingStartedWallClock;
     const bookingStartedDate = bookingStartedWallClock
@@ -2620,8 +2669,27 @@ Deno.serve(async (req) => {
     const receiptAgeMinutes = bookingStartedAt && receiptDateTime
       ? (receiptDateTime.getTime() - bookingStartedAt.getTime()) / 60000
       : null;
-    if (provider === "gcash" && typedRef.length !== 13) {
-      flags.push("REF_FORMAT_INVALID");
+    const providerVerification: ProviderReceiptVerificationEvidence | null =
+      providerParse
+        ? verifyProviderReceipt(providerParse, {
+          typedReference: typedRef,
+          expectedAmount: pricingError ? null : expectedAmount,
+          pricingAvailable: !pricingError,
+          amountTolerance: 0.01,
+          expectedRecipientNumber: expectedNumber,
+          expectedRecipientName: expectedName,
+          bookingStartedAt: bookingStartedInstant?.toISOString() || null,
+          bookingStartedDate,
+          paymentWindowMinutes: PAYMENT_WINDOW_MINUTES,
+          earlyToleranceMinutes: PAYMENT_EARLY_TOLERANCE_MINUTES,
+        })
+        : null;
+    const gcashRecipient: GcashRecipientComparison | null =
+      providerVerification?.provider === "gcash"
+        ? providerVerification.recipientComparison
+        : null;
+    for (const flag of providerVerification?.flags || []) {
+      if (!flags.includes(flag)) flags.push(flag);
     }
     if (provider === "bdopay" && !isBdoPayReference(typedRef)) {
       flags.push("REF_FORMAT_INVALID");
@@ -2639,80 +2707,16 @@ Deno.serve(async (req) => {
         flags.push("METHOD_MISMATCH");
       }
 
-      if (provider === "gcash") {
-        // Dedicated GCash parser. OCR observations stay independent from the
-        // customer-typed reference and from configured recipient values.
-        if (!gcashParse || !gcashRecipient) {
-          flags.push("GCASH_RECEIPT_UNREADABLE");
-        } else if (!extractedRef && !flags.includes("REF_FORMAT_INVALID")) {
-          flags.push("REF_UNREADABLE");
-        } else if (gcashParse.reference.typedMatch === "mismatch") {
-          flags.push("REF_MISMATCH");
-        } else if (
-          gcashParse.reference.source !== "ref_label" ||
-          gcashParse.reference.confidence !== "high"
-        ) {
-          flags.push("REF_LABEL_UNREADABLE");
-        }
-
-        if (pricingError) flags.push("PRICING_UNAVAILABLE");
-        else if (
-          extractedAmount == null || !gcashParse?.amount.reliable ||
-          gcashParse?.amount.ambiguous
-        ) flags.push("AMOUNT_UNREADABLE");
-        else if (gcashParse?.amount.conflictingPrimaryAmounts) {
-          flags.push("AMOUNT_REVIEW");
-        } else if (!closeMoney(extractedAmount, expectedAmount)) {
-          flags.push("AMOUNT_MISMATCH");
-        }
-
-        if (!receiptDate) flags.push("DATE_UNREADABLE");
-        else if (bookingStartedDate && receiptDate !== bookingStartedDate) {
-          flags.push("DATE_NOT_TODAY");
-        }
-        if (!receiptDateTime || !bookingStartedAt) {
-          flags.push("TIME_UNREADABLE");
-        } else {
-          if (
-            (receiptAgeMinutes as number) < -PAYMENT_EARLY_TOLERANCE_MINUTES
-          ) flags.push("TIME_FUTURE");
-          else if ((receiptAgeMinutes as number) > PAYMENT_WINDOW_MINUTES) {
-            flags.push("TIME_EXPIRED");
-          }
-        }
-
-        if (
-          gcashParse?.indicators.classification !== "gcash" ||
-          !gcashParse?.indicators.sentViaGcash ||
-          !gcashParse?.indicators.totalAmountSent ||
-          !gcashParse?.indicators.referenceLabel ||
-          !gcashParse?.indicators.amountLabel
-        ) {
-          flags.push("GCASH_RECEIPT_UNREADABLE");
-        }
-
-        if (gcashRecipient?.phone === "mismatch") {
-          flags.push("WRONG_GCASH_NUMBER");
-        } else if (gcashRecipient?.phone !== "exact") {
-          flags.push("NUMBER_UNREADABLE");
-        }
-
-        if (gcashRecipient?.name === "mismatch") {
-          flags.push("RECEIVER_NAME_MISMATCH");
-        } else if (
-          expectedName && gcashRecipient?.phone !== "exact" &&
-          gcashRecipient?.name !== "exact" &&
-          gcashRecipient?.name !== "masked_compatible"
-        ) {
-          flags.push("RECEIVER_NAME_UNREADABLE");
-        }
-
+      if (providerVerification) {
+        // Dedicated provider parsers keep OCR observations independent from
+        // the customer-typed reference. The typed value is comparison input
+        // only and never becomes extracted receipt evidence.
         const groupPaymentConsistent = bookingGroup.length > 0 &&
           bookingGroup.every((row) =>
-            paymentMethodProvider(row.payment_method) === "gcash" &&
+            paymentMethodProvider(row.payment_method) === provider &&
             normalizeReferenceForProvider(
                 String(row.gcash_ref || ""),
-                "gcash",
+                provider,
               ) === typedRef &&
             ["verifying", "pending"].includes(String(row.status || "")) &&
             ["pending", "for_verification", "unpaid"].includes(
@@ -2720,7 +2724,7 @@ Deno.serve(async (req) => {
             )
           );
         if (
-          inlinePricingKind !== "host_booking_balance" &&
+          hasPersistedBooking &&
           (!groupPaymentConsistent || !autoPaymentStatus)
         ) {
           flags.push("BOOKING_GROUP_PAYMENT_MISMATCH");
@@ -2860,62 +2864,35 @@ Deno.serve(async (req) => {
     }
     if (editedBySoftware(bytes)) flags.push("EDITED_METADATA");
 
-    // Auto-verifying GCash requires a high-quality OCR read.
-    const minimumOcrConfidence = provider === "gcash" ? 0.9 : 0.55;
+    // Every provider-specific auto-approval requires a high-quality native OCR
+    // read. Generic/legacy parsers remain review-only.
+    const minimumOcrConfidence = isDedicatedReceiptProvider(provider)
+      ? 0.9
+      : 0.55;
     if (
       ocrText &&
       (
         ocrConfidence < minimumOcrConfidence ||
-        (provider === "gcash" && ocrConfidenceSource !== "native")
+        (isDedicatedReceiptProvider(provider) &&
+          ocrConfidenceSource !== "native")
       )
     ) {
       flags.push("LOW_OCR_CONFIDENCE");
     }
 
     // ── reference reuse / replay guard ──────────────────────────────────────
-    // For GCash, a duplicate is terminal only when a high-confidence labeled
-    // OCR reference independently matches the customer's stored reference.
-    // A typed-only collision may be a typo, so it remains a soft possible
-    // duplicate for owner review. Other providers retain their existing
-    // extracted-reference behavior.
-    // GCash refs are stored as digits only; other providers are namespaced so
-    // same-looking references from different banks do not collide.
-    const gcashReferenceProven = provider === "gcash" &&
-      // A collision is terminal only when it is the sole failed check on an
-      // otherwise auto-verifiable GCash receipt. Low-confidence, conflicting,
-      // or incomplete evidence must stay pending for an owner.
-      flags.length === 0 &&
-      ocrProvider === "google_vision" &&
-      ocrConfidenceSource === "native" &&
-      ocrConfidence >= minimumOcrConfidence &&
-      /^\d{13}$/.test(typedRef) &&
-      gcashParse?.reference.value === typedRef &&
-      gcashParse.reference.source === "ref_label" &&
-      gcashParse.reference.confidence === "high" &&
-      gcashParse.reference.typedMatch === "match" &&
-      gcashParse.indicators.classification === "gcash" &&
-      gcashParse.indicators.sentViaGcash &&
-      gcashParse.indicators.totalAmountSent &&
-      gcashParse.indicators.referenceLabel &&
-      gcashParse.indicators.amountLabel;
-    const rawRefForDedupe = provider === "gcash"
-      ? (/^\d{13}$/.test(typedRef) ? typedRef : null)
-      : extractedRef || typedRef || null;
-    const refForDedupe = rawRefForDedupe
-      ? provider === "gcash"
-        ? rawRefForDedupe
-        : `${provider}:${rawRefForDedupe}`
-      : null;
+    // Dedicated parsers produce provider-namespaced transaction keys plus a
+    // shared InstaPay rail key. This catches cross-bank replay without making
+    // unrelated provider references collide. Customer-typed values are never
+    // promoted into dedupe evidence.
     const dedupeKeys: Array<
       { key: string; providerKey: string; duplicateFlag: string }
-    > = [];
-    if (refForDedupe) {
+    > = providerVerification?.dedupeKeys.map((item) => ({ ...item })) || [];
+    if (!providerVerification && extractedRef) {
       dedupeKeys.push({
-        key: refForDedupe,
+        key: `${provider}:${extractedRef}`,
         providerKey: provider,
-        duplicateFlag: provider === "gcash" && !gcashReferenceProven
-          ? "POSSIBLE_DUPLICATE_REF"
-          : "DUPLICATE_REF",
+        duplicateFlag: "DUPLICATE_REF",
       });
     }
     if (provider === "bdopay" && extractedInvoice) {
@@ -2940,6 +2917,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    let duplicateClear = true;
     for (const item of dedupeKeys) {
       const { data: existingRef } = await db
         .from("used_gcash_refs")
@@ -2947,43 +2925,83 @@ Deno.serve(async (req) => {
         .eq("gcash_ref", item.key)
         .maybeSingle();
       if (existingRef && !ledgerClaimBelongsToBooking(existingRef)) {
+        duplicateClear = false;
         flags.push(item.duplicateFlag);
       }
     }
 
     // ── decision routing ────────────────────────────────────────────────────
-    const hasHard = flags.some((f) => HARD_FLAGS.has(f));
-    const hasProvenDuplicate = flags.some((flag) =>
-      [
-        "DUPLICATE_REF",
-        "DUPLICATE_INVOICE",
-        "DUPLICATE_INSTAPAY_REF",
-        "DUPLICATE_BPI_TRANSACTION_REF",
-      ].includes(flag)
-    );
-    const gcashCanAutoApprove = provider === "gcash" &&
+    const sourceProviderMatch = providerParse?.provider === "gcash"
+      ? providerParse.receipt.indicators.classification === "gcash"
+      : providerParse
+      ? providerParse.receipt.indicators.providerBrand &&
+        !providerParse.receipt.indicators.competingProviderBrand
+      : false;
+    const referenceMatch =
+      providerParse?.receipt.reference.typedMatch === "match";
+    const amountMatch = extractedAmount != null && expectedAmount > 0 &&
+      closeMoney(extractedAmount, expectedAmount) &&
+      amountExtraction?.reliable === true &&
+      amountExtraction.ambiguous !== true;
+    const timestampValid =
+      providerParse?.receipt.timestamp.completeness === "date_time" &&
+      !flags.some((flag) =>
+        [
+          "DATE_UNREADABLE",
+          "DATE_NOT_TODAY",
+          "TIME_UNREADABLE",
+          "TIME_FUTURE",
+          "TIME_EXPIRED",
+        ].includes(flag)
+      );
+    const recipientMatch = providerVerification?.provider === "gcash"
+      ? providerVerification.recipientComparison.phone === "exact" &&
+        providerVerification.recipientComparison.name !== "mismatch"
+      : providerVerification
+      ? ["exact", "last4_only"].includes(
+        providerVerification.recipientComparison.phone,
+      ) &&
+        ["exact", "masked_compatible"].includes(
+          providerVerification.recipientComparison.name,
+        )
+      : false;
+    const cleanEvidence = !!providerVerification &&
+      sourceProviderMatch &&
+      referenceMatch &&
+      amountMatch &&
+      timestampValid &&
+      recipientMatch &&
+      duplicateClear &&
+      flags.length === 0;
+    const bookingCanAutoApprove = cleanEvidence &&
       hasPersistedBooking &&
-      autoPaymentStatus !== null &&
-      flags.length === 0;
-    const hostBalanceCanAutoApprove = provider === "gcash" &&
-      inlinePricingKind === "host_booking_balance" &&
-      flags.length === 0;
-    let result: "auto_approved" | "manual_review" | "rejected" =
-      gcashCanAutoApprove ? "auto_approved" : provider === "gcash"
-        // GCash OCR mismatches are preserved for an owner instead of releasing
-        // a possibly paid customer's slot. Only a proven reused reference is
-        // terminal.
-        ? (hasProvenDuplicate ? "rejected" : "manual_review")
-        : hasHard
-        ? "rejected"
+      autoPaymentStatus !== null;
+    const hostBalanceCanAutoApprove = cleanEvidence &&
+      inlinePricingKind === "host_booking_balance";
+    const inlineRegistrationCanAutoApprove = cleanEvidence &&
+      (inlinePricingKind === "host_session" ||
+        inlinePricingKind === "open_play");
+    let result: "auto_approved" | "manual_review" =
+      bookingCanAutoApprove || hostBalanceCanAutoApprove ||
+        inlineRegistrationCanAutoApprove
+        ? "auto_approved"
         : "manual_review";
-    if (hostBalanceCanAutoApprove) result = "auto_approved";
-
-    let confidence = result === "auto_approved"
-      ? ocrConfidence
-      : result === "manual_review"
-      ? 0.5
-      : 0.1;
+    let confidence = result === "auto_approved" ? ocrConfidence : 0.5;
+    const route = provider === "gcash"
+      ? "gcash"
+      : provider === "gotyme" || provider === "maribank"
+      ? `${provider}_to_gcash`
+      : provider;
+    const verification = {
+      decision: cleanEvidence ? "valid" : "review",
+      sourceProviderMatch,
+      referenceMatch,
+      amountMatch,
+      timestampValid,
+      recipientMatch,
+      duplicateClear,
+      destinationProvider: providerParse?.destinationProvider || null,
+    };
 
     const extracted = {
       ref: extractedRef,
@@ -3005,13 +3023,13 @@ Deno.serve(async (req) => {
       })) || [],
       date: receiptDate,
       time: receiptDateTime ? receiptDateTime.toISOString() : null,
-      timePh12: provider === "gcash"
+      timePh12: providerParse
         ? formatPhInstantDateTime12(receiptDateTime)
         : formatPhDateTime12(receiptDateTime),
       bookingStartedAt: bookingStartedAt
         ? bookingStartedAt.toISOString()
         : null,
-      bookingStartedAtPh12: provider === "gcash"
+      bookingStartedAtPh12: providerParse
         ? formatPhInstantDateTime12(bookingStartedAt)
         : formatPhDateTime12(bookingStartedAt),
       bookingStartedDate,
@@ -3022,7 +3040,10 @@ Deno.serve(async (req) => {
       expectedTotal,
       autoPaymentStatus,
       provider,
-      parserVersion: gcashParse ? "gcash_v1" : "legacy",
+      route,
+      parserVersion: providerParse?.parserVersion || "legacy",
+      verifierVersion: "receipt_evidence_v1",
+      verification,
       gcash: gcashParse
         ? {
           reference: gcashParse.reference,
@@ -3039,6 +3060,26 @@ Deno.serve(async (req) => {
           recipientComparison: gcashRecipient,
           indicators: gcashParse.indicators,
           issues: gcashParse.issues,
+        }
+        : null,
+      bankTransfer: bankParse
+        ? {
+          reference: bankParse.reference,
+          railReference: bankParse.railReference,
+          amount: {
+            value: bankParse.amount.amount,
+            reliable: bankParse.amount.reliable,
+            ambiguous: bankParse.amount.ambiguous,
+            reason: bankParse.amount.reason,
+          },
+          timestamp: bankParse.timestamp,
+          recipient: bankParse.recipient,
+          recipientComparison: providerVerification?.provider === "gotyme" ||
+              providerVerification?.provider === "maribank"
+            ? providerVerification.recipientComparison
+            : null,
+          indicators: bankParse.indicators,
+          issues: bankParse.issues,
         }
         : null,
       ocrProvider,
@@ -3060,6 +3101,20 @@ Deno.serve(async (req) => {
         : inlinePricingKind === "host_booking_balance"
         ? "host_booking_balance"
         : "open_play",
+      subject: {
+        fullName: String(
+          booking.full_name || booking.fullName || "",
+        ).trim(),
+        bookingDate: String(booking.date || "").slice(0, 10),
+        courtId: String(booking.court_id || booking.courtId || "").trim() ||
+          null,
+        hour: Number.isInteger(Number(booking.hour))
+          ? Number(booking.hour)
+          : null,
+        sessionId: String(
+          booking.host_session_id || booking.hostSessionId || "",
+        ).trim() || null,
+      },
       ...(inlinePricingKind === "host_booking_balance"
         ? { balancePaymentId: String(hostBalancePayment?.id || "") }
         : {}),
@@ -3088,12 +3143,9 @@ Deno.serve(async (req) => {
         statusUpdate.status = "confirmed";
         statusUpdate.payment_status = autoPaymentStatus;
         statusUpdate.paid_at = receiptVerifiedAt;
-      } else if (result === "manual_review") {
+      } else {
         statusUpdate.status = "pending";
         statusUpdate.payment_status = "for_verification";
-      } else {
-        statusUpdate.status = "cancelled";
-        statusUpdate.payment_status = "rejected";
       }
       metadataUpdate.receipt_status = result;
       metadataUpdate.receipt_flags = flags;
@@ -3110,13 +3162,14 @@ Deno.serve(async (req) => {
     if (hasPersistedBooking) {
       if (result === "auto_approved") {
         const { data: finalizedRows, error: finalizeError } = await db.rpc(
-          "finalize_gcash_receipt_auto_approval",
+          "finalize_digital_receipt_auto_approval",
           {
             p_booking_ref: bookingRef,
             p_booking_refs: [...bookingGroupRefs].sort(),
             p_lease_key: receiptLeaseKey,
             p_lease_token: receiptLeaseToken,
-            p_gcash_reference: extractedRef,
+            p_provider: provider,
+            p_payment_reference: typedRef,
             p_payment_status: autoPaymentStatus,
             p_receipt_image_url: objectPath,
             p_receipt_image_hash: imageHash,
@@ -3130,25 +3183,24 @@ Deno.serve(async (req) => {
         );
         if (finalizeError) {
           const finalizeMessage = errMsg(finalizeError);
-          // The ledger raises this exact message after confirming that another
-          // payment owns the reference. A generic 23505 can come from an
-          // unrelated unique constraint and must remain manual review.
-          const duplicateReference = /already been used for another payment/i
-            .test(finalizeMessage);
-          if (duplicateReference) {
+          // Any failed precondition, ledger race, or database error is
+          // uncertainty. Hold the slot for an owner; never auto-reject.
+          if (/already been used for another payment/i.test(finalizeMessage)) {
             if (!flags.includes("DUPLICATE_REF")) flags.push("DUPLICATE_REF");
-            result = "rejected";
-            confidence = 0.1;
-          } else {
-            flags.push("AUTO_APPROVAL_FAILED");
-            result = "manual_review";
-            confidence = 0.5;
+            duplicateClear = false;
+            verification.duplicateClear = false;
           }
+          if (!flags.includes("AUTO_APPROVAL_FAILED")) {
+            flags.push("AUTO_APPROVAL_FAILED");
+          }
+          verification.decision = "review";
+          result = "manual_review";
+          confidence = 0.5;
           refreshOutcomeUpdates();
           finalPaymentStatus = String(statusUpdate.payment_status || "");
           finalBookingStatus = String(statusUpdate.status || "");
           console.error(
-            "GCash auto-approval finalization failed:",
+            "Digital receipt auto-approval finalization failed:",
             finalizeMessage,
           );
         } else {
@@ -3168,17 +3220,15 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (provider === "gcash" && result !== "auto_approved") {
-        const finalizeReview = async (
-          reviewResult: "manual_review" | "rejected",
-        ) =>
-          await db.rpc("finalize_gcash_receipt_review", {
+      if (isDedicatedReceiptProvider(provider) && result === "manual_review") {
+        const finalizeReview = async () =>
+          await db.rpc("finalize_digital_receipt_review", {
             p_booking_ref: bookingRef,
             p_booking_refs: [...bookingGroupRefs].sort(),
             p_lease_key: receiptLeaseKey,
             p_lease_token: receiptLeaseToken,
-            p_gcash_reference: typedRef,
-            p_result: reviewResult,
+            p_provider: provider,
+            p_payment_reference: typedRef,
             p_receipt_image_url: objectPath,
             p_receipt_image_hash: imageHash,
             p_receipt_phash: phash,
@@ -3189,22 +3239,12 @@ Deno.serve(async (req) => {
             p_raw_ocr_text: ocrText || null,
           });
 
-        let reviewResponse = await finalizeReview(result);
-        if (reviewResponse.error && result === "rejected") {
-          // Cancellation is allowed only when the transaction independently
-          // proves the duplicate. Any race or validation failure falls back to
-          // a held slot and owner review.
-          flags.push("REJECTION_FINALIZATION_FAILED");
-          result = "manual_review";
-          confidence = 0.5;
-          refreshOutcomeUpdates();
-          reviewResponse = await finalizeReview("manual_review");
-        }
+        const reviewResponse = await finalizeReview();
 
         if (reviewResponse.error) {
           finalUpdateError = errMsg(reviewResponse.error);
           console.error(
-            "GCash review finalization failed:",
+            "Digital receipt review finalization failed:",
             finalUpdateError,
           );
 
@@ -3271,7 +3311,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (provider !== "gcash" && result !== "auto_approved") {
+      if (!isDedicatedReceiptProvider(provider) && result === "manual_review") {
         // Metadata and final status must be one conditional update. This acts as
         // a compare-and-set: one concurrent verifier can finalize a row, while a
         // later verifier cannot overwrite that terminal outcome or its evidence.
@@ -3381,9 +3421,13 @@ Deno.serve(async (req) => {
           "receipt verification audit insert failed:",
           errMsg(auditError),
         );
-        if (inlinePricingKind === "host_booking_balance") {
+        if (
+          result === "auto_approved" &&
+          (!hasPersistedBooking ||
+            inlinePricingKind === "host_booking_balance")
+        ) {
           throw new Error(
-            "Balance receipt verification could not be recorded. Please upload the receipt again.",
+            "Receipt verification could not be recorded. Please upload the receipt again.",
           );
         }
       } else {
@@ -3430,17 +3474,13 @@ Deno.serve(async (req) => {
       const totalPayment = expectedTotal || expectedAmount;
       await sendTelegram(
         `⚠️ <b>PAYMENT REVIEW</b>\n` +
-          `👤 Player: ${
-            escapeTelegramHtml(booking.full_name || "Player")
-          }\n` +
+          `👤 Player: ${escapeTelegramHtml(booking.full_name || "Player")}\n` +
           `📋 Ref: <code>${escapeTelegramHtml(displayRef)}</code>\n` +
           `💳 Payment: ${escapeTelegramHtml(paymentLabel)}\n` +
           `🕒 Submitted: ${
             escapeTelegramHtml(telegramDateTime(booking.created_at))
           }\n` +
-          `🚩 Issue: ${
-            escapeTelegramHtml(shortTelegramFlags(flags))
-          }\n\n` +
+          `🚩 Issue: ${escapeTelegramHtml(shortTelegramFlags(flags))}\n\n` +
           `🏟️ <b>COURT SCHEDULE</b>\n` +
           `${courtCountLabel}\n` +
           (sharedDate ? `📅 ${telegramDate(sharedDate)}\n` : "") +
@@ -3448,43 +3488,6 @@ Deno.serve(async (req) => {
           `💰 <b>TOTAL PAYMENT: ${telegramPeso(totalPayment)}</b>\n\n` +
           `🔗 <a href="${telegramAdminUrl()}">Open the Paddle Rage dashboard</a>`,
       );
-    }
-
-    if (result === "rejected" && hasPersistedBooking && !finalUpdateError) {
-      const customerEmail = String(booking.email || "").trim().toLowerCase();
-      if (isEmailAddress(customerEmail)) {
-        const reason = publicReceiptMessage(result, flags);
-        const content = renderBookingCancellationEmail({
-          bookingRef,
-          fullName: String(booking.full_name || "Player"),
-          courtName: String(booking.court_name || "Court"),
-          date: String(booking.date || ""),
-          startTime: String(booking.start_time || ""),
-          endTime: String(booking.end_time || ""),
-          total: Number(booking.total || 0),
-          paid: 0,
-          reason,
-          paymentRejected: true,
-        });
-        try {
-          await sendMailerooEmail({
-            to: customerEmail,
-            toName: String(booking.full_name || "Player"),
-            subject: `Payment rejected: ${bookingRef} | Paddle Rage Pickleball`,
-            html: content.html,
-            plain: content.plain,
-            tags: {
-              message_type: "payment-rejected",
-              booking_reference: bookingRef,
-            },
-          });
-        } catch (emailError) {
-          console.error(
-            "Rejected-payment customer email failed:",
-            errMsg(emailError),
-          );
-        }
-      }
     }
 
     return json({
@@ -3505,10 +3508,10 @@ Deno.serve(async (req) => {
         ? { warning: `booking update failed: ${finalUpdateError}` }
         : {}),
       message: result === "auto_approved"
-        ? "Payment verified. Your booking is confirmed."
-        : result === "manual_review"
-        ? "Received — the owner will verify your payment shortly."
-        : "Your receipt could not be verified. Your booking has been cancelled — please try again with a valid receipt.",
+        ? hasPersistedBooking
+          ? "Payment verified. Your booking is confirmed."
+          : "Payment verified. Complete the registration to save it."
+        : "Received — the owner will verify your payment shortly.",
     });
   } catch (err) {
     console.error("verify-gcash-receipt error:", errMsg(err));

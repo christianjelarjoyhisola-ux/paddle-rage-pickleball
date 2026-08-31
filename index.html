@@ -1900,7 +1900,7 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
   .gc-note { margin-top:8px; }
   .qr-scan-wrap { margin:6px 0 4px; }
   .qr-img { width:160px !important; height:160px !important; }
-  #gcashQrPlaceholder,#gotymeQrPlaceholder,#pnbQrPlaceholder { width:160px !important; height:160px !important; margin:6px auto !important; }
+  #gcashQrPlaceholder,#pnbQrPlaceholder { width:160px !important; height:160px !important; margin:6px auto !important; }
   .pay-amount-toggle { margin-bottom:10px; gap:6px; }
   .qr-scan-hint { padding:5px 10px; margin-top:6px; }
   .bpay-method-block { margin-bottom:8px; }
@@ -3664,9 +3664,14 @@ try {
                 <div class="pay-sub">InstaPay to GCash QR</div>
               </div>
               <div class="pay-opt" id="payOptGotyme" data-m="gotyme" onclick="pickPay('gotyme')">
-                <div class="pay-ic">🏦</div>
-                <div class="pay-lb">GoTyme</div>
-                <div class="pay-sub">Scan QR · enter ref #</div>
+                <div class="pay-ic">GT</div>
+                <div class="pay-lb">GoTyme → GCash</div>
+                <div class="pay-sub">Pay from GoTyme</div>
+              </div>
+              <div class="pay-opt" id="payOptMaribank" data-m="maribank" onclick="pickPay('maribank')">
+                <div class="pay-ic">MB</div>
+                <div class="pay-lb">MariBank → GCash</div>
+                <div class="pay-sub">Pay from MariBank</div>
               </div>
               <div class="pay-opt" id="payOptPnb" data-m="pnb" onclick="pickPay('pnb')">
                 <div class="pay-ic">🏛️</div>
@@ -3763,54 +3768,6 @@ try {
             </div>
           </div>
 
-          <!-- GoTyme QR section -->
-          <div class="gcash bpay-card" id="gotymeBox">
-            <div class="gc-header">
-              <span class="gc-header-icon">🏦</span>
-              <span class="gc-header-lbl">GoTyme Payment</span>
-            </div>
-            <div class="bpay-card-head">
-              <div class="gc-amount-lbl" id="gtPayLabel">Payment amount</div>
-              <div class="bpay-amount-due">
-                <span>Amount to pay</span>
-                <strong id="gtDownAmt">--</strong>
-              </div>
-              <div class="pay-amount-toggle" id="gtPayAmtToggle">
-                <div class="pat-btn on" id="gtPat50" onclick="setPayAmount('half')" style="display:none">
-                  <div>Full Payment</div>
-                  <div class="pat-amt" id="gtPat50Amt"></div>
-                </div>
-                <div class="pat-btn" id="gtPat100" onclick="setPayAmount('full')" style="display:none">
-                  <div>100%</div>
-                  <div class="pat-amt" id="gtPat100Amt"></div>
-                </div>
-              </div>
-            </div>
-            <div class="bpay-recipient">
-              <div class="bpay-qr-wrap">
-                <img id="gotymeQrImg" class="qr-img bpay-qr qr-clickable" alt="GoTyme QR Code" style="display:none" onclick="openQrZoomFromImg(this,'GoTyme QR')" />
-                <div id="gotymeQrPlaceholder" class="bpay-qr-placeholder">
-                  <span style="font-size:1.7rem">🏦</span>
-                  <span style="font-size:.74rem">QR not uploaded</span>
-                </div>
-              </div>
-              <div class="bpay-recipient-info">
-                <div class="bpay-send-title">🏦 Send GoTyme Payment To</div>
-                <div class="gc-num-row" style="justify-content:flex-start;margin:4px 0 3px">
-                  <div class="gc-num" id="gtMerchantNumber" style="font-size:1rem;font-weight:800;margin:0">—</div>
-                  <button type="button" class="gc-copy-btn" onclick="copyPaymentNumber('gotyme')">📋 Copy</button>
-                </div>
-                <div class="bpay-send-name" id="gtMerchantName">Paddle Rage Pickleball</div>
-              </div>
-            </div>
-            <div class="payment-guide">
-              <div class="payment-guide-step"><b>1</b><span><span class="payment-guide-long">Copy #/tap to zoom QR.</span><span class="payment-guide-short">Copy #/tap to zoom QR</span></span></div>
-              <div class="payment-guide-step"><b>2</b><span><span class="payment-guide-long">Paste # / upload receipt.</span><span class="payment-guide-short">Paste # / upload</span></span></div>
-              <div class="payment-guide-step"><b>3</b><span><span class="payment-guide-long">Pay exact amount.</span><span class="payment-guide-short">Pay exact</span></span></div>
-              <div class="payment-guide-step"><b>4</b><span><span class="payment-guide-long">Copy/save ref & QR.</span><span class="payment-guide-short">Save ref & QR</span></span></div>
-            </div>
-          </div>
-
           <!-- PNB section -->
           <div class="gcash bpay-card" id="pnbBox">
             <div class="gc-header">
@@ -3882,7 +3839,7 @@ try {
                 GCash reference must be exactly 13 digits.
               </div>
 
-              <!-- Receipt screenshot upload (auto-verification) -->
+              <!-- Receipt screenshot upload (owner-reviewed verification) -->
               <div class="bpay-receipt" id="bReceiptUploadRegion" aria-busy="false">
                 <label class="bpay-ref-label" style="display:block;margin-bottom:6px">
                   Proof of Payment <span style="color:#e53935;font-size:.8rem">*</span>
@@ -3899,8 +3856,8 @@ try {
                 </div>
                 <div id="bReceiptStatus" class="bpay-upload-status" role="status" aria-live="polite" aria-atomic="true" style="display:none"></div>
                 <div id="bReceiptRequired" class="bpay-help">
-                  Selecting a receipt starts its secure upload for payment verification.<br>
-                  GCash to GCash only.<br>BDO Pay/InstaPay receipts will be rejected.<br>Please choose the correct payment method before paying.
+                  Selecting a receipt starts its secure upload and payment checks.<br>
+                  Choose the payment app you actually used. When automated confirmation is available for that method, a clean receipt can confirm automatically; otherwise it stays pending for court-owner review.
                 </div>
               </div>
             </div>
@@ -3908,7 +3865,7 @@ try {
 
           <label class="booking-policy-check">
             <input type="checkbox" id="bookingPolicyAgree" />
-            <span id="bookingPolicyText"><strong>I agree</strong> that all booking payments are final and non-refundable, my payment details and receipt must be correct, and an invalid payment may release this reservation. If I upload a receipt, I consent to Google Cloud Vision processing it for payment verification and Paddle Rage retaining the private audit record only as long as needed for disputes, fraud prevention, accounting, and legal requirements.</span>
+            <span id="bookingPolicyText"><strong>I agree</strong> that all booking payments are final and non-refundable and my payment details and receipt must be correct. When automated confirmation is available for the selected method, a clean receipt can confirm automatically; otherwise it stays pending for court-owner review. If I upload a receipt, I consent to Google Cloud Vision analyzing it for verification and Paddle Rage retaining the private audit record only as long as needed for disputes, fraud prevention, accounting, and legal requirements.</span>
           </label>
 
           <!-- Cash note -->
@@ -4515,7 +4472,7 @@ function hostSessionPaymentHtml(session) {
     </div>
     <div class="fg">
       <label class="fl" for="hsPaymentRef">${_hostSessionPayMethod === 'bpi' ? 'BPI Confirmation No.' : `${label} Reference Number`}</label>
-      <input type="text" class="fi" id="hsPaymentRef" placeholder="${_hostSessionPayMethod === 'gcash' ? 'e.g. 1234567890123' : _hostSessionPayMethod === 'bdopay' ? 'e.g. BN-20260627-91811670' : _hostSessionPayMethod === 'maya' ? 'e.g. B6DC F633 F08C' : _hostSessionPayMethod === 'bpi' ? 'e.g. 1783397488347' : 'Enter payment reference number'}" maxlength="${paymentRefMaxLength(_hostSessionPayMethod)}" inputmode="${(_hostSessionPayMethod === 'bdopay' || _hostSessionPayMethod === 'maya') ? 'text' : 'numeric'}" oninput="syncHostSessionRef()" />
+      <input type="text" class="fi" id="hsPaymentRef" placeholder="${_hostSessionPayMethod === 'gcash' ? 'e.g. 1234567890123' : _hostSessionPayMethod === 'bdopay' ? 'e.g. BN-20260627-91811670' : _hostSessionPayMethod === 'maya' ? 'e.g. B6DC F633 F08C' : _hostSessionPayMethod === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" maxlength="${paymentRefMaxLength(_hostSessionPayMethod)}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'pnb'].includes(_hostSessionPayMethod) ? 'text' : 'numeric'}" oninput="syncHostSessionRef()" />
       <div id="hsRefHelp" style="font-size:.7rem;color:var(--muted);margin-top:4px">${paymentRefHelpText(_hostSessionPayMethod)}</div>
     </div>
     <div class="fg">
@@ -4534,7 +4491,7 @@ function hostSessionPaymentHtml(session) {
     </div>
     <label class="booking-policy-check" style="margin-top:10px">
       <input type="checkbox" id="hsOcrConsent" />
-      <span><strong>I consent</strong> to Google Cloud Vision securely processing this receipt for payment verification and fraud prevention, and to Paddle Rage privately retaining the audit record only as long as needed for disputes, fraud prevention, accounting, and legal requirements. Privacy requests: bookings@paddleragecdo.ph.</span>
+      <span><strong>I consent</strong> to Google Cloud Vision securely analyzing this receipt for verification and fraud prevention, and to Paddle Rage privately retaining the audit record only as long as needed for disputes, fraud prevention, accounting, and legal requirements. When automated confirmation is available for the selected method, a clean receipt can confirm automatically; otherwise it stays pending for court-owner review. Privacy requests: bookings@paddleragecdo.ph.</span>
     </label>
   `;
 }
@@ -4587,7 +4544,7 @@ function clearHostSessionReceipt() {
 
 async function verifyHostSessionReceipt(ref, method, inlineData) {
   const st = $('hsReceiptStatus');
-  if (st) { st.style.display = ''; st.style.background = 'rgba(74,154,220,.1)'; st.style.color = '#4b5563'; st.textContent = 'Verifying your receipt...'; }
+  if (st) { st.style.display = ''; st.style.background = 'rgba(74,154,220,.1)'; st.style.color = '#4b5563'; st.textContent = 'Checking receipt details…'; }
   const res = await DB.verifyGcashReceipt({
     bookingRef: ref,
     provider: method,
@@ -4595,14 +4552,20 @@ async function verifyHostSessionReceipt(ref, method, inlineData) {
     contentType: _hostSessionReceiptFile.type || 'image/jpeg',
     bookingData: inlineData,
   });
-  // Host-session joins are verified before their registration row exists.
-  // Until a trusted server transaction can create and settle that row
-  // atomically, every non-rejected receipt remains pending for owner review.
-  const status = res?.status === 'rejected' ? 'rejected' : 'manual_review';
-  const msg = res?.publicReason || res?.message || 'Receipt received.';
+  const parsedVerificationId = Number(res?.receiptVerificationId ?? res?.receipt_verification_id);
+  const receiptVerificationId = Number.isSafeInteger(parsedVerificationId) && parsedVerificationId > 0
+    ? parsedVerificationId
+    : null;
+  const status = res?.status === 'auto_approved' && receiptVerificationId
+    ? 'auto_approved'
+    : 'manual_review';
+  const msg = status === 'auto_approved'
+    ? (res?.publicReason || res?.message || 'Receipt passed every check. Securing your confirmed spot…')
+    : (res?.publicReason || res?.message || 'Receipt received. Your spot is pending owner review.');
   if (st) {
-    if (status === 'rejected') { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = 'Receipt rejected: ' + msg; }
-    else { st.style.background = 'rgba(184,126,0,.12)'; st.style.color = '#b87e00'; st.textContent = 'Receipt needs review. Your spot is pending.'; }
+    st.style.background = status === 'auto_approved' ? 'rgba(34,197,94,.12)' : 'rgba(184,126,0,.12)';
+    st.style.color = status === 'auto_approved' ? '#16803a' : '#b87e00';
+    st.textContent = msg;
   }
   return {
     status,
@@ -4614,6 +4577,7 @@ async function verifyHostSessionReceipt(ref, method, inlineData) {
     receiptImageHash: res?.receiptImageHash || null,
     receiptPhash: res?.receiptPhash || null,
     receiptVerifiedAt: res?.receiptVerifiedAt || new Date().toISOString(),
+    receiptVerificationId,
     paymentStatus: res?.paymentStatus || null,
     bookingStatus: res?.bookingStatus || null,
   };
@@ -4662,7 +4626,10 @@ async function submitHostSessionJoin() {
         full_name: name,
         created_at: _hostSessionStartedAt || new Date().toISOString(),
       });
-      paymentStatus = receiptResult.status === 'rejected' ? 'rejected' : 'pending';
+      // Only the protected registration service may turn this clean audit into
+      // a paid row. Until its canonical response arrives, the browser keeps the
+      // registration pending.
+      paymentStatus = 'pending';
     }
     const savedRegistration = await DB.addOpenPlayHostSessionRegistration({
       sessionId: session.id,
@@ -4680,14 +4647,13 @@ async function submitHostSessionJoin() {
       receiptExtracted: receiptResult?.extracted || null,
       receiptConfidence: receiptResult?.confidence ?? null,
       receiptVerifiedAt: receiptResult?.receiptVerifiedAt || null,
+      receiptVerificationId: receiptResult?.status === 'auto_approved'
+        ? receiptResult.receiptVerificationId
+        : null,
     });
     paymentStatus = savedRegistration.paymentStatus;
     const canonicalAmount = Number(savedRegistration.amount || 0);
     const canonicalReceiptStatus = savedRegistration.receiptStatus || 'none';
-    if (paymentStatus === 'rejected') {
-      toast('Receipt rejected. Please try again with a valid receipt.', 'err');
-      return;
-    }
     const isConfirmed = paymentStatus === 'paid';
     const savedStatusMessage = isConfirmed
       ? (canonicalAmount > 0 ? 'Your payment is confirmed.' : 'Your free spot is confirmed.')
@@ -5174,11 +5140,12 @@ let paymentReceiverSettings = {
   bdopay: { number: '09XX XXX XXXX', name: 'Paddle Rage Pickleball', qrImage: '' },
   maya: { number: '09XX XXX XXXX', name: 'Paddle Rage Pickleball', qrImage: '' },
   bpi: { number: '09XX XXX XXXX', name: 'Paddle Rage Pickleball', qrImage: '' },
-  gotyme: { number: '', name: 'Paddle Rage Pickleball', qrImage: '' },
+  gotyme: { number: '09XX XXX XXXX', name: 'Paddle Rage Pickleball', qrImage: '' },
+  maribank: { number: '09XX XXX XXXX', name: 'Paddle Rage Pickleball', qrImage: '' },
   pnb: { number: '', name: 'Paddle Rage Pickleball', qrImage: '' },
 };
-let paymentMethods = { cash: true, gcash: true, bdopay: true, maya: true, bpi: true, gotyme: true, pnb: true };
-const DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'pnb'];
+let paymentMethods = { cash: true, gcash: true, bdopay: true, maya: true, bpi: true, gotyme: true, maribank: true, pnb: true };
+const DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'];
 const ALL_PAYMENT_METHODS = [...DIGITAL_PAYMENT_METHODS, 'cash'];
 
 function isDigitalPayMethod(method) {
@@ -5186,11 +5153,11 @@ function isDigitalPayMethod(method) {
 }
 
 function paymentMethodName(method) {
-  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme', pnb: 'PNB', cash: 'Cash' }[String(method || '').toLowerCase()] || 'Payment');
+  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', cash: 'Cash' }[String(method || '').toLowerCase()] || 'Payment');
 }
 
 function paymentReceiverKey(method) {
-  return method === 'bdopay' || method === 'maya' || method === 'bpi' ? 'gcash' : method;
+  return ['bdopay', 'maya', 'bpi', 'gotyme', 'maribank'].includes(String(method || '').toLowerCase()) ? 'gcash' : method;
 }
 let paymentWatch = { ref: null, timer: null, tries: 0 };
 
@@ -5533,9 +5500,14 @@ function applyPaymentSettings(settings) {
       qrImage: settings.bpi_qr_image || settings.gcash_qr_image || '',
     },
     gotyme: {
-      number: settings.gotyme_merchant_number || '',
-      name: settings.gotyme_merchant_name || '',
-      qrImage: settings.gotyme_qr_image || '',
+      number: settings.gcash_merchant_number || '',
+      name: settings.gcash_merchant_name || sharedMerchantName,
+      qrImage: settings.gcash_qr_image || '',
+    },
+    maribank: {
+      number: settings.gcash_merchant_number || '',
+      name: settings.gcash_merchant_name || sharedMerchantName,
+      qrImage: settings.gcash_qr_image || '',
     },
     pnb: {
       number: settings.pnb_merchant_number || '',
@@ -5560,7 +5532,7 @@ function applyPaymentSettings(settings) {
 
   const receiverReady = method => {
     if (method === 'cash') return true;
-    const receiver = paymentReceiverSettings[method] || {};
+    const receiver = paymentReceiverSettings[paymentReceiverKey(method)] || {};
     return !!String(receiver.name || '').trim() &&
       (!!String(receiver.number || '').trim() || !!String(receiver.qrImage || '').trim());
   };
@@ -5572,13 +5544,12 @@ function applyPaymentSettings(settings) {
   paymentMethods.maya = settings.payment_method_maya === '1' && receiverReady('maya');
   paymentMethods.bpi = settings.payment_method_bpi === '1' && receiverReady('bpi');
   paymentMethods.gotyme = settings.payment_method_gotyme === '1' && receiverReady('gotyme');
+  paymentMethods.maribank = settings.payment_method_maribank === '1' && receiverReady('maribank');
   paymentMethods.pnb = settings.payment_method_pnb === '1' && receiverReady('pnb');
   paymentAcceptanceMode = 'full_payment_only';
 
   if ($('gcMerchantNumber')) $('gcMerchantNumber').textContent = gcashSettings.merchantNumber;
   if ($('gcMerchantName')) $('gcMerchantName').textContent = maskGcashOwnerName(gcashSettings.merchantName) || 'Court owner account';
-  if ($('gtMerchantNumber')) $('gtMerchantNumber').textContent = paymentReceiverSettings.gotyme.number || 'Scan QR';
-  if ($('gtMerchantName')) $('gtMerchantName').textContent = paymentReceiverSettings.gotyme.name;
   if ($('pnMerchantNumber')) $('pnMerchantNumber').textContent = paymentReceiverSettings.pnb.number || 'Scan QR';
   if ($('pnMerchantName')) $('pnMerchantName').textContent = paymentReceiverSettings.pnb.name;
 
@@ -5587,12 +5558,6 @@ function applyPaymentSettings(settings) {
     const img = $('gcashQrImg');
     if (img) { img.src = settings.gcash_qr_image; img.style.display = ''; }
     const ph = $('gcashQrPlaceholder');
-    if (ph) ph.style.display = 'none';
-  }
-  if (settings.gotyme_qr_image) {
-    const img = $('gotymeQrImg');
-    if (img) { img.src = settings.gotyme_qr_image; img.style.display = ''; }
-    const ph = $('gotymeQrPlaceholder');
     if (ph) ph.style.display = 'none';
   }
   if (settings.pnb_qr_image) {
@@ -5613,6 +5578,7 @@ function applyPaymentMethodVisibility() {
   if ($('payOptMaya')) $('payOptMaya').style.display = paymentMethods.maya ? '' : 'none';
   if ($('payOptBpi')) $('payOptBpi').style.display = paymentMethods.bpi ? '' : 'none';
   if ($('payOptGotyme')) $('payOptGotyme').style.display = paymentMethods.gotyme ? '' : 'none';
+  if ($('payOptMaribank')) $('payOptMaribank').style.display = paymentMethods.maribank ? '' : 'none';
   if ($('payOptPnb')) $('payOptPnb').style.display = paymentMethods.pnb ? '' : 'none';
 
   const hasAny = ALL_PAYMENT_METHODS.some(m => paymentMethods[m]);
@@ -5628,7 +5594,6 @@ function applyPaymentMethodVisibility() {
     $('bPay').value = '';
     document.querySelectorAll('.pay-opt').forEach(el => el.classList.remove('on'));
     $('gcashBox').classList.remove('show');
-    $('gotymeBox').classList.remove('show');
     $('pnbBox').classList.remove('show');
     const refWrap = $('gcashRefWrap');
     if (refWrap) refWrap.style.display = 'none';
@@ -5650,7 +5615,7 @@ function preparePaymentStep() {
     return;
   }
 
-  ['gcashBox', 'gotymeBox', 'pnbBox'].forEach(id => $(id)?.classList.remove('show'));
+  ['gcashBox', 'pnbBox'].forEach(id => $(id)?.classList.remove('show'));
   const refWrap = $('gcashRefWrap');
   if (refWrap) refWrap.style.display = 'none';
   if ($('cashNote')) $('cashNote').style.display = 'none';
@@ -7293,14 +7258,11 @@ function updatePriceLegacy() {
   // Update toggle button amount labels
   if ($('gcPat50Amt'))  $('gcPat50Amt').textContent  = fmt(dpAmt);
   if ($('gcPat100Amt')) $('gcPat100Amt').textContent = fmt(total);
-  if ($('gtPat50Amt'))  $('gtPat50Amt').textContent  = fmt(dpAmt);
-  if ($('gtPat100Amt')) $('gtPat100Amt').textContent = fmt(total);
   if ($('pnPat50Amt'))  $('pnPat50Amt').textContent  = fmt(dpAmt);
   if ($('pnPat100Amt')) $('pnPat100Amt').textContent = fmt(total);
 
   // Update payment amount display in QR boxes
   if ($('gcDownAmt'))   $('gcDownAmt').textContent   = fmt(payAmt);
-  if ($('gtDownAmt'))   $('gtDownAmt').textContent   = fmt(payAmt);
   if ($('pnDownAmt'))   $('pnDownAmt').textContent   = fmt(payAmt);
   if ($('bStepPayAmtMethod')) $('bStepPayAmtMethod').textContent = fmt(payAmt);
   if ($('bStepPayAmt')) $('bStepPayAmt').textContent = fmt(payAmt);
@@ -7334,13 +7296,10 @@ function updatePrice() {
 
   if ($('gcPat50Amt'))  $('gcPat50Amt').textContent  = fmt(dpAmt);
   if ($('gcPat100Amt')) $('gcPat100Amt').textContent = fmt(total);
-  if ($('gtPat50Amt'))  $('gtPat50Amt').textContent  = fmt(dpAmt);
-  if ($('gtPat100Amt')) $('gtPat100Amt').textContent = fmt(total);
   if ($('pnPat50Amt'))  $('pnPat50Amt').textContent  = fmt(dpAmt);
   if ($('pnPat100Amt')) $('pnPat100Amt').textContent = fmt(total);
 
   if ($('gcDownAmt'))   $('gcDownAmt').textContent   = fmt(payAmt);
-  if ($('gtDownAmt'))   $('gtDownAmt').textContent   = fmt(payAmt);
   if ($('pnDownAmt'))   $('pnDownAmt').textContent   = fmt(payAmt);
   if ($('bStepPayAmtMethod')) $('bStepPayAmtMethod').textContent = fmt(payAmt);
   if ($('bStepPayAmt')) $('bStepPayAmt').textContent = fmt(payAmt);
@@ -7378,29 +7337,18 @@ function pickPay(m) {
   const methodNote = $('payMethodNote');
   if (methodNote) {
     const notes = {
-      gcash: [
-        'GCash to GCash only.',
-        'BDO Pay/InstaPay receipts will be rejected.',
-        'Please choose the correct payment method before paying.',
-      ],
-      bdopay: [
-        'BDO Pay to GCash only.',
-        'GCash-to-GCash receipts will be rejected.',
-        'Please choose the correct payment method before paying.',
-      ],
-      maya: [
-        'Maya to GCash only.',
-        'GCash/BDO Pay receipts will be rejected.',
-        'Please choose the correct payment method before paying.',
-      ],
+      gcash: 'Pay from GCash to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+      bdopay: 'Pay from BDO Pay to the GCash recipient shown. Your receipt stays pending for court-owner review.',
+      maya: 'Pay from Maya to the GCash recipient shown. Your receipt stays pending for court-owner review.',
       bpi: [
         'BPI to GCash/G-Xchange only.',
         'Enter the BPI Confirmation No., not the Transaction Ref. No.',
-        'Receipts from another payment method will not auto-approve.',
+        'Your receipt stays pending for court-owner review.',
       ],
-      gotyme: 'Use GoTyme only. Receipts from another payment method will not auto-approve.',
-      pnb: 'Use PNB only. Receipts from another payment method will not auto-approve.',
-      cash: 'Cash bookings are paid at the front desk and are not auto-approved by receipt OCR.',
+      gotyme: 'Pay from GoTyme to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+      maribank: 'Pay from MariBank to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+      pnb: 'Use the configured PNB payment details. Your receipt stays pending for court-owner review.',
+      cash: 'Cash bookings are paid at the front desk and confirmed by staff.',
     };
     methodNote.innerHTML = Array.isArray(notes[m]) ? notes[m].map(esc).join('<br>') : esc(notes[m] || '');
     methodNote.style.display = notes[m] ? '' : 'none';
@@ -7409,12 +7357,11 @@ function pickPay(m) {
 
   // Host pricing is automatic: 25% only before the five-day deadline.
   payFull = isVerifiedHostBooking() && !hostBookingDepositEligible();
-  ['gcPat50','gtPat50','pnPat50'].forEach(id => $(id)?.classList.toggle('on', !payFull));
-  ['gcPat100','gtPat100','pnPat100'].forEach(id => $(id)?.classList.toggle('on', payFull));
+  ['gcPat50','pnPat50'].forEach(id => $(id)?.classList.toggle('on', !payFull));
+  ['gcPat100','pnPat100'].forEach(id => $(id)?.classList.toggle('on', payFull));
 
   syncGcashSharedPanel(m);
-  $('gcashBox').classList.toggle('show',  m === 'gcash' || m === 'bdopay' || m === 'maya' || m === 'bpi');
-  $('gotymeBox').classList.toggle('show', m === 'gotyme');
+  $('gcashBox').classList.toggle('show',  ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank'].includes(m));
   $('pnbBox').classList.toggle('show',    m === 'pnb');
   const refWrap = $('gcashRefWrap');
   if (refWrap) refWrap.style.display = digitalPay ? '' : 'none';
@@ -7436,40 +7383,53 @@ function pickPay(m) {
 }
 
 function syncGcashSharedPanel(method) {
-  const isBdo = method === 'bdopay';
-  const isMaya = method === 'maya';
-  const isBpi = method === 'bpi';
+  const profiles = {
+    gcash: {
+      header: 'GCash Payment',
+      title: '📲 Send GCash Payment To',
+      guide: ['Open or scan in GCash.', 'Pay the exact amount.', 'Save the reference number.', 'Upload the complete receipt.'],
+      help: 'GCash → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+    },
+    bdopay: {
+      header: 'BDO Pay → GCash',
+      title: '🏦 Send from BDO Pay to this GCash account',
+      guide: ['Open the QR in BDO Pay.', 'Pay the exact amount.', 'Use Reference no., not invoice.', 'Upload the BDO Pay receipt.'],
+      help: 'BDO Pay → GCash. Your receipt stays pending for court-owner review.',
+    },
+    maya: {
+      header: 'Maya → GCash',
+      title: 'M Send from Maya to this GCash account',
+      guide: ['Open the QR in Maya.', 'Pay the exact amount.', 'Use Reference ID.', 'Upload the Maya receipt.'],
+      help: 'Maya → GCash. Your receipt stays pending for court-owner review.',
+    },
+    bpi: {
+      header: 'BPI → GCash',
+      title: 'BPI Send to this GCash / G-Xchange account',
+      guide: ['Open the QR in BPI.', 'Pay the exact amount.', 'Use Confirmation No.', 'Upload the BPI receipt.'],
+      help: 'BPI → GCash/G-Xchange. Enter the Confirmation No., not the Transaction Ref. No. Your receipt stays pending for court-owner review.',
+    },
+    gotyme: {
+      header: 'GoTyme → GCash',
+      title: 'GT Send from GoTyme to this GCash account',
+      guide: ['Open the QR in GoTyme.', 'Pay the exact amount.', 'Save the transaction reference.', 'Upload the GoTyme receipt.'],
+      help: 'GoTyme → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+    },
+    maribank: {
+      header: 'MariBank → GCash',
+      title: 'MB Send from MariBank to this GCash account',
+      guide: ['Open the QR in MariBank.', 'Pay the exact amount.', 'Save the transaction reference.', 'Upload the MariBank receipt.'],
+      help: 'MariBank → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+    },
+  };
+  const profile = profiles[method] || profiles.gcash;
   const header = $('gcashBox')?.querySelector('.gc-header-lbl');
-  if (header) header.textContent = isBdo ? 'BDO Pay / InstaPay' : isBpi ? 'BPI / InstaPay' : 'GCash Payment';
+  if (header) header.textContent = profile.header;
   const title = $('gcashBox')?.querySelector('.bpay-send-title');
-  if (title) title.textContent = isBdo ? '🏦 Send BDO Pay to GCash QR' : '📲 Send GCash Payment To';
-  const guide = isBdo
-    ? ['Scan GCash QR in BDO Pay.', 'Pay exact amount via InstaPay.', 'Use Reference no., not invoice.', 'Upload BDO Pay receipt.']
-    : ['Copy #/tap to zoom QR.', 'Paste # / upload receipt.', 'Pay exact amount.', 'Copy/save ref & QR.'];
-  $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-long').forEach((el, i) => { if (guide[i]) el.textContent = guide[i]; });
-  $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-short').forEach((el, i) => { if (guide[i]) el.textContent = guide[i]; });
+  if (title) title.textContent = profile.title;
+  $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-long').forEach((el, i) => { if (profile.guide[i]) el.textContent = profile.guide[i]; });
+  $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-short').forEach((el, i) => { if (profile.guide[i]) el.textContent = profile.guide[i]; });
   const receiptHelp = $('bReceiptRequired');
-  if (receiptHelp) {
-    receiptHelp.innerHTML = isBdo
-      ? 'BDO Pay to GCash only.<br>GCash-to-GCash receipts will be rejected.<br>Please choose the correct payment method before paying.'
-      : 'GCash to GCash only.<br>BDO Pay/InstaPay receipts will be rejected.<br>Please choose the correct payment method before paying.';
-  }
-  if (isMaya) {
-    if (header) header.textContent = 'Maya / QRPh';
-    if (title) title.textContent = 'Send Maya to GCash QR';
-    const mayaGuide = ['Scan GCash QR in Maya.', 'Pay exact amount via QRPh.', 'Use Reference ID, not InstaPay Ref. No.', 'Upload Maya receipt.'];
-    $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-long').forEach((el, i) => { if (mayaGuide[i]) el.textContent = mayaGuide[i]; });
-    $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-short').forEach((el, i) => { if (mayaGuide[i]) el.textContent = mayaGuide[i]; });
-    if (receiptHelp) receiptHelp.innerHTML = 'Maya to GCash only.<br>GCash/BDO Pay receipts will be rejected.<br>Please choose the correct payment method before paying.';
-  }
-  if (isBpi) {
-    if (header) header.textContent = 'BPI / InstaPay';
-    if (title) title.textContent = 'Send BPI to GCash/G-Xchange QR';
-    const bpiGuide = ['Scan GCash QR in BPI.', 'Pay exact amount via InstaPay.', 'Use Confirmation No., not Transaction Ref.', 'Upload BPI receipt.'];
-    $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-long').forEach((el, i) => { if (bpiGuide[i]) el.textContent = bpiGuide[i]; });
-    $('gcashBox')?.querySelectorAll('.payment-guide-step span span.payment-guide-short').forEach((el, i) => { if (bpiGuide[i]) el.textContent = bpiGuide[i]; });
-    if (receiptHelp) receiptHelp.innerHTML = 'BPI to GCash/G-Xchange only.<br>Enter the BPI Confirmation No., not the Transaction Ref. No.<br>Please choose the correct payment method before paying.';
-  }
+  if (receiptHelp) receiptHelp.textContent = profile.help;
 }
 
 function copyPaymentNumber(method = 'gcash') {
@@ -7478,7 +7438,8 @@ function copyPaymentNumber(method = 'gcash') {
     bdopay: { id: 'gcMerchantNumber', label: 'BDO Pay' },
     maya: { id: 'gcMerchantNumber', label: 'Maya' },
     bpi: { id: 'gcMerchantNumber', label: 'BPI' },
-    gotyme: { id: 'gtMerchantNumber', label: 'GoTyme' },
+    gotyme: { id: 'gcMerchantNumber', label: 'GCash recipient for GoTyme' },
+    maribank: { id: 'gcMerchantNumber', label: 'GCash recipient for MariBank' },
     pnb: { id: 'pnMerchantNumber', label: 'PNB' },
   };
   const meta = map[method] || map.gcash;
@@ -7517,6 +7478,9 @@ function normalizePaymentRef(value, method) {
     return compact.match(/.{1,4}/g)?.join(' ') || '';
   }
   if (method === 'bpi') return raw.replace(/\D/g, '').slice(0, paymentRefMaxLength(method));
+  if (['gotyme', 'maribank', 'pnb'].includes(method)) {
+    return raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, paymentRefMaxLength(method));
+  }
   return raw.replace(/\D/g, '').slice(0, paymentRefMaxLength(method));
 }
 
@@ -7541,6 +7505,8 @@ function paymentRefHelpText(method) {
   if (method === 'bdopay') return 'Enter the BDO Pay Reference no. in BN-YYYYMMDD-######## format, not the invoice number. We verify the invoice from the receipt.';
   if (method === 'maya') return 'Enter the Maya Reference ID, e.g. B6DC F633 F08C. Do not enter the InstaPay Ref. No.';
   if (method === 'bpi') return 'Enter the BPI Confirmation No., e.g. 1783397488347. Do not enter the Transaction Ref. No.';
+  if (method === 'gotyme') return 'Enter the complete GoTyme transaction reference exactly as shown on the successful receipt.';
+  if (method === 'maribank') return 'Enter the complete MariBank transaction reference exactly as shown on the successful receipt.';
   return 'Must match the reference number on the uploaded receipt.';
 }
 
@@ -7548,8 +7514,8 @@ function syncBookingRefUi(method = $('bPay')?.value || 'gcash') {
   const input = $('bGcashRef');
   if (input) {
     input.maxLength = paymentRefMaxLength(method);
-    input.placeholder = method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : 'Enter payment reference number';
-    input.inputMode = (method === 'bdopay' || method === 'maya') ? 'text' : 'numeric';
+    input.placeholder = method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : `Enter ${method === 'gotyme' ? 'GoTyme' : method === 'maribank' ? 'MariBank' : 'payment'} reference`;
+    input.inputMode = ['bdopay', 'maya', 'gotyme', 'maribank', 'pnb'].includes(method) ? 'text' : 'numeric';
     const clean = normalizePaymentRef(input.value, method);
     if (input.value !== clean) input.value = clean;
   }
@@ -7596,7 +7562,7 @@ function updateRefCount() {
     el.textContent = `${len}/20 digits`;
     el.style.color = isBpiConfirmationValid(input?.value || '') ? 'var(--accent)' : 'var(--muted)';
   } else {
-    el.textContent = len + (len === 1 ? ' digit' : ' digits');
+    el.textContent = len + (len === 1 ? ' character' : ' characters');
     el.style.color = len > 0 ? 'var(--accent)' : 'var(--muted)';
   }
 }
@@ -7608,7 +7574,7 @@ function updatePaymentAmountUI() {
   const fpOnly = paymentAcceptanceMode === 'full_payment_only';
 
   // Update booking wizard payment toggles
-  ['gc', 'gt', 'pn'].forEach(p => {
+  ['gc', 'pn'].forEach(p => {
     const label = $(p + 'PayLabel');
     const toggle = $(p + 'PayAmtToggle');
     if (!toggle) return;
@@ -7646,7 +7612,7 @@ function updatePaymentAmountUI() {
       ? hostDeposit
         ? '<strong>I agree</strong> that all payments are final and non-refundable. The remaining balance is due by 11:59 PM Philippine time, five calendar days before Open Play; missing the deadline forfeits the reservation and releases the slot.'
         : '<strong>I agree</strong> that full payment is required because this Open Play starts in five days or less, and all payments are final and non-refundable.'
-      : '<strong>I agree</strong> that all booking payments are final and non-refundable, my payment details and receipt must be correct, and an invalid payment may release this reservation.') + visionConsent;
+      : '<strong>I agree</strong> that all booking payments are final and non-refundable and my payment details and receipt must be correct. When automated confirmation is available for the selected method, clean proof can confirm automatically; anything wrong or unclear stays pending for the court owner to choose Confirm Received or Not Received.') + visionConsent;
   }
   updatePrice();
 }
@@ -7843,46 +7809,29 @@ async function submitBookingLegacy(e) {
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🎾 Confirm Booking'; }
         return;
       }
-      const ocrStatus = booking._receiptResult?.status;
-      if (ocrStatus === 'rejected') {
-        // Edge fn already set status=cancelled on the booking. Show rejection
-        // screen then refresh the grid so the slot turns free immediately.
-        booking.status = 'cancelled';
-        booking.paymentStatus = 'rejected';
-        DB.notifyBookingUpdate(booking, 'payment_rejected', receiptReasonFromFlags(booking._receiptResult?.flags || [])).catch(() => {});
-        showInvoice(booking);
-        resetForm();
-        // Refresh both the card grid (today) AND the specific date-picker view
-        // for the rejected booking's date so the slot turns free right away.
-        await renderCourts();
-        onCardDate(booking.courtId, booking.date).catch(() => {});
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '🎾 Confirm Booking'; }
-        return;
-      } else if (ocrStatus === 'auto_approved') {
-        const verifiedState = await canonicalAutoReceiptState(
-          booking.ref,
-          booking._receiptResult,
-        );
+      if (booking._receiptResult?.status === 'auto_approved') {
+        const verifiedState = await canonicalAutoReceiptState(booking.ref, booking._receiptResult);
         if (verifiedState) {
           booking.status = verifiedState.bookingStatus;
           booking.paymentStatus = verifiedState.paymentStatus;
-          DB.notifyBookingUpdate(booking, 'payment_verified', 'GCash receipt auto-verified.').catch(() => {});
+          DB.notifyBookingUpdate(booking, 'payment_verified', `${paymentMethodName(payMethod)} receipt auto-verified.`).catch(() => {});
           sendCustomerConfirmationEmail(booking);
         } else {
-          // Never invent a paid state in the browser. A mixed deployment or
-          // interrupted response is preserved for owner review without
-          // overwriting whatever canonical state the server committed.
           booking.status = 'pending';
           booking.paymentStatus = 'for_verification';
-          DB.notifyBookingUpdate(booking, 'payment_review_needed', 'Auto-verification response did not include a canonical settlement state.').catch(() => {});
+          DB.notifyBookingUpdate(booking, 'payment_review_needed', 'Receipt needs court-owner review.').catch(() => {});
         }
       } else {
-        // manual_review or OCR error — downgrade from verifying to pending so
-        // slot shows as taken (red) while admin reviews it, not yellow forever.
+        // Any uncertain, mismatched, duplicate, or unreadable receipt is held
+        // for owner review. Automated checks never reject or cancel a booking.
         booking.status = 'pending';
         booking.paymentStatus = 'for_verification';
         await DB.updateBooking(booking.ref, { status: 'pending', paymentStatus: 'for_verification' }).catch(() => {});
-        DB.notifyBookingUpdate(booking, 'payment_review_needed', receiptReasonFromFlags(booking._receiptResult?.flags || []) || 'Receipt needs owner review.').catch(() => {});
+        DB.notifyBookingUpdate(
+          booking,
+          'payment_review_needed',
+          receiptReasonFromFlags(booking._receiptResult?.flags || []) || 'Receipt received. Pending court-owner review.',
+        ).catch(() => {});
         onCardDate(booking.courtId, booking.date).catch(() => {});
       }
     }
@@ -8153,19 +8102,8 @@ async function submitBooking(e) {
 
       receiptEvidenceProven = true;
       _receiptFinalRetryNeeded = false;
-      const ocrStatus = booking._receiptResult?.status;
-      if (ocrStatus === 'rejected') {
-        booking.status = 'cancelled';
-        booking.paymentStatus = 'rejected';
-        itemBookings.forEach(row => { row.status = 'cancelled'; row.paymentStatus = 'rejected'; });
-        DB.notifyBookingUpdate(booking, 'payment_rejected', receiptReasonFromFlags(booking._receiptResult?.flags || [])).catch(() => {});
-        await refreshBookingItemViews(itemBookings);
-        submissionToast = '';
-      } else if (ocrStatus === 'auto_approved') {
-        const verifiedState = await canonicalAutoReceiptState(
-          booking.ref,
-          booking._receiptResult,
-        );
+      if (booking._receiptResult?.status === 'auto_approved') {
+        const verifiedState = await canonicalAutoReceiptState(booking.ref, booking._receiptResult);
         if (verifiedState) {
           booking.status = verifiedState.bookingStatus;
           booking.paymentStatus = verifiedState.paymentStatus;
@@ -8173,18 +8111,14 @@ async function submitBooking(e) {
             row.status = verifiedState.bookingStatus;
             row.paymentStatus = verifiedState.paymentStatus;
           });
-          DB.notifyBookingUpdate(booking, 'payment_verified', 'GCash receipt auto-verified.').catch(() => {});
+          DB.notifyBookingUpdate(booking, 'payment_verified', `${paymentMethodName(booking.paymentMethod)} receipt auto-verified.`).catch(() => {});
           sendCustomerConfirmationEmail(booking);
         } else {
           booking.status = 'pending';
           booking.paymentStatus = 'for_verification';
-          itemBookings.forEach(row => {
-            row.status = 'pending';
-            row.paymentStatus = 'for_verification';
-          });
-          DB.notifyBookingUpdate(booking, 'payment_review_needed', 'Auto-verification response did not include a canonical settlement state.').catch(() => {});
+          itemBookings.forEach(row => { row.status = 'pending'; row.paymentStatus = 'for_verification'; });
+          DB.notifyBookingUpdate(booking, 'payment_review_needed', 'Receipt needs court-owner review.').catch(() => {});
         }
-        await refreshBookingItemViews(itemBookings);
       } else {
         booking.status = 'pending';
         booking.paymentStatus = 'for_verification';
@@ -8192,9 +8126,14 @@ async function submitBooking(e) {
         await Promise.allSettled(itemBookings.map(row =>
           DB.updateBooking(row.ref, { status: 'pending', paymentStatus: 'for_verification' })
         ));
-        DB.notifyBookingUpdate(booking, 'payment_review_needed', receiptReasonFromFlags(booking._receiptResult?.flags || []) || 'Receipt needs owner review.').catch(() => {});
-        await refreshBookingItemViews(itemBookings);
+        DB.notifyBookingUpdate(
+          booking,
+          'payment_review_needed',
+          receiptReasonFromFlags(booking._receiptResult?.flags || []) || 'Receipt received. Pending court-owner review.',
+        ).catch(() => {});
+        submissionToast = 'Booking submitted. Payment is pending court-owner review.';
       }
+      await refreshBookingItemViews(itemBookings);
     }
 
     // Cash needs no receipt. Digital submissions reach this point only after
@@ -8532,16 +8471,13 @@ function normalizeStoredBookingReceipt(result) {
   const bookingStatus = String(result?.bookingStatus || result?.booking_status || result?.status || '').toLowerCase();
   const paymentStatus = String(result?.paymentStatus || result?.payment_status || '').toLowerCase();
   const storedReceiptStatus = String(result?.receiptStatus || result?.receipt_status || '').toLowerCase();
-  const status = ['auto_approved', 'manual_review', 'rejected'].includes(String(result?.status || '').toLowerCase())
-    ? String(result.status).toLowerCase()
-    : storedReceiptStatus === 'auto_approved' || (bookingStatus === 'confirmed' && ['paid', 'downpayment_paid'].includes(paymentStatus))
-    ? 'auto_approved'
-    : storedReceiptStatus === 'rejected' || bookingStatus === 'cancelled' || paymentStatus === 'rejected'
-    ? 'rejected'
-    : 'manual_review';
+  const autoApproved = storedReceiptStatus === 'auto_approved' ||
+    (bookingStatus === 'confirmed' && ['paid', 'downpayment_paid'].includes(paymentStatus));
   return {
-    status,
-    message: result?.publicReason || result?.message || 'Receipt safely stored for owner review.',
+    status: autoApproved ? 'auto_approved' : 'manual_review',
+    message: autoApproved
+      ? 'Receipt verified and payment confirmed.'
+      : (result?.publicReason || result?.message || 'Receipt safely stored for court-owner review.'),
     flags: result?.flags || result?.receiptFlags || result?.receipt_flags || [],
     extracted: result?.extracted || result?.receiptExtracted || result?.receipt_extracted || null,
     confidence: result?.confidence ?? result?.receiptConfidence ?? result?.receipt_confidence ?? null,
@@ -8549,8 +8485,8 @@ function normalizeStoredBookingReceipt(result) {
     receiptImageHash: result?.receiptImageHash || result?.receipt_image_hash || null,
     receiptPhash: result?.receiptPhash || result?.receipt_phash || null,
     receiptVerifiedAt: result?.receiptVerifiedAt || result?.receipt_verified_at || null,
-    paymentStatus: paymentStatus || null,
-    bookingStatus: bookingStatus || null,
+    paymentStatus: autoApproved ? paymentStatus : 'for_verification',
+    bookingStatus: autoApproved ? bookingStatus : 'pending',
   };
 }
 
@@ -8638,7 +8574,7 @@ async function verifyUploadedReceipt(
   receiptFile = _receiptFile,
   stagedResult = null,
 ) {
-  setBookingReceiptUploadMessage('verifying', 'Checking payment details…');
+  setBookingReceiptUploadMessage('verifying', 'Checking receipt details…');
   try {
     if (!receiptFile) throw new Error('Receipt screenshot is required.');
     const staged = stagedResult?.stagedReceiptPath
@@ -8661,13 +8597,11 @@ async function verifyUploadedReceipt(
     };
     if (inlineData) payload.bookingData = inlineData;
     const res = await DB.verifyGcashReceipt(payload);
-    const status = ['auto_approved', 'manual_review', 'rejected'].includes(res?.status)
-      ? res.status
-      : 'manual_review';
-    const msg = res?.publicReason || res?.message || 'Receipt received.';
-    if (status === 'auto_approved') setBookingReceiptUploadMessage('uploaded', 'Receipt passed the initial check. Finalizing your registration…');
-    else if (status === 'rejected') setBookingReceiptUploadMessage('failed', msg);
-    else setBookingReceiptUploadMessage('review', msg);
+    const status = res?.status === 'auto_approved' ? 'auto_approved' : 'manual_review';
+    const msg = status === 'auto_approved'
+      ? (res?.publicReason || res?.message || 'Receipt verified and payment confirmed.')
+      : (res?.publicReason || res?.message || 'Receipt received. Payment is pending court-owner review.');
+    setBookingReceiptUploadMessage(status === 'auto_approved' ? 'uploaded' : 'review', msg);
     return {
       status,
       message: msg,
@@ -8678,8 +8612,8 @@ async function verifyUploadedReceipt(
       receiptImageHash: res?.receiptImageHash || null,
       receiptPhash: res?.receiptPhash || null,
       receiptVerifiedAt: res?.receiptVerifiedAt || new Date().toISOString(),
-      paymentStatus: res?.paymentStatus || null,
-      bookingStatus: res?.bookingStatus || null,
+      paymentStatus: status === 'auto_approved' ? (res?.paymentStatus || null) : 'for_verification',
+      bookingStatus: status === 'auto_approved' ? (res?.bookingStatus || null) : 'pending',
     };
   } catch (err) {
     setBookingReceiptUploadMessage('failed', 'Receipt verification failed. Your upload is still selected — please retry.');
@@ -8721,7 +8655,6 @@ function resetForm(options = {}) {
     m.textContent = 'Select a date above to see real-time availability.';
   }
   $('gcashBox').classList.remove('show');
-  $('gotymeBox').classList.remove('show');
   $('pnbBox').classList.remove('show');
   const refWrap2 = $('gcashRefWrap');
   if (refWrap2) refWrap2.style.display = 'none';
@@ -9368,7 +9301,7 @@ function hostBalancePaymentEnabledMethods() {
 }
 
 function hostBalancePaymentMethodIcon(method) {
-  return ({ gcash: 'GC', bdopay: 'BDO', maya: 'M', bpi: 'BPI', gotyme: 'GT', pnb: 'PNB' }[method] || 'Pay');
+  return ({ gcash: 'GC', bdopay: 'BDO', maya: 'M', bpi: 'BPI', gotyme: 'GT', maribank: 'MB', pnb: 'PNB' }[method] || 'Pay');
 }
 
 function hostBalancePaymentReferencePlaceholder(method) {
@@ -9377,6 +9310,7 @@ function hostBalancePaymentReferencePlaceholder(method) {
     : method === 'maya' ? 'e.g. B6DC F633 F08C'
     : method === 'bpi' ? 'e.g. 1783397488347'
     : method === 'gotyme' ? 'Enter the full GoTyme reference'
+    : method === 'maribank' ? 'Enter the full MariBank reference'
     : 'Enter the new transaction reference';
 }
 
@@ -9386,7 +9320,8 @@ function hostBalancePaymentMethodNote(method) {
     bdopay: 'Use BDO Pay to the configured recipient and enter the full BN reference.',
     maya: 'Use Maya and enter the Maya Reference ID shown on the successful receipt.',
     bpi: 'Use BPI and enter the Confirmation No., not the Transaction Ref. No.',
-    gotyme: 'Use GoTyme and enter the complete transaction reference shown on the receipt.',
+    gotyme: 'Pay from GoTyme to the GCash recipient and enter the complete transaction reference.',
+    maribank: 'Pay from MariBank to the GCash recipient and enter the complete transaction reference.',
     pnb: 'Use the configured PNB payment details and upload the complete successful receipt.',
   })[method] || 'Use a new transaction and upload its complete successful receipt.';
 }
@@ -9808,7 +9743,7 @@ async function submitHostBalancePayment() {
       receiptResult = state.receiptResult;
     }
 
-    setHostBalancePaymentBusy(true, 'Submitting for owner review…');
+    setHostBalancePaymentBusy(true, 'Checking receipt details…');
     const submitResponse = await api.invoke(hostBalancePaymentClient(), api.buildSubmitPayload(state.payment, receiptResult));
     const finalPayment = api.normalizeQuote(submitResponse, state.booking);
     state.payment = { ...state.payment, ...finalPayment };
@@ -10543,7 +10478,8 @@ async function openPlaySignup(courtId, date, h, courtName) {
     paymentMethods.gcash   ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gcash' ? 'on' : ''}" data-m="gcash"   onclick="opPickPay('gcash')"><span class="po-ico">📱</span><span class="po-lbl">GCash</span><span class="po-sub">Scan QR · send ref #</span></div>` : '',
     paymentMethods.bdopay  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'bdopay' ? 'on' : ''}" data-m="bdopay"  onclick="opPickPay('bdopay')"><span class="po-ico">🏦</span><span class="po-lbl">BDO Pay</span><span class="po-sub">InstaPay to GCash QR</span></div>` : '',
     paymentMethods.maya    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maya' ? 'on' : ''}" data-m="maya"    onclick="opPickPay('maya')"><span class="po-ico">M</span><span class="po-lbl">Maya</span><span class="po-sub">QRPh to GCash</span></div>` : '',
-    paymentMethods.gotyme  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gotyme' ? 'on' : ''}" data-m="gotyme"  onclick="opPickPay('gotyme')"><span class="po-ico">🏦</span><span class="po-lbl">GoTyme</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
+    paymentMethods.gotyme  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gotyme' ? 'on' : ''}" data-m="gotyme"  onclick="opPickPay('gotyme')"><span class="po-ico">GT</span><span class="po-lbl">GoTyme → GCash</span><span class="po-sub">Pay from GoTyme</span></div>` : '',
+    paymentMethods.maribank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maribank' ? 'on' : ''}" data-m="maribank" onclick="opPickPay('maribank')"><span class="po-ico">MB</span><span class="po-lbl">MariBank → GCash</span><span class="po-sub">Pay from MariBank</span></div>` : '',
     paymentMethods.pnb     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'pnb' ? 'on' : ''}" data-m="pnb"     onclick="opPickPay('pnb')"><span class="po-ico">🏛️</span><span class="po-lbl">PNB</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
     paymentMethods.cash    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'cash' ? 'on' : ''}" data-m="cash"    onclick="opPickPay('cash')"><span class="po-ico">💵</span><span class="po-lbl">Cash</span><span class="po-sub">Pay at front desk</span></div>` : '',
   ].filter(Boolean);
@@ -10604,7 +10540,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
       </div>
       <label class="booking-policy-check op-policy-check">
         <input type="checkbox" id="opPolicyAgree" />
-        <span><strong>I agree</strong> that Open Play payments are non-refundable, my reference and receipt must be correct, and invalid or missing proof may reject this registration. If I upload a receipt, I consent to Google Cloud Vision processing it for payment verification and Paddle Rage retaining the private audit record only as long as needed for disputes, fraud prevention, accounting, and legal requirements. Privacy requests: bookings@paddleragecdo.ph.</span>
+        <span><strong>I agree</strong> that Open Play payments are non-refundable and my reference and receipt must be correct. When automated confirmation is available for the selected method, a clean receipt can confirm automatically; otherwise it stays pending for court-owner review. If I upload a receipt, I consent to Google Cloud Vision processing it for payment verification and Paddle Rage retaining the private audit record only as long as needed for disputes, fraud prevention, accounting, and legal requirements. Privacy requests: bookings@paddleragecdo.ph.</span>
       </label>
     </div>`;
   $('opModalFt').innerHTML = `
@@ -10641,14 +10577,14 @@ function opPickPay(method) {
       ? `${cleanRef.replace(/[^A-Z0-9]/gi, '').length}/12 chars`
     : method === 'bpi'
       ? `${cleanRef.length}/20 digits`
-    : cleanRef.length + (cleanRef.length === 1 ? ' digit' : ' digits');
+    : cleanRef.length + (cleanRef.length === 1 ? ' character' : ' characters');
   const refHtml = `
     <div class="op-ref-block">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
         <label>${method === 'bpi' ? 'BPI Confirmation No. *' : 'Reference # (after sending) *'}</label>
         <span id="opRefCount" style="font-size:.65rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap">${refCountText}</span>
       </div>
-      <input type="text" class="fi" id="opGcashRef" placeholder="${method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : 'Enter payment reference number'}" inputmode="${(method === 'bdopay' || method === 'maya') ? 'text' : 'numeric'}"
+      <input type="text" class="fi" id="opGcashRef" placeholder="${method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'pnb'].includes(method) ? 'text' : 'numeric'}"
         maxlength="${paymentRefMaxLength(method)}"
         style="margin:0;font-family:monospace;letter-spacing:1px"
         oninput="syncOpenPlayRefInput('${method}')"
@@ -10661,20 +10597,23 @@ function opPickPay(method) {
       bdopay: { icon: '🏦', label: 'BDO Pay', receiver: paymentReceiverSettings.gcash },
       maya: { icon: 'M', label: 'Maya', receiver: paymentReceiverSettings.gcash },
       bpi: { icon: 'BPI', label: 'BPI', receiver: paymentReceiverSettings.gcash },
-      gotyme: { icon: '🏦', label: 'GoTyme', receiver: paymentReceiverSettings.gotyme },
+      gotyme: { icon: 'GT', label: 'GoTyme → GCash', receiver: paymentReceiverSettings.gcash },
+      maribank: { icon: 'MB', label: 'MariBank → GCash', receiver: paymentReceiverSettings.gcash },
       pnb: { icon: '🏛️', label: 'PNB', receiver: paymentReceiverSettings.pnb },
     }[method];
     const receiver = meta.receiver;
     const methodWarning = method === 'bdopay'
-      ? 'BDO Pay to GCash only.<br>GCash-to-GCash receipts will be rejected.<br>Please choose the correct payment method before paying.'
+      ? 'Pay from BDO Pay to this GCash recipient. Anything unclear or mismatched stays pending for court-owner review.'
       : method === 'maya'
-        ? 'Maya to GCash only.<br>GCash/BDO Pay receipts will be rejected.<br>Please choose the correct payment method before paying.'
+        ? 'Pay from Maya to this GCash recipient. Anything unclear or mismatched stays pending for court-owner review.'
       : method === 'bpi'
-        ? 'BPI to GCash/G-Xchange only.<br>Enter the BPI Confirmation No., not the Transaction Ref. No.<br>Upload the full success screen showing both reference numbers, receiver number, amount, and time.'
+        ? 'Pay from BPI to this GCash/G-Xchange recipient. Enter the BPI Confirmation No.; the receipt stays pending for court-owner review.'
       : method === 'gcash'
-        ? 'GCash to GCash only.<br>BDO Pay/InstaPay receipts will be rejected.<br>Please choose the correct payment method before paying.'
-        : `Use ${meta.label} only. Receipts from another payment method will not auto-approve.`;
-    const displayReceiverName = method === 'gcash'
+        ? 'Pay from GCash to this GCash recipient. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.'
+        : method === 'pnb'
+          ? 'Use the configured PNB recipient. Your receipt stays pending for court-owner review.'
+          : `Pay using ${meta.label}. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.`;
+    const displayReceiverName = paymentReceiverKey(method) === 'gcash'
       ? (maskGcashOwnerName(receiver.name) || 'Court owner account')
       : (receiver.name || 'Court owner account');
     const copyValue = (receiver.number || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -10762,7 +10701,7 @@ function syncOpenPlayRefInput(method = _opSignupData.payMethod || 'gcash') {
         ? `${clean.replace(/[^A-Z0-9]/gi, '').length}/12 chars`
       : method === 'bpi'
         ? `${clean.length}/20 digits`
-        : clean.length + (clean.length === 1 ? ' digit' : ' digits');
+        : clean.length + (clean.length === 1 ? ' character' : ' characters');
     count.style.color = method === 'gcash' && clean.length === 13
       ? 'var(--accent)'
       : method === 'bdopay' && clean.length >= 10
@@ -10821,7 +10760,7 @@ function clearOpReceipt() {
 
 async function verifyOpReceipt(ref, method, inlineData) {
   const st = $('opReceiptStatus');
-  if (st) { st.style.display = ''; st.style.background = 'rgba(74,154,220,.1)'; st.style.color = '#4b5563'; st.textContent = '🔎 Verifying your receipt…'; }
+  if (st) { st.style.display = ''; st.style.background = 'rgba(74,154,220,.1)'; st.style.color = '#4b5563'; st.textContent = '🔎 Checking your receipt…'; }
   try {
     const res = await DB.verifyGcashReceipt({
       bookingRef: ref,
@@ -10830,14 +10769,20 @@ async function verifyOpReceipt(ref, method, inlineData) {
       contentType: _opReceiptFile.type || 'image/jpeg',
       bookingData: inlineData,
     });
-    // Open Play is verified before its registration row is created. Preserve
-    // every non-rejected result for owner review until settlement can be
-    // performed atomically by a trusted server workflow.
-    const status = res?.status === 'rejected' ? 'rejected' : 'manual_review';
-    const msg = res?.publicReason || res?.message || 'Receipt received.';
+    const parsedVerificationId = Number(res?.receiptVerificationId ?? res?.receipt_verification_id);
+    const receiptVerificationId = Number.isSafeInteger(parsedVerificationId) && parsedVerificationId > 0
+      ? parsedVerificationId
+      : null;
+    const status = res?.status === 'auto_approved' && receiptVerificationId
+      ? 'auto_approved'
+      : 'manual_review';
+    const msg = status === 'auto_approved'
+      ? (res?.publicReason || res?.message || 'Receipt passed every check. Securing your paid registration…')
+      : (res?.publicReason || res?.message || 'Receipt received. Pending court-owner review.');
     if (st) {
-      if (status === 'rejected') { st.style.background = 'rgba(229,57,53,.1)'; st.style.color = '#e53935'; st.textContent = '⚠️ ' + msg; }
-      else { st.style.background = 'rgba(184,126,0,.12)'; st.style.color = '#b87e00'; st.textContent = '🕓 ' + msg; }
+      st.style.background = status === 'auto_approved' ? 'rgba(34,197,94,.12)' : 'rgba(184,126,0,.12)';
+      st.style.color = status === 'auto_approved' ? '#16803a' : '#b87e00';
+      st.textContent = (status === 'auto_approved' ? '✅ ' : '🕓 ') + msg;
     }
     return {
       status,
@@ -10849,6 +10794,7 @@ async function verifyOpReceipt(ref, method, inlineData) {
       receiptImageHash: res?.receiptImageHash || null,
       receiptPhash: res?.receiptPhash || null,
       receiptVerifiedAt: res?.receiptVerifiedAt || new Date().toISOString(),
+      receiptVerificationId,
       paymentStatus: res?.paymentStatus || null,
       bookingStatus: res?.bookingStatus || null,
     };
@@ -10940,14 +10886,16 @@ async function submitOpenPlay() {
       $('opModalFt').innerHTML = `<button class="btn btn-g" style="width:100%;justify-content:center" onclick="closeOpModal()">Got it</button>`;
       return;
     }
-    // Auto-verify the uploaded receipt BEFORE saving (digital payments only).
-    // Inline bookingData makes the edge function verify-only (no bookings write).
+    // Check the uploaded receipt before saving. Clean evidence can be accepted;
+    // every doubtful result is saved pending for court-owner review.
     let regPayStatus = 'pending';
     let receiptResult = null;
     if (needsRef && _opReceiptFile) {
       const opRef = 'OP-' + Date.now().toString(36).toUpperCase();
       receiptResult = await verifyOpReceipt(opRef, payMethod, {
         ref: opRef,
+        court_id: _opSignupData.courtId,
+        hour: _opSignupData.hour,
         total: opTotal,
          downpayment: amt,
          gcash_ref: _opSignupData.gcashRef,
@@ -10956,33 +10904,8 @@ async function submitOpenPlay() {
         full_name: name,
         created_at: _opSignupData.startedAt,
       });
-      if (receiptResult.status === 'rejected') {
-        const timeLabel = _opSignupData.sessionLabel || `${fmtT(_opSignupData.hour)} – ${fmtT(_opSignupData.hour + 1)}`;
-        await DB.addOpenPlayRegistration({
-          fullName: name,
-          courtId: _opSignupData.courtId,
-          courtName: _opSignupData.courtName,
-          date: _opSignupData.date,
-          hour: _opSignupData.hour,
-          timeLabel,
-          paymentType: payType,
-          paymentMethod: _opSignupData.payMethod,
-          gcashRef: _opSignupData.gcashRef || null,
-          paymentStatus: 'rejected',
-          amount: amt,
-          receiptImageUrl: receiptResult.receiptImageUrl,
-          receiptImageHash: receiptResult.receiptImageHash,
-          receiptPhash: receiptResult.receiptPhash,
-          receiptStatus: 'rejected',
-          receiptFlags: receiptResult.flags || [],
-          receiptExtracted: receiptResult.extracted || null,
-          receiptConfidence: receiptResult.confidence,
-          receiptVerifiedAt: receiptResult.receiptVerifiedAt,
-        });
-        toast('Receipt could not be verified: ' + receiptResult.message, 'err');
-        if (btn) { btn.disabled = false; btn.textContent = '🏓 Join Open Play'; }
-        return;
-      }
+      // The protected insert consumes the verification ID and returns the
+      // canonical paid/pending state. Never invent paid state in the browser.
       regPayStatus = 'pending';
     }
     const timeLabel = _opSignupData.sessionLabel || `${fmtT(_opSignupData.hour)} – ${fmtT(_opSignupData.hour + 1)}`;
@@ -11006,16 +10929,14 @@ async function submitOpenPlay() {
       receiptExtracted: receiptResult?.extracted || null,
       receiptConfidence: receiptResult?.confidence ?? null,
       receiptVerifiedAt: receiptResult?.receiptVerifiedAt || null,
+      receiptVerificationId: receiptResult?.status === 'auto_approved'
+        ? receiptResult.receiptVerificationId
+        : null,
     });
     regPayStatus = savedRegistration.paymentStatus;
     const canonicalAmount = Number(savedRegistration.amount || 0);
     const canonicalReceiptStatus = savedRegistration.receiptStatus || 'none';
     const canonicalPaymentMethod = savedRegistration.paymentMethod || _opSignupData.payMethod;
-    if (regPayStatus === 'rejected') {
-      toast('Receipt rejected. Please try again with a valid receipt.', 'err');
-      return;
-    }
-
     $('opModalBody').innerHTML = `
       <div style="text-align:center;padding:28px 0">
         <div style="font-size:3rem;margin-bottom:12px">🏓</div>

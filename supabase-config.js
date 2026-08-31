@@ -530,7 +530,21 @@ function _bookingEmailPayload(b) {
 // ROW ↔ JS OBJECT MAPPING
 // SQL uses snake_case; JS objects use camelCase
 // =============================================
-const PB_DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'pnb'];
+const PB_DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'];
+
+function _pbNormalizeReceiptOutcome(result) {
+  const source = result && typeof result === 'object' ? result : {};
+  if (String(source.status || '').toLowerCase() === 'auto_approved') return source;
+  return {
+    ...source,
+    status: 'manual_review',
+    paymentStatus: ['pending', 'for_verification'].includes(String(source.paymentStatus || '').toLowerCase())
+      ? source.paymentStatus
+      : 'for_verification',
+    bookingStatus: 'pending',
+    publicReason: source.publicReason || source.message || 'Receipt needs court-owner review.',
+  };
+}
 
 function normalizePaymentKey(value, fallback = '') {
   return String(value || fallback || '').toLowerCase().trim();
@@ -933,6 +947,7 @@ function rowToOpenPlayHostSessionRegistration(r) {
     receiptExtracted: r.receipt_extracted || null,
     receiptConfidence: r.receipt_confidence != null ? Number(r.receipt_confidence) : null,
     receiptVerifiedAt: r.receipt_verified_at || null,
+    receiptVerificationId: Number(r.receipt_verification_id) || null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -1300,6 +1315,38 @@ window.DB = {
     };
   },
 
+  async rejectBookingPaymentTransaction(ref, reason) {
+    const bookingRef = String(ref || '').trim();
+    const reviewReason = String(reason || '').trim();
+    if (!bookingRef) throw new Error('A booking reference is required.');
+    if (reviewReason.length < 3) throw new Error('A Not Received reason of at least 3 characters is required.');
+
+    const { data, error } = await _sb.rpc('reject_booking_payment_transaction', {
+      p_booking_ref: bookingRef,
+      p_reason: reviewReason,
+    });
+    if (error) {
+      console.error('rejectBookingPaymentTransaction:', error);
+      throw new Error(_extractFnError(error, 'Could not mark this booking payment as not received'));
+    }
+
+    const result = Array.isArray(data) ? data[0] || null : data;
+    if (!result || typeof result.transitioned !== 'boolean') {
+      throw new Error('The booking payment review service returned an invalid result.');
+    }
+    const canonicalRef = String(result.booking_ref || bookingRef);
+    const refs = Array.isArray(result.booking_refs) && result.booking_refs.length
+      ? result.booking_refs.map(value => String(value))
+      : [canonicalRef];
+    _pbClearFastCache(['bookings']);
+    return {
+      transitioned: result.transitioned,
+      status: String(result.booking_status || 'cancelled'),
+      paymentStatus: String(result.booking_payment_status || 'rejected'),
+      refs,
+    };
+  },
+
   // Stamp a set of bookings as billed on a given weekly statement (idempotent
   // audit trail; a booking is only ever billed once).
   async markBookingsBilled(refs, weeklyFeeId) {
@@ -1376,6 +1423,7 @@ window.DB = {
         gcashRef: reg.gcashRef || null,
         receiptImageUrl: reg.receiptImageUrl || null,
         receiptStatus: reg.receiptStatus || 'none',
+        receiptVerificationId: Number(reg.receiptVerificationId) || null,
       }, { retryDirect: false });
       const saved = response?.registration;
       if (!saved?.id) throw new Error(response?.error || 'Open Play registration was not saved.');
@@ -1392,6 +1440,7 @@ window.DB = {
         paymentStatus: saved.payment_status || 'pending',
         amount: Number(saved.amount || 0),
         receiptStatus: saved.receipt_status || 'none',
+        receiptVerificationId: Number(saved.receipt_verification_id) || null,
         createdAt: saved.created_at,
       };
     } catch (error) {
@@ -1589,6 +1638,7 @@ window.DB = {
         gcashRef: reg.gcashRef || null,
         receiptImageUrl: reg.receiptImageUrl || null,
         receiptStatus: reg.receiptStatus || 'none',
+        receiptVerificationId: Number(reg.receiptVerificationId) || null,
       }, { retryDirect: false });
       const saved = response?.registration;
       if (!saved?.id) throw new Error(response?.error || 'Host-session registration was not saved.');
@@ -2138,7 +2188,7 @@ window.DB = {
     return result;
   },
 
-  // Verify an uploaded GCash/GoTyme/PNB receipt image via the Edge Function.
+  // Verify a provider-specific digital receipt image via the Edge Function.
   // payload: { bookingRef, provider, imageFile, contentType }.
   // For a saved public booking, its browser-only bearer token is attached here
   // and verified by the Edge Function before any service-role write.
@@ -2172,7 +2222,7 @@ window.DB = {
       } catch (_) {
         // Older embedded WebViews may expose a file-like object that FormData
         // refuses. Base64 is a compatibility fallback, not the normal path.
-        return _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader);
+        return _pbNormalizeReceiptOutcome(await _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader));
       }
 
       const res = await _pbFetchWithTimeout(fnUrl, {
@@ -2190,12 +2240,12 @@ window.DB = {
         const missingMultipartImage = [400, 415, 422].includes(res.status) &&
           /receipt file|multipart body|empty image/i.test(reason);
         if (missingMultipartImage) {
-          return _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader);
+          return _pbNormalizeReceiptOutcome(await _pbVerifyReceiptBase64Fallback(fnUrl, requestPayload, imageFile, authHeader));
         }
         throw _pbApiError(reason, String(json?.code || `HTTP_${res.status}`));
       }
       if (!json) throw new Error('Receipt verification returned an invalid response.');
-      return json;
+      return _pbNormalizeReceiptOutcome(json);
     }
 
     const fnUrl = `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/verify-gcash-receipt`;
@@ -2210,7 +2260,7 @@ window.DB = {
       String(json?.error || txt || `HTTP ${res.status}`),
       String(json?.code || `HTTP_${res.status}`),
     );
-    return json;
+    return _pbNormalizeReceiptOutcome(json);
   },
 
   // Request a short-lived signed URL to view a stored receipt (admin only).
@@ -2667,7 +2717,8 @@ window.DB = {
     payment_method_bdopay: '1',
     payment_method_maya: '1',
     payment_method_bpi: '1',
-    payment_method_gotyme: '0',
+    payment_method_gotyme: '1',
+    payment_method_maribank: '1',
     payment_method_pnb: '0',
     gcash_merchant_number: '09XXXXXXXXX',
     gcash_merchant_name: 'Court Owner Name',
@@ -3303,9 +3354,9 @@ window.DB = {
       if (!bookingRef) throw new Error('A booking reference is required.');
 
       const session = window.Auth?.getSession?.() || null;
-      if (!session || !['owner', 'court_owner', 'staff'].includes(String(session.role || '')) ||
+      if (!session || !['owner', 'court_owner'].includes(String(session.role || '')) ||
           (session.status && session.status !== 'active')) {
-        throw new Error('Only an active owner, court owner, or staff account can confirm a booking payment.');
+        throw new Error('Only an active owner or court owner can confirm a booking payment.');
       }
 
       const db = readDb();
@@ -3470,22 +3521,12 @@ window.DB = {
 
       const receiptUrls = new Set();
       const receiptHashes = new Set();
-      let receiptRejected = false;
-      let provenDuplicate = false;
       items.forEach(item => {
-        const receiptStatus = lowerValue(item.receiptStatus ?? item.receipt_status ?? 'none');
-        if (receiptStatus === 'rejected') receiptRejected = true;
         const receiptUrl = String(item.receiptImageUrl ?? item.receipt_image_url ?? '').trim();
         const receiptHash = String(item.receiptImageHash ?? item.receipt_image_hash ?? '').trim();
         if (receiptUrl) receiptUrls.add(receiptUrl);
         if (receiptHash) receiptHashes.add(receiptHash);
-        const flags = item.receiptFlags ?? item.receipt_flags ?? [];
-        if (Array.isArray(flags) && flags.some(flag => /^DUPLICATE_/i.test(String(flag).trim()))) {
-          provenDuplicate = true;
-        }
       });
-      if (receiptRejected) throw new Error('The receipt is rejected and cannot be confirmed.');
-      if (provenDuplicate) throw new Error('The receipt contains proven duplicate evidence and cannot be confirmed.');
       if (receiptUrls.size > 1 || receiptHashes.size > 1) {
         throw new Error('Grouped receipt evidence is inconsistent. Review the payment details before confirming.');
       }
@@ -3553,6 +3594,63 @@ window.DB = {
         status: 'confirmed',
         refs,
       };
+    },
+    async rejectBookingPaymentTransaction(ref, reason) {
+      const bookingRef = String(ref || '').trim();
+      const reviewReason = String(reason || '').trim();
+      if (!bookingRef) throw new Error('A booking reference is required.');
+      if (reviewReason.length < 3) throw new Error('A Not Received reason of at least 3 characters is required.');
+
+      const session = window.Auth?.getSession?.() || null;
+      if (!session || !['owner', 'court_owner'].includes(String(session.role || '')) ||
+          (session.status && session.status !== 'active')) {
+        throw new Error('Only an active owner or court owner can mark a booking payment as not received.');
+      }
+
+      const db = readDb();
+      const target = db.bookings.find(booking => String(booking.ref) === bookingRef);
+      if (!target) throw new Error('Booking not found.');
+      const groupRef = String(target.groupRef || target.bookingGroupRef || '').trim();
+      const items = groupRef
+        ? db.bookings.filter(booking =>
+            String(booking.groupRef || booking.bookingGroupRef || '').trim() === groupRef)
+        : [target];
+      const refs = items.map(booking => String(booking.ref)).sort();
+      const statuses = [...new Set(items.map(item => String(item.status || '').toLowerCase()))];
+      const paymentStatuses = [...new Set(items.map(item =>
+        String(item.paymentStatus ?? item.payment_status ?? '').toLowerCase(),
+      ))];
+      const methods = [...new Set(items.map(item =>
+        String(item.paymentMethod ?? item.payment_method ?? '').toLowerCase(),
+      ))];
+      if (statuses.length === 1 && statuses[0] === 'cancelled' &&
+          paymentStatuses.length === 1 && paymentStatuses[0] === 'rejected') {
+        return { transitioned: false, status: 'cancelled', paymentStatus: 'rejected', refs };
+      }
+      if (statuses.length !== 1 || paymentStatuses.length !== 1 || methods.length !== 1) {
+        throw new Error('Grouped booking payment states are mixed.');
+      }
+      if (!['verifying', 'pending'].includes(statuses[0]) ||
+          !['unpaid', 'pending', 'for_verification'].includes(paymentStatuses[0])) {
+        throw new Error('This payment is no longer awaiting review.');
+      }
+      if (!PB_DIGITAL_PAYMENT_METHODS.includes(methods[0])) {
+        throw new Error('Only a digital payment review can use Not Received.');
+      }
+
+      const refSet = new Set(refs);
+      db.bookings = db.bookings.map(booking => refSet.has(String(booking.ref))
+        ? {
+          ...booking,
+          status: 'cancelled',
+          paymentStatus: 'rejected',
+          receiptStatus: 'rejected',
+          paidAt: null,
+          paymentReviewReason: reviewReason,
+        }
+        : booking);
+      writeDb(db);
+      return { transitioned: true, status: 'cancelled', paymentStatus: 'rejected', refs };
     },
     async markBookingsBilled(refs, weeklyFeeId) {
       if (!Array.isArray(refs) || refs.length === 0) return;
@@ -3688,12 +3786,10 @@ window.DB = {
 
       const court = db.courts.find(c => String(c.id) === String(reg.courtId));
       if (!court || court.blocked) throw new Error('This court is not currently available.');
-      const requestedReceiptStatus = String(reg.receiptStatus || 'none').toLowerCase();
       const paymentMethod = String(reg.paymentMethod || 'cash').toLowerCase();
       if (db.settings[`payment_method_${paymentMethod}`] === '0') {
         throw new Error('This payment method is not currently enabled.');
       }
-      const isRejected = requestedReceiptStatus === 'rejected';
       const paymentType = '100%';
 
       const openPlayFee = Number(config.fee ?? db.settings.open_play_fee ?? 100);
@@ -3706,7 +3802,7 @@ window.DB = {
         String(r.court_id) === String(reg.courtId) &&
         r.payment_status !== 'rejected'
       ).length;
-      if (!isRejected && activeCount >= maxPlayers) throw new Error('This Open Play session is already full.');
+      if (activeCount >= maxPlayers) throw new Error('This Open Play session is already full.');
 
       const formatHour = value => {
         const hour = ((Number(value) % 24) + 24) % 24;
@@ -3723,12 +3819,12 @@ window.DB = {
         payment_type: paymentType,
         payment_method: paymentMethod,
         gcash_ref: reg.gcashRef || null,
-        payment_status: isRejected ? 'rejected' : 'pending',
+        payment_status: 'pending',
         amount: canonicalAmount,
         receipt_image_url: reg.receiptImageUrl || null,
         receipt_image_hash: null,
         receipt_phash: null,
-        receipt_status: isRejected ? 'rejected' : (paymentMethod === 'cash' ? 'none' : 'manual_review'),
+        receipt_status: paymentMethod === 'cash' ? 'none' : 'manual_review',
         receipt_flags: [],
         receipt_extracted: null,
         receipt_confidence: null,
@@ -3955,19 +4051,21 @@ window.DB = {
     async addOpenPlayHostSessionRegistration(reg) {
       const db = readDb();
       if (!Array.isArray(db.openPlayHostSessionRegistrations)) db.openPlayHostSessionRegistrations = [];
+      const paymentMethod = String(reg.paymentMethod || 'gcash').toLowerCase();
+      const digitalPayment = PB_DIGITAL_PAYMENT_METHODS.includes(paymentMethod);
       const row = {
         id: localRef('hostreg'),
         sessionId: reg.sessionId,
         fullName: reg.fullName,
         contactNumber: reg.contactNumber || '',
-        paymentMethod: reg.paymentMethod || 'gcash',
+        paymentMethod,
         gcashRef: reg.gcashRef || null,
-        paymentStatus: reg.paymentStatus || 'pending',
+        paymentStatus: digitalPayment ? 'pending' : (reg.paymentStatus || 'paid'),
         amount: reg.amount || 0,
         receiptImageUrl: reg.receiptImageUrl || null,
         receiptImageHash: reg.receiptImageHash || null,
         receiptPhash: reg.receiptPhash || null,
-        receiptStatus: reg.receiptStatus || 'none',
+        receiptStatus: digitalPayment ? 'manual_review' : 'none',
         receiptFlags: reg.receiptFlags || [],
         receiptExtracted: reg.receiptExtracted || null,
         receiptConfidence: reg.receiptConfidence ?? null,

@@ -288,6 +288,14 @@
     return ['owner', 'court_owner'].includes(role());
   }
 
+  function providerLabel(value) {
+    const key = String(value || '').toLowerCase();
+    return ({
+      gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI',
+      gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB',
+    })[key] || value || '—';
+  }
+
   function notify(message, kind) {
     if (typeof global.toast === 'function') global.toast(message, kind);
   }
@@ -553,7 +561,7 @@
           ? 'Loading Payment 2 receipt…'
           : state.receiptLoadState === 'error'
             ? 'Receipt unavailable — reopen to retry'
-            : `Approve ${money(amount || 0)} Balance`;
+            : `Confirm ${money(amount || 0)} Received`;
       }
     }
     if (reject) reject.disabled = locked || reason.length < 3;
@@ -566,7 +574,7 @@
       const view = paymentStatusView(state.current);
       hint.textContent = !reviewingBalance
         ? (state.reviewable
-          ? 'Payment 1 is read-only. Select Payment 2 to approve or reject the remaining balance.'
+          ? 'Payment 1 is read-only. Select Payment 2 to confirm receipt or mark it not received.'
           : 'Payment 1 is accepted and preserved as read-only payment evidence.')
         : state.reviewable
           ? state.receiptLoadState === 'loading'
@@ -705,18 +713,18 @@
     const reason = document.createElement('textarea');
     reason.id = 'hostBalanceReviewReason';
     reason.className = 'hba-reason';
-    reason.placeholder = 'Reason required to reject Payment 2 (at least 3 characters)';
+    reason.placeholder = 'Reason for marking Payment 2 not received (at least 3 characters)';
     reason.setAttribute('aria-label', 'Balance payment review reason');
     reason.addEventListener('input', syncActions);
     const decisionHint = make('div', 'hba-decision-hint', 'This decision applies only to Payment 2 — the remaining balance.');
     decisionHint.id = 'hostBalanceDecisionHint';
     const actions = make('div', 'hba-modal-actions');
     actions.id = 'hostBalanceActions';
-    const reject = make('button', 'btn btn-d', 'Reject Payment 2');
+    const reject = make('button', 'btn btn-d', 'Not Received');
     reject.id = 'hostBalanceRejectBtn';
     reject.type = 'button';
     reject.addEventListener('click', () => decide('reject'));
-    const approve = make('button', 'btn btn-p', 'Approve Balance');
+    const approve = make('button', 'btn btn-p', 'Confirm Received');
     approve.id = 'hostBalanceApproveBtn';
     approve.type = 'button';
     approve.addEventListener('click', () => decide('approve'));
@@ -816,7 +824,7 @@
     const totalAmount = paymentAmount(payment, 'totalAmount', 'total_amount');
     const depositAmount = optionalPaymentAmount(payment, 'originalPaidAmount', 'original_paid_amount');
     const balanceAmount = optionalPaymentAmount(payment, 'balanceAmount', 'expected_amount');
-    const provider = paymentValue(payment, 'paymentProvider', 'payment_provider', '—').toUpperCase();
+    const provider = providerLabel(paymentValue(payment, 'paymentProvider', 'payment_provider', '—'));
     const balanceReference = paymentValue(payment, 'paymentReference', 'payment_reference', '—');
     const bookingReference = paymentValue(payment, 'bookingGroupRef', 'booking_group_ref')
       || paymentValue(payment, 'bookingRef', 'booking_ref')
@@ -832,7 +840,7 @@
     paymentChip.textContent = `${['approved', 'manual'].includes(view.key) ? '✓' : view.key === 'rejected' ? '×' : '●'} ${view.label}`;
     const explainer = byId('hostBalanceReviewModal').querySelector('.hba-explainer');
     if (view.key === 'pending') {
-      explainer.innerHTML = '<strong>Two separate payments, one protected history.</strong> Payment 1 secured the court and stays read-only. Only Payment 2 can be approved or rejected here.';
+      explainer.innerHTML = '<strong>Two separate payments, one protected history.</strong> Payment 1 secured the court and stays read-only. For Payment 2, confirm funds received or mark them not received.';
     } else if (view.key === 'approved') {
       explainer.innerHTML = '<strong>Two accepted payments, one complete history.</strong> Payment 1 secured the court and Payment 2 settled the remaining balance. This record is read-only.';
     } else if (view.key === 'rejected') {
@@ -884,8 +892,8 @@
     );
     const reject = byId('hostBalanceRejectBtn');
     const approve = byId('hostBalanceApproveBtn');
-    if (reject) reject.textContent = 'Reject Payment 2';
-    if (approve) approve.textContent = `Approve ${money(balanceAmount || 0)} Balance`;
+    if (reject) reject.textContent = 'Not Received';
+    if (approve) approve.textContent = `Confirm ${money(balanceAmount || 0)} Received`;
 
     const balanceProof = prepareReceiptImage({
       imageId: 'hostBalanceProofImage',
@@ -1007,23 +1015,23 @@
     const amount = money(payment.balanceAmount || payment.balance_amount || payment.expectedAmount || payment.expected_amount);
     const reference = payment.paymentReference || payment.payment_reference || '—';
     if (decision === 'reject' && reason.length < 3) {
-      notify('Enter a reason before rejecting Payment 2.', 'err');
+      notify('Enter a reason before marking Payment 2 not received.', 'err');
       return;
     }
     if (decision === 'approve' && !global.confirm(
-      `Approve Payment 2 — ${amount} remaining balance?\n\nReference: ${reference}\nThis marks the booking fully paid. Payment 1 stays unchanged.`
+      `Confirm Payment 2 received — ${amount} remaining balance?\n\nReference: ${reference}\nThis marks the booking fully paid. Payment 1 stays unchanged.`
     )) return;
     if (decision === 'reject' && !global.confirm(
-      `Reject Payment 2 — ${amount} for ${payment.bookingGroupRef || payment.booking_group_ref || payment.bookingRef || payment.booking_ref || 'this booking'}?\n\nReference: ${reference}\nReason: ${reason}`
+      `Mark Payment 2 not received — ${amount} for ${payment.bookingGroupRef || payment.booking_group_ref || payment.bookingRef || payment.booking_ref || 'this booking'}?\n\nReference: ${reference}\nReason: ${reason}`
     )) return;
     state.busy = true;
     const button = byId(decision === 'approve' ? 'hostBalanceApproveBtn' : 'hostBalanceRejectBtn');
     const idleText = button?.textContent || '';
-    if (button) button.textContent = decision === 'approve' ? 'Approving…' : 'Rejecting…';
+    if (button) button.textContent = decision === 'approve' ? 'Confirming…' : 'Saving…';
     syncActions();
     try {
       await apiCall('review', { paymentId: paymentId(payment), decision, reason });
-      notify(decision === 'approve' ? 'Payment 2 approved. The booking is fully paid.' : 'Payment 2 balance receipt rejected.', decision === 'approve' ? 'ok' : 'inf');
+      notify(decision === 'approve' ? 'Payment 2 confirmed received. The booking is fully paid.' : 'Payment 2 marked not received.', decision === 'approve' ? 'ok' : 'inf');
       state.busy = false;
       closeModal();
       await render(true);
@@ -1060,7 +1068,7 @@
       const meta = make('div', 'hba-meta');
       appendSummary(meta, 'Schedule', payment.scheduleLabel || payment.schedule_label || payment.bookingDate || payment.booking_date);
       appendSummary(meta, 'Court', payment.courtLabel || payment.court_label);
-      appendSummary(meta, 'Method', String(payment.paymentProvider || payment.payment_provider || '—').toUpperCase());
+      appendSummary(meta, 'Method', providerLabel(payment.paymentProvider || payment.payment_provider || '—'));
       appendSummary(meta, 'New reference', payment.paymentReference || payment.payment_reference);
       const bottom = make('div', 'hba-bottom');
       bottom.appendChild(make('div', 'hba-status', 'Waiting for owner review'));

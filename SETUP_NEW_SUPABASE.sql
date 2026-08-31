@@ -8,11 +8,11 @@
 -- production database unless you have reviewed the seed/upsert data.
 --
 -- REQUIRED FRESH-INSTALL FOLLOW-UP:
--- After this baseline succeeds, run the complete contents of
+-- After this baseline succeeds, apply every migration from
 -- supabase/migrations/20260713213000_accumulated_booking_fee_remittances.sql
--- as a second SQL Editor query. That migration installs the accumulated
--- exact-cutoff remittance ledger, private proof storage, security policies,
--- and RPCs. The Remittances UI is not ready until both SQL files succeed.
+-- forward, in filename order. The forward chain installs the accumulated
+-- remittance ledger and all later hardened receipt, payment-review, balance,
+-- and provider-neutral settlement RPCs. Do not stop after the first file.
 -- ============================================================
 
 create extension if not exists pgcrypto;
@@ -150,6 +150,7 @@ create table if not exists public.open_play_registrations (
   receipt_extracted jsonb,
   receipt_confidence numeric,
   receipt_verified_at timestamptz,
+  receipt_verification_id bigint,
   created_at timestamptz not null default now(),
   constraint open_play_payment_status_check
     check (payment_status in ('pending','paid','rejected')),
@@ -344,15 +345,33 @@ create table if not exists public.open_play_host_session_registrations (
   receipt_extracted jsonb,
   receipt_confidence numeric,
   receipt_verified_at timestamptz,
+  receipt_verification_id bigint references public.receipt_verifications(id) on delete restrict,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint open_play_host_session_registrations_payment_method_check
-    check (payment_method in ('gcash','bdopay','maya','bpi','gotyme','pnb','cash')),
+    check (payment_method in ('gcash','bdopay','maya','bpi','gotyme','maribank','pnb','cash')),
   constraint open_play_host_session_registrations_payment_status_check
     check (payment_status in ('pending','paid','rejected')),
   constraint open_play_host_session_registrations_receipt_status_check
     check (receipt_status in ('none','auto_approved','manual_review','rejected')),
   constraint open_play_host_session_registrations_amount_check check (amount >= 0)
+);
+
+alter table public.open_play_registrations
+  drop constraint if exists open_play_registrations_receipt_verification_fk;
+alter table public.open_play_registrations
+  add constraint open_play_registrations_receipt_verification_fk
+  foreign key (receipt_verification_id)
+  references public.receipt_verifications(id) on delete restrict;
+
+create table if not exists public.receipt_verification_subject_claims (
+  receipt_verification_id bigint primary key
+    references public.receipt_verifications(id) on delete restrict,
+  subject_scope text not null,
+  subject_id text not null,
+  created_at timestamptz not null default now(),
+  constraint receipt_verification_subject_claims_scope_check
+    check (subject_scope in ('open_play','host_session'))
 );
 
 create table if not exists public.deleted_booking_archive (
@@ -646,7 +665,7 @@ alter table public.open_play_host_session_registrations
   drop constraint if exists open_play_host_session_registrations_payment_method_check;
 alter table public.open_play_host_session_registrations
   add constraint open_play_host_session_registrations_payment_method_check
-  check (payment_method in ('gcash','bdopay','maya','bpi','gotyme','pnb','cash'));
+  check (payment_method in ('gcash','bdopay','maya','bpi','gotyme','maribank','pnb','cash'));
 
 -- ============================================================
 -- 2. INDEXES
@@ -685,6 +704,9 @@ create index if not exists idx_weekly_fees_week_start on public.weekly_fees (wee
 
 create index if not exists idx_open_play_receipt_status on public.open_play_registrations (receipt_status);
 create index if not exists idx_open_play_receipt_verified_at on public.open_play_registrations (receipt_verified_at);
+create unique index if not exists open_play_registrations_receipt_verification_uq
+  on public.open_play_registrations (receipt_verification_id)
+  where receipt_verification_id is not null;
 
 create index if not exists idx_op_game_sessions_date on public.open_play_game_sessions (date);
 create index if not exists idx_op_game_players_session
@@ -705,6 +727,9 @@ create index if not exists idx_open_play_host_session_registrations_session
   on public.open_play_host_session_registrations (session_id, created_at desc);
 create index if not exists idx_open_play_host_session_registrations_payment
   on public.open_play_host_session_registrations (payment_status, receipt_status);
+create unique index if not exists host_session_registrations_receipt_verification_uq
+  on public.open_play_host_session_registrations (receipt_verification_id)
+  where receipt_verification_id is not null;
 
 create index if not exists idx_deleted_booking_archive_ref on public.deleted_booking_archive (booking_ref);
 create index if not exists idx_deleted_booking_archive_deleted_at on public.deleted_booking_archive (deleted_at desc);
@@ -749,6 +774,50 @@ security definer
 set search_path = public
 as $$
   select coalesce(public.current_account_role() = any(allowed_roles), false)
+$$;
+
+-- Staff and hosts retain their existing non-payment edit policies, but a
+-- pending digital payment may be resolved only by an owner/court owner. The
+-- receipt-verification service is limited to a clean, unflagged approval.
+create or replace function public.guard_digital_payment_decision_role()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  method_value text := lower(trim(coalesce(new.payment_method, 'cash')));
+  actor_role_value text := public.current_account_role();
+  request_role_value text := coalesce(auth.role(), '');
+begin
+  if method_value not in (
+    'gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'
+  ) or old.payment_status is not distinct from new.payment_status then
+    return new;
+  end if;
+
+  if lower(trim(coalesce(new.payment_status, ''))) not in (
+    'paid', 'downpayment_paid', 'rejected'
+  ) then
+    return new;
+  end if;
+
+  if actor_role_value in ('owner', 'court_owner') and auth.uid() is not null then
+    return new;
+  end if;
+
+  if request_role_value = 'service_role'
+     and lower(trim(coalesce(new.payment_status, ''))) in (
+       'paid', 'downpayment_paid'
+     )
+     and lower(trim(coalesce(new.receipt_status, ''))) = 'auto_approved'
+     and cardinality(coalesce(new.receipt_flags, array[]::text[])) = 0 then
+    return new;
+  end if;
+
+  raise exception 'Only an active owner or court owner can resolve a pending digital payment.'
+    using errcode = '42501';
+end;
 $$;
 
 create or replace function public.get_host_finance_accounts()
@@ -1399,6 +1468,27 @@ create trigger trg_guard_public_booking_hold_update
 before update on public.bookings
 for each row execute function public.guard_public_booking_hold_update();
 
+drop trigger if exists y90_guard_booking_payment_decision_role
+  on public.bookings;
+create trigger y90_guard_booking_payment_decision_role
+before update of payment_status, payment_method, receipt_status, receipt_flags
+on public.bookings
+for each row execute function public.guard_digital_payment_decision_role();
+
+drop trigger if exists y90_guard_open_play_payment_decision_role
+  on public.open_play_registrations;
+create trigger y90_guard_open_play_payment_decision_role
+before update of payment_status, payment_method, receipt_status, receipt_flags
+on public.open_play_registrations
+for each row execute function public.guard_digital_payment_decision_role();
+
+drop trigger if exists y90_guard_host_session_payment_decision_role
+  on public.open_play_host_session_registrations;
+create trigger y90_guard_host_session_payment_decision_role
+before update of payment_status, payment_method, receipt_status, receipt_flags
+on public.open_play_host_session_registrations
+for each row execute function public.guard_digital_payment_decision_role();
+
 drop trigger if exists trg_archive_deleted_booking on public.bookings;
 create trigger trg_archive_deleted_booking
 before delete on public.bookings
@@ -1448,6 +1538,7 @@ alter table public.open_play_registrations enable row level security;
 alter table public.payment_sessions enable row level security;
 alter table public.used_gcash_refs enable row level security;
 alter table public.receipt_verifications enable row level security;
+alter table public.receipt_verification_subject_claims enable row level security;
 alter table public.agreements enable row level security;
 alter table public.weekly_fees enable row level security;
 alter table public.open_play_game_sessions enable row level security;
@@ -1710,6 +1801,15 @@ drop policy if exists receipt_verifications_no_write on public.receipt_verificat
 create policy receipt_verifications_no_write on public.receipt_verifications
   for all to authenticated using (false) with check (false);
 
+drop policy if exists receipt_verification_subject_claims_no_access
+  on public.receipt_verification_subject_claims;
+create policy receipt_verification_subject_claims_no_access
+  on public.receipt_verification_subject_claims
+  for all to authenticated using (false) with check (false);
+revoke all on table public.receipt_verification_subject_claims
+  from public, anon, authenticated;
+grant all on table public.receipt_verification_subject_claims to service_role;
+
 drop policy if exists agreements_select_self_or_owner on public.agreements;
 drop policy if exists users_read_own_agreement on public.agreements;
 create policy agreements_select_self_or_owner on public.agreements
@@ -1955,7 +2055,9 @@ values
   ('booking_fee', '5'),
   ('open_play_fee', '100'),
   ('payment_method_maya', '1'),
-  ('payment_method_bpi', '1')
+  ('payment_method_bpi', '1'),
+  ('payment_method_gotyme', '1'),
+  ('payment_method_maribank', '1')
 on conflict (key) do nothing;
 
 notify pgrst, 'reload schema';
@@ -1964,8 +2066,9 @@ notify pgrst, 'reload schema';
 -- DONE
 --
 -- Next steps:
--- 1. In a new SQL Editor query, run the complete contents of
---    supabase/migrations/20260713213000_accumulated_booking_fee_remittances.sql.
+-- 1. Apply every migration from
+--    supabase/migrations/20260713213000_accumulated_booking_fee_remittances.sql
+--    forward, in filename order, through the newest migration.
 -- 2. Authentication -> Providers -> Email -> disable Confirm email.
 -- 3. Project Settings -> API -> copy Project URL and anon public key.
 -- 4. Update .env.local / supabase-config.js for the cloned app.

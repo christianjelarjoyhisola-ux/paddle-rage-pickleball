@@ -52,8 +52,23 @@ const manageAccountEdge = read('supabase/functions/manage-account/index.ts');
 const hostApplicationEdge = read('supabase/functions/host-application/index.ts');
 const fullPaymentMigration = read('supabase/migrations/20260719130000_regular_bookings_full_payment.sql');
 const gcashParser = read('supabase/functions/_shared/gcash-receipt.ts');
+const receiptProviderDispatch = read(
+  'supabase/functions/_shared/receipt-providers/index.ts'
+);
+const bankToGcashParser = read(
+  'supabase/functions/_shared/receipt-providers/bank-to-gcash.ts'
+);
+const gotymeParser = read(
+  'supabase/functions/_shared/receipt-providers/gotyme.ts'
+);
+const maribankParser = read(
+  'supabase/functions/_shared/receipt-providers/maribank.ts'
+);
 const gcashAutoFinalizer = read(
   'supabase/migrations/20260728120000_gcash_receipt_auto_verification.sql'
+);
+const digitalReceiptMigration = read(
+  'supabase/migrations/20260901090000_receipt_review_maribank.sql'
 );
 
 test('public creation paths keep configured Edge and database boundaries', () => {
@@ -172,7 +187,7 @@ test('anonymous court holds are atomic service-only writes', () => {
   assert.doesNotMatch(page, /paymentMethods\.[a-z]+ = settings\.payment_method_[a-z]+ !== '0'/);
   assert.match(admin, /const cashOn = settings\.payment_method_cash === '1'/);
   assert.doesNotMatch(admin, /const [a-z]+On = settings\.payment_method_[a-z]+ !== '0'/);
-  assert.match(admin, /Add the shared recipient name and a GCash number or QR before enabling/);
+  assert.match(admin, /Add the shared GCash recipient name and number or QR before enabling/);
 });
 
 test('Telegram endpoint authorizes active accounts and sends review-only alerts', () => {
@@ -266,7 +281,10 @@ test('receipt and confirmation delivery use recoverable single-worker leases', (
   assert.match(receiptEdge, /flags\.push\("SETTINGS_UNAVAILABLE"\)/);
   assert.match(receiptEdge, /flags\.push\("PROVIDER_REVIEW_REQUIRED"\)/);
   assert.match(receiptEdge, /if \(!receiptDate\) flags\.push\("DATE_UNREADABLE"\)/);
-  assert.match(receiptEdge, /if \(!receiptDateTime \|\| !bookingStartedAt\)/);
+  assert.match(
+    receiptProviderDispatch,
+    /!receiptInstant \|\| Number\.isNaN\(receiptInstant\.getTime\(\)\)[\s\S]*?addUnique\(flags, "TIME_UNREADABLE"\)/
+  );
   assert.match(receiptEdge, /code: "DIGITAL_PAYMENT_METHOD_REQUIRED"/);
   const merchantResolver = receiptEdge.slice(
     receiptEdge.indexOf('function expectedMerchantForProvider'),
@@ -276,80 +294,143 @@ test('receipt and confirmation delivery use recoverable single-worker leases', (
   assert.match(receiptEdge, /const authoritativeProvider = paymentMethodProvider\([\s\S]*?provider = authoritativeProvider/);
   assert.doesNotMatch(receiptEdge, /paymentMethodProvider\([\s\S]{0,160}\)\s*\|\|\s*provider/);
 
-  // GCash has a dedicated, pure parser. The typed reference and configured
-  // recipient are comparisons only; they cannot become invented OCR evidence.
+  // GCash, GoTyme->GCash, and MariBank->GCash have explicit pure parser and
+  // verifier dispatch. Unknown providers fail closed.
   assert.match(gcashParser, /export function parseGcashReceipt\(/);
   assert.match(gcashParser, /export function compareGcashRecipient\(/);
   assert.match(gcashParser, /source:\s*"ref_label"/);
   assert.match(gcashParser, /typedMatch:\s*typedReferenceMatch\(/);
   assert.match(gcashParser, /source:\s*"recipient_block"/);
   assert.doesNotMatch(gcashParser, /expectedAmount/);
+  assert.match(receiptProviderDispatch, /case "gcash":/);
+  assert.match(receiptProviderDispatch, /case "gotyme":/);
+  assert.match(receiptProviderDispatch, /case "maribank":/);
   assert.match(
-    receiptEdge,
-    /const gcashParse:[\s\S]*?parseGcashReceipt\(ocrText,\s*\{\s*typedReference:\s*typedRef\s*\}\)/
+    receiptProviderDispatch,
+    /default:\s*throw new UnsupportedReceiptProviderError\(provider\)/
+  );
+  assert.match(gotymeParser, /parseGotymeToGcashReceipt/);
+  assert.match(gotymeParser, /verifyGotymeToGcashReceipt/);
+  assert.match(maribankParser, /parseMaribankToGcashReceipt/);
+  assert.match(maribankParser, /verifyMaribankToGcashReceipt/);
+  assert.match(bankToGcashParser, /typedReferenceMatch\(/);
+  assert.match(
+    bankToGcashParser,
+    /const primary = parsePrimaryReference\(lines, options\.typedReference \|\| ""\)/
+  );
+  assert.doesNotMatch(
+    bankToGcashParser,
+    /selected\?\.(?:value|raw)\s*\|\|\s*typedReference/
   );
   assert.match(
     receiptEdge,
-    /compareGcashRecipient\(gcashParse\.receiver,\s*\{\s*phone:\s*expectedNumber,\s*name:\s*expectedName/
+    /code: "UNSUPPORTED_PAYMENT_PROVIDER"/
+  );
+  assert.match(
+    receiptEdge,
+    /parseProviderReceipt\(provider, ocrText,[\s\S]*?typedReference: typedRef/
+  );
+  assert.match(
+    receiptEdge,
+    /verifyProviderReceipt\(providerParse,[\s\S]*?expectedRecipientNumber: expectedNumber,[\s\S]*?expectedRecipientName: expectedName/
   );
 
-  // Auto-verification is deliberately narrow: a persisted GCash booking,
-  // complete canonical payment state, exact parser evidence, 90%+ OCR, and no
-  // flags. The same 15-minute limit used by the customer hold is enforced.
+  // Auto-verification is deliberately narrow: exact dedicated-parser evidence,
+  // native 90%+ OCR, a valid timestamp inside the same customer hold window,
+  // recipient/amount/reference matches, and an atomically clear replay ledger.
   assert.match(receiptEdge, /const PAYMENT_WINDOW_MINUTES = 15/);
-  assert.match(receiptEdge, /receiptAgeMinutes as number\) > PAYMENT_WINDOW_MINUTES/);
-  assert.match(receiptEdge, /minimumOcrConfidence = provider === "gcash" \? 0\.9 : 0\.55/);
-  assert.match(receiptEdge, /gcashParse\.reference\.source !== "ref_label"/);
-  assert.match(receiptEdge, /gcashParse\.reference\.confidence !== "high"/);
+  assert.match(
+    receiptEdge,
+    /minimumOcrConfidence = isDedicatedReceiptProvider\(provider\)[\s\S]*?\? 0\.9/
+  );
+  assert.match(receiptEdge, /ocrConfidenceSource !== "native"/);
   assert.match(
     receiptEdge,
     /provider === "gcash" && !expectedNumber &&\s*!flags\.includes\("MERCHANT_CONFIG_MISSING"\)[\s\S]*?flags\.push\("MERCHANT_CONFIG_MISSING"\)/
   );
   assert.match(
-    receiptEdge,
-    /if \(gcashRecipient\?\.phone === "mismatch"\) \{[\s\S]*?flags\.push\("WRONG_GCASH_NUMBER"\);[\s\S]*?\} else if \(gcashRecipient\?\.phone !== "exact"\) \{[\s\S]*?flags\.push\("NUMBER_UNREADABLE"\)/
+    receiptProviderDispatch,
+    /receipt\.reference\.typedMatch === "mismatch"[\s\S]*?addUnique\(flags, "REF_MISMATCH"\)/
   );
   assert.match(
     receiptEdge,
-    /const groupPaymentConsistent = bookingGroup\.length > 0 &&\s*bookingGroup\.every\(\(row\) =>[\s\S]*?paymentMethodProvider\(row\.payment_method\) === "gcash"[\s\S]*?normalizeReferenceForProvider\([\s\S]*?=== typedRef[\s\S]*?\["verifying", "pending"\][\s\S]*?\["pending", "for_verification", "unpaid"\]/
+    /const groupPaymentConsistent = bookingGroup\.length > 0 &&[\s\S]*?paymentMethodProvider\(row\.payment_method\) === provider[\s\S]*?=== typedRef/
   );
   assert.match(
     receiptEdge,
-    /const gcashCanAutoApprove = provider === "gcash" &&\s*hasPersistedBooking &&\s*autoPaymentStatus !== null &&\s*flags\.length === 0/
+    /const cleanEvidence = !!providerVerification &&[\s\S]*?sourceProviderMatch &&[\s\S]*?referenceMatch &&[\s\S]*?amountMatch &&[\s\S]*?timestampValid &&[\s\S]*?recipientMatch &&[\s\S]*?duplicateClear &&[\s\S]*?flags\.length === 0/
   );
 
-  // Missing/uncertain/mismatched GCash evidence stays pending for an owner.
-  // Only a reference already claimed by another payment is terminal.
+  // Every wrong/uncertain/mismatched/duplicate receipt stays pending. Automated
+  // verification has no rejected/cancelled outcome.
   assert.match(
-    receiptEdge,
-    /const hasProvenDuplicate = flags\.some\(\(flag\) =>[\s\S]*?"DUPLICATE_REF"[\s\S]*?"DUPLICATE_INVOICE"[\s\S]*?"DUPLICATE_INSTAPAY_REF"[\s\S]*?"DUPLICATE_BPI_TRANSACTION_REF"/
+    bankToGcashParser,
+    /providerKey: parsed\.provider,[\s\S]*?duplicateFlag: "DUPLICATE_REF"/
+  );
+  assert.match(
+    bankToGcashParser,
+    /providerKey: "instapay",[\s\S]*?duplicateFlag: "DUPLICATE_INSTAPAY_REF"/
   );
   assert.match(
     receiptEdge,
-    /gcashCanAutoApprove \? "auto_approved" : provider === "gcash"[\s\S]*?\(hasProvenDuplicate \? "rejected" : "manual_review"\)/
+    /let result: "auto_approved" \| "manual_review" =/
+  );
+  const decisionStart = receiptEdge.indexOf('// ── decision routing');
+  const auditStart = receiptEdge.indexOf('// ── audit trail', decisionStart);
+  const automaticOutcome = receiptEdge.slice(decisionStart, auditStart);
+  assert.doesNotMatch(automaticOutcome, /result\s*=\s*"rejected"/);
+  assert.doesNotMatch(automaticOutcome, /statusUpdate\.status\s*=\s*"cancelled"/);
+  assert.doesNotMatch(automaticOutcome, /statusUpdate\.payment_status\s*=\s*"rejected"/);
+  assert.match(
+    automaticOutcome,
+    /statusUpdate\.status = "pending";[\s\S]*?statusUpdate\.payment_status = "for_verification"/
+  );
+  assert.match(
+    automaticOutcome,
+    /already been used for another payment[\s\S]*?flags\.push\("DUPLICATE_REF"\)[\s\S]*?result = "manual_review"/
   );
   assert.match(
     receiptEdge,
-    /const gcashReferenceProven = provider === "gcash" &&[\s\S]*?flags\.length === 0[\s\S]*?ocrProvider === "google_vision"[\s\S]*?ocrConfidenceSource === "native"[\s\S]*?ocrConfidence >= minimumOcrConfidence[\s\S]*?reference\.source === "ref_label"[\s\S]*?reference\.confidence === "high"[\s\S]*?reference\.typedMatch === "match"[\s\S]*?indicators\.classification === "gcash"/
-  );
-  assert.match(
-    receiptEdge,
-    /provider === "gcash" && !gcashReferenceProven[\s\S]*?"POSSIBLE_DUPLICATE_REF"[\s\S]*?: "DUPLICATE_REF"/
-  );
-  assert.match(
-    receiptEdge,
-    /result === "manual_review"[\s\S]*?statusUpdate\.status = "pending";[\s\S]*?statusUpdate\.payment_status = "for_verification"/
-  );
-  assert.match(
-    receiptEdge,
-    /if \(duplicateReference\) \{[\s\S]*?result = "rejected";[\s\S]*?\} else \{[\s\S]*?flags\.push\("AUTO_APPROVAL_FAILED"\);[\s\S]*?result = "manual_review"/
+    /if \(!isDedicatedReceiptProvider\(provider\)\)[\s\S]*?flags\.push\("PROVIDER_REVIEW_REQUIRED"\)/
   );
 
   // The successful state transition, complete booking-group update, ledger
   // claim trigger, and audit insert occur in one service-role-only transaction.
-  assert.match(receiptEdge, /db\.rpc\(\s*"finalize_gcash_receipt_auto_approval"/);
-  assert.match(receiptEdge, /db\.rpc\("finalize_gcash_receipt_review"/);
+  assert.match(receiptEdge, /db\.rpc\(\s*"finalize_digital_receipt_auto_approval"/);
+  assert.match(receiptEdge, /p_provider: provider/);
+  assert.match(receiptEdge, /p_payment_reference: typedRef/);
+  assert.match(receiptEdge, /db\.rpc\("finalize_digital_receipt_review"/);
   assert.doesNotMatch(receiptEdge, /FALLBACK cancel succeeded/);
+  assert.match(
+    digitalReceiptMigration,
+    /create or replace function public\.finalize_digital_receipt_auto_approval\([\s\S]*?security definer\s+set search_path = public, pg_temp/i
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /create or replace function public\.finalize_digital_receipt_review\([\s\S]*?security definer\s+set search_path = public, pg_temp/i
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /cardinality\(coalesce\(p_receipt_flags, array\[\]::text\[\]\)\) <> 0/
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /jsonb_typeof\(p_extracted->'dedupeKeys'\) <> 'array'[\s\S]*?payment_review_ledger_keys\([\s\S]*?used_gcash_refs/
+  );
+  const automaticFinalizer = digitalReceiptMigration.slice(
+    digitalReceiptMigration.indexOf('create or replace function public.finalize_digital_receipt_auto_approval'),
+    digitalReceiptMigration.indexOf('create or replace function public.finalize_digital_receipt_review')
+  );
+  assert.doesNotMatch(automaticFinalizer, /payment_status = 'rejected'/i);
+  assert.doesNotMatch(automaticFinalizer, /status = 'cancelled'/i);
+  const reviewFinalizer = digitalReceiptMigration.slice(
+    digitalReceiptMigration.indexOf('create or replace function public.finalize_digital_receipt_review'),
+    digitalReceiptMigration.indexOf('create or replace function public.assert_clean_registration_receipt')
+  );
+  assert.match(reviewFinalizer, /status = 'pending'[\s\S]*?payment_status = 'for_verification'/i);
+  assert.match(reviewFinalizer, /receipt_status = 'manual_review'/i);
+  assert.doesNotMatch(reviewFinalizer, /payment_status = 'rejected'/i);
+  assert.doesNotMatch(reviewFinalizer, /status = 'cancelled'/i);
   assert.match(gcashAutoFinalizer, /language plpgsql\s+security definer\s+set search_path = public, pg_temp/i);
   assert.match(gcashAutoFinalizer, /where b\.ref = p_booking_ref\s+for update/i);
   assert.match(gcashAutoFinalizer, /actual_refs is distinct from expected_refs/i);
@@ -431,15 +512,12 @@ test('receipt clients preserve only a persisted canonical auto-verification resu
   );
   assert.match(
     savedBookingVerifier,
-    /\['auto_approved', 'manual_review', 'rejected'\]\.includes\(res\?\.status\)[\s\S]*?\? res\.status/
+    /res\?\.status === 'auto_approved' \? 'auto_approved' : 'manual_review'/
   );
-  assert.doesNotMatch(
-    savedBookingVerifier,
-    /res\?\.status === 'rejected' \? 'rejected' : 'manual_review'/
-  );
+  assert.doesNotMatch(savedBookingVerifier, /rejected/);
   assert.match(
     savedBookingVerifier,
-    /paymentStatus:\s*res\?\.paymentStatus \|\| null,[\s\S]*?bookingStatus:\s*res\?\.bookingStatus \|\| null/
+    /paymentStatus:\s*status === 'auto_approved' \? \(res\?\.paymentStatus \|\| null\) : 'for_verification'[\s\S]*?bookingStatus:\s*status === 'auto_approved' \? \(res\?\.bookingStatus \|\| null\) : 'pending'/
   );
 
   // The browser accepts auto-approval only with a canonical confirmed and paid
@@ -454,24 +532,24 @@ test('receipt clients preserve only a persisted canonical auto-verification resu
   );
   assert.match(
     singleBookingFlow,
-    /ocrStatus === 'auto_approved'[\s\S]*?canonicalAutoReceiptState\([\s\S]*?booking\.status = verifiedState\.bookingStatus;[\s\S]*?booking\.paymentStatus = verifiedState\.paymentStatus/
+    /(?:ocrStatus|booking\._receiptResult\?\.status) === 'auto_approved'[\s\S]*?canonicalAutoReceiptState\([\s\S]*?booking\.status = verifiedState\.bookingStatus;[\s\S]*?booking\.paymentStatus = verifiedState\.paymentStatus/
   );
   assert.match(
     groupBookingFlow,
-    /ocrStatus === 'auto_approved'[\s\S]*?canonicalAutoReceiptState\([\s\S]*?itemBookings\.forEach\(row => \{[\s\S]*?row\.status = verifiedState\.bookingStatus;[\s\S]*?row\.paymentStatus = verifiedState\.paymentStatus/
+    /(?:ocrStatus|booking\._receiptResult\?\.status) === 'auto_approved'[\s\S]*?canonicalAutoReceiptState\([\s\S]*?itemBookings\.forEach\(row => \{[\s\S]*?row\.status = verifiedState\.bookingStatus;[\s\S]*?row\.paymentStatus = verifiedState\.paymentStatus/
   );
 
-  // Pre-save host-session and Open Play scans have no row that the finalizer
-  // can lock. They preserve only proven duplicate rejection; all other results
-  // are submitted as pending and the UI renders the protected insert response.
+  // Pre-save host-session and Open Play scans can return a clean audit proof.
+  // The browser passes its immutable ID to the protected registration Edge;
+  // canonical paid state comes only from the verified registration RPC.
   assert.match(
     hostVerifier,
-    /const status = res\?\.status === 'rejected' \? 'rejected' : 'manual_review'/
+    /res\?\.status === 'auto_approved'[\s\S]*?receiptVerificationId/
   );
-  assert.doesNotMatch(hostVerifier, /\['auto_approved'/);
+  assert.doesNotMatch(hostVerifier, /rejected/);
   assert.match(
     hostSubmission,
-    /paymentStatus = receiptResult\.status === 'rejected' \? 'rejected' : 'pending'/
+    /receiptVerificationId:\s*receiptResult\?\.status === 'auto_approved'[\s\S]*?receiptResult\.receiptVerificationId/
   );
   assert.match(hostSubmission, /paymentStatus = savedRegistration\.paymentStatus/);
   assert.match(
@@ -480,14 +558,58 @@ test('receipt clients preserve only a persisted canonical auto-verification resu
   );
   assert.match(
     openPlayVerifier,
-    /const status = res\?\.status === 'rejected' \? 'rejected' : 'manual_review'/
+    /res\?\.status === 'auto_approved'[\s\S]*?receiptVerificationId/
   );
-  assert.doesNotMatch(openPlayVerifier, /\['auto_approved'/);
-  assert.match(openPlaySubmission, /regPayStatus = 'pending'/);
+  assert.doesNotMatch(openPlayVerifier, /rejected/);
+  assert.match(
+    openPlaySubmission,
+    /receiptVerificationId:\s*receiptResult\?\.status === 'auto_approved'[\s\S]*?receiptResult\.receiptVerificationId/
+  );
   assert.match(openPlaySubmission, /regPayStatus = savedRegistration\.paymentStatus/);
   assert.match(
     openPlaySubmission,
     /canonicalReceiptStatus = savedRegistration\.receiptStatus \|\| 'none'/
+  );
+  assert.match(registrationEdge, /function positiveReceiptVerificationId\(/);
+  assert.match(
+    registrationEdge,
+    /submit_verified_public_open_play_registration[\s\S]*?p_receipt_verification_id: receiptVerificationId/
+  );
+  assert.match(
+    registrationEdge,
+    /submit_verified_public_host_session_registration[\s\S]*?p_receipt_verification_id: receiptVerificationId/
+  );
+  assert.match(
+    registrationEdge,
+    /receiptVerificationId && response\.error[\s\S]*?retryable: true/
+  );
+  assert.ok(
+    (digitalReceiptMigration.match(
+      /pg_advisory_xact_lock\(hashtextextended\([\s\S]*?'paddle-rage-receipt-registration:' \|\| p_receipt_verification_id::text/g
+    ) || []).length >= 2,
+    'both verified registration RPCs serialize same-audit retries'
+  );
+  assert.ok(
+    (digitalReceiptMigration.match(
+      /from public\.receipt_verification_subject_claims claims[\s\S]*?where claims\.receipt_verification_id = p_receipt_verification_id;[\s\S]*?return query/g
+    ) || []).length >= 2,
+    'both verified registration RPCs return the canonical claimed row on an exact retry'
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /Receipt verification retry does not match its original registration\./
+  );
+  assert.match(
+    registrationEdge,
+    /receiptVerificationId[\s\S]*?submit_verified_public_open_play_registration[\s\S]*?: await db\.rpc\("submit_public_open_play_registration"[\s\S]*?p_client_receipt_status:[\s\S]*?"manual_review"/
+  );
+  assert.doesNotMatch(
+    registrationEdge,
+    /receiptVerificationId && response\.error[\s\S]{0,900}?submit_public_(?:open_play|host_session)_registration/
+  );
+  assert.doesNotMatch(
+    registrationEdge,
+    /p_client_receipt_status:\s*text\(body\.receiptStatus/
   );
 });
 
@@ -596,8 +718,14 @@ test('payment review covers every receipt-backed registration type', () => {
   assert.match(admin, /regular bookings require (?:the )?full payment(?: amount)?/);
   assert.match(admin, /receiptRef: receiptItem\.ref/);
   assert.match(admin, /function bookingPaymentIsResolved[\s\S]*?'deposit_retained'[\s\S]*?'forfeited'/);
-  assert.match(admin, /vmRejectBtn'\)\.style\.display = readOnly \? 'none'/);
-  assert.match(admin, /vmConfirmBtn'\)\.style\.display\s*=\s*[^?\n]*readOnly[^?\n]*\?\s*'none'/);
+  assert.match(
+    admin,
+    /vmRejectBtn'\)\.style\.display = !readOnly && canReview \? '' : 'none'/
+  );
+  assert.match(
+    admin,
+    /vmConfirmBtn'\)\.style\.display = !readOnly && canReview \? '' : 'none'/
+  );
   assert.ok((admin.match(/if \(bookingPaymentIsResolved\(bkForPay\)\)/g) || []).length >= 1);
   assert.match(admin, /item\.status === 'retained'[\s\S]*?>Resolved</);
   assert.match(client, /async updateOpenPlayHostSessionRegistration\(id, updates\)/);
@@ -773,7 +901,7 @@ test('duplicate payment risk survives a lookup narrowed to one booking group', a
   );
 });
 
-test('row and verify-modal confirmation reuse one guarded booking transaction', () => {
+test('row and verify-modal confirmation reuse one atomic transaction with deliberate owner review', () => {
   const admin = read('admin.html');
   const quickButton = functionSource(admin, 'bookingQuickConfirmButton');
   const quickButtonClosure = functionClosure(admin, 'bookingQuickConfirmButton');
@@ -795,10 +923,20 @@ test('row and verify-modal confirmation reuse one guarded booking transaction', 
   assert.doesNotMatch(transaction, /\b(?:updateBookingGroupByRef|updatePaymentStatus)\s*\(/);
   assert.match(updateStatus, /status\s*===\s*["']confirmed["'][\s\S]*?confirmBookingTransaction\s*\(/);
   assert.match(transaction, /bookingQuickConfirmIssue\s*\(\s*current\s*\)/);
-  assert.doesNotMatch(
+  assert.match(
     transaction,
-    /if\s*\(\s*requireQuickEligibility\s*\)[\s\S]{0,180}bookingQuickConfirmIssue/,
-    'modal and row confirmation must not be able to bypass the shared safety guard',
+    /if\s*\(\s*!paymentReviewDecision\s*\)[\s\S]{0,180}bookingQuickConfirmIssue/,
+    'one-tap confirmation must retain the convenience safety guard',
+  );
+  assert.match(
+    verifyAndConfirm,
+    /paymentReviewDecision:\s*true/,
+    'the explicit owner modal decision must be distinct from one-tap confirmation',
+  );
+  assert.doesNotMatch(
+    quickButtonClosure,
+    /paymentReviewDecision:\s*true/,
+    'row quick-confirm must never opt into deliberate review semantics',
   );
 
   const inFlightSets = [...admin.matchAll(/\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+Set\s*\(\s*\)/g)]
@@ -812,6 +950,12 @@ test('row and verify-modal confirmation reuse one guarded booking transaction', 
   assert.match(transactionClosure, /aria-busy/);
   assert.match(transactionClosure, /\.disabled\s*=|disabled\s*:/);
   assert.match(transactionClosure, /Confirming(?:\.{3}|…)/);
+  assert.match(transaction, /String\(error\?\.code \|\| ''\) === '23505'/);
+  assert.match(
+    transaction,
+    /already linked to another payment\. Nothing was changed/,
+    'a true atomic replay collision needs a clear owner-facing no-change result',
+  );
 });
 
 test('quick confirmation visibility and transaction guards reject unsafe payment states', () => {
@@ -840,4 +984,62 @@ test('quick confirmation visibility and transaction guards reject unsafe payment
       'regular underpayment must never expose or pass one-tap confirmation',
     );
   }
+});
+
+test('receipt review copy identifies each dedicated parser without mislabeling bank transfers', () => {
+  const admin = read('admin.html');
+  const receiptDetails = functionSource(admin, 'receiptDetailsHtml');
+
+  assert.match(receiptDetails, /gcash_v1:\s*'Dedicated GCash v1'/);
+  assert.match(receiptDetails, /gotyme_to_gcash_v1:\s*'Dedicated GoTyme → GCash v1'/);
+  assert.match(receiptDetails, /maribank_to_gcash_v1:\s*'Dedicated MariBank → GCash v1'/);
+  assert.match(
+    receiptDetails,
+    /All provider, reference, amount, time, recipient, and replay checks passed/,
+  );
+  assert.doesNotMatch(receiptDetails, /All dedicated GCash checks passed/);
+  assert.doesNotMatch(receiptDetails, /Anchored Maya amount/);
+});
+
+test('deliberate owner review ignores analyzer labels but atomically claims real evidence keys', () => {
+  assert.match(
+    digitalReceiptMigration,
+    /do \$manual_review_confirm_patch\$/,
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /rejected_label_block[\s\S]*?The receipt is rejected and cannot be confirmed/,
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /duplicate_label_block[\s\S]*?proven duplicate evidence and cannot be confirmed/,
+  );
+  assert.ok(
+    (digitalReceiptMigration.match(/patched_definition := replace\(/g) || []).length >= 3,
+    'provider expansion and both analyzer-label blocks must be forward-patched',
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /create or replace function public\.claim_owner_confirmed_receipt_evidence/,
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /actor_role_value not in \('owner', 'court_owner'\)/,
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /perform public\.claim_payment_reference\([\s\S]*?new\.gcash_ref[\s\S]*?claim_owner_value/,
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /from public\.payment_review_ledger_keys\([\s\S]*?new\.receipt_extracted[\s\S]*?new\.gcash_ref/,
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /incumbent_owner is distinct from claim_owner_value[\s\S]*?already linked to another payment[\s\S]*?errcode = '23505'/,
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /create trigger y95_claim_owner_confirmed_receipt_evidence[\s\S]*?before update of payment_status on public\.bookings/,
+  );
 });

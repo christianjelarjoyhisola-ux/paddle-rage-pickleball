@@ -4806,7 +4806,10 @@ body.admin-booting .admin-boot-splash {
               <input type="checkbox" id="payMethodBpiOn" /> BPI
             </label>
             <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
-              <input type="checkbox" id="payMethodGotymeOn" /> GoTyme
+              <input type="checkbox" id="payMethodGotymeOn" /> GoTyme → GCash
+            </label>
+            <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
+              <input type="checkbox" id="payMethodMaribankOn" /> MariBank → GCash
             </label>
             <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
               <input type="checkbox" id="payMethodPnbOn" /> PNB
@@ -4816,7 +4819,8 @@ body.admin-booting .admin-boot-splash {
 
         <!-- GCash Section -->
         <div style="margin-top:16px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
-          <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:10px;">📲 GCash</div>
+          <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px;">📲 Shared GCash Recipient</div>
+          <div style="font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Used by GCash and every source→GCash method: BDO Pay, Maya, BPI, GoTyme, and MariBank.</div>
           <div class="frow" style="gap:10px;margin-bottom:10px;">
             <div class="fg" style="margin:0;flex:1">
               <label class="fl">GCash Number</label>
@@ -4842,32 +4846,14 @@ body.admin-booting .admin-boot-splash {
           </div>
         </div>
 
-        <!-- GoTyme Section -->
+        <!-- Source apps routed to the authoritative GCash recipient -->
         <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
-          <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:10px;">🏦 GoTyme</div>
-          <div class="frow" style="gap:10px;margin-bottom:10px;">
-            <div class="fg" style="margin:0;flex:1">
-              <label class="fl">GoTyme Number / Account No.</label>
-              <input type="text" class="fi" id="gotymeNumInput" placeholder="e.g. 09XX XXX XXXX" />
-            </div>
-            <div class="fg" style="margin:0;flex:1">
-              <label class="fl">Account Name</label>
-              <input type="text" class="fi" id="gotymeNameInput" placeholder="e.g. Paddle Rage Pickleball" />
-            </div>
-          </div>
-          <div class="fg" style="margin:0">
-            <label class="fl">GoTyme QR Code Image</label>
-            <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
-              <div id="gotymeQrPreviewWrap" style="display:none">
-                <img id="gotymeQrPreview" src="" alt="GoTyme QR" style="width:110px;height:110px;object-fit:contain;border-radius:8px;border:1px solid var(--border);background:#fff;padding:4px;"/>
-                <button type="button" onclick="removeQr('gotyme')" style="display:block;margin-top:6px;font-size:.7rem;color:#e53935;background:none;border:none;cursor:pointer;padding:2px 0;font-weight:600;">✕ Remove QR</button>
-              </div>
-              <label style="flex:1;min-width:160px;display:flex;align-items:center;gap:9px;padding:11px 13px;background:var(--card);border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;font-size:.84rem;color:var(--muted);" onmouseover="this.style.borderColor='var(--yellow)'" onmouseout="this.style.borderColor='var(--border)'">
-                📷 Upload GoTyme QR image
-                <input type="file" accept="image/*" id="gotymeQrFile" style="display:none" onchange="handleQrUpload('gotyme',event)"/>
-              </label>
-            </div>
-          </div>
+          <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:7px;">GT GoTyme → GCash</div>
+          <div style="font-size:.78rem;color:var(--muted);line-height:1.55">Players pay from GoTyme to the shared GCash number/QR above. Its receipt parser still validates GoTyme-specific references and receipt fields.</div>
+        </div>
+        <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
+          <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:7px;">MB MariBank → GCash</div>
+          <div style="font-size:.78rem;color:var(--muted);line-height:1.55">Players pay from MariBank to the shared GCash number/QR above. Its receipt parser validates MariBank-specific references and receipt fields.</div>
         </div>
 
         <!-- PNB Section -->
@@ -5053,7 +5039,7 @@ body.admin-booting .admin-boot-splash {
       <div style="background:rgba(var(--green-rgb),.07);border:1.5px solid rgba(var(--green-rgb),.28);border-radius:10px;padding:16px;text-align:center;margin-bottom:14px">
         <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Payment Reference #</div>
         <div id="vmGcashRef" style="font-family:monospace;font-size:1.55rem;font-weight:800;color:var(--green);letter-spacing:2px">—</div>
-        <div style="font-size:.7rem;color:var(--muted);margin-top:5px">Check your GCash/GoTyme app for this reference</div>
+        <div style="font-size:.7rem;color:var(--muted);margin-top:5px">Check this reference in the matching payment app and in the receiving GCash account</div>
       </div>
       <div style="font-size:.82rem;color:var(--muted)">
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>Customer</span><strong style="color:var(--text)" id="vmName">—</strong></div>
@@ -5065,7 +5051,7 @@ body.admin-booting .admin-boot-splash {
       </div>
       <div id="vmGroupBreakdown" style="display:none;margin-top:8px;font-size:.76rem;color:var(--muted)"></div>
       <div id="vmReceiptWrap" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
-        <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Auto-Verification</div>
+        <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Automated receipt checks</div>
         <div id="vmReceiptStatus" style="font-size:.82rem;font-weight:700;border-radius:8px;padding:8px 10px;margin-bottom:8px"></div>
         <div id="vmReceiptFlags" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px"></div>
         <div id="vmReceiptDetails" class="receipt-detail-grid" style="display:none"></div>
@@ -5100,7 +5086,7 @@ body.admin-booting .admin-boot-splash {
       <div style="background:rgba(56,189,248,.07);border:1.5px solid rgba(56,189,248,.3);border-radius:10px;padding:16px;text-align:center;margin-bottom:14px">
         <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Payment Reference #</div>
         <div id="ovGcashRef" style="font-family:monospace;font-size:1.55rem;font-weight:800;color:#38bdf8;letter-spacing:2px">—</div>
-        <div style="font-size:.7rem;color:var(--muted);margin-top:5px">Verify this reference in your GCash / GoTyme / PNB app</div>
+        <div style="font-size:.7rem;color:var(--muted);margin-top:5px">Verify this reference in the matching payment app and receiving account</div>
       </div>
       <div style="font-size:.82rem;color:var(--muted)">
         <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span>Player</span><strong style="color:var(--text)" id="ovName">—</strong></div>
@@ -5110,7 +5096,7 @@ body.admin-booting .admin-boot-splash {
         <div style="display:flex;justify-content:space-between;padding:6px 0"><span>Amount</span><strong style="color:#38bdf8" id="ovAmount">—</strong></div>
       </div>
       <div id="ovReceiptWrap" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
-        <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Auto-Verification</div>
+        <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Automated receipt checks</div>
         <div id="ovReceiptStatus" style="font-size:.82rem;font-weight:700;border-radius:8px;padding:8px 10px;margin-bottom:8px"></div>
         <div id="ovReceiptFlags" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px"></div>
         <div id="ovReceiptDetails" class="receipt-detail-grid" style="display:none"></div>
@@ -5124,8 +5110,9 @@ body.admin-booting .admin-boot-splash {
       </p>
     </div>
     <div class="m-foot">
-      <button class="btn btn-d" onclick="rejectOpPayment()">❌ Not Received</button>
-      <button class="btn" style="background:rgba(56,189,248,.15);color:#38bdf8;border:1px solid rgba(56,189,248,.4);font-weight:700" onclick="confirmOpPayment()">✅ Received — Confirm</button>
+      <button class="btn btn-d" id="ovRejectBtn" onclick="rejectOpPayment()">❌ Not Received</button>
+      <button class="btn" id="ovConfirmBtn" style="background:rgba(56,189,248,.15);color:#38bdf8;border:1px solid rgba(56,189,248,.4);font-weight:700" onclick="confirmOpPayment()">✅ Received — Confirm</button>
+      <button class="btn btn-g" id="ovResolvedClose" style="display:none" onclick="closeModal('opVerifyModal')">Close</button>
     </div>
   </div>
 </div>
@@ -5490,7 +5477,7 @@ function bookingGroupKey(b) {
 }
 function normalizedPaymentRefKey(b) {
   const method = String(b?.paymentMethod || '').toLowerCase();
-  if (!['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'pnb'].includes(method)) return '';
+  if (!['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'].includes(method)) return '';
   const ref = String(b?.gcashRef || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   return ref ? `${method}:${ref}` : '';
 }
@@ -5950,6 +5937,11 @@ function receiptDetailsHtml(b){
   const ex = b.receiptExtracted || {};
   const gcash = ex.gcash || null;
   const recipientCheck = gcash?.recipientComparison || {};
+  const parserLabel = ({
+    gcash_v1: 'Dedicated GCash v1',
+    gotyme_to_gcash_v1: 'Dedicated GoTyme → GCash v1',
+    maribank_to_gcash_v1: 'Dedicated MariBank → GCash v1',
+  })[String(ex.parserVersion || '').toLowerCase()] || '';
   const displayFlags = receiptFlagsForDisplay(b);
   const paymentState = String(b.paymentStatus || '').toLowerCase();
   const bookingState = String(b.status || '').toLowerCase();
@@ -5958,7 +5950,7 @@ function receiptDetailsHtml(b){
   const reason = displayFlags.length
     ? receiptReasonText(displayFlags)
     : b.receiptStatus === 'auto_approved'
-      ? 'All dedicated GCash checks passed'
+      ? 'All provider, reference, amount, time, recipient, and replay checks passed'
       : canonicallyResolved
         ? 'Parser review completed — payment was resolved by staff'
       : 'No hard mismatch found — owner confirmation required';
@@ -5966,12 +5958,12 @@ function receiptDetailsHtml(b){
   const ocrConfidence = ex.ocrConfidence != null && Number.isFinite(ocrConfidenceNumber)
     ? `${Math.round(ocrConfidenceNumber * 100)}%`
     : '--';
-  const amountParse = ex.parserVersion === 'gcash_v1'
-    ? (ex.amountReliable === true ? 'Dedicated GCash parser · reliable' : 'Dedicated GCash parser · review')
+  const amountParse = parserLabel
+    ? `${parserLabel} · ${ex.amountReliable === true ? 'reliable' : 'review'}`
     : ex.amountReason === 'legacy_parser'
     ? 'Legacy parser result'
     : ex.amountReliable === true
-      ? 'Anchored Maya amount'
+      ? 'Provider-specific amount · reliable'
       : ex.amountAmbiguous === true
         ? 'Ambiguous — manual review'
         : ex.amountReliable === false
@@ -5985,7 +5977,7 @@ function receiptDetailsHtml(b){
     ['Booking Started', receiptDetailValue(ex.bookingStartedAtPh12)],
     ['Window', ex.allowedPaymentWindowMinutes ? `${esc(ex.allowedPaymentWindowMinutes)} min` : '--'],
     ['OCR Engine', receiptOcrProviderLabel(ex.ocrProvider)],
-    ...(ex.parserVersion === 'gcash_v1' ? [['Parser', 'Dedicated GCash v1']] : []),
+    ...(parserLabel ? [['Parser', parserLabel]] : []),
     ...(gcash ? [
       ['Recipient Phone', receiptDetailValue(gcashPhoneCheckLabel(recipientCheck.phone)), true],
       ['Recipient Name', receiptDetailValue(gcashNameCheckLabel(recipientCheck.name, gcash.receiver?.name?.raw)), true],
@@ -7426,11 +7418,11 @@ async function restoreDeletedBooking(id, ref) {
 
 /* ── CALENDAR VIEW ── */
 function paymentMethodLabel(m) {
-  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme', pnb: 'PNB', cash: 'Cash' }[String(m || '').toLowerCase()] || (m || 'Cash'));
+  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', cash: 'Cash' }[String(m || '').toLowerCase()] || (m || 'Cash'));
 }
 
 function isDigitalPayment(m) {
-  return ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'pnb'].includes(String(m || '').toLowerCase());
+  return ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'].includes(String(m || '').toLowerCase());
 }
 
 function receivedAccountKey(b) {
@@ -8151,7 +8143,11 @@ function setBookingConfirmBusy(trigger, busy) {
   trigger.textContent = trigger.dataset.idleLabel || '✓ Confirm';
   delete trigger.dataset.idleLabel;
 }
-async function confirmBookingTransaction(ref, { trigger = null, closePaymentModal = false } = {}) {
+async function confirmBookingTransaction(ref, {
+  trigger = null,
+  closePaymentModal = false,
+  paymentReviewDecision = false,
+} = {}) {
   const key = String(ref || '').trim();
   if (!key) return false;
   if (_bookingConfirmInFlight.has(key)) {
@@ -8163,8 +8159,10 @@ async function confirmBookingTransaction(ref, { trigger = null, closePaymentModa
   try {
     const current = await getBookingGroupByRef(key);
     if (!current) throw new Error('Booking not found.');
-    const issue = bookingQuickConfirmIssue(current);
-    if (issue) throw new Error(issue);
+    if (!paymentReviewDecision) {
+      const issue = bookingQuickConfirmIssue(current);
+      if (issue) throw new Error(issue);
+    }
     if (typeof DB.confirmBookingTransaction !== 'function') {
       throw new Error('Secure booking confirmation is unavailable. Refresh and try again.');
     }
@@ -8195,7 +8193,14 @@ async function confirmBookingTransaction(ref, { trigger = null, closePaymentModa
     }
     return true;
   } catch (error) {
-    toast(error?.message || 'Failed to confirm booking.', 'err');
+    const rawMessage = String(error?.message || 'Failed to confirm booking.');
+    const collision = paymentReviewDecision && (
+      String(error?.code || '') === '23505' ||
+      /(?:reference|receipt|evidence)[^.]*already (?:used|claimed|linked)|reference is also attached to another booking|duplicate (?:payment|reference|receipt)/i.test(rawMessage)
+    );
+    toast(collision
+      ? 'This receipt is already linked to another payment. Nothing was changed. Compare the other booking or choose Not Received.'
+      : rawMessage, 'err');
     return false;
   } finally {
     _bookingConfirmInFlight.delete(key);
@@ -8266,6 +8271,10 @@ function bookingPaymentIsResolved(b) {
     ['forfeited', 'cancelled'].includes(bookingState);
 }
 
+function canManuallyResolvePayment() {
+  return ['owner', 'court_owner'].includes(String(sess?.role || '').toLowerCase());
+}
+
 async function openVerifyModal(ref, { returnFocus = null } = {}) {
   _verifyModalLastFocus = returnFocus || document.activeElement;
   const b = await getBookingGroupByRef(ref);
@@ -8286,16 +8295,16 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   }
   await vmPopulateReceipt(b);
   const readOnly = bookingPaymentIsResolved(b);
-  const confirmationBlocked = !!b.duplicatePaymentRef || String(b.receiptStatus || '').toLowerCase() === 'rejected';
-  if ($('vmRejectBtn')) $('vmRejectBtn').style.display = readOnly ? 'none' : '';
-  if ($('vmConfirmBtn')) $('vmConfirmBtn').style.display = readOnly || confirmationBlocked ? 'none' : '';
-  if ($('vmResolvedClose')) $('vmResolvedClose').style.display = readOnly ? '' : 'none';
+  const canReview = canManuallyResolvePayment();
+  if ($('vmRejectBtn')) $('vmRejectBtn').style.display = !readOnly && canReview ? '' : 'none';
+  if ($('vmConfirmBtn')) $('vmConfirmBtn').style.display = !readOnly && canReview ? '' : 'none';
+  if ($('vmResolvedClose')) $('vmResolvedClose').style.display = readOnly || !canReview ? '' : 'none';
   if ($('vmReviewHint')) {
-    $('vmReviewHint').textContent = confirmationBlocked
-      ? 'This payment cannot be confirmed: the receipt is flagged or its payment reference is duplicated.'
-      : readOnly
+    $('vmReviewHint').textContent = readOnly
       ? 'This payment is already resolved. Receipt evidence remains available for audit.'
-      : 'Open your GCash inbox and match the reference above, then mark as received to confirm the booking and send an email to the customer.';
+      : !canReview
+      ? 'Only the system owner or court owner can decide a pending payment. Receipt evidence remains available for review.'
+      : 'Match the source-app reference with the receiving account, then choose Received or Not Received. This owner decision is recorded.';
   }
   $('verifyModal').dataset.ref = ref;
   $('verifyModal').dataset.refs = JSON.stringify(b.refs || [ref]);
@@ -8398,10 +8407,15 @@ async function vmPopulateReceipt(b){
 }
 
 async function verifyAndConfirm() {
+  if (!canManuallyResolvePayment()) { toast('Only the system owner or court owner can confirm a payment.', 'err'); return; }
   const ref = $('verifyModal').dataset.ref;
   if (!ref) return;
   const trigger = $('vmConfirmBtn');
-  await confirmBookingTransaction(ref, { trigger, closePaymentModal: true });
+  await confirmBookingTransaction(ref, {
+    trigger,
+    closePaymentModal: true,
+    paymentReviewDecision: true,
+  });
 }
 
 async function resendConfirmationEmail(ref) {
@@ -8417,6 +8431,7 @@ async function resendConfirmationEmail(ref) {
 }
 
 async function rejectPayment() {
+  if (!canManuallyResolvePayment()) { toast('Only the system owner or court owner can mark a payment not received.', 'err'); return; }
   const ref = $('verifyModal').dataset.ref;
   if (!ref) return;
   try {
@@ -8429,19 +8444,36 @@ async function rejectPayment() {
       toast('This payment is already resolved and cannot be changed here.', 'inf');
       return;
     }
-    if (!confirm(`Cancel booking ${ref}? This cannot be undone.`)) return;
-    await updateBookingGroupByRef(ref, { status: 'cancelled', paymentStatus: 'rejected' });
+    const reviewReason = prompt(
+      `Why was payment for ${bkForPay.displayRef || ref} not received?\n\nThis note is stored in the owner review audit.`,
+      'Payment could not be found in the receiving account.',
+    );
+    if (reviewReason === null) return;
+    if (reviewReason.trim().length < 3) {
+      toast('Enter a Not Received reason of at least 3 characters.', 'err');
+      return;
+    }
+    if (!confirm(`Mark payment for ${bkForPay.displayRef || ref} as Not Received and cancel this booking? This cannot be undone.`)) return;
+    if (typeof DB.rejectBookingPaymentTransaction !== 'function') {
+      throw new Error('Secure payment review is unavailable. Refresh and try again.');
+    }
+    const result = await DB.rejectBookingPaymentTransaction(bkForPay.primaryRef || ref, reviewReason.trim());
     closeVerifyModal();
-    toast('Booking cancelled — payment not verified.', 'err');
+    toast(result?.transitioned === false
+      ? 'This payment was already marked Not Received.'
+      : 'Payment marked Not Received and booking cancelled.',
+    result?.transitioned === false ? 'inf' : 'err');
     await renderBookings();
     if (_curSection === 'payreview') await renderPaymentReview();
     renderDash();
-    Promise.all([
-      DB.sendBookingStatusEmail(ref, 'payment_rejected', 'The submitted payment could not be verified by the Paddle Rage team.', { allowFailure: true }),
-      notifyBookingUpdateSafe(ref, 'payment_rejected', 'Payment marked not received by admin.'),
-    ]).catch(() => {});
+    if (result?.transitioned !== false) {
+      Promise.all([
+        DB.sendBookingStatusEmail(ref, 'payment_rejected', 'The court owner reviewed the submitted proof and marked the payment as not received.', { allowFailure: true }),
+        notifyBookingUpdateSafe(ref, 'payment_rejected', 'Payment marked not received by admin.'),
+      ]).catch(() => {});
+    }
   } catch(e) {
-    toast('Failed to cancel booking.', 'err');
+    toast(e?.message || 'Failed to mark payment as Not Received.', 'err');
   }
 }
 
@@ -10096,6 +10128,7 @@ async function renderPaymentSettings() {
   const mayaOn = settings.payment_method_maya === '1';
   const bpiOn = settings.payment_method_bpi === '1';
   const gotymeOn = settings.payment_method_gotyme === '1';
+  const maribankOn = settings.payment_method_maribank === '1';
   const pnbOn = settings.payment_method_pnb === '1';
   const paymentAcceptanceMode = 'full_payment_only';
 
@@ -10106,12 +10139,11 @@ async function renderPaymentSettings() {
   if ($('payMethodMayaOn')) $('payMethodMayaOn').checked = mayaOn;
   if ($('payMethodBpiOn')) $('payMethodBpiOn').checked = bpiOn;
   $('payMethodGotymeOn').checked = gotymeOn;
+  if ($('payMethodMaribankOn')) $('payMethodMaribankOn').checked = maribankOn;
   $('payMethodPnbOn').checked = pnbOn;
 
   if ($('gcashNumInput')) $('gcashNumInput').value = settings.gcash_merchant_number || '';
   if ($('gcashNameInput')) $('gcashNameInput').value = settings.gcash_merchant_name || '';
-  if ($('gotymeNumInput')) $('gotymeNumInput').value = settings.gotyme_merchant_number || '';
-  if ($('gotymeNameInput')) $('gotymeNameInput').value = settings.gotyme_merchant_name || '';
   if ($('pnbNumInput')) $('pnbNumInput').value = settings.pnb_merchant_number || '';
   if ($('pnbNameInput')) $('pnbNameInput').value = settings.pnb_merchant_name || '';
   if ($('platformGcashNumInput')) $('platformGcashNumInput').value = settings.platform_gcash_number || '';
@@ -10127,18 +10159,13 @@ async function renderPaymentSettings() {
     $('gcashQrPreview').src = gcashQr;
     $('gcashQrPreviewWrap').style.display = '';
   }
-  const gotymeQr = settings.gotyme_qr_image || '';
-  if (gotymeQr && $('gotymeQrPreview')) {
-    $('gotymeQrPreview').src = gotymeQr;
-    $('gotymeQrPreviewWrap').style.display = '';
-  }
   const pnbQr = settings.pnb_qr_image || '';
   if (pnbQr && $('pnbQrPreview')) {
     $('pnbQrPreview').src = pnbQr;
     $('pnbQrPreviewWrap').style.display = '';
   }
 
-  const summaryParts = [`Methods: ${(cashOn?'Cash ':'')}${(gcashOn?'GCash ':'')}${(bdopayOn?'BDO Pay ':'')}${(mayaOn?'Maya ':'')}${(bpiOn?'BPI ':'')}${(gotymeOn?'GoTyme ':'')}${(pnbOn?'PNB':'')}`.trim() || 'none'];
+  const summaryParts = [`Methods: ${(cashOn?'Cash ':'')}${(gcashOn?'GCash ':'')}${(bdopayOn?'BDO Pay ':'')}${(mayaOn?'Maya ':'')}${(bpiOn?'BPI ':'')}${(gotymeOn?'GoTyme→GCash ':'')}${(maribankOn?'MariBank→GCash ':'')}${(pnbOn?'PNB':'')}`.trim() || 'none'];
   $('paySettingsSummary').textContent = summaryParts.join(' • ');
 
   // Platform remittance summary
@@ -11115,10 +11142,11 @@ async function removePlatformQr() {
 
 async function removeQr(type) {
   if (!Auth.can('payments', sess.role)) { toast('You do not have access to edit payment settings.', 'err'); return; }
-  const key = type === 'gcash' ? 'gcash_qr_image' : type === 'gotyme' ? 'gotyme_qr_image' : 'pnb_qr_image';
-  const previewId = type === 'gcash' ? 'gcashQrPreview' : type === 'gotyme' ? 'gotymeQrPreview' : 'pnbQrPreview';
-  const wrapId = type === 'gcash' ? 'gcashQrPreviewWrap' : type === 'gotyme' ? 'gotymeQrPreviewWrap' : 'pnbQrPreviewWrap';
-  const fileId = type === 'gcash' ? 'gcashQrFile' : type === 'gotyme' ? 'gotymeQrFile' : 'pnbQrFile';
+  if (!['gcash', 'pnb'].includes(type)) return;
+  const key = type === 'gcash' ? 'gcash_qr_image' : 'pnb_qr_image';
+  const previewId = type === 'gcash' ? 'gcashQrPreview' : 'pnbQrPreview';
+  const wrapId = type === 'gcash' ? 'gcashQrPreviewWrap' : 'pnbQrPreviewWrap';
+  const fileId = type === 'gcash' ? 'gcashQrFile' : 'pnbQrFile';
   try {
     await DB.saveSetting(key, '');
     $(previewId).src = '';
@@ -11132,18 +11160,16 @@ async function removeQr(type) {
 
 function handleQrUpload(type, e) {
   if (!Auth.can('payments', sess.role)) { toast('You do not have access to edit payment settings.', 'err'); e.target.value = ''; return; }
+  if (!['gcash', 'pnb'].includes(type)) { e.target.value = ''; return; }
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = async ev => {
     const data = ev.target.result;
-    const key = type === 'gcash' ? 'gcash_qr_image' : type === 'gotyme' ? 'gotyme_qr_image' : 'pnb_qr_image';
+    const key = type === 'gcash' ? 'gcash_qr_image' : 'pnb_qr_image';
     if (type === 'gcash') {
       $('gcashQrPreview').src = data;
       $('gcashQrPreviewWrap').style.display = '';
-    } else if (type === 'gotyme') {
-      $('gotymeQrPreview').src = data;
-      $('gotymeQrPreviewWrap').style.display = '';
     } else {
       $('pnbQrPreview').src = data;
       $('pnbQrPreviewWrap').style.display = '';
@@ -11168,27 +11194,21 @@ async function savePaymentSettings() {
   const mayaOn = $('payMethodMayaOn')?.checked || false;
   const bpiOn = $('payMethodBpiOn')?.checked || false;
   const gotymeOn = $('payMethodGotymeOn').checked;
+  const maribankOn = $('payMethodMaribankOn')?.checked || false;
   const pnbOn = $('payMethodPnbOn').checked;
   const gcashNum = $('gcashNumInput')?.value.trim() || '';
   const gcashName = $('gcashNameInput')?.value.trim() || '';
-  const gotymeNum = $('gotymeNumInput')?.value.trim() || '';
-  const gotymeName = $('gotymeNameInput')?.value.trim() || '';
   const pnbNum = $('pnbNumInput')?.value.trim() || '';
   const pnbName = $('pnbNameInput')?.value.trim() || '';
   const gcashQrSrc = $('gcashQrPreview')?.src || '';
-  const gotymeQrSrc = $('gotymeQrPreview')?.src || '';
   const pnbQrSrc = $('pnbQrPreview')?.src || '';
 
-  if (!cashOn && !gcashOn && !bdopayOn && !mayaOn && !bpiOn && !gotymeOn && !pnbOn) {
+  if (!cashOn && !gcashOn && !bdopayOn && !mayaOn && !bpiOn && !gotymeOn && !maribankOn && !pnbOn) {
     toast('Enable at least one payment method.', 'err');
     return;
   }
-  if ((gcashOn || bdopayOn || mayaOn || bpiOn) && (!gcashName || (!gcashNum && !gcashQrSrc))) {
-    toast('Add the shared recipient name and a GCash number or QR before enabling GCash, BDO Pay, Maya, or BPI.', 'err');
-    return;
-  }
-  if (gotymeOn && (!gotymeName || (!gotymeNum && !gotymeQrSrc))) {
-    toast('Add the GoTyme recipient name and account number or QR before enabling GoTyme.', 'err');
+  if ((gcashOn || bdopayOn || mayaOn || bpiOn || gotymeOn || maribankOn) && (!gcashName || (!gcashNum && !gcashQrSrc))) {
+    toast('Add the shared GCash recipient name and number or QR before enabling a GCash-routed method.', 'err');
     return;
   }
   if (pnbOn && (!pnbName || (!pnbNum && !pnbQrSrc))) {
@@ -11205,14 +11225,13 @@ async function savePaymentSettings() {
     await DB.saveSetting('payment_method_maya', mayaOn ? '1' : '0');
     await DB.saveSetting('payment_method_bpi', bpiOn ? '1' : '0');
     await DB.saveSetting('payment_method_gotyme', gotymeOn ? '1' : '0');
+    await DB.saveSetting('payment_method_maribank', maribankOn ? '1' : '0');
     await DB.saveSetting('payment_method_pnb', pnbOn ? '1' : '0');
     await DB.saveSetting('payment_acceptance_mode', paymentAcceptanceMode);
 
     await DB.saveSetting('gcash_merchant_number', gcashNum);
     await DB.saveSetting('gcash_merchant_name', gcashName);
     await DB.saveSetting('payment_merchant_name', gcashName);
-    await DB.saveSetting('gotyme_merchant_number', gotymeNum);
-    await DB.saveSetting('gotyme_merchant_name', gotymeName);
     await DB.saveSetting('pnb_merchant_number', pnbNum);
     await DB.saveSetting('pnb_merchant_name', pnbName);
 
@@ -11220,7 +11239,6 @@ async function savePaymentSettings() {
     const platformQrSrc = $('platformGcashQrPreview')?.src || '';
     if (platformQrSrc.startsWith('data:')) await DB.saveSetting('platform_gcash_qr', platformQrSrc);
     if (gcashQrSrc.startsWith('data:')) await DB.saveSetting('gcash_qr_image', gcashQrSrc);
-    if (gotymeQrSrc.startsWith('data:')) await DB.saveSetting('gotyme_qr_image', gotymeQrSrc);
     if (pnbQrSrc.startsWith('data:')) await DB.saveSetting('pnb_qr_image', pnbQrSrc);
 
     await renderPaymentSettings();
@@ -12378,8 +12396,7 @@ async function openOpVerifyModal(id) {
   const regs = await DB.getOpenPlayRegistrations();
   const r = regs.find(x => String(x.id) === String(id));
   if (!r) { toast('Registration not found.', 'err'); return; }
-  const methodLabel = { gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme', pnb: 'PNB', cash: 'Cash' };
-  $('ovMethod').textContent  = methodLabel[r.payment_method] || r.payment_method || 'GCash';
+  $('ovMethod').textContent  = paymentMethodLabel(r.payment_method);
   $('ovGcashRef').textContent = r.gcash_ref || '—';
   $('ovName').textContent    = r.full_name;
   $('ovCourt').textContent   = r.court_name || '—';
@@ -12389,6 +12406,7 @@ async function openOpVerifyModal(id) {
   await ovPopulateReceipt(r, 'open_play');
   $('opVerifyModal').dataset.regId = id;
   $('opVerifyModal').dataset.regType = 'open_play';
+  syncOpenPlayReviewActions(r.payment_status);
   $('opVerifyModal').classList.add('show');
 }
 
@@ -12428,7 +12446,16 @@ async function openHostSessionVerifyModal(id) {
   await ovPopulateReceipt(receipt, 'host_session');
   $('opVerifyModal').dataset.regId = id;
   $('opVerifyModal').dataset.regType = 'host_session';
+  syncOpenPlayReviewActions(registration.paymentStatus);
   $('opVerifyModal').classList.add('show');
+}
+
+function syncOpenPlayReviewActions(paymentStatus) {
+  const resolved = ['paid', 'rejected'].includes(String(paymentStatus || '').toLowerCase());
+  const canReview = canManuallyResolvePayment();
+  if ($('ovRejectBtn')) $('ovRejectBtn').style.display = !resolved && canReview ? '' : 'none';
+  if ($('ovConfirmBtn')) $('ovConfirmBtn').style.display = !resolved && canReview ? '' : 'none';
+  if ($('ovResolvedClose')) $('ovResolvedClose').style.display = resolved || !canReview ? '' : 'none';
 }
 
 async function ovPopulateReceipt(r, receiptType = 'open_play') {
@@ -12485,6 +12512,7 @@ async function ovPopulateReceipt(r, receiptType = 'open_play') {
 }
 
 async function confirmOpPayment() {
+  if (!canManuallyResolvePayment()) { toast('Only the system owner or court owner can confirm a payment.', 'err'); return; }
   const id = $('opVerifyModal').dataset.regId;
   const registrationType = $('opVerifyModal').dataset.regType || 'open_play';
   if (!id) return;
@@ -12507,6 +12535,7 @@ async function confirmOpPayment() {
 }
 
 async function rejectOpPayment() {
+  if (!canManuallyResolvePayment()) { toast('Only the system owner or court owner can mark a payment not received.', 'err'); return; }
   const id = $('opVerifyModal').dataset.regId;
   const registrationType = $('opVerifyModal').dataset.regType || 'open_play';
   if (!id) return;
@@ -14199,6 +14228,6 @@ async function checkAgreementGate(session) {
 <script src="supabase-config.js?v=20260830-host-balance-v1"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>
-<script src="host-balance-admin.js?v=20260831-payment-evidence-v9"></script>
+<script src="host-balance-admin.js?v=20260831-multi-provider-v1"></script>
 </body>
 </html>
