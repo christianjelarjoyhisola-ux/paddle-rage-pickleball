@@ -318,9 +318,17 @@ declare
     'public.apply_host_booking_balance_payment_decision(uuid,text,uuid,text,text)'
   );
   original_definition text;
+  canonical_definition text;
   patched_definition text;
-  update_needle text := E'  update public.bookings b\n     set payment_status = ''paid'',\n         downpayment = b.total';
-  update_replacement text := E'  perform set_config(\n    ''paddle_rage.host_balance_decision_payment_id'',\n    v_payment.id::text,\n    true\n  );\n  perform set_config(\n    ''paddle_rage.host_balance_decision_actor_role'',\n    v_actor_role,\n    true\n  );\n  perform set_config(\n    ''paddle_rage.host_balance_decision_actor_user_id'',\n    coalesce(p_actor_user_id::text, ''''),\n    true\n  );\n\n  update public.bookings b\n     set payment_status = ''paid'',\n         downpayment = b.total';
+  target_marker constant text := 'downpayment = b.total';
+  update_anchor constant text := 'update public.bookings b';
+  context_marker constant text := 'paddle_rage.host_balance_decision_payment_id';
+  marker_position integer;
+  reverse_update_offset integer;
+  update_start integer;
+  preceding_text text;
+  update_segment text;
+  context_insertion constant text := E'perform set_config(\n    ''paddle_rage.host_balance_decision_payment_id'',\n    v_payment.id::text,\n    true\n  );\n  perform set_config(\n    ''paddle_rage.host_balance_decision_actor_role'',\n    v_actor_role,\n    true\n  );\n  perform set_config(\n    ''paddle_rage.host_balance_decision_actor_user_id'',\n    coalesce(p_actor_user_id::text, ''''),\n    true\n  );\n\n  ';
 begin
   if function_oid is null then
     raise exception 'Required host-balance decision function was not found.'
@@ -329,15 +337,61 @@ begin
 
   select pg_get_functiondef(function_oid)
     into original_definition;
-  patched_definition := replace(
-    original_definition,
-    update_needle,
-    update_replacement
-  );
-  if patched_definition = original_definition then
-    raise exception 'Host-balance decision update did not match the expected definition.'
+
+  -- pg_get_functiondef preserves the function body's original line endings.
+  -- Normalize CRLF first, then locate the unique Payment 2 settlement update by
+  -- its semantic marker instead of relying on indentation or line formatting.
+  canonical_definition := replace(original_definition, E'\r\n', E'\n');
+
+  if strpos(lower(canonical_definition), context_marker) > 0 then
+    -- Idempotent replay: the decision context is already installed.
+    return;
+  end if;
+
+  marker_position := strpos(lower(canonical_definition), target_marker);
+  if marker_position = 0
+     or strpos(
+       lower(substring(
+         canonical_definition
+         from marker_position + char_length(target_marker)
+       )),
+       target_marker
+     ) > 0 then
+    raise exception 'Host-balance decision update marker was missing or ambiguous.'
       using errcode = 'P0001';
   end if;
+
+  preceding_text := substring(
+    canonical_definition from 1 for marker_position - 1
+  );
+  reverse_update_offset := strpos(
+    reverse(lower(preceding_text)),
+    reverse(update_anchor)
+  );
+  if reverse_update_offset = 0 then
+    raise exception 'Host-balance decision update has no booking update anchor.'
+      using errcode = 'P0001';
+  end if;
+
+  update_start := marker_position
+    - reverse_update_offset
+    - char_length(update_anchor)
+    + 1;
+  update_segment := substring(
+    canonical_definition
+    from update_start
+    for marker_position + char_length(target_marker) - update_start
+  );
+
+  if update_segment !~* E'^update[[:space:]]+public\\.bookings[[:space:]]+b[[:space:]]+set[[:space:]]+payment_status[[:space:]]*=[[:space:]]*''paid''[[:space:]]*,[[:space:]]*downpayment[[:space:]]*=[[:space:]]*b\\.total$'
+     or position(';' in update_segment) > 0 then
+    raise exception 'Host-balance decision update did not match the Payment 2 settlement shape.'
+      using errcode = 'P0001';
+  end if;
+
+  patched_definition := substring(
+    canonical_definition from 1 for update_start - 1
+  ) || context_insertion || substring(canonical_definition from update_start);
   execute patched_definition;
 end;
 $host_balance_decision_context_patch$;

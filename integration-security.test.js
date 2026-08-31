@@ -1025,6 +1025,25 @@ test('deliberate owner review ignores analyzer labels but atomically claims real
   );
   assert.match(
     digitalReceiptMigration,
+    /canonical_definition := replace\(original_definition, E'\\r\\n', E'\\n'\)/,
+    'the Payment 2 context patch must normalize production CRLF function bodies',
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /target_marker constant text := 'downpayment = b\.total'/,
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /reverse_update_offset := strpos\([\s\S]*?reverse\(lower\(preceding_text\)\)[\s\S]*?reverse\(update_anchor\)/,
+    'the Payment 2 context must be inserted by semantic structure, not exact whitespace',
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /update_segment !~\*[\s\S]*?Payment 2 settlement shape/,
+    'the structural splice must fail closed unless the located update is the settlement statement',
+  );
+  assert.match(
+    digitalReceiptMigration,
     /create or replace function public\.claim_owner_confirmed_receipt_evidence/,
   );
   assert.match(
