@@ -12,16 +12,16 @@ assert.notEqual(end, -1, 'startSplashSound must remain independently testable');
 
 const startSplashSoundSource = page.slice(start, end);
 
-function createHarness({ rejectPlay = false } = {}) {
+function createHarness({ rejectPlay = false, pauseOnAudibleVolume = false } = {}) {
   const label = { textContent: 'Play music' };
   const updates = [];
   const fades = [];
   let beatStarts = 0;
   let volumeAtPlay = null;
 
+  let storedVolume = 1;
   const audio = {
     paused: true,
-    volume: 1,
     defaultMuted: true,
     muted: true,
     play() {
@@ -35,6 +35,16 @@ function createHarness({ rejectPlay = false } = {}) {
       return Promise.resolve();
     }
   };
+  Object.defineProperty(audio, 'volume', {
+    enumerable: true,
+    get() {
+      return storedVolume;
+    },
+    set(value) {
+      storedVolume = value;
+      if (pauseOnAudibleVolume && !audio.paused && value > 0) audio.paused = true;
+    }
+  });
 
   const splashAudio = {
     active: false,
@@ -74,13 +84,13 @@ function createHarness({ rejectPlay = false } = {}) {
   };
 }
 
-test('automatic splash playback starts audibly without a zero-volume fade', async () => {
+test('automatic splash playback uses a silent permission request then raises volume without a fade', async () => {
   const harness = createHarness();
 
   const started = await harness.start(true);
 
   assert.equal(started, true);
-  assert.equal(harness.volumeAtPlay(), harness.splashAudio.targetVolume);
+  assert.equal(harness.volumeAtPlay(), 0);
   assert.equal(harness.audio.volume, harness.splashAudio.targetVolume);
   assert.equal(harness.audio.muted, false);
   assert.equal(harness.audio.defaultMuted, false);
@@ -115,7 +125,24 @@ test('blocked automatic playback offers an honest tap-for-music fallback', async
   const started = await harness.start(true);
 
   assert.equal(started, false);
-  assert.equal(harness.volumeAtPlay(), harness.splashAudio.targetVolume);
+  assert.equal(harness.volumeAtPlay(), 0);
+  assert.equal(harness.splashAudio.active, false);
+  assert.equal(harness.splashAudio.autoBlocked, true);
+  assert.equal(harness.splashAudio.starting, false);
+  assert.equal(harness.label.textContent, 'Tap for music');
+  assert.equal(harness.fades.length, 0);
+  assert.deepEqual(harness.updates, [false]);
+  assert.equal(harness.beatStarts(), 0);
+});
+
+test('automatic playback does not claim success when the browser pauses on the audible volume raise', async () => {
+  const harness = createHarness({ pauseOnAudibleVolume: true });
+
+  const started = await harness.start(true);
+
+  assert.equal(started, false);
+  assert.equal(harness.volumeAtPlay(), 0);
+  assert.equal(harness.audio.paused, true);
   assert.equal(harness.splashAudio.active, false);
   assert.equal(harness.splashAudio.autoBlocked, true);
   assert.equal(harness.splashAudio.starting, false);

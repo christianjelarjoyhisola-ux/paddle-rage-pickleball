@@ -10282,19 +10282,29 @@ async function startSplashSound(automatic = false) {
   splashAudio.starting = true;
   audio.defaultMuted = false;
   audio.muted = false;
-  if (audio.paused) audio.volume = automatic ? splashAudio.targetVolume : 0;
+  if (audio.paused) audio.volume = 0;
   try {
     await audio.play();
+    if (automatic) {
+      audio.volume = splashAudio.targetVolume;
+      if (audio.paused || audio.ended || audio.muted || audio.volume <= 0) {
+        throw new DOMException('Audible autoplay was blocked.', 'NotAllowedError');
+      }
+    } else {
+      fadeSplashMusic(audio, audio.volume, splashAudio.targetVolume, 650);
+    }
     splashAudio.active = true;
     splashAudio.autoBlocked = false;
-    if (automatic) audio.volume = splashAudio.targetVolume;
-    else fadeSplashMusic(audio, audio.volume, splashAudio.targetVolume, 650);
     updateSplashSoundButton(true);
     startRageBeatAnimation();
     return true;
   } catch (_) {
     splashAudio.active = false;
-    if (automatic) splashAudio.autoBlocked = true;
+    if (automatic) {
+      splashAudio.autoBlocked = true;
+      if (!audio.paused) audio.pause();
+      try { audio.currentTime = 0; } catch (_) {}
+    }
     updateSplashSoundButton(false);
     if (automatic) {
       const label = document.querySelector('.pr-splash-sound-label');
@@ -10350,6 +10360,15 @@ document.addEventListener('DOMContentLoaded', () => {
     audio.defaultMuted = false;
     audio.muted = false;
     audio.addEventListener('canplay', attemptSplashAutoplay, { once: true });
+    audio.addEventListener('pause', () => {
+      if (!splashAudio.active || !splashIsVisible()) return;
+      splashAudio.active = false;
+      splashAudio.autoBlocked = true;
+      stopRageBeatAnimation();
+      updateSplashSoundButton(false);
+      const label = document.querySelector('.pr-splash-sound-label');
+      if (label) label.textContent = 'Tap for music';
+    });
   }
   attemptSplashAutoplay();
 }, { once: true });
