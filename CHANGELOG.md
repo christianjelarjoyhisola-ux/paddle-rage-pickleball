@@ -6,6 +6,7 @@
 - Kept Intelligence read-only: it never changes prices, bookings, payments, receipts, or customer data.
 - Corrected Korte Dos analytics issues by using an explicit zero-history state, calculating expected total fill from existing reservations plus evidence-backed open-hour demand, excluding Open Play from private-court demand, and avoiding false “published” claims.
 - Added a paginated, PII-minimal booking adapter plus Manila-time, payment-state, schedule-exclusion, role, branding, mobile, and forecast regression coverage.
+- Replaced the long mobile hourly list with a compact seven-day matrix whose time columns swipe horizontally, including sticky weekday labels, time-of-day jumps, truthful learning and error states, and accessible selected-hour details.
 
 ## 2026-07-16 — Independent brand foundation
 

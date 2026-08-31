@@ -140,6 +140,49 @@ test('a zero-booking court learns from venue history without being stuck forever
   assert.equal(snapshot.recommendation?.action_type, 'feature_regular_price_hour');
 });
 
+test('mobile demand map is compact, transposed, evidence-aware, and accessible', () => {
+  const admin = read('admin.html');
+  const styles = read('owner-insights.css');
+
+  assert.match(admin, /id="prInsightMobileMap"/);
+  assert.match(admin, /function renderPaddleInsightMobileMap\(\)/);
+  assert.match(admin, /function renderPaddleInsightMobileUnavailable\(\)/);
+  assert.match(admin, /Demand by weekday rows and time columns/);
+  assert.match(admin, /role="rowheader"/);
+  assert.match(admin, /role="columnheader"/);
+  assert.match(admin, /aria-rowcount="8"/);
+  assert.match(admin, /aria-colcount="\$\{starts\.length\+1\}"/);
+  assert.match(admin, /Jump to time of day/);
+  assert.match(admin, /\{id:'morning',label:'Morning'/);
+  assert.match(admin, /\{id:'afternoon',label:'Afternoon'/);
+  assert.match(admin, /\{id:'evening',label:'Evening'/);
+  assert.match(admin, /Swipe times/);
+  assert.doesNotMatch(admin, /id="prInsightDay"|prInsightMobileList|renderPaddleInsightMobileDay/);
+
+  assert.match(admin, /const evidenceCells=cells\.filter/);
+  assert.match(admin, /if\(!evidenceCells\.length\)/);
+  assert.match(admin, /Learning your booking pattern/);
+  assert.match(admin, /role="progressbar"/);
+  assert.match(admin, /confidenceFor\(cell\)\.code==='learning'\?'—':`\$\{prInsightNumber\(cell\.utilization_pct\)\}%`/);
+  assert.match(admin, /id="prInsightMobileDetail" role="region" aria-label="Selected hour details"/);
+  assert.doesNotMatch(admin, /aria-describedby="prInsightMobileDetail"/);
+  assert.match(admin, /onfocus="selectPaddleInsightMobileCell\(this\)"/);
+  assert.match(admin, /function handlePaddleInsightMobileGridKey\(event\)/);
+  assert.match(admin, /_prInsightSnapshot=\{\};\s*renderPaddleInsightMobileUnavailable\(\);/);
+  assert.match(admin, /requestAnimationFrame\(\(\)=>syncPaddleInsightMobilePeriod\(\)\)/);
+  ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].forEach(key => assert.match(admin, new RegExp(key)));
+
+  assert.match(styles, /\.pr-insights-mobile-scroll \{[^}]*overflow-x: auto;[^}]*overflow-y: hidden;/s);
+  assert.match(styles, /\.pr-insights-mobile-scroll \{[^}]*touch-action: pan-x pan-y;/s);
+  assert.match(styles, /\.pr-insights-mobile-day \{[^}]*position: sticky;[^}]*left: 0;/s);
+  assert.match(styles, /\.pr-insights-mobile-grid-row \{[^}]*grid-template-columns: 56px repeat\(var\(--mobile-hour-count\), 56px\)/s);
+  assert.match(styles, /\.pr-insights-mobile-cell \{[^}]*min-height: 44px;/s);
+  assert.match(styles, /\.pr-insights-mobile-toolbar \{[^}]*display: grid;/s);
+  assert.match(styles, /\.pr-insights-mobile-scroll-shell\.is-at-end::after \{ opacity: 0;/);
+  assert.match(styles, /\.pr-insights-map-card \{ grid-row: 1; \}/);
+  assert.match(styles, /\.pr-insights-action > \.pr-insights-empty \{ min-height: 0;/);
+});
+
 test('Paddle admin integration is branded, role-scoped, mobile-safe, and read-only', () => {
   const admin = read('admin.html');
   const config = read('supabase-config.js');

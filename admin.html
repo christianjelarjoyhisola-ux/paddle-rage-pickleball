@@ -3732,11 +3732,14 @@ body.admin-booting .admin-boot-splash {
             <div class="pr-insights-heatmap-wrap">
               <div class="pr-insights-heatmap" id="prInsightHeatmap" role="grid" aria-label="Demand by weekday and time"></div>
             </div>
-            <div class="pr-insights-mobile-map">
-              <select class="pr-insights-select pr-insights-day-select" id="prInsightDay" aria-label="Choose weekday" onchange="renderPaddleInsightMobileDay()">
-                <option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="7">Sunday</option>
-              </select>
-              <div class="pr-insights-mobile-list" id="prInsightMobileList"></div>
+            <div class="pr-insights-mobile-map" id="prInsightMobileMap" aria-label="Mobile demand by weekday and time">
+              <div class="pr-insights-mobile-learning" role="status">
+                <div class="pr-insights-mobile-learning-head">
+                  <div><strong>Learning your booking pattern</strong><span>Successful paid bookings build the hourly map.</span></div>
+                  <b>0 / 30</b>
+                </div>
+                <div class="pr-insights-mobile-progress" role="progressbar" aria-label="Learning progress" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"><i style="--progress:0%"></i></div>
+              </div>
             </div>
           </article>
 
@@ -6573,13 +6576,167 @@ function paddleInsightCellLabel(cell){
   return `${cell.weekday_label} ${time}: ${prInsightNumber(cell.utilization_pct)} percent historical utilization, ${confidence.label.toLowerCase()}, ${prInsightNumber(cell.booked_hours,1)} of ${prInsightNumber(cell.available_hours,1)} sellable court-hours booked`;
 }
 
+const PR_INSIGHT_MOBILE_WEEKDAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+let _prInsightMobileSelection='';
+
+function renderPaddleInsightMobileUnavailable(){
+  _prInsightMobileSelection='';
+  const target=$('prInsightMobileMap');
+  if(target) target.innerHTML='<div class="pr-insights-mobile-learning pr-insights-mobile-no-schedule" role="alert"><div class="pr-insights-mobile-learning-head"><div><strong>Demand map unavailable</strong><span>Refresh to try again. Booking, payment, and pricing remain unchanged.</span></div></div></div>';
+}
+
+function paddleInsightMobileCellValue(cell){
+  return window.PaddleRageInsights.confidenceFor(cell).code==='learning'?'—':`${prInsightNumber(cell.utilization_pct)}%`;
+}
+
+function paddleInsightMobileDetailMarkup(cell){
+  const confidence=window.PaddleRageInsights.confidenceFor(cell);
+  const weekday=PR_INSIGHT_MOBILE_WEEKDAYS[Number(cell.weekday)-1]||cell.weekday_label||'';
+  const time=window.PaddleRageInsights.timeLabel(cell.start_hour,cell.end_hour);
+  const value=paddleInsightMobileCellValue(cell);
+  const evidence=confidence.code==='learning'
+    ? `${prInsightNumber(cell.comparable_days)} comparable days · demand stays hidden`
+    : `${confidence.label} · ${prInsightNumber(cell.booked_hours,1)} of ${prInsightNumber(cell.available_hours,1)} sellable court-hours booked`;
+  return `<div><span>Selected hour</span><strong>${esc(weekday)} · ${esc(time)}</strong><small>${esc(evidence)}</small></div><b>${esc(value)}</b>`;
+}
+
+function paddleInsightMobilePeriodFor(hour){
+  return Number(hour)<12?'morning':Number(hour)<17?'afternoon':'evening';
+}
+
+function paddleInsightMobilePeriodButtons(starts){
+  const periods=[
+    {id:'morning',label:'Morning',hour:starts.find(hour=>hour<12)},
+    {id:'afternoon',label:'Afternoon',hour:starts.find(hour=>hour>=12&&hour<17)},
+    {id:'evening',label:'Evening',hour:starts.find(hour=>hour>=17)},
+  ];
+  const initial=paddleInsightMobilePeriodFor(starts[0]);
+  return periods.map(period=>`<button type="button" class="pr-insights-mobile-jump" data-period="${period.id}" data-hour="${period.hour??''}" aria-controls="prInsightMobileScroller" aria-pressed="${period.id===initial?'true':'false'}" ${period.hour==null?'disabled':''} onclick="jumpPaddleInsightMobilePeriod(this)">${period.label}</button>`).join('');
+}
+
+function renderPaddleInsightMobileMap(){
+  const target=$('prInsightMobileMap');
+  if(!target) return;
+  const snapshot=_prInsightSnapshot||{};
+  const cells=Array.isArray(snapshot.heatmap)?snapshot.heatmap:[];
+  if(!cells.length){
+    target.innerHTML='<div class="pr-insights-mobile-learning pr-insights-mobile-no-schedule" role="status"><div class="pr-insights-mobile-learning-head"><div><strong>No court schedule available</strong><span>Add an active court and operating hours to begin.</span></div></div></div>';
+    return;
+  }
+  const evidenceCells=cells.filter(cell=>window.PaddleRageInsights.confidenceFor(cell).code!=='learning');
+  if(!evidenceCells.length){
+    const minimum=Math.max(1,Number(snapshot.period?.minimum_learning_days||30));
+    const comparable=Math.max(0,...cells.map(cell=>Number(cell.comparable_days||0)));
+    const fresh=!snapshot.period?.from;
+    const learning=fresh?0:Math.min(comparable,4);
+    const targetDays=fresh?minimum:4;
+    const progress=Math.min(100,Math.round(learning*100/targetDays));
+    const message=fresh
+      ? 'Successful paid bookings build the hourly map.'
+      : `Hourly demand appears after 4 comparable days. Recommendations still require ${minimum} venue learning days.`;
+    target.innerHTML=`<div class="pr-insights-mobile-learning" role="status"><div class="pr-insights-mobile-learning-head"><div><strong>Learning your booking pattern</strong><span>${esc(message)}</span></div><b>${prInsightNumber(learning)} / ${prInsightNumber(targetDays)}</b></div><div class="pr-insights-mobile-progress" role="progressbar" aria-label="Demand-map learning progress: ${prInsightNumber(learning)} of ${prInsightNumber(targetDays)} comparable days" aria-valuemin="0" aria-valuemax="${targetDays}" aria-valuenow="${learning}"><i style="--progress:${progress}%"></i></div></div>`;
+    return;
+  }
+
+  const starts=[...new Set(cells.map(cell=>Number(cell.start_hour)))].sort((a,b)=>a-b);
+  const byKey=new Map(cells.map(cell=>[`${Number(cell.weekday)}:${Number(cell.start_hour)}`,cell]));
+  const firstHour=starts[0];
+  const selectedCell=cells.find(cell=>Number(cell.start_hour)===firstHour&&window.PaddleRageInsights.confidenceFor(cell).code!=='learning')
+    ||cells.find(cell=>Number(cell.start_hour)===firstHour)
+    ||evidenceCells[0]
+    ||cells[0];
+  _prInsightMobileSelection=`${Number(selectedCell.weekday)}:${Number(selectedCell.start_hour)}`;
+  let rows=`<div class="pr-insights-mobile-grid-row pr-insights-mobile-grid-head" role="row" aria-rowindex="1"><div class="pr-insights-mobile-corner" role="columnheader" aria-colindex="1">Day</div>${starts.map((hour,index)=>`<div class="pr-insights-mobile-time" role="columnheader" aria-colindex="${index+2}" data-hour="${hour}">${esc(window.PaddleRageInsights.timeLabel(hour,hour+1).split('–')[0])}</div>`).join('')}</div>`;
+  for(let weekday=1;weekday<=7;weekday++){
+    rows+=`<div class="pr-insights-mobile-grid-row" role="row" aria-rowindex="${weekday+1}"><div class="pr-insights-mobile-day" role="rowheader">${esc(window.PaddleRageInsights.WEEKDAYS[weekday-1])}</div>`;
+    starts.forEach((hour,index)=>{
+      const cell=byKey.get(`${weekday}:${hour}`)||{weekday,weekday_label:window.PaddleRageInsights.WEEKDAYS[weekday-1],start_hour:hour,end_hour:hour+1,utilization_pct:0,comparable_days:0,booked_hours:0,available_hours:0};
+      const confidence=window.PaddleRageInsights.confidenceFor(cell);
+      const key=`${weekday}:${hour}`;
+      const selected=key===_prInsightMobileSelection;
+      rows+=`<button type="button" class="pr-insights-mobile-cell${selected?' is-selected':''}" role="gridcell" style="--demand:${Math.round(Number(cell.utilization_pct||0))}" data-confidence="${esc(confidence.code)}" data-weekday="${weekday}" data-hour="${hour}" data-hour-index="${index}" aria-colindex="${index+2}" aria-selected="${selected?'true':'false'}" aria-label="${esc(paddleInsightCellLabel(cell))}" tabindex="${selected?'0':'-1'}" onfocus="selectPaddleInsightMobileCell(this)" onclick="selectPaddleInsightMobileCell(this)">${esc(paddleInsightMobileCellValue(cell))}</button>`;
+    });
+    rows+='</div>';
+  }
+  target.innerHTML=`
+    <div class="pr-insights-mobile-toolbar">
+      <div class="pr-insights-mobile-jumps" role="group" aria-label="Jump to time of day">${paddleInsightMobilePeriodButtons(starts)}</div>
+      <span class="pr-insights-mobile-swipe" aria-hidden="true">Swipe times <b>→</b></span>
+    </div>
+    <div class="pr-insights-mobile-legend" aria-label="Demand intensity legend"><span><i class="is-learning">—</i> Learning</span><span>Low</span><i style="--legend:.16"></i><i style="--legend:.38"></i><i style="--legend:.7"></i><span>High</span></div>
+    <div class="pr-insights-mobile-scroll-shell"><div class="pr-insights-mobile-scroll" id="prInsightMobileScroller" onscroll="syncPaddleInsightMobilePeriod()"><div class="pr-insights-mobile-grid" role="grid" aria-label="Demand by weekday rows and time columns" aria-rowcount="8" aria-colcount="${starts.length+1}" style="--mobile-hour-count:${starts.length}" onkeydown="handlePaddleInsightMobileGridKey(event)">${rows}</div></div></div>
+    <div class="pr-insights-mobile-detail" id="prInsightMobileDetail" role="region" aria-label="Selected hour details">${paddleInsightMobileDetailMarkup(selectedCell)}</div>`;
+  requestAnimationFrame(()=>syncPaddleInsightMobilePeriod());
+}
+
+function selectPaddleInsightMobileCell(button){
+  if(!button) return;
+  const key=`${Number(button.dataset.weekday)}:${Number(button.dataset.hour)}`;
+  const cell=(Array.isArray(_prInsightSnapshot?.heatmap)?_prInsightSnapshot.heatmap:[])
+    .find(item=>`${Number(item.weekday)}:${Number(item.start_hour)}`===key);
+  if(!cell) return;
+  _prInsightMobileSelection=key;
+  document.querySelectorAll('#prInsightMobileMap .pr-insights-mobile-cell').forEach(candidate=>{
+    const selected=candidate===button;
+    candidate.classList.toggle('is-selected',selected);
+    candidate.setAttribute('aria-selected',selected?'true':'false');
+    candidate.tabIndex=selected?0:-1;
+  });
+  const detail=$('prInsightMobileDetail');
+  if(detail) detail.innerHTML=paddleInsightMobileDetailMarkup(cell);
+}
+
+function handlePaddleInsightMobileGridKey(event){
+  const current=event.target.closest?.('.pr-insights-mobile-cell');
+  if(!current) return;
+  let weekday=Number(current.dataset.weekday);
+  let hourIndex=Number(current.dataset.hourIndex);
+  const maxHourIndex=Math.max(0,Number(getComputedStyle(event.currentTarget).getPropertyValue('--mobile-hour-count'))-1);
+  if(event.key==='ArrowLeft') hourIndex--;
+  else if(event.key==='ArrowRight') hourIndex++;
+  else if(event.key==='ArrowUp') weekday--;
+  else if(event.key==='ArrowDown') weekday++;
+  else if(event.key==='Home') hourIndex=0;
+  else if(event.key==='End') hourIndex=maxHourIndex;
+  else return;
+  const next=event.currentTarget.querySelector(`.pr-insights-mobile-cell[data-weekday="${Math.max(1,Math.min(7,weekday))}"][data-hour-index="${Math.max(0,Math.min(maxHourIndex,hourIndex))}"]`);
+  if(!next) return;
+  event.preventDefault();
+  next.focus({preventScroll:true});
+  next.scrollIntoView({behavior:'auto',block:'nearest',inline:'nearest'});
+}
+
+function jumpPaddleInsightMobilePeriod(button){
+  const scroller=$('prInsightMobileScroller');
+  const hour=Number(button?.dataset.hour);
+  const header=scroller?.querySelector(`.pr-insights-mobile-time[data-hour="${hour}"]`);
+  if(!scroller||!header) return;
+  const dayWidth=scroller.querySelector('.pr-insights-mobile-day')?.offsetWidth||56;
+  const left=Math.max(0,header.offsetLeft-dayWidth-4);
+  const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  scroller.scrollTo({left,behavior:reduced?'auto':'smooth'});
+  scroller.closest('.pr-insights-mobile-map')?.querySelectorAll('.pr-insights-mobile-jump').forEach(item=>item.setAttribute('aria-pressed',item===button?'true':'false'));
+}
+
+function syncPaddleInsightMobilePeriod(){
+  const scroller=$('prInsightMobileScroller');
+  if(!scroller) return;
+  if(scroller.clientWidth>0) scroller.parentElement?.classList.toggle('is-at-end',scroller.scrollLeft+scroller.clientWidth>=scroller.scrollWidth-2);
+  else scroller.parentElement?.classList.remove('is-at-end');
+  const marker=scroller.scrollLeft+(scroller.querySelector('.pr-insights-mobile-day')?.offsetWidth||56)+8;
+  let visibleHour=Number(scroller.querySelector('.pr-insights-mobile-time')?.dataset.hour||0);
+  scroller.querySelectorAll('.pr-insights-mobile-time').forEach(header=>{if(header.offsetLeft<=marker) visibleHour=Number(header.dataset.hour);});
+  const period=paddleInsightMobilePeriodFor(visibleHour);
+  scroller.parentElement?.parentElement?.querySelectorAll('.pr-insights-mobile-jump').forEach(button=>button.setAttribute('aria-pressed',button.dataset.period===period?'true':'false'));
+}
+
 function renderPaddleInsightHeatmap(snapshot){
   const target=$('prInsightHeatmap');
   const cells=Array.isArray(snapshot?.heatmap)?snapshot.heatmap:[];
   if(!target) return;
   if(!cells.length){
     target.innerHTML='<div class="pr-insights-empty" style="grid-column:1/-1"><div><strong>No court schedule is available.</strong><p>Add an active court and operating hours to begin.</p></div></div>';
-    renderPaddleInsightMobileDay();
+    renderPaddleInsightMobileMap();
     return;
   }
   const starts=[...new Set(cells.map(cell=>Number(cell.start_hour)))].sort((a,b)=>a-b);
@@ -6595,25 +6752,7 @@ function renderPaddleInsightHeatmap(snapshot){
     }
   });
   target.innerHTML=html;
-  renderPaddleInsightMobileDay();
-}
-
-function renderPaddleInsightMobileDay(){
-  const target=$('prInsightMobileList');
-  if(!target) return;
-  const weekday=Number($('prInsightDay')?.value||1);
-  const rows=(Array.isArray(_prInsightSnapshot?.heatmap)?_prInsightSnapshot.heatmap:[])
-    .filter(cell=>Number(cell.weekday)===weekday)
-    .sort((a,b)=>Number(a.start_hour)-Number(b.start_hour));
-  if(!rows.length){
-    target.innerHTML='<div class="pr-insights-empty" style="min-height:150px"><div><strong>No schedule available</strong></div></div>';
-    return;
-  }
-  target.innerHTML=rows.map(cell=>{
-    const confidence=window.PaddleRageInsights.confidenceFor(cell);
-    const value=confidence.code==='learning'?'Learning':`${prInsightNumber(cell.utilization_pct)}% demand`;
-    return `<div class="pr-insights-mobile-row" style="--demand:${Math.round(Number(cell.utilization_pct||0))}" aria-label="${esc(paddleInsightCellLabel(cell))}"><div><span>${esc(window.PaddleRageInsights.timeLabel(cell.start_hour,cell.end_hour))}</span><small>${esc(confidence.label)} · ${prInsightNumber(cell.comparable_days)} comparable days</small></div><strong>${value}</strong></div>`;
-  }).join('');
+  renderPaddleInsightMobileMap();
 }
 
 function paddleInsightPostText(recommendation){
@@ -6701,7 +6840,14 @@ async function renderPaddleInsights({force=false}={}){
   const root=$('prInsights');
   const refresh=$('prInsightRefresh');
   if(!root) return;
-  if(!window.PaddleRageInsights){toast('Paddle Rage Intelligence did not load. Refresh the page.','err');return;}
+  if(!window.PaddleRageInsights){
+    $('prInsightStatus').innerHTML='<span>Insights are temporarily unavailable.</span><span>No booking, payment, or price was changed.</span>';
+    $('prInsightMapSummary').textContent='Demand data could not be read. Regular booking operations continue normally.';
+    $('prInsightHeatmap').innerHTML='<div class="pr-insights-empty" style="grid-column:1/-1"><div><strong>Could not load demand data</strong><p>Refresh the page when you are ready to try again.</p></div></div>';
+    renderPaddleInsightMobileUnavailable();
+    toast('Paddle Rage Intelligence did not load. Refresh the page.','err');
+    return;
+  }
   const requestSeq=++_prInsightRequestSeq;
   root.setAttribute('aria-busy','true');
   if(refresh){refresh.disabled=true;refresh.textContent='Refreshing…';}
@@ -6724,6 +6870,8 @@ async function renderPaddleInsights({force=false}={}){
     $('prInsightActionCount').textContent='Paused';
     $('prInsightMapSummary').textContent='Demand data could not be read. Regular booking operations continue normally.';
     $('prInsightHeatmap').innerHTML='<div class="pr-insights-empty" style="grid-column:1/-1"><div><strong>Could not load demand data</strong><p>Use Refresh when you are ready to try again.</p></div></div>';
+    _prInsightSnapshot={};
+    renderPaddleInsightMobileUnavailable();
     renderPaddleInsightAction({period:{from:null,learning_days:0,minimum_learning_days:30},kpis:{}});
     toast('Paddle Rage Insights could not be loaded.','err');
   }finally{
