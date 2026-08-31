@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 
 const page = fs.readFileSync('index.html', 'utf8');
+const brandTheme = fs.readFileSync('brand-theme.css', 'utf8');
 const start = page.indexOf('async function startSplashSound');
 const end = page.indexOf('\nfunction stopSplashSound', start);
 
@@ -11,6 +12,19 @@ assert.notEqual(start, -1, 'index.html must define startSplashSound');
 assert.notEqual(end, -1, 'startSplashSound must remain independently testable');
 
 const startSplashSoundSource = page.slice(start, end);
+
+test('splash Book Now goes directly to court booking without the September notice', () => {
+  assert.match(
+    page,
+    /class="pr-splash-enter"[^>]*onclick="event\.stopPropagation\(\);dismissSplashAndBook\(\)"/,
+  );
+  assert.match(
+    page,
+    /function dismissSplashAndBook\(\)\s*\{[\s\S]*?dismissSplash\(\);[\s\S]*?getElementById\('courts'\)\?\.scrollIntoView/,
+  );
+  assert.doesNotMatch(page, /advanceBookingNotice|September bookings are open|View September Time Slots/i);
+  assert.doesNotMatch(brandTheme, /\.advance-booking-/i);
+});
 
 function createHarness({ rejectPlay = false, pauseOnAudibleVolume = false } = {}) {
   const label = { textContent: 'Play music' };
