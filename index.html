@@ -10282,12 +10282,13 @@ async function startSplashSound(automatic = false) {
   splashAudio.starting = true;
   audio.defaultMuted = false;
   audio.muted = false;
-  if (audio.paused) audio.volume = 0;
+  if (audio.paused) audio.volume = automatic ? splashAudio.targetVolume : 0;
   try {
     await audio.play();
     splashAudio.active = true;
     splashAudio.autoBlocked = false;
-    fadeSplashMusic(audio, audio.volume, splashAudio.targetVolume, 650);
+    if (automatic) audio.volume = splashAudio.targetVolume;
+    else fadeSplashMusic(audio, audio.volume, splashAudio.targetVolume, 650);
     updateSplashSoundButton(true);
     startRageBeatAnimation();
     return true;
