@@ -1008,15 +1008,20 @@ test('deliberate owner review ignores analyzer labels but atomically claims real
   );
   assert.match(
     digitalReceiptMigration,
-    /rejected_label_block[\s\S]*?The receipt is rejected and cannot be confirmed/,
+    /foreach guard_message[\s\S]*?The receipt is rejected and cannot be confirmed/,
   );
   assert.match(
     digitalReceiptMigration,
-    /duplicate_label_block[\s\S]*?proven duplicate evidence and cannot be confirmed/,
+    /foreach guard_message[\s\S]*?proven duplicate evidence and cannot be confirmed/,
   );
-  assert.ok(
-    (digitalReceiptMigration.match(/patched_definition := replace\(/g) || []).length >= 3,
-    'provider expansion and both analyzer-label blocks must be forward-patched',
+  assert.match(
+    digitalReceiptMigration,
+    /reverse_if_offset := strpos\([\s\S]*?reverse\('if exists \('\)/,
+    'analyzer-only guards must be removed structurally across pg_get_functiondef formatting variants',
+  );
+  assert.match(
+    digitalReceiptMigration,
+    /end_if_offset := strpos\(following_text, 'end if;'\)/,
   );
   assert.match(
     digitalReceiptMigration,

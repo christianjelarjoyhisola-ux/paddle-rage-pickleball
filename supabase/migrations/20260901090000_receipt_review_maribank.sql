@@ -232,29 +232,14 @@ declare
     to_regprocedure('public.confirm_booking_transaction(text)');
   original_definition text;
   patched_definition text;
-  rejected_label_block text := $blocked$
-  if exists (
-    select 1
-      from public.bookings b
-     where b.ref = any(actual_refs)
-       and lower(trim(coalesce(b.receipt_status, 'none'))) = 'rejected'
-  ) then
-    raise exception 'The receipt is rejected and cannot be confirmed.'
-      using errcode = '22023';
-  end if;
-$blocked$;
-  duplicate_label_block text := $blocked$
-  if exists (
-    select 1
-      from public.bookings b
-      cross join lateral unnest(coalesce(b.receipt_flags, array[]::text[])) flag
-     where b.ref = any(actual_refs)
-       and upper(trim(flag)) ~ '^DUPLICATE_'
-  ) then
-    raise exception 'The receipt contains proven duplicate evidence and cannot be confirmed.'
-      using errcode = '23505';
-  end if;
-$blocked$;
+  guard_message text;
+  marker_position integer;
+  preceding_text text;
+  reverse_if_offset integer;
+  block_start integer;
+  following_text text;
+  end_if_offset integer;
+  block_end integer;
 begin
   if function_oid is null then
     raise exception 'Required booking confirmation function was not found.'
@@ -263,24 +248,58 @@ begin
 
   select pg_get_functiondef(function_oid)
     into original_definition;
-  patched_definition := replace(
-    original_definition,
-    rejected_label_block,
-    E'\n'
-  );
-  if patched_definition = original_definition then
-    raise exception 'Rejected-label booking confirmation guard did not match migration history.'
-      using errcode = 'P0001';
-  end if;
+  patched_definition := original_definition;
 
-  original_definition := patched_definition;
-  patched_definition := replace(
-    original_definition,
-    duplicate_label_block,
-    E'\n'
-  );
+  -- pg_get_functiondef preserves function semantics but may normalize
+  -- whitespace differently across PostgreSQL/Supabase versions. Locate each
+  -- unique analyzer-only exception and remove its enclosing IF block without
+  -- depending on indentation or line wrapping. Abort unless both guards are
+  -- present and structurally complete.
+  foreach guard_message in array array[
+    'The receipt is rejected and cannot be confirmed.',
+    'The receipt contains proven duplicate evidence and cannot be confirmed.'
+  ]
+  loop
+    marker_position := strpos(patched_definition, guard_message);
+    if marker_position = 0 then
+      raise exception 'Booking confirmation analyzer guard was not found: %',
+        guard_message using errcode = 'P0001';
+    end if;
+
+    preceding_text := substring(
+      patched_definition from 1 for marker_position - 1
+    );
+    reverse_if_offset := strpos(
+      reverse(preceding_text),
+      reverse('if exists (')
+    );
+    if reverse_if_offset = 0 then
+      raise exception 'Booking confirmation analyzer guard has no IF start: %',
+        guard_message using errcode = 'P0001';
+    end if;
+    block_start := marker_position
+      - reverse_if_offset
+      - char_length('if exists (')
+      + 1;
+
+    following_text := substring(patched_definition from marker_position);
+    end_if_offset := strpos(following_text, 'end if;');
+    if end_if_offset = 0 then
+      raise exception 'Booking confirmation analyzer guard has no IF end: %',
+        guard_message using errcode = 'P0001';
+    end if;
+    block_end := marker_position
+      + end_if_offset
+      + char_length('end if;')
+      - 2;
+
+    patched_definition := substring(
+      patched_definition from 1 for block_start - 1
+    ) || E'\n' || substring(patched_definition from block_end + 1);
+  end loop;
+
   if patched_definition = original_definition then
-    raise exception 'Duplicate-label booking confirmation guard did not match migration history.'
+    raise exception 'Booking confirmation analyzer guards were not removed.'
       using errcode = 'P0001';
   end if;
 
