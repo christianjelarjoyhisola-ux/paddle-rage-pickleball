@@ -45,6 +45,8 @@ $publicFiles = @(
   "booking-balance.js",
   "host-balance-payment.js",
   "host-balance-admin.js",
+  "owner-insights.js",
+  "owner-insights.css",
   "chart.min.js",
   "host.html",
   "index.html",

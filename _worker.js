@@ -16,6 +16,8 @@ export default {
       '/booking-balance.js',
       '/host-balance-payment.js',
       '/host-balance-admin.js',
+      '/owner-insights.js',
+      '/owner-insights.css',
     ]);
     const isSharedRuntime = url.pathname === '/supabase-config.js' ||
       releaseCoupledRuntime.has(url.pathname);

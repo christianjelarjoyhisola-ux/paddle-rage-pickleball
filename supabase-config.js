@@ -753,6 +753,7 @@ function rowToCourt(r) {
     feats:        r.feats || [],
     photo:        r.photo || '',
     rateSchedule: r.rate_schedule || null,
+    createdAt:    r.created_at || null,
   };
 }
 
@@ -997,6 +998,44 @@ window.DB = {
         return [];
       }
       return data.map(rowToBooking);
+    });
+  },
+
+  async getInsightBookings() {
+    return _pbCached('bookings', { view: 'insights' }, PB_FAST_CACHE_MS.bookings, async () => {
+      const accountRole = await _pbCurrentAccountRole();
+      if (!PB_PRIVATE_DATA_SURFACE || !['owner', 'court_owner'].includes(accountRole)) {
+        throw new Error('An active owner session is required to load Paddle Rage Insights.');
+      }
+      const pageSize = 1000;
+      const rows = [];
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await _sb
+          .from('bookings')
+          .select('ref,booking_group_ref,court_id,date,slots,start_time,end_time,duration,status,payment_status,created_at')
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (error) {
+          console.error('getInsightBookings:', error);
+          throw error;
+        }
+        const page = data || [];
+        rows.push(...page);
+        if (page.length < pageSize) break;
+      }
+      return rows.map(row => ({
+        ref: row.ref,
+        groupRef: row.booking_group_ref || null,
+        courtId: row.court_id,
+        date: row.date,
+        slots: row.slots || [],
+        startTime: row.start_time,
+        endTime: row.end_time,
+        duration: Number(row.duration || 0),
+        status: row.status,
+        paymentStatus: row.payment_status || 'unpaid',
+        createdAt: row.created_at,
+      }));
     });
   },
 
@@ -3146,6 +3185,25 @@ window.DB = {
         .filter(b => !opts.activeOnly || (b.status !== 'cancelled' && b.status !== 'forfeited'))
         .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
     },
+    async getInsightBookings() {
+      const session = window.Auth?.getSession?.();
+      if (!session || !['owner', 'court_owner'].includes(session.role)) {
+        throw new Error('An active owner session is required to load Paddle Rage Insights.');
+      }
+      return readDb().bookings.map(booking => ({
+        ref: booking.ref,
+        groupRef: booking.groupRef || null,
+        courtId: booking.courtId,
+        date: booking.date,
+        slots: booking.slots || [],
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        duration: Number(booking.duration || 0),
+        status: booking.status,
+        paymentStatus: booking.paymentStatus || 'unpaid',
+        createdAt: booking.createdAt,
+      })).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+    },
     async getMyHostBookings() {
       const session = window.Auth?.getSession?.();
       if (!session || session.role !== 'host' || (session.status && session.status !== 'active')) {
@@ -4846,8 +4904,8 @@ window.Auth = {
   ROLES: ['owner', 'court_owner', 'staff', 'host'],
   ROLE_LABELS: { owner: 'System Owner', court_owner: 'Court Owner', staff: 'Court Staff', host: 'Open Play Host' },
   ROLE_PERMISSIONS: {
-    owner:       ['dashboard', 'bookings', 'payment_review', 'reports', 'courts', 'open_play', 'host_open_play', 'host_accounts_view', 'remittances', 'maintenance', 'payments', 'accounts', 'booking_delete', 'export', 'settings', 'owner_only'],
-    court_owner: ['dashboard', 'bookings', 'payment_review', 'reports', 'courts', 'open_play', 'host_open_play', 'host_accounts_view', 'remittances', 'maintenance', 'payments', 'export', 'settings', 'court_owner_only'],
+    owner:       ['dashboard', 'insights', 'bookings', 'payment_review', 'reports', 'courts', 'open_play', 'host_open_play', 'host_accounts_view', 'remittances', 'maintenance', 'payments', 'accounts', 'booking_delete', 'export', 'settings', 'owner_only'],
+    court_owner: ['dashboard', 'insights', 'bookings', 'payment_review', 'reports', 'courts', 'open_play', 'host_open_play', 'host_accounts_view', 'remittances', 'maintenance', 'payments', 'export', 'settings', 'court_owner_only'],
     staff:       ['bookings', 'open_play', 'payment_review'],
     host:        ['host_open_play'],
   },

@@ -9,6 +9,7 @@
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
 <script src="finance-core.js?v=20260719-finance-v2"></script>
+<script src="owner-insights.js?v=20260831-paddle-intelligence-v1"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
@@ -2479,6 +2480,7 @@ body.gm-display-open { overflow:hidden; }
 
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260716-paddle-rage-v1&amp;rollback=deb2d66">
+<link rel="stylesheet" href="owner-insights.css?v=20260831-paddle-intelligence-v1">
 <link rel="stylesheet" href="play-manager.css?v=20260729-dispatch-type-v2&amp;rollback=deb2d66">
 <style id="admin-modern-refresh">
 /* Modern admin shell — visual-only refresh; dashboard features and data stay unchanged. */
@@ -3550,6 +3552,7 @@ body.admin-booting .admin-boot-splash {
     <div class="sb-section">
       <div class="nav-grp">Overview</div>
       <div class="nav-item on" data-s="dash" data-perm="dashboard" onclick="goto('dash')"><span>&#128202;</span> Dashboard</div>
+      <div class="nav-item" data-s="insights" data-perm="insights" onclick="goto('insights')"><span>&#10024;</span> Insights</div>
       <div class="nav-item" data-s="bookings" data-perm="bookings" onclick="goto('bookings')"><span>&#128203;</span> Bookings</div>
       <div class="nav-item" data-s="payreview" data-perm="payment_review" onclick="goto('payreview')"><span>&#128269;</span> Payment Review</div>
       <div class="nav-item" data-s="reports" data-perm="reports" onclick="goto('reports')"><span>&#128200;</span> Reports</div>
@@ -3672,6 +3675,87 @@ body.admin-booting .admin-boot-splash {
           </table>
         </div>
       </div>
+    </div>
+
+    <!-- PADDLE RAGE INSIGHTS -->
+    <div id="sec-insights" class="adm-sec">
+      <section class="pr-insights" id="prInsights" aria-busy="false" aria-labelledby="prInsightsTitle">
+        <header class="pr-insights-hero">
+          <div class="pr-insights-hero-copy">
+            <div class="pr-insights-eyebrow">Paddle Rage Intelligence</div>
+            <h2 id="prInsightsTitle">Find quiet hours. Fill more courts.</h2>
+            <p>Paddle Rage learns from successful paid bookings, maps reliable demand patterns, and recommends one regular-price court hour at a time.</p>
+          </div>
+          <div class="pr-insights-controls" aria-label="Insights controls">
+            <select class="pr-insights-select" id="prInsightCourt" aria-label="Filter Insights by court" onchange="renderPaddleInsights({force:true})">
+              <option value="">All courts</option>
+            </select>
+            <button class="pr-insights-refresh" id="prInsightRefresh" type="button" onclick="renderPaddleInsights({force:true})">&#8635; Refresh</button>
+          </div>
+        </header>
+
+        <div class="pr-insights-status" id="prInsightStatus" role="status" aria-live="polite" aria-atomic="true">
+          <span>Waiting for real booking history.</span>
+          <span>Forecasts begin after enough reliable evidence exists.</span>
+        </div>
+
+        <div class="pr-insights-kpis" aria-label="Demand summary">
+          <article class="pr-insights-kpi">
+            <div class="pr-insights-kpi-label">Booked next 28 days</div>
+            <strong id="prInsightBooked">—</strong>
+            <small id="prInsightBookedNote">Actual reserved court-hours</small>
+          </article>
+          <article class="pr-insights-kpi">
+            <div class="pr-insights-kpi-label">Expected total fill</div>
+            <strong id="prInsightExpected">—</strong>
+            <small id="prInsightExpectedNote">Shown only when evidence is reliable</small>
+          </article>
+          <article class="pr-insights-kpi" id="prInsightActionKpi">
+            <div class="pr-insights-kpi-label">Next action</div>
+            <strong id="prInsightActionCount">Learning</strong>
+            <small id="prInsightActionNote">No action is ready yet</small>
+          </article>
+        </div>
+
+        <div class="pr-insights-grid">
+          <article class="pr-insights-card pr-insights-map-card" aria-labelledby="prInsightMapTitle">
+            <div class="pr-insights-card-head">
+              <div>
+                <div class="pr-insights-kicker">Demand map</div>
+                <h3 id="prInsightMapTitle">Demand by time · All courts</h3>
+              </div>
+              <div class="pr-insights-legend" aria-label="Demand intensity from low to high">
+                <span>Low</span><i style="--legend:.12"></i><i style="--legend:.28"></i><i style="--legend:.48"></i><i style="--legend:.7"></i><span>High</span>
+              </div>
+            </div>
+            <div class="pr-insights-map-summary" id="prInsightMapSummary">Learning begins after the first successful paid booking.</div>
+            <div class="pr-insights-heatmap-wrap">
+              <div class="pr-insights-heatmap" id="prInsightHeatmap" role="grid" aria-label="Demand by weekday and time"></div>
+            </div>
+            <div class="pr-insights-mobile-map">
+              <select class="pr-insights-select pr-insights-day-select" id="prInsightDay" aria-label="Choose weekday" onchange="renderPaddleInsightMobileDay()">
+                <option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option><option value="7">Sunday</option>
+              </select>
+              <div class="pr-insights-mobile-list" id="prInsightMobileList"></div>
+            </div>
+          </article>
+
+          <aside class="pr-insights-card pr-insights-action" id="prInsightAction" aria-live="polite" aria-atomic="true">
+            <div class="pr-insights-empty">
+              <div>
+                <div class="pr-insights-empty-icon" aria-hidden="true">&#10022;</div>
+                <strong>Collecting reliable history</strong>
+                <p>After 30 calendar days of successful paid play, Paddle Rage can identify one evidence-backed regular-price hour to feature.</p>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <details class="pr-insights-method">
+          <summary>How Paddle Rage decides</summary>
+          <p id="prInsightMethod">Only paid or downpayment-paid confirmed/completed court bookings through yesterday teach demand. Failed payments, temporary holds, cancelled or forfeited bookings, blocked dates, Maintenance, and Open Play are excluded. Recent comparable weeks carry more weight. Current saved schedules are applied to historical capacity, so review Insights after major operating-hour changes.</p>
+        </details>
+      </section>
     </div>
 
     <!-- BOOKINGS -->
@@ -6317,9 +6401,9 @@ let sess;
 /* ==============================================
    NAVIGATION
    ============================================== */
-const titles={dash:'Dashboard',bookings:'Bookings',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',gamemgr:'Play Manager',accounts:'Host Accounts',remittances:'Remittances',hosts:'Host Center',maintenance:'Maintenance',payments:'Payments'};
-const SECTION_PERM={dash:'dashboard',bookings:'bookings',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',gamemgr:'open_play',accounts:'host_accounts_view',remittances:'remittances',hosts:'host_open_play',maintenance:'maintenance',payments:'payments'};
-const SECTION_LOADERS={dash:renderDash,bookings:renderBookings,deleted:renderDeletedBookings,payreview:()=>renderPaymentReview(),reports:renderReport,courts:renderCourts,gamemgr:()=>window.PlayManager?.render(),accounts:renderAccounts,remittances:renderRemittances,hosts:renderHostCenter,maintenance:renderMaintenance,payments:renderPaymentSettings};
+const titles={dash:'Dashboard',insights:'Insights',bookings:'Bookings',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',gamemgr:'Play Manager',accounts:'Host Accounts',remittances:'Remittances',hosts:'Host Center',maintenance:'Maintenance',payments:'Payments'};
+const SECTION_PERM={dash:'dashboard',insights:'insights',bookings:'bookings',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',gamemgr:'open_play',accounts:'host_accounts_view',remittances:'remittances',hosts:'host_open_play',maintenance:'maintenance',payments:'payments'};
+const SECTION_LOADERS={dash:renderDash,insights:()=>renderPaddleInsights({force:true}),bookings:renderBookings,deleted:renderDeletedBookings,payreview:()=>renderPaymentReview(),reports:renderReport,courts:renderCourts,gamemgr:()=>window.PlayManager?.render(),accounts:renderAccounts,remittances:renderRemittances,hosts:renderHostCenter,maintenance:renderMaintenance,payments:renderPaymentSettings};
 let _curSection=null;
 function canAccessSection(s,role=sess?.role){
   if(!SECTION_LOADERS[s] || !$('sec-'+s)) return false;
@@ -6456,6 +6540,195 @@ function startAdminRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'accounts'},rerender)
     .on('postgres_changes',{event:'*',schema:'public',table:'host_booking_balance_payments'},rerenderHostBalances)
     .subscribe();
+}
+
+/* ==============================================
+   PADDLE RAGE INSIGHTS
+   ============================================== */
+let _prInsightSnapshot=null;
+let _prInsightRequestSeq=0;
+
+function prInsightNumber(value,digits=0){
+  return Number(value||0).toLocaleString('en-PH',{minimumFractionDigits:digits,maximumFractionDigits:digits});
+}
+
+function prInsightMoney(value){
+  return '₱'+Number(value||0).toLocaleString('en-PH',{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+
+async function ensurePaddleInsightCourts(courts=null){
+  const select=$('prInsightCourt');
+  if(!select) return [];
+  const rows=Array.isArray(courts)?courts:await DB.getCourts();
+  const selected=select.value;
+  select.innerHTML='<option value="">All courts</option>'+rows.map(court=>`<option value="${esc(court.id)}">${esc(court.name||court.id)}</option>`).join('');
+  if([...select.options].some(option=>option.value===selected)) select.value=selected;
+  return rows;
+}
+
+function paddleInsightCellLabel(cell){
+  const confidence=window.PaddleRageInsights.confidenceFor(cell);
+  const time=window.PaddleRageInsights.timeLabel(cell.start_hour,cell.end_hour);
+  if(confidence.code==='learning') return `${cell.weekday_label} ${time}: still learning from ${prInsightNumber(cell.comparable_days)} comparable days`;
+  return `${cell.weekday_label} ${time}: ${prInsightNumber(cell.utilization_pct)} percent historical utilization, ${confidence.label.toLowerCase()}, ${prInsightNumber(cell.booked_hours,1)} of ${prInsightNumber(cell.available_hours,1)} sellable court-hours booked`;
+}
+
+function renderPaddleInsightHeatmap(snapshot){
+  const target=$('prInsightHeatmap');
+  const cells=Array.isArray(snapshot?.heatmap)?snapshot.heatmap:[];
+  if(!target) return;
+  if(!cells.length){
+    target.innerHTML='<div class="pr-insights-empty" style="grid-column:1/-1"><div><strong>No court schedule is available.</strong><p>Add an active court and operating hours to begin.</p></div></div>';
+    renderPaddleInsightMobileDay();
+    return;
+  }
+  const starts=[...new Set(cells.map(cell=>Number(cell.start_hour)))].sort((a,b)=>a-b);
+  const byKey=new Map(cells.map(cell=>[`${Number(cell.weekday)}:${Number(cell.start_hour)}`,cell]));
+  let html='<div class="pr-insights-heat-label" role="columnheader">Time</div>'+window.PaddleRageInsights.WEEKDAYS.map(day=>`<div class="pr-insights-heat-label" role="columnheader">${day}</div>`).join('');
+  starts.forEach(hour=>{
+    html+=`<div class="pr-insights-heat-label pr-insights-heat-time" role="rowheader">${esc(window.PaddleRageInsights.timeLabel(hour,hour+1))}</div>`;
+    for(let weekday=1;weekday<=7;weekday++){
+      const cell=byKey.get(`${weekday}:${hour}`)||{weekday,weekday_label:window.PaddleRageInsights.WEEKDAYS[weekday-1],start_hour:hour,end_hour:hour+1,utilization_pct:0,comparable_days:0};
+      const confidence=window.PaddleRageInsights.confidenceFor(cell);
+      const display=confidence.code==='learning'?'—':`${prInsightNumber(cell.utilization_pct)}%`;
+      html+=`<button type="button" class="pr-insights-cell" role="gridcell" style="--demand:${Math.round(Number(cell.utilization_pct||0))}" data-confidence="${esc(confidence.code)}" aria-label="${esc(paddleInsightCellLabel(cell))}">${display}</button>`;
+    }
+  });
+  target.innerHTML=html;
+  renderPaddleInsightMobileDay();
+}
+
+function renderPaddleInsightMobileDay(){
+  const target=$('prInsightMobileList');
+  if(!target) return;
+  const weekday=Number($('prInsightDay')?.value||1);
+  const rows=(Array.isArray(_prInsightSnapshot?.heatmap)?_prInsightSnapshot.heatmap:[])
+    .filter(cell=>Number(cell.weekday)===weekday)
+    .sort((a,b)=>Number(a.start_hour)-Number(b.start_hour));
+  if(!rows.length){
+    target.innerHTML='<div class="pr-insights-empty" style="min-height:150px"><div><strong>No schedule available</strong></div></div>';
+    return;
+  }
+  target.innerHTML=rows.map(cell=>{
+    const confidence=window.PaddleRageInsights.confidenceFor(cell);
+    const value=confidence.code==='learning'?'Learning':`${prInsightNumber(cell.utilization_pct)}% demand`;
+    return `<div class="pr-insights-mobile-row" style="--demand:${Math.round(Number(cell.utilization_pct||0))}" aria-label="${esc(paddleInsightCellLabel(cell))}"><div><span>${esc(window.PaddleRageInsights.timeLabel(cell.start_hour,cell.end_hour))}</span><small>${esc(confidence.label)} · ${prInsightNumber(cell.comparable_days)} comparable days</small></div><strong>${value}</strong></div>`;
+  }).join('');
+}
+
+function paddleInsightPostText(recommendation){
+  return `🏓 PADDLE RAGE COURT PICK\n\n${recommendation.court_name} is open on ${window.PaddleRageInsights.formatDate(recommendation.date)}, ${window.PaddleRageInsights.timeLabel(recommendation.start_hour,recommendation.end_hour)}.\n\nRegular rate: ${prInsightMoney(recommendation.rate)}/hour\nBook now: https://paddleragecdo.ph\n\nFeel the rage. Live the game.`;
+}
+
+async function copyPaddleInsightAction(){
+  const recommendation=_prInsightSnapshot?.recommendation;
+  if(!recommendation) return;
+  const text=paddleInsightPostText(recommendation);
+  try{
+    if(navigator.clipboard?.writeText&&window.isSecureContext) await navigator.clipboard.writeText(text);
+    else{
+      const textarea=document.createElement('textarea');
+      textarea.value=text;
+      textarea.setAttribute('readonly','');
+      textarea.style.position='fixed';
+      textarea.style.opacity='0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      if(!document.execCommand('copy')) throw new Error('Copy is not supported in this browser.');
+      textarea.remove();
+    }
+    toast('Paddle Rage Court Pick copied. Review it before posting.');
+  }catch(error){toast(error?.message||'The Court Pick could not be copied.','err');}
+}
+
+function renderPaddleInsightAction(snapshot){
+  const target=$('prInsightAction');
+  if(!target) return;
+  const learning=Number(snapshot?.period?.learning_days||0);
+  const minimum=Number(snapshot?.period?.minimum_learning_days||30);
+  const recommendation=snapshot?.recommendation;
+  if(recommendation){
+    target.innerHTML=`
+      <div class="pr-insights-action-top"><div><div class="pr-insights-kicker">Next best action</div><h3>Feature one quiet court-hour</h3></div><span class="pr-insights-confidence">${esc(recommendation.confidence?.label||'Evidence ready')}</span></div>
+      <div class="pr-insights-action-body">
+        <div class="pr-insights-action-title">${esc(recommendation.court_name)} · ${esc(window.PaddleRageInsights.formatDate(recommendation.date))}<br>${esc(window.PaddleRageInsights.timeLabel(recommendation.start_hour,recommendation.end_hour))}</div>
+        <p class="pr-insights-action-copy">This window has stayed open about ${prInsightNumber(recommendation.expected_open_pct)}% of the time across comparable history. Feature it once at the regular rate and watch the result.</p>
+        <div class="pr-insights-action-facts">
+          <div class="pr-insights-action-fact"><span>Court</span><strong>${esc(recommendation.court_name)}</strong></div>
+          <div class="pr-insights-action-fact"><span>Date &amp; time</span><strong>${esc(window.PaddleRageInsights.formatDate(recommendation.date))} · ${esc(window.PaddleRageInsights.timeLabel(recommendation.start_hour,recommendation.end_hour))}</strong></div>
+          <div class="pr-insights-action-fact"><span>Regular player price</span><strong>${esc(prInsightMoney(recommendation.rate))} / hour</strong></div>
+          <div class="pr-insights-action-fact"><span>Evidence</span><strong>${prInsightNumber(recommendation.comparable_days)} comparable days</strong></div>
+        </div>
+        <div class="pr-insights-action-note"><strong>No price or booking is changed.</strong> Copying opens no external service and does not claim the post was published.</div>
+        <button class="pr-insights-copy-action" type="button" onclick="copyPaddleInsightAction()">Copy Paddle Rage Court Pick</button>
+      </div>`;
+    return;
+  }
+  const noHistory=!snapshot?.period?.from;
+  const enough=learning>=minimum;
+  target.innerHTML=`<div class="pr-insights-empty"><div><div class="pr-insights-empty-icon" aria-hidden="true">&#10022;</div><strong>${noHistory?'Collecting reliable history':enough?'No quiet-hour action is ready':'Building a reliable baseline'}</strong><p>${noHistory?'Learning begins after the first successful paid court booking. No test data will be added.':enough?'Current evidence does not identify a safe hour to feature. Keep regular booking operations unchanged.':`${learning} of ${minimum} calendar learning days complete. Recommendations stay locked until the baseline is reliable.`}</p></div></div>`;
+}
+
+function renderPaddleInsightSnapshot(snapshot,courtName){
+  _prInsightSnapshot=snapshot||{};
+  const k=snapshot?.kpis||{};
+  const learning=Number(snapshot?.period?.learning_days||0);
+  const minimum=Number(snapshot?.period?.minimum_learning_days||30);
+  const noHistory=!snapshot?.period?.from;
+  const enough=learning>=minimum;
+  const booked=Number(k.booked_next_28_hours||0);
+  const sellable=Number(k.sellable_next_28_hours||0);
+  $('prInsightBooked').textContent=`${prInsightNumber(booked,booked%1?1:0)} hr`;
+  $('prInsightBookedNote').textContent=sellable?`${prInsightNumber(k.booked_next_28_pct,1)}% of ${prInsightNumber(sellable)} sellable hours already reserved`:'No sellable court-hours found';
+  $('prInsightExpected').textContent=k.expected_total_fill_pct==null?'—':`${prInsightNumber(k.expected_total_fill_pct,1)}%`;
+  $('prInsightExpectedNote').textContent=k.expected_total_fill_pct==null?(noHistory?'Begins after the first successful paid booking':`${learning} of ${minimum} learning days complete`):`${prInsightNumber(k.forecast_coverage_pct)}% of the next schedule has comparable evidence`;
+  $('prInsightActionCount').textContent=snapshot?.recommendation?'1 Ready':enough?'0 Ready':'Learning';
+  $('prInsightActionNote').textContent=snapshot?.recommendation?'One regular-price Court Pick is ready':enough?'No safe quiet-hour action right now':`${learning} of ${minimum} days complete`;
+  $('prInsightActionKpi').dataset.state=snapshot?.recommendation?'ready':'learning';
+  $('prInsightMapTitle').textContent=`Demand by time · ${courtName||'All courts'}`;
+  if(noHistory){
+    $('prInsightStatus').innerHTML='<span>Learning begins after the first successful paid booking.</span><span>Nothing has been changed.</span>';
+    $('prInsightMapSummary').textContent='Demand percentages stay blank until real booking evidence exists.';
+  }else{
+    $('prInsightStatus').innerHTML=`<span>${esc(window.PaddleRageInsights.formatDate(snapshot.period.from))} – ${esc(window.PaddleRageInsights.formatDate(snapshot.period.to))}</span><span>${learning} calendar learning days · successful bookings through yesterday only</span>`;
+    $('prInsightMapSummary').textContent=k.likely_open_hours==null?`Still learning: ${learning} of ${minimum} days complete.`:`About ${prInsightNumber(Math.round(k.likely_open_hours))} evidence-qualified court-hours may remain open over the next 28 days. Forecast coverage: ${prInsightNumber(k.forecast_coverage_pct)}%.`;
+  }
+  renderPaddleInsightHeatmap(snapshot);
+  renderPaddleInsightAction(snapshot);
+}
+
+async function renderPaddleInsights({force=false}={}){
+  const root=$('prInsights');
+  const refresh=$('prInsightRefresh');
+  if(!root) return;
+  if(!window.PaddleRageInsights){toast('Paddle Rage Intelligence did not load. Refresh the page.','err');return;}
+  const requestSeq=++_prInsightRequestSeq;
+  root.setAttribute('aria-busy','true');
+  if(refresh){refresh.disabled=true;refresh.textContent='Refreshing…';}
+  try{
+    if(force&&typeof DB.clearCache==='function') DB.clearCache(['bookings','courts','settings','blockedDates']);
+    const insightBookings=typeof DB.getInsightBookings==='function'?DB.getInsightBookings():DB.getBookings();
+    const [bookings,courts,settings,blockedDates]=await Promise.all([insightBookings,DB.getCourts(),DB.getSettings(),DB.getBlockedDates()]);
+    if(requestSeq!==_prInsightRequestSeq) return;
+    await ensurePaddleInsightCourts(courts);
+    const courtId=$('prInsightCourt')?.value||null;
+    const courtName=courtId?(courts.find(court=>String(court.id)===String(courtId))?.name||courtId):'All courts';
+    const snapshot=window.PaddleRageInsights.buildSnapshot({bookings,courts,settings,blockedDates,courtId});
+    renderPaddleInsightSnapshot(snapshot,courtName);
+  }catch(error){
+    if(requestSeq!==_prInsightRequestSeq) return;
+    console.error('[Paddle Rage Insights]',error);
+    $('prInsightStatus').innerHTML='<span>Insights are temporarily unavailable.</span><span>No booking, payment, or price was changed.</span>';
+    $('prInsightBooked').textContent='—';
+    $('prInsightExpected').textContent='—';
+    $('prInsightActionCount').textContent='Paused';
+    $('prInsightMapSummary').textContent='Demand data could not be read. Regular booking operations continue normally.';
+    $('prInsightHeatmap').innerHTML='<div class="pr-insights-empty" style="grid-column:1/-1"><div><strong>Could not load demand data</strong><p>Use Refresh when you are ready to try again.</p></div></div>';
+    renderPaddleInsightAction({period:{from:null,learning_days:0,minimum_learning_days:30},kpis:{}});
+    toast('Paddle Rage Insights could not be loaded.','err');
+  }finally{
+    if(requestSeq===_prInsightRequestSeq){root.setAttribute('aria-busy','false');if(refresh){refresh.disabled=false;refresh.innerHTML='&#8635; Refresh';}}
+  }
 }
 
 /* ==============================================

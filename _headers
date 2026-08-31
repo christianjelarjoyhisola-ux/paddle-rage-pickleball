@@ -36,3 +36,9 @@
 
 /host-balance-admin.js
   Cache-Control: no-store, max-age=0
+
+/owner-insights.js
+  Cache-Control: no-store, max-age=0
+
+/owner-insights.css
+  Cache-Control: no-store, max-age=0

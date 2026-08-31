@@ -1,5 +1,12 @@
 # Changelog — Paddle Rage Pickleball
 
+## 2026-08-31 — Paddle Rage Intelligence
+
+- Added a premium owner/court-owner Insights workspace with actual 28-day booked capacity, evidence-gated fill forecasting, a responsive demand heatmap, court filtering, and one regular-price Court Pick recommendation.
+- Kept Intelligence read-only: it never changes prices, bookings, payments, receipts, or customer data.
+- Corrected Korte Dos analytics issues by using an explicit zero-history state, calculating expected total fill from existing reservations plus evidence-backed open-hour demand, excluding Open Play from private-court demand, and avoiding false “published” claims.
+- Added a paginated, PII-minimal booking adapter plus Manila-time, payment-state, schedule-exclusion, role, branding, mobile, and forecast regression coverage.
+
 ## 2026-07-16 — Independent brand foundation
 
 - Imported the booking platform as a clean code snapshot without source Git history or remote configuration.
