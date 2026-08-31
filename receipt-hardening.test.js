@@ -116,8 +116,8 @@ test('GoTyme and MariBank use dedicated source methods with the shared GCash des
   assert.match(page, /payment_method_maribank === '1' && receiverReady\('maribank'\)/);
   assert.doesNotMatch(page, /id="gotymeBox"|id="gotymeQrPlaceholder"/);
 
-  assert.match(admin, /id="payMethodGotymeOn"[^>]*\/> GoTyme → GCash/);
-  assert.match(admin, /id="payMethodMaribankOn"[^>]*\/> MariBank → GCash/);
+  assert.match(admin, /id="payMethodGotymeOn"[\s\S]{0,500}?GoTyme → GCash/);
+  assert.match(admin, /id="payMethodMaribankOn"[\s\S]{0,500}?MariBank → GCash/);
   assert.match(admin, /saveSetting\('payment_method_maribank'/);
   assert.doesNotMatch(admin, /id="gotymeNumInput"|id="gotymeNameInput"|saveSetting\('gotyme_merchant_/);
 

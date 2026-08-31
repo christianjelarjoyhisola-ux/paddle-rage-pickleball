@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <title>Paddle Rage Pickleball — Admin Dashboard</title>
 <link rel="icon" type="image/png" href="paddleragelogo.jpg">
+<link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v1" />
+<script src="payment-method-brand.js?v=20260901-payment-icons-v1"></script>
 <script src="chart.min.js"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
@@ -3650,7 +3652,7 @@ body.admin-booting .admin-boot-splash {
       <div class="rev-grid">
         <div class="panel">
           <h4>Money Received To</h4>
-          <div class="pay-row"><span>📲 GCash</span><span id="pGcash">₱0.00</span></div>
+          <div class="pay-row"><span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--inline pm-brand-mark--gcash" data-payment-method="gcash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gcash.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>GCash</span></span><span id="pGcash">₱0.00</span></div>
           <div class="bar bar-g"><div class="bar-fill" id="gBar" style="width:0%"></div></div>
           <div class="pay-row"><span>💵 Cash</span><span id="pCash">₱0.00</span></div>
           <div class="bar bar-y"><div class="bar-fill" id="cBar" style="width:0%"></div></div>
@@ -4794,7 +4796,7 @@ body.admin-booting .admin-boot-splash {
               <input type="checkbox" id="payMethodCashOn" /> Cash
             </label>
             <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
-              <input type="checkbox" id="payMethodGcashOn" /> GCash
+              <input type="checkbox" id="payMethodGcashOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gcash" data-payment-method="gcash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gcash.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>GCash</span></span>
             </label>
             <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
               <input type="checkbox" id="payMethodBdopayOn" /> BDO Pay
@@ -4806,10 +4808,10 @@ body.admin-booting .admin-boot-splash {
               <input type="checkbox" id="payMethodBpiOn" /> BPI
             </label>
             <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
-              <input type="checkbox" id="payMethodGotymeOn" /> GoTyme → GCash
+              <input type="checkbox" id="payMethodGotymeOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gotyme" data-payment-method="gotyme" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gotyme.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>GoTyme → GCash</span></span>
             </label>
             <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
-              <input type="checkbox" id="payMethodMaribankOn" /> MariBank → GCash
+              <input type="checkbox" id="payMethodMaribankOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--maribank" data-payment-method="maribank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maribank.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>MariBank → GCash</span></span>
             </label>
             <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
               <input type="checkbox" id="payMethodPnbOn" /> PNB
@@ -4819,7 +4821,7 @@ body.admin-booting .admin-boot-splash {
 
         <!-- GCash Section -->
         <div style="margin-top:16px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
-          <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px;">📲 Shared GCash Recipient</div>
+          <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--green);margin-bottom:6px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gcash" data-payment-method="gcash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gcash.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>Shared GCash Recipient</span></div>
           <div style="font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Used by GCash and every source→GCash method: BDO Pay, Maya, BPI, GoTyme, and MariBank.</div>
           <div class="frow" style="gap:10px;margin-bottom:10px;">
             <div class="fg" style="margin:0;flex:1">
@@ -4848,11 +4850,11 @@ body.admin-booting .admin-boot-splash {
 
         <!-- Source apps routed to the authoritative GCash recipient -->
         <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
-          <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:7px;">GT GoTyme → GCash</div>
+          <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:7px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gotyme" data-payment-method="gotyme" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gotyme.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>GoTyme → GCash</span></div>
           <div style="font-size:.78rem;color:var(--muted);line-height:1.55">Players pay from GoTyme to the shared GCash number/QR above. Its receipt parser still validates GoTyme-specific references and receipt fields.</div>
         </div>
         <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
-          <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:7px;">MB MariBank → GCash</div>
+          <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:7px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--maribank" data-payment-method="maribank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maribank.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>MariBank → GCash</span></div>
           <div style="font-size:.78rem;color:var(--muted);line-height:1.55">Players pay from MariBank to the shared GCash number/QR above. Its receipt parser validates MariBank-specific references and receipt fields.</div>
         </div>
 
@@ -7311,7 +7313,7 @@ async function renderBookings(){
         ${b.gcashRef?`<div style="font-size:.7rem;margin-top:1px;font-weight:700">Ref: <code style="color:var(--text)">${esc(b.gcashRef)}</code></div>`:''}
         ${duplicatePaymentRefBadge(b)}
       </div></td>
-      <td data-label="Method"><span style="font-size:.76rem;background:var(--input);border-radius:4px;padding:2px 7px">${esc(paymentMethodLabel(b.paymentMethod))}</span></td>
+      <td data-label="Method"><span style="font-size:.76rem;background:var(--input);border-radius:6px;padding:3px 7px">${paymentMethodBrandLabelHtml(b.paymentMethod)}</span></td>
       <td data-label="Payment Status"><div class="pay-state-stack">${bookingPayStateSelect(b)}
         <select class="fi" style="display:none;padding:4px 7px;font-size:.76rem;width:auto" onchange="updatePaymentStatus('${jsArg(b.ref)}',this.value)">
           <option value="unpaid" ${(!b.paymentStatus||b.paymentStatus==='unpaid')?'selected':''}>Unpaid</option>
@@ -7421,6 +7423,25 @@ function paymentMethodLabel(m) {
   return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', cash: 'Cash' }[String(m || '').toLowerCase()] || (m || 'Cash'));
 }
 
+function paymentMethodBrandMarkHtml(method, modifier = 'pm-brand-mark--inline') {
+  return window.PaymentMethodBrand?.markHtml?.(method, modifier) || '';
+}
+
+function paymentMethodBrandLabelHtml(method, label = paymentMethodLabel(method), modifier = 'pm-brand-mark--inline') {
+  const mark = paymentMethodBrandMarkHtml(method, modifier);
+  return mark ? `<span class="pm-method-label">${mark}<span>${esc(label)}</span></span>` : esc(label);
+}
+
+function renderPaymentMethodBrandLabel(element, method, label = paymentMethodLabel(method), modifier = 'pm-brand-mark--inline') {
+  if (!element) return;
+  if (window.PaymentMethodBrand?.iconSrc?.(method)) {
+    window.PaymentMethodBrand.renderLabel(element, method, label, modifier);
+    return;
+  }
+  element.classList.remove('pm-method-label');
+  element.textContent = label;
+}
+
 function isDigitalPayment(m) {
   return ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'].includes(String(m || '').toLowerCase());
 }
@@ -7517,7 +7538,7 @@ function paymentReviewRow(item) {
     </div>
     <div class="pr-card-meta">
       <span class="pr-type-pill ${typeClass}">${typeLabel}</span>
-      <span>${esc(paymentMethodLabel(item.method))}</span>
+      <span>${paymentMethodBrandLabelHtml(item.method)}</span>
       <span>${fmt(item.amount || 0)}</span>
     </div>
     <div class="pr-card-schedule">
@@ -8279,7 +8300,7 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   _verifyModalLastFocus = returnFocus || document.activeElement;
   const b = await getBookingGroupByRef(ref);
   if (!b) { toast('Booking not found.', 'err'); return; }
-  $('vmMethod').textContent = paymentMethodLabel(b.paymentMethod);
+  renderPaymentMethodBrandLabel($('vmMethod'), b.paymentMethod);
   $('vmGcashRef').textContent = b.gcashRef || '—';
   $('vmName').textContent = b.fullName;
   $('vmContact').textContent = b.contactNumber;
@@ -12396,7 +12417,7 @@ async function openOpVerifyModal(id) {
   const regs = await DB.getOpenPlayRegistrations();
   const r = regs.find(x => String(x.id) === String(id));
   if (!r) { toast('Registration not found.', 'err'); return; }
-  $('ovMethod').textContent  = paymentMethodLabel(r.payment_method);
+  renderPaymentMethodBrandLabel($('ovMethod'), r.payment_method);
   $('ovGcashRef').textContent = r.gcash_ref || '—';
   $('ovName').textContent    = r.full_name;
   $('ovCourt').textContent   = r.court_name || '—';
@@ -12436,7 +12457,7 @@ async function openHostSessionVerifyModal(id) {
     receipt_verified_at: registration.receiptVerifiedAt,
     payment_status: registration.paymentStatus,
   };
-  $('ovMethod').textContent = paymentMethodLabel(registration.paymentMethod);
+  renderPaymentMethodBrandLabel($('ovMethod'), registration.paymentMethod);
   $('ovGcashRef').textContent = registration.gcashRef || '—';
   $('ovName').textContent = registration.fullName || '--';
   $('ovCourt').textContent = receipt.court_name;

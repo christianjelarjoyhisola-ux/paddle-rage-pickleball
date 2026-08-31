@@ -42,6 +42,11 @@ $publicFiles = @(
   "_worker.js",
   "admin.html",
   "brand-theme.css",
+  "payment-method-brand.css",
+  "payment-method-brand.js",
+  "assets/payment-methods/gcash.png",
+  "assets/payment-methods/gotyme.png",
+  "assets/payment-methods/maribank.png",
   "booking-balance.js",
   "host-balance-payment.js",
   "host-balance-admin.js",
@@ -82,7 +87,12 @@ foreach ($file in $publicFiles) {
   if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
     throw "Required Pages asset is missing: $file"
   }
-  Copy-Item -LiteralPath $source -Destination $stagingDir -Force
+  $destination = Join-Path $stagingDir $file
+  $destinationDir = Split-Path -Parent $destination
+  if (-not (Test-Path -LiteralPath $destinationDir -PathType Container)) {
+    New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
+  }
+  Copy-Item -LiteralPath $source -Destination $destination -Force
 }
 
 $wranglerCli = Get-Command "wrangler.cmd" -CommandType Application -ErrorAction SilentlyContinue
