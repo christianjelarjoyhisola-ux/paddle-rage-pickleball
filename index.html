@@ -24,8 +24,8 @@
 <meta name="twitter:image" content="https://paddleragecdo.ph/linkimage.jpg?v=20260717" />
 <meta name="twitter:image:alt" content="Paddle Rage Pickleball — Feel the Rage, Live the Game" />
 <link rel="icon" type="image/png" href="paddleragelogo.jpg">
-<link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v1" />
-<script src="payment-method-brand.js?v=20260901-payment-icons-v1"></script>
+<link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
+<script src="payment-method-brand.js?v=20260901-payment-icons-v2"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&family=Road+Rage&display=swap" rel="stylesheet" />
@@ -1877,7 +1877,14 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
 .pat-btn .pat-amt { font-size:.72rem; color:inherit; opacity:.8; margin-top:2px; }
 
 /* RESPONSIVE */
-@media(max-width:700px){ .frow{grid-template-columns:1fr;} .ft-g{grid-template-columns:1fr;gap:24px;} .ft-bot{flex-direction:column;text-align:center;} .pay-opts{grid-template-columns:1fr;} }
+@media(max-width:700px){
+  .frow{grid-template-columns:1fr;}
+  .ft-g{grid-template-columns:1fr;gap:24px;}
+  .ft-bot{flex-direction:column;text-align:center;}
+  .pay-opts{grid-template-columns:1fr;}
+  .pay-opts.bpay-methods,
+  .pay-opts.op-pay-opts{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
 @media(max-width:480px){
   .nav{padding:0 14px;}
   .bk-modal-body{padding:12px 14px;}
@@ -3651,17 +3658,17 @@ try {
                 <div class="pay-sub">Scan QR · enter ref #</div>
               </div>
               <div class="pay-opt" id="payOptBdopay" data-m="bdopay" onclick="pickPay('bdopay')">
-                <div class="pay-ic">🏦</div>
+                <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--bdopay" data-payment-method="bdopay" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/bdo-pay.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">BDO Pay</div>
                 <div class="pay-sub">InstaPay to GCash QR</div>
               </div>
               <div class="pay-opt" id="payOptMaya" data-m="maya" onclick="pickPay('maya')">
-                <div class="pay-ic">M</div>
+                <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--maya" data-payment-method="maya" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maya.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">Maya</div>
                 <div class="pay-sub">QRPh to GCash</div>
               </div>
               <div class="pay-opt" id="payOptBpi" data-m="bpi" onclick="pickPay('bpi')">
-                <div class="pay-ic">BPI</div>
+                <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--bpi" data-payment-method="bpi" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/bpi.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">BPI</div>
                 <div class="pay-sub">InstaPay to GCash QR</div>
               </div>
@@ -3676,12 +3683,12 @@ try {
                 <div class="pay-sub">Pay from MariBank</div>
               </div>
               <div class="pay-opt" id="payOptPnb" data-m="pnb" onclick="pickPay('pnb')">
-                <div class="pay-ic">🏛️</div>
+                <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">PNB</div>
                 <div class="pay-sub">Scan QR · enter ref #</div>
               </div>
               <div class="pay-opt" id="payOptCash" data-m="cash" onclick="pickPay('cash')">
-                <div class="pay-ic">💵</div>
+                <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--cash" data-payment-method="cash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/cash.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">Cash</div>
                 <div class="pay-sub">Pay at front desk</div>
               </div>
@@ -3773,7 +3780,7 @@ try {
           <!-- PNB section -->
           <div class="gcash bpay-card" id="pnbBox">
             <div class="gc-header">
-              <span class="gc-header-icon">🏛️</span>
+              <span class="gc-header-icon pm-brand-mark pm-brand-mark--small pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span>
               <span class="gc-header-lbl">PNB Payment</span>
             </div>
             <div class="bpay-card-head">
@@ -3797,12 +3804,12 @@ try {
               <div class="bpay-qr-wrap">
                 <img id="pnbQrImg" class="qr-img bpay-qr qr-clickable" alt="PNB QR Code" style="display:none" onclick="openQrZoomFromImg(this,'PNB QR')" />
                 <div id="pnbQrPlaceholder" class="bpay-qr-placeholder">
-                  <span style="font-size:1.7rem">🏛️</span>
+                  <span class="pm-brand-mark pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span>
                   <span style="font-size:.74rem">QR not uploaded</span>
                 </div>
               </div>
               <div class="bpay-recipient-info">
-                <div class="bpay-send-title">🏛️ Send PNB Payment To</div>
+                <div class="bpay-send-title pm-method-label"><span class="pm-brand-mark pm-brand-mark--inline pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>Send PNB Payment To</span></div>
                 <div class="gc-num-row" style="justify-content:flex-start;margin:4px 0 3px">
                   <div class="gc-num" id="pnMerchantNumber" style="font-size:1rem;font-weight:800;margin:0">—</div>
                   <button type="button" class="gc-copy-btn" onclick="copyPaymentNumber('pnb')">📋 Copy</button>
@@ -3872,7 +3879,7 @@ try {
 
           <!-- Cash note -->
           <div class="cash-note" id="cashNote" style="display:none">
-            💵 <strong>Cash payment</strong> is only available for pre-arranged bookings — you must have already contacted the manager and received approval before selecting this option. Payment is due at the front desk upon arrival.
+            <span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--cash" data-payment-method="cash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/cash.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span><strong>Cash payment</strong> is only available for pre-arranged bookings — you must have already contacted the manager and received approval before selecting this option. Payment is due at the front desk upon arrival.</span>
           </div>
 
           <div class="down-note" id="downNote" style="margin-top:10px">
@@ -7413,19 +7420,19 @@ function syncGcashSharedPanel(method) {
     },
     bdopay: {
       header: 'BDO Pay → GCash',
-      title: '🏦 Send from BDO Pay to this GCash account',
+      title: 'Send from BDO Pay to this GCash account',
       guide: ['Open the QR in BDO Pay.', 'Pay the exact amount.', 'Use Reference no., not invoice.', 'Upload the BDO Pay receipt.'],
       help: 'BDO Pay → GCash. Your receipt stays pending for court-owner review.',
     },
     maya: {
       header: 'Maya → GCash',
-      title: 'M Send from Maya to this GCash account',
+      title: 'Send from Maya to this GCash account',
       guide: ['Open the QR in Maya.', 'Pay the exact amount.', 'Use Reference ID.', 'Upload the Maya receipt.'],
       help: 'Maya → GCash. Your receipt stays pending for court-owner review.',
     },
     bpi: {
       header: 'BPI → GCash',
-      title: 'BPI Send to this GCash / G-Xchange account',
+      title: 'Send to this GCash / G-Xchange account',
       guide: ['Open the QR in BPI.', 'Pay the exact amount.', 'Use Confirmation No.', 'Upload the BPI receipt.'],
       help: 'BPI → GCash/G-Xchange. Enter the Confirmation No., not the Transaction Ref. No. Your receipt stays pending for court-owner review.',
     },
@@ -10499,15 +10506,15 @@ async function openPlaySignup(courtId, date, h, courtName) {
   }
   const payOptList = [
     paymentMethods.gcash   ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gcash' ? 'on' : ''}" data-m="gcash"   onclick="opPickPay('gcash')">${paymentMethodBrandMarkHtml('gcash', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">📱</span>'}<span class="po-lbl">GCash</span><span class="po-sub">Scan QR · send ref #</span></div>` : '',
-    paymentMethods.bdopay  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'bdopay' ? 'on' : ''}" data-m="bdopay"  onclick="opPickPay('bdopay')"><span class="po-ico">🏦</span><span class="po-lbl">BDO Pay</span><span class="po-sub">InstaPay to GCash QR</span></div>` : '',
-    paymentMethods.maya    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maya' ? 'on' : ''}" data-m="maya"    onclick="opPickPay('maya')"><span class="po-ico">M</span><span class="po-lbl">Maya</span><span class="po-sub">QRPh to GCash</span></div>` : '',
+    paymentMethods.bdopay  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'bdopay' ? 'on' : ''}" data-m="bdopay"  onclick="opPickPay('bdopay')">${paymentMethodBrandMarkHtml('bdopay', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">BDO Pay</span><span class="po-sub">InstaPay to GCash QR</span></div>` : '',
+    paymentMethods.maya    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maya' ? 'on' : ''}" data-m="maya"    onclick="opPickPay('maya')">${paymentMethodBrandMarkHtml('maya', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Maya</span><span class="po-sub">QRPh to GCash</span></div>` : '',
     paymentMethods.gotyme  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gotyme' ? 'on' : ''}" data-m="gotyme"  onclick="opPickPay('gotyme')">${paymentMethodBrandMarkHtml('gotyme', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">GT</span>'}<span class="po-lbl">GoTyme → GCash</span><span class="po-sub">Pay from GoTyme</span></div>` : '',
     paymentMethods.maribank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maribank' ? 'on' : ''}" data-m="maribank" onclick="opPickPay('maribank')">${paymentMethodBrandMarkHtml('maribank', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">MB</span>'}<span class="po-lbl">MariBank → GCash</span><span class="po-sub">Pay from MariBank</span></div>` : '',
-    paymentMethods.pnb     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'pnb' ? 'on' : ''}" data-m="pnb"     onclick="opPickPay('pnb')"><span class="po-ico">🏛️</span><span class="po-lbl">PNB</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
-    paymentMethods.cash    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'cash' ? 'on' : ''}" data-m="cash"    onclick="opPickPay('cash')"><span class="po-ico">💵</span><span class="po-lbl">Cash</span><span class="po-sub">Pay at front desk</span></div>` : '',
+    paymentMethods.pnb     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'pnb' ? 'on' : ''}" data-m="pnb"     onclick="opPickPay('pnb')">${paymentMethodBrandMarkHtml('pnb', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">PNB</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
+    paymentMethods.cash    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'cash' ? 'on' : ''}" data-m="cash"    onclick="opPickPay('cash')">${paymentMethodBrandMarkHtml('cash', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Cash</span><span class="po-sub">Pay at front desk</span></div>` : '',
   ].filter(Boolean);
   if (paymentMethods.bpi) {
-    payOptList.splice(Math.min(3, payOptList.length), 0, `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'bpi' ? 'on' : ''}" data-m="bpi" onclick="opPickPay('bpi')"><span class="po-ico">BPI</span><span class="po-lbl">BPI</span><span class="po-sub">Confirmation No.</span></div>`);
+    payOptList.splice(Math.min(3, payOptList.length), 0, `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'bpi' ? 'on' : ''}" data-m="bpi" onclick="opPickPay('bpi')">${paymentMethodBrandMarkHtml('bpi', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">BPI</span><span class="po-sub">Confirmation No.</span></div>`);
   }
   const payOpts = payOptList.join('');
   const paymentPicker = payOptList.length > 1 ? `
@@ -10617,12 +10624,12 @@ function opPickPay(method) {
   if (isDigitalPayMethod(method)) {
     const meta = {
       gcash: { icon: paymentMethodBrandMarkHtml('gcash', 'pm-brand-mark--small') || '📱', label: 'GCash', receiver: paymentReceiverSettings.gcash },
-      bdopay: { icon: '🏦', label: 'BDO Pay', receiver: paymentReceiverSettings.gcash },
-      maya: { icon: 'M', label: 'Maya', receiver: paymentReceiverSettings.gcash },
-      bpi: { icon: 'BPI', label: 'BPI', receiver: paymentReceiverSettings.gcash },
+      bdopay: { icon: paymentMethodBrandMarkHtml('bdopay', 'pm-brand-mark--small'), label: 'BDO Pay', receiver: paymentReceiverSettings.gcash },
+      maya: { icon: paymentMethodBrandMarkHtml('maya', 'pm-brand-mark--small'), label: 'Maya', receiver: paymentReceiverSettings.gcash },
+      bpi: { icon: paymentMethodBrandMarkHtml('bpi', 'pm-brand-mark--small'), label: 'BPI', receiver: paymentReceiverSettings.gcash },
       gotyme: { icon: paymentMethodBrandMarkHtml('gotyme', 'pm-brand-mark--small') || 'GT', label: 'GoTyme → GCash', receiver: paymentReceiverSettings.gcash },
       maribank: { icon: paymentMethodBrandMarkHtml('maribank', 'pm-brand-mark--small') || 'MB', label: 'MariBank → GCash', receiver: paymentReceiverSettings.gcash },
-      pnb: { icon: '🏛️', label: 'PNB', receiver: paymentReceiverSettings.pnb },
+      pnb: { icon: paymentMethodBrandMarkHtml('pnb', 'pm-brand-mark--small'), label: 'PNB', receiver: paymentReceiverSettings.pnb },
     }[method];
     const receiver = meta.receiver;
     const methodWarning = method === 'bdopay'
@@ -10701,7 +10708,7 @@ function opPickPay(method) {
     syncOpReceiptPreview();
   } else if (method === 'cash') {
     info.innerHTML = `<div class="op-cash-card">
-      <div class="op-send-title">💵 Cash Payment</div>
+      <div class="op-send-title">${paymentMethodBrandLabelHtml('cash', 'Cash Payment', 'pm-brand-mark--small')}</div>
       <div style="margin-top:4px">Pay <strong style="color:var(--lime-ink)">${fmt(amt)}</strong> at the front desk upon arrival.</div>
     </div>`;
   }

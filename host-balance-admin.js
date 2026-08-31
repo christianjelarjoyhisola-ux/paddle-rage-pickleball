@@ -292,8 +292,31 @@
     const key = String(value || '').toLowerCase();
     return ({
       gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI',
-      gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB',
+      gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', cash: 'Cash',
     })[key] || value || '—';
+  }
+
+  function paymentMethodBrandNode(value, modifier = 'pm-brand-mark--inline') {
+    const method = String(value || '').trim().toLowerCase();
+    const node = make('span', 'hba-method-label');
+    const label = providerLabel(method || value);
+    try {
+      const brands = global.PaymentMethodBrand;
+      if (method && typeof brands?.iconSrc === 'function' && brands.iconSrc(method)
+        && typeof brands.renderLabel === 'function') {
+        brands.renderLabel(node, method, label, modifier);
+        return node;
+      }
+    } catch (_) {}
+    node.textContent = String(label || '—');
+    return node;
+  }
+
+  function renderPaymentMethodReference(container, method, reference) {
+    if (!container) return;
+    container.replaceChildren(paymentMethodBrandNode(method));
+    const cleanReference = String(reference || '').trim();
+    if (cleanReference) container.append(document.createTextNode(` · ${cleanReference}`));
   }
 
   function notify(message, kind) {
@@ -377,6 +400,7 @@
       .hba-payment-tab strong{display:block;font-size:.79rem;line-height:1.3}
       .hba-tab-amount{display:block;margin-top:7px;font-size:1.02rem;font-weight:950}
       .hba-tab-meta{display:block;margin-top:5px;color:var(--muted);font-size:.65rem;line-height:1.35;overflow-wrap:anywhere}
+      .hba-method-label{display:inline-flex;align-items:center;vertical-align:middle}
       .hba-receipt-stage{min-width:0;border:1px solid var(--border);border-radius:15px;background:rgba(2,8,5,.48);overflow:hidden}
       .hba-proof-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.018)}
       .hba-proof-head b{display:block;color:var(--text);font-size:.77rem}
@@ -437,6 +461,12 @@
   function appendSummary(container, label, value) {
     const cell = make('div');
     cell.append(make('b', '', label), document.createTextNode(String(value || '—')));
+    container.appendChild(cell);
+  }
+
+  function appendPaymentMethodSummary(container, label, method) {
+    const cell = make('div');
+    cell.append(make('b', '', label), paymentMethodBrandNode(method));
     container.appendChild(cell);
   }
 
@@ -824,7 +854,7 @@
     const totalAmount = paymentAmount(payment, 'totalAmount', 'total_amount');
     const depositAmount = optionalPaymentAmount(payment, 'originalPaidAmount', 'original_paid_amount');
     const balanceAmount = optionalPaymentAmount(payment, 'balanceAmount', 'expected_amount');
-    const provider = providerLabel(paymentValue(payment, 'paymentProvider', 'payment_provider', '—'));
+    const providerMethod = paymentValue(payment, 'paymentProvider', 'payment_provider', '—');
     const balanceReference = paymentValue(payment, 'paymentReference', 'payment_reference', '—');
     const bookingReference = paymentValue(payment, 'bookingGroupRef', 'booking_group_ref')
       || paymentValue(payment, 'bookingRef', 'booking_ref')
@@ -879,9 +909,11 @@
     byId('hostBalanceTab').querySelector('.hba-tab-amount').textContent = view.key === 'manual'
       ? 'No online receipt'
       : balanceAmount == null ? 'Amount unavailable' : money(balanceAmount);
-    byId('hostBalanceTab').querySelector('.hba-tab-meta').textContent = view.hasBalanceReceipt
-      ? `${provider} · ${balanceReference}`
-      : view.key === 'manual' ? 'Recorded outside the online receipt flow' : 'No balance payment submitted';
+    const balanceTabMeta = byId('hostBalanceTab').querySelector('.hba-tab-meta');
+    if (view.hasBalanceReceipt) renderPaymentMethodReference(balanceTabMeta, providerMethod, balanceReference);
+    else balanceTabMeta.textContent = view.key === 'manual'
+      ? 'Recorded outside the online receipt flow'
+      : 'No balance payment submitted';
     const balanceTabStatus = byId('hostBalanceTab').querySelector('.hba-tab-status');
     balanceTabStatus.className = `hba-tab-status ${view.tone}`;
     balanceTabStatus.textContent = view.tab;
@@ -956,9 +988,9 @@
         const booking = await loadDepositBooking(payment);
         if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
         if (!booking) throw new Error('Accepted deposit record could not be found.');
-        const depositMethod = String(booking.paymentMethod || provider || '—').toUpperCase();
+        const depositMethod = String(booking.paymentMethod || booking.payment_method || providerMethod || '—');
         const depositReference = String(booking.gcashRef || 'Reference unavailable');
-        byId('hostDepositTab').querySelector('.hba-tab-meta').textContent = `${depositMethod} · ${depositReference}`;
+        renderPaymentMethodReference(byId('hostDepositTab').querySelector('.hba-tab-meta'), depositMethod, depositReference);
         depositHistoryLoaded = true;
         depositNote.replaceChildren(
           make('strong', '', 'Accepted deposit. '),
@@ -1068,7 +1100,7 @@
       const meta = make('div', 'hba-meta');
       appendSummary(meta, 'Schedule', payment.scheduleLabel || payment.schedule_label || payment.bookingDate || payment.booking_date);
       appendSummary(meta, 'Court', payment.courtLabel || payment.court_label);
-      appendSummary(meta, 'Method', providerLabel(payment.paymentProvider || payment.payment_provider || '—'));
+      appendPaymentMethodSummary(meta, 'Method', payment.paymentProvider || payment.payment_provider || '—');
       appendSummary(meta, 'New reference', payment.paymentReference || payment.payment_reference);
       const bottom = make('div', 'hba-bottom');
       bottom.appendChild(make('div', 'hba-status', 'Waiting for owner review'));

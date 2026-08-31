@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <title>Paddle Rage Pickleball — Admin Dashboard</title>
 <link rel="icon" type="image/png" href="paddleragelogo.jpg">
-<link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v1" />
-<script src="payment-method-brand.js?v=20260901-payment-icons-v1"></script>
+<link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
+<script src="payment-method-brand.js?v=20260901-payment-icons-v2"></script>
 <script src="chart.min.js"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
@@ -3654,7 +3654,7 @@ body.admin-booting .admin-boot-splash {
           <h4>Money Received To</h4>
           <div class="pay-row"><span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--inline pm-brand-mark--gcash" data-payment-method="gcash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gcash.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>GCash</span></span><span id="pGcash">₱0.00</span></div>
           <div class="bar bar-g"><div class="bar-fill" id="gBar" style="width:0%"></div></div>
-          <div class="pay-row"><span>💵 Cash</span><span id="pCash">₱0.00</span></div>
+          <div class="pay-row"><span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--inline pm-brand-mark--cash" data-payment-method="cash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/cash.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>Cash</span></span><span id="pCash">₱0.00</span></div>
           <div class="bar bar-y"><div class="bar-fill" id="cBar" style="width:0%"></div></div>
         </div>
         <div class="panel">
@@ -4791,30 +4791,30 @@ body.admin-booting .admin-boot-splash {
 
         <div class="fg">
           <label class="fl">Enabled Payment Methods</label>
-          <div style="display:flex;gap:14px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
-              <input type="checkbox" id="payMethodCashOn" /> Cash
+          <div class="pm-toggle-grid">
+            <label class="pm-toggle">
+              <input type="checkbox" id="payMethodCashOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--cash" data-payment-method="cash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/cash.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>Cash</span></span>
             </label>
-            <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
+            <label class="pm-toggle">
               <input type="checkbox" id="payMethodGcashOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gcash" data-payment-method="gcash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gcash.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>GCash</span></span>
             </label>
-            <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
-              <input type="checkbox" id="payMethodBdopayOn" /> BDO Pay
+            <label class="pm-toggle">
+              <input type="checkbox" id="payMethodBdopayOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--bdopay" data-payment-method="bdopay" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/bdo-pay.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>BDO Pay</span></span>
             </label>
-            <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
-              <input type="checkbox" id="payMethodMayaOn" /> Maya
+            <label class="pm-toggle">
+              <input type="checkbox" id="payMethodMayaOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--maya" data-payment-method="maya" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maya.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>Maya</span></span>
             </label>
-            <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
-              <input type="checkbox" id="payMethodBpiOn" /> BPI
+            <label class="pm-toggle">
+              <input type="checkbox" id="payMethodBpiOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--bpi" data-payment-method="bpi" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/bpi.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>BPI</span></span>
             </label>
-            <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
+            <label class="pm-toggle">
               <input type="checkbox" id="payMethodGotymeOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gotyme" data-payment-method="gotyme" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gotyme.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>GoTyme → GCash</span></span>
             </label>
-            <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
+            <label class="pm-toggle">
               <input type="checkbox" id="payMethodMaribankOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--maribank" data-payment-method="maribank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maribank.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>MariBank → GCash</span></span>
             </label>
-            <label style="display:flex;align-items:center;gap:7px;font-size:.84rem;cursor:pointer">
-              <input type="checkbox" id="payMethodPnbOn" /> PNB
+            <label class="pm-toggle">
+              <input type="checkbox" id="payMethodPnbOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>PNB</span></span>
             </label>
           </div>
         </div>
@@ -4860,7 +4860,7 @@ body.admin-booting .admin-boot-splash {
 
         <!-- PNB Section -->
         <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
-          <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#4a90d9;margin-bottom:10px;">🏛️ PNB</div>
+          <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#4a90d9;margin-bottom:10px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>PNB</span></div>
           <div class="frow" style="gap:10px;margin-bottom:10px;">
             <div class="fg" style="margin:0;flex:1">
               <label class="fl">PNB Number / Account No.</label>
@@ -5158,8 +5158,8 @@ body.admin-booting .admin-boot-splash {
       <div class="nb-section-label">Payment</div>
       <div class="fg" style="margin:0"><label class="fl">Method *</label>
         <select class="fi" id="nbMethod" onchange="nbToggleRef()">
-          <option value="cash">💵 Cash</option>
-          <option value="gcash">📲 GCash</option>
+          <option value="cash">Cash</option>
+          <option value="gcash">GCash</option>
         </select>
       </div>
       <div class="fg" id="nbRefWrap" style="margin-top:12px;display:none">
@@ -12353,7 +12353,6 @@ async function renderOpRegistrations() {
     return;
   }
   const fmt = n => '₱' + Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 });
-  const methodLabel = paymentMethodLabel;
   const activeRegs = regs.filter(r => r.payment_status !== 'rejected');
   const maxPerCourt = $('opMaxPlayers')?.value || '?';
   el.innerHTML = `
@@ -12391,7 +12390,7 @@ async function renderOpRegistrations() {
               <td style="padding:9px 10px;color:var(--muted)">${esc(r.court_name || '—')}</td>
               <td style="padding:9px 10px">${fmtD(r.date)}</td>
               <td style="padding:9px 10px">${esc(r.time_label || '—')}</td>
-              <td style="padding:9px 10px;color:var(--muted)">${esc(methodLabel(r.payment_method))}</td>
+              <td style="padding:9px 10px;color:var(--muted)">${paymentMethodBrandLabelHtml(r.payment_method || 'cash')}</td>
               <td style="padding:9px 10px"><span style="font-size:.75rem;font-weight:700;padding:2px 7px;border-radius:20px;background:${r.payment_type==='100%'?'rgba(var(--green-rgb),.15)':'rgba(var(--yellow-rgb),.15)'};color:${r.payment_type==='100%'?'var(--green)':'var(--yellow)'}">${esc(r.payment_type)}</span></td>
               <td style="padding:9px 10px;text-align:right;font-weight:700;color:var(--green)">${fmt(r.amount)}</td>
               <td style="padding:9px 10px">${statusBadge}</td>

@@ -3,8 +3,13 @@
 
   const ICONS = Object.freeze({
     gcash: 'assets/payment-methods/gcash.png',
+    bdopay: 'assets/payment-methods/bdo-pay.png',
+    maya: 'assets/payment-methods/maya.png',
+    bpi: 'assets/payment-methods/bpi.png',
     gotyme: 'assets/payment-methods/gotyme.png',
     maribank: 'assets/payment-methods/maribank.png',
+    pnb: 'assets/payment-methods/pnb.png',
+    cash: 'assets/payment-methods/cash.svg',
   });
 
   function normalize(method) {
