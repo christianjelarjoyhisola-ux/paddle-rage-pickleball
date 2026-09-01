@@ -1912,6 +1912,20 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
   overflow:hidden; border:1px solid rgba(var(--lime-rgb),.28); border-radius:12px;
   background:linear-gradient(145deg,rgba(var(--lime-rgb),.075),rgba(var(--ac),.02));
 }
+.pbs-rental-breakdown { padding:10px 11px 9px; border-bottom:1px solid rgba(var(--lime-rgb),.11); }
+.pbs-rental-heading {
+  display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:7px;
+}
+.pbs-rental-heading span {
+  color:var(--text); font-size:.61rem; font-weight:950; letter-spacing:.8px; text-transform:uppercase;
+}
+.pbs-rental-heading small { color:var(--muted); font-size:.66rem; font-weight:750; text-align:right; }
+.pbs-rental-entry + .pbs-rental-entry { margin-top:8px; padding-top:8px; border-top:1px dashed rgba(var(--lime-rgb),.18); }
+.pbs-rental-context { margin-bottom:3px; color:var(--muted); font-size:.64rem; font-weight:760; line-height:1.3; }
+.pbs-rental-math { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px 12px; }
+.pbs-rental-formula { color:var(--text); font-size:.76rem; font-weight:850; line-height:1.35; overflow-wrap:anywhere; }
+.pbs-rental-subtotal { color:var(--text); font-size:.83rem; font-weight:950; white-space:nowrap; }
+.pbs-rental-note { display:block; margin-top:3px; color:var(--muted); font-size:.61rem; line-height:1.3; }
 .pbs-price-row {
   display:flex; align-items:center; justify-content:space-between; gap:12px;
   padding:8px 11px; color:var(--muted); font-size:.76rem;
@@ -1937,6 +1951,12 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
   .premium-booking-summary { gap:8px; }
   .pbs-session { gap:7px 9px; padding-bottom:8px; }
   .pbs-detail-value { font-size:.72rem; }
+  .pbs-rental-breakdown { padding:9px; }
+  .pbs-rental-heading { align-items:flex-start; margin-bottom:6px; }
+  .pbs-rental-heading small { max-width:58%; }
+  .pbs-rental-math { gap:6px 9px; }
+  .pbs-rental-formula { font-size:.72rem; }
+  .pbs-rental-subtotal { font-size:.78rem; }
   .pbs-price-row { padding:7px 9px; font-size:.72rem; }
   .pbs-price-row.total { padding:9px; }
 }
@@ -3129,6 +3149,13 @@ body.host-mode .courts { padding-bottom:140px; }
   font-size:.57rem; font-weight:900; letter-spacing:.55px; text-transform:uppercase; white-space:nowrap;
 }
 .inv-fee-free strong { color:var(--lime-ink); font-weight:950; }
+.inv-rental-breakdown .pbs-rental-breakdown {
+  margin-top:10px; padding:9px 0 0; border-top:1px solid rgba(var(--ticket-accent-rgb),.1); border-bottom:0;
+}
+.inv-rental-breakdown .pbs-rental-heading { margin-bottom:6px; }
+.inv-rental-breakdown .pbs-rental-context { font-size:.61rem; }
+.inv-rental-breakdown .pbs-rental-formula { font-size:.71rem; }
+.inv-rental-breakdown .pbs-rental-subtotal { font-size:.76rem; }
 .inv-amt-total { color:var(--muted); font-size:.63rem; letter-spacing:1.05px; }
 .inv-amt-val { color:var(--ticket-accent); font-size:1.9rem; line-height:1; white-space:nowrap; }
 .inv-payment-meta {
@@ -4136,6 +4163,7 @@ try {
             </div>
             <div class="inv-fee-free"><span>Booking fee</span><strong>Free</strong></div>
           </div>
+          <div class="inv-rental-breakdown" id="iRentalBreakdown" aria-label="Court rental calculation"></div>
           <div class="inv-payment-meta">
             <div class="inv-payment-row"><span>Payment</span><strong id="iPay">—</strong></div>
             <div id="iGcashRefRow" class="inv-payment-row" style="display:none"><span id="iPaymentRefLabel">Reference</span><strong id="iGcashRef">—</strong></div>
@@ -5039,9 +5067,16 @@ function getCardSelection(courtId) {
 }
 
 function selectionListedPrice(sel) {
+  return selectionSlotRates(sel).reduce((sum, rate) => sum + rate, 0);
+}
+
+function selectionSlotRates(sel) {
   const tiers = Array.isArray(sel?.tiers) && sel.tiers.length ? sel.tiers : pricingTiers;
   const fallbackRate = Number(sel?.rate || 0);
-  return (sel?.slots || []).reduce((sum, h) => sum + getRateForHourFromTiers(Number(h), tiers, fallbackRate), 0);
+  return normalizedSlots(sel?.slots).map(h => {
+    const rate = Number(getRateForHourFromTiers(h, tiers, fallbackRate));
+    return Math.round(Math.max(0, Number.isFinite(rate) ? rate : fallbackRate) * 100) / 100;
+  });
 }
 
 function selectionServiceFee(sel) {
@@ -5113,6 +5148,7 @@ function makeBookingItemFromSelection(sel, ref = null, groupRef = null) {
     timeLabel: slotsTimeLabel(slots),
     duration: slots.length,
     rate: Number(sel.rate || 0),
+    slotRates: selectionSlotRates(sel),
     courtFee,
     serviceFee,
     total,
@@ -5199,21 +5235,94 @@ function bookingItemsDate(items = activeBookingItems()) {
 }
 
 function bookingItemsRateLabel(items = activeBookingItems()) {
-  const rates = [];
-  items.forEach(item => {
-    if (item.duration > 0 && item.total > 0) rates.push(item.total / item.duration);
+  const breakdowns = items.map(bookingItemRateBreakdown);
+  if (breakdowns.some(entry => !entry.components.length)) return 'Scheduled rates';
+  const rates = breakdowns.flatMap(entry => entry.components.map(component => component.rate));
+  const unique = [...new Set(rates)].sort((a, b) => a - b);
+  if (unique.length === 1) return `${compactPeso(unique[0])}/hr`;
+  if (unique.length > 1) return `${compactPeso(unique[0])} – ${compactPeso(unique[unique.length - 1])}/hr`;
+  return court ? compactPeso(court.rate) + '/hr' : '-';
+}
+
+function bookingItemRateBreakdown(item = {}) {
+  const duration = Math.max(0, Number(item.duration || item.slots?.length || 0));
+  const total = Math.max(0, Number(item.total || 0));
+  const storedRates = Array.isArray(item.slotRates ?? item.slot_rates)
+    ? (item.slotRates ?? item.slot_rates).map(Number)
+    : [];
+  const storedRatesAreExact = storedRates.length === duration && storedRates.every(rate => Number.isFinite(rate) && rate >= 0) &&
+    Math.abs(storedRates.reduce((sum, rate) => sum + rate, 0) - total) <= 0.01;
+  const fallbackRate = Math.max(0, Number(item.rate || 0));
+  const uniformRateIsExact = duration > 0 && fallbackRate > 0 && Math.abs((fallbackRate * duration) - total) <= 0.01;
+  const rates = storedRatesAreExact
+    ? storedRates.map(rate => Math.round(rate * 100) / 100)
+    : uniformRateIsExact
+      ? Array.from({ length: duration }, () => Math.round(fallbackRate * 100) / 100)
+      : [];
+  const components = [];
+  rates.forEach(rate => {
+    const existing = components.find(component => component.rate === rate);
+    if (existing) existing.hours += 1;
+    else components.push({ rate, hours: 1 });
   });
-  const unique = [...new Set(rates.map(rate => Math.round(rate * 100) / 100))].sort((a, b) => a - b);
-  if (unique.length === 1) return `${fmt(unique[0])}/hr`;
-  if (unique.length > 1) return `${fmt(unique[0])} - ${fmt(unique[unique.length - 1])}/hr`;
-  return court ? fmt(court.rate) + '/hr' : '-';
+  const hourLabel = `${duration} hr${duration === 1 ? '' : 's'}`;
+  const formula = components.length
+    ? components.map(component => `${compactPeso(component.rate)}/hr × ${component.hours} hr${component.hours === 1 ? '' : 's'}`).join(' + ')
+    : `Scheduled rates · ${hourLabel}`;
+  const knownRateSignature = components.length ? rates.join(',') : `unknown:${item.courtId || item.courtName || ''}`;
+  const signature = [item.date || '', normalizedSlots(item.slots).join(','), knownRateSignature, duration, Math.round(total * 100)].join('|');
+  return { item, duration, total, components, formula, signature };
+}
+
+function bookingRentalBreakdownModel(items = uniqueBookingSelections(activeBookingItems())) {
+  const groups = new Map();
+  items.map(bookingItemRateBreakdown).forEach(entry => {
+    if (!groups.has(entry.signature)) groups.set(entry.signature, { ...entry, entries: [], subtotal: 0 });
+    const group = groups.get(entry.signature);
+    group.entries.push(entry);
+    group.subtotal += entry.total;
+  });
+  return [...groups.values()];
+}
+
+function bookingRentalBreakdownHtml(items = uniqueBookingSelections(activeBookingItems())) {
+  const groups = bookingRentalBreakdownModel(items);
+  const totalHours = bookingItemsDuration(items);
+  const totalCourts = new Set(items.map(item => String(item.courtId || item.courtName || ''))).size;
+  const sameDuration = groups.length === 1 && groups[0].entries.length > 1;
+  const overview = sameDuration
+    ? `${groups[0].entries.length} courts · ${groups[0].duration} hr${groups[0].duration === 1 ? '' : 's'} each`
+    : `${totalCourts} court${totalCourts === 1 ? '' : 's'} · ${totalHours} court-hour${totalHours === 1 ? '' : 's'}`;
+  const rows = groups.map(group => {
+    const count = group.entries.length;
+    const courtNames = group.entries.map(entry => entry.item.courtName || 'Court').join(', ');
+    const context = count > 1
+      ? (groups.length > 1 ? `${count} matching courts · ${group.duration} hr${group.duration === 1 ? '' : 's'} each` : '')
+      : `${courtNames} · ${group.duration} hr${group.duration === 1 ? '' : 's'}`;
+    const formula = count > 1
+      ? group.components.length === 1
+        ? `${group.formula} × ${count} courts`
+        : `(${group.formula}) × ${count} courts`
+      : group.formula;
+    const note = count > 1
+      ? `${compactPeso(group.total)} per court · ${group.duration * count} court-hours`
+      : `${group.duration} court-hour${group.duration === 1 ? '' : 's'}`;
+    return `<div class="pbs-rental-entry">
+      ${context ? `<div class="pbs-rental-context">${esc(context)}</div>` : ''}
+      <div class="pbs-rental-math"><span class="pbs-rental-formula">${esc(formula)}</span><strong class="pbs-rental-subtotal">${fmt(group.subtotal)}</strong></div>
+      <small class="pbs-rental-note">${esc(note)}</small>
+    </div>`;
+  }).join('');
+  return `<div class="pbs-rental-breakdown">
+    <div class="pbs-rental-heading"><span>Court rental</span><small>${esc(overview)}</small></div>
+    ${rows}
+  </div>`;
 }
 
 function hostBookingItemsSummaryHtml(items = uniqueBookingSelections(activeBookingItems())) {
   const courtFee = bookingItemsCourtFee(items);
   const svcFee = bookingItemsServiceFee(items);
   const total = bookingItemsTotal(items);
-  const hrs = bookingItemsDuration(items);
   const dueToday = downpaymentAmount(total, courtFee, svcFee);
   const balance = Math.max(0, total - dueToday);
   const dates = [...new Set(items.map(item => item.date).filter(Boolean))];
@@ -5230,7 +5339,7 @@ function hostBookingItemsSummaryHtml(items = uniqueBookingSelections(activeBooki
         <div class="pbs-detail wide"><span class="pbs-detail-label">Session${items.length > 1 ? 's' : ''}</span><strong class="pbs-detail-value pbs-time-list">${timeRows}</strong></div>
       </div>
       <div class="pbs-price-card">
-        <div class="pbs-price-row"><span>Court price · ${hrs} hr${hrs === 1 ? '' : 's'}</span><strong>${fmt(total)}</strong></div>
+        ${bookingRentalBreakdownHtml(items)}
         <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
         <div class="pbs-price-row total"><span>Booking total</span><strong>${fmt(total)}</strong></div>
         <div class="pbs-price-row due"><span>Reservation payment today</span><strong>${fmt(dueToday)}</strong></div>
@@ -5243,7 +5352,6 @@ function hostBookingItemsSummaryHtml(items = uniqueBookingSelections(activeBooki
 function bookingItemsSummaryHtml(items = uniqueBookingSelections(activeBookingItems())) {
   if (isVerifiedHostBooking()) return hostBookingItemsSummaryHtml(items);
   const total = bookingItemsTotal(items);
-  const hrs = bookingItemsDuration(items);
   const dates = [...new Set(items.map(item => item.date).filter(Boolean))];
   const dateStr = dates.length > 1 ? dates.map(fmtD).join(' + ') : bookingItemsDate(items) ? fmtD(bookingItemsDate(items)) : '-';
   const timeRows = items.map(item => {
@@ -5259,7 +5367,7 @@ function bookingItemsSummaryHtml(items = uniqueBookingSelections(activeBookingIt
         <div class="pbs-detail wide"><span class="pbs-detail-label">Session${items.length > 1 ? 's' : ''}</span><strong class="pbs-detail-value pbs-time-list">${timeRows}</strong></div>
       </div>
       <div class="pbs-price-card">
-        <div class="pbs-price-row"><span>Court price · ${hrs} hr${hrs === 1 ? '' : 's'}</span><strong>${fmt(total)}</strong></div>
+        ${bookingRentalBreakdownHtml(items)}
         <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
         <div class="pbs-price-row total"><span>Total</span><strong>${fmt(total)}</strong></div>
       </div>
@@ -6317,6 +6425,7 @@ function bookingItemFromReservedBooking(b) {
     timeLabel: b.timeLabel || slotsTimeLabel(slots),
     duration,
     rate: Number(b.rate || 0),
+    slotRates: Array.isArray(b.slotRates ?? b.slot_rates) ? [...(b.slotRates ?? b.slot_rates)].map(Number) : [],
     courtFee: Math.max(0, total - serviceFee),
     serviceFee,
     total,
@@ -8195,6 +8304,7 @@ async function submitBooking(e) {
     timeLabel: item.timeLabel || itemTimeLabel(item),
     duration: item.duration,
     rate: item.rate,
+    slotRates: Array.isArray(item.slotRates) ? [...item.slotRates] : [],
     total: item.total,
     paymentMethod: payMethod,
     gcashRef: gcashRef || null,
@@ -8908,12 +9018,18 @@ function bookingTicketSessionItems(booking = {}) {
     const derivedTime = item.timeLabel
       || (slots.length ? slotsTimeLabel(slots) : '')
       || (item.startTime && item.endTime ? `${item.startTime} – ${item.endTime}` : '');
+    const totalValue = Number(item.total);
+    const rateValue = Number(item.rate);
     return {
+      courtId: item.courtId || '',
       courtName,
       date: String(item.date || booking.date || '').trim(),
       timeLabel: bookingTicketTimeDisplay(derivedTime || booking.timeLabel || 'Time to be confirmed'),
       duration,
       slots,
+      rate: Number.isFinite(rateValue) ? rateValue : 0,
+      slotRates: Array.isArray(item.slotRates ?? item.slot_rates) ? [...(item.slotRates ?? item.slot_rates)].map(Number) : [],
+      total: Number.isFinite(totalValue) ? totalValue : 0,
       sourceIndex: index,
     };
   };
@@ -9027,6 +9143,25 @@ function bookingTicketSessionModel(booking = {}) {
   return { items, groups, courts, dates, totalDuration, isMulti, summary };
 }
 
+function bookingTicketPricingItems(booking = {}, model = bookingTicketSessionModel(booking)) {
+  const structured = (Array.isArray(booking.groupItems) && booking.groupItems.length)
+    || (Array.isArray(booking.items) && booking.items.length)
+    || (Array.isArray(booking.allItems) && booking.allItems.length);
+  if (structured) return model.items;
+  const total = Math.max(0, Number(booking.total || 0));
+  if (model.items.length === 1) return [{ ...model.items[0], total }];
+  return [{
+    courtId: 'legacy-aggregate',
+    courtName: model.courts.length ? model.courts.join(', ') : booking.courtName || 'Court booking',
+    date: model.dates[0] || booking.date || '',
+    slots: [],
+    duration: model.totalDuration,
+    rate: 0,
+    slotRates: [],
+    total,
+  }];
+}
+
 function renderBookingTicketSessions(booking = {}) {
   const model = bookingTicketSessionModel(booking);
   const first = model.items[0] || {};
@@ -9107,7 +9242,9 @@ function showInvoice(b) {
   set('iName', b.fullName);
   set('iContact', b.contactNumber);
   set('iEmail', b.email || 'Not provided');
-  renderBookingTicketSessions(b);
+  const ticketModel = renderBookingTicketSessions(b);
+  const rentalBreakdown = $('iRentalBreakdown');
+  if (rentalBreakdown) rentalBreakdown.innerHTML = bookingRentalBreakdownHtml(bookingTicketPricingItems(b, ticketModel));
   set('iPay', payLabel);
   set('iTot', fmt(b.total));
   set('iDown', fmt(b.downpayment));

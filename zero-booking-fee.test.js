@@ -47,7 +47,7 @@ function pricingHarness() {
 }
 
 function selectionHarness() {
-  const selectionSource = sourceBetween('function selectionListedPrice(sel)', 'function normalizedSlots(slots)');
+  const selectionSource = sourceBetween('function selectionListedPrice(sel)', 'function slotGroups(slots)');
   const totalsSource = sourceBetween('function bookingItemsCourtFee', 'function bookingItemsCourtLabel');
   return new Function(`
     let pricingTiers = [];
@@ -84,6 +84,33 @@ function selectionHarness() {
           duration: bookingItemsDuration(items),
         };
       },
+    };
+  `)();
+}
+
+function rentalBreakdownHarness() {
+  const source = sourceBetween('function bookingItemRateBreakdown', 'function hostBookingItemsSummaryHtml');
+  return new Function(`
+    function normalizedSlots(slots) {
+      return [...(slots || [])].map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+    }
+    function compactPeso(amount) {
+      const value = Math.max(0, Number(amount || 0));
+      return '₱' + value.toLocaleString('en-PH', {
+        minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+        maximumFractionDigits: 2,
+      });
+    }
+    const fmt = value => '₱' + Number(value).toLocaleString('en-PH', { minimumFractionDigits: 2 });
+    const esc = value => String(value ?? '');
+    const activeBookingItems = () => [];
+    const uniqueBookingSelections = items => items;
+    const bookingItemsDuration = items => items.reduce((sum, item) => sum + Number(item.duration || 0), 0);
+    ${source}
+    return {
+      item: bookingItemRateBreakdown,
+      model: bookingRentalBreakdownModel,
+      html: bookingRentalBreakdownHtml,
     };
   `)();
 }
@@ -172,6 +199,62 @@ test('₱400 inclusive-price contract stays exact through regular and host check
   assert.equal(allocation.total - hostDue, 292.5);
 });
 
+test('premium rental breakdown groups three identical courts into one auditable formula', () => {
+  const harness = rentalBreakdownHarness();
+  const items = [1, 2, 3].map(number => ({
+    courtId: String(number),
+    courtName: `Court ${number}`,
+    date: '2026-09-01',
+    slots: [8, 9, 10],
+    duration: 3,
+    rate: 400,
+    slotRates: [400, 400, 400],
+    total: 1200,
+  }));
+  const model = harness.model(items);
+  assert.equal(model.length, 1);
+  assert.equal(model[0].entries.length, 3);
+  assert.equal(model[0].subtotal, 3600);
+
+  const html = harness.html(items);
+  assert.match(html, /3 courts · 3 hrs each/);
+  assert.match(html, /₱400\/hr × 3 hrs × 3 courts/);
+  assert.match(html, /₱1,200 per court · 9 court-hours/);
+  assert.match(html, /₱3,600\.00/);
+});
+
+test('rental breakdown expands mixed courts and preserves real tier components', () => {
+  const harness = rentalBreakdownHarness();
+  const items = [
+    { courtId: '1', courtName: 'Court 1', date: '2026-09-01', slots: [8, 9, 10], duration: 3, rate: 400, slotRates: [400, 400, 400], total: 1200 },
+    { courtId: '2', courtName: 'Court 2', date: '2026-09-01', slots: [8, 9], duration: 2, rate: 350, slotRates: [350, 350], total: 700 },
+    { courtId: '3', courtName: 'Court 3', date: '2026-09-01', slots: [15, 16, 17], duration: 3, rate: 350, slotRates: [350, 350, 400], total: 1100 },
+  ];
+  const model = harness.model(items);
+  assert.equal(model.length, 3);
+  const html = harness.html(items);
+  assert.match(html, /Court 1 · 3 hrs/);
+  assert.match(html, /Court 2 · 2 hrs/);
+  assert.match(html, /₱350\/hr × 2 hrs \+ ₱400\/hr × 1 hr/);
+  assert.match(html, /₱1,100\.00/);
+});
+
+test('legacy resumed holds never invent an average hourly rate', () => {
+  const harness = rentalBreakdownHarness();
+  const legacy = harness.item({
+    courtId: '1',
+    courtName: 'Court 1',
+    date: '2026-09-01',
+    slots: [15, 16],
+    duration: 2,
+    rate: 350,
+    total: 800,
+  });
+  assert.equal(legacy.components.length, 0);
+  assert.equal(legacy.formula, 'Scheduled rates · 2 hrs');
+  assert.doesNotMatch(legacy.formula, /₱400\/hr/);
+});
+
 test('both court renderers use the configured player price and accessible selection state', () => {
   const onCardDate = sourceBetween('async function onCardDate', 'async function ensureCourt');
   const renderCourts = sourceBetween('async function renderCourts()', 'async function selectCourt');
@@ -196,11 +279,22 @@ test('player summary and confirmation show the fee-free all-in price only', () =
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
   assert.doesNotMatch(summaries, /bookingFeeDisplay\(/);
   assert.doesNotMatch(summaries, /Fee paid in full|25% court/i);
+  assert.equal((summaries.match(/bookingRentalBreakdownHtml\(items\)/g) || []).length, 2, 'regular and host summaries must share the same rental breakdown');
+  assert.match(page, /@media\(max-width:480px\)[\s\S]*?\.pbs-rental-math\s*\{[^}]*gap:/);
 
   const confirmation = sourceBetween('<section class="inv-payment-card', '</section>');
   assert.match(confirmation, /inv-fee-free/);
   assert.match(confirmation, /Booking fee/);
   assert.match(confirmation, />Free</);
+  assert.match(confirmation, /id="iRentalBreakdown"/);
+
+  const submission = sourceBetween('async function submitBooking(e)', 'function resetForm');
+  assert.match(submission, /slotRates:\s*Array\.isArray\(item\.slotRates\) \? \[\.\.\.item\.slotRates\] : \[\]/);
+  const ticketItems = sourceBetween('function bookingTicketSessionItems', 'function bookingTicketSessionModel');
+  assert.match(ticketItems, /slotRates:\s*Array\.isArray\(item\.slotRates \?\? item\.slot_rates\)/);
+  assert.match(ticketItems, /total:\s*Number\.isFinite\(totalValue\) \? totalValue : 0/);
+  const showInvoice = sourceBetween('function showInvoice(b)', 'function copyInvRef()');
+  assert.match(showInvoice, /bookingRentalBreakdownHtml\(bookingTicketPricingItems\(b, ticketModel\)\)/);
 });
 
 test('mobile sticky booking total leads with the all-in amount', () => {
