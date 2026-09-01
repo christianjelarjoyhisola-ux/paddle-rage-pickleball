@@ -672,8 +672,11 @@ test('verified host applications enqueue one privacy-safe retryable Telegram rev
   assert.match(testAlert, /requireReviewer\(req, db\)/);
   assert.match(testAlert, /PADDLE RAGE TELEGRAM TEST/);
   assert.match(testAlert, /No host application was created/);
+  assert.match(testAlert, /delivery\.errors/);
   assert.doesNotMatch(testAlert, /body\.(?:message|chatId|botToken)/);
   assert.match(hostApplicationEdge, /"Access-Control-Allow-Methods": "POST, OPTIONS"/);
+  assert.match(telegramShared, /description/);
+  assert.match(admin, /id="hostTelegramTestStatus"/);
   assert.match(deploy, /TELEGRAM_BOT_TOKEN/);
   assert.match(deploy, /TELEGRAM_CHAT_ID/);
   assert.match(config, /confirmOpenPlayHostVerification\(\) \{ return \{ ok: true, reviewable: true, skipped: true, reason: 'Local data mode'/);

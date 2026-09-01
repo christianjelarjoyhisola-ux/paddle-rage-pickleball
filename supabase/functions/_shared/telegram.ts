@@ -30,6 +30,7 @@ export async function sendTelegramHtml(
   failed: number;
   deliveredChatIds: string[];
   failedChatIds: string[];
+  errors: string[];
 }> {
   const botToken = clean(Deno.env.get("TELEGRAM_BOT_TOKEN"), 500);
   const chatIds = [...new Set(recipients.map((id) => clean(id, 200)).filter(Boolean))];
@@ -42,6 +43,7 @@ export async function sendTelegramHtml(
       failed: 0,
       deliveredChatIds: [],
       failedChatIds: [],
+      errors: ["Telegram is not configured"],
     };
   }
 
@@ -60,14 +62,28 @@ export async function sendTelegramHtml(
           }),
         },
       );
-      if (!response.ok) throw new Error(`Telegram HTTP ${response.status}`);
-      return { chatId, ok: true };
+      if (!response.ok) {
+        let detail = `Telegram HTTP ${response.status}`;
+        try {
+          const payload = await response.json() as { description?: unknown };
+          const description = clean(payload?.description, 160);
+          if (description) detail += `: ${description}`;
+        } catch (_) {
+          // Keep the status-only diagnostic when Telegram returns no JSON body.
+        }
+        throw new Error(detail);
+      }
+      return { chatId, ok: true, error: "" };
     } catch (error) {
       console.error("Telegram delivery failed", {
         recipient: chatId.slice(-4).padStart(chatId.length, "*"),
         error: error instanceof Error ? error.message : "Unknown error",
       });
-      return { chatId, ok: false };
+      return {
+        chatId,
+        ok: false,
+        error: error instanceof Error ? clean(error.message, 200) : "Unknown Telegram error",
+      };
     }
   }));
 
@@ -79,5 +95,6 @@ export async function sendTelegramHtml(
     failed: failedChatIds.length,
     deliveredChatIds,
     failedChatIds,
+    errors: results.filter((result) => !result.ok).map((result) => result.error),
   };
 }

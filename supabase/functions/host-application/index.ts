@@ -1124,7 +1124,18 @@ Deno.serve(async (req): Promise<Response> => {
         `This is a test only. No host application was created.`,
     );
     if (delivery.skipped || !delivery.ok || delivery.sent < 1) {
-      return json({ error: "Telegram test could not be delivered", delivery }, 503);
+      const diagnostic = delivery.errors.filter(Boolean).join("; ").slice(0, 300);
+      return json({
+        error: diagnostic
+          ? `Telegram test failed: ${diagnostic}`
+          : "Telegram test could not be delivered",
+        delivery: {
+          ok: delivery.ok,
+          sent: delivery.sent,
+          failed: delivery.failed,
+          errors: delivery.errors,
+        },
+      }, 503);
     }
     return json({ ok: true, delivery });
   }

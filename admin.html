@@ -5472,6 +5472,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
         <h2>OPEN PLAY HOST CENTER</h2>
         <div class="booking-toolbar-actions">
           <button class="btn btn-g btn-sm" id="hostTelegramTestBtn" onclick="sendHostTelegramTest()">Test Telegram</button>
+          <span id="hostTelegramTestStatus" role="status" aria-live="polite" style="font-size:.78rem;color:var(--muted)"></span>
           <button class="btn btn-g btn-sm" onclick="renderHostCenter()">Refresh</button>
           <button class="btn btn-p btn-sm" onclick="hostResetForm()">New Session</button>
         </div>
@@ -13536,13 +13537,17 @@ async function sendHostTelegramTest() {
     return;
   }
   const button = $('hostTelegramTestBtn');
+  const status = $('hostTelegramTestStatus');
   if (button) button.disabled = true;
+  if (status) status.textContent = 'Sending test…';
   try {
     const result = await DB.sendOpenPlayHostTelegramTest();
     const sent = Number(result?.delivery?.sent || 0);
     if (sent < 1) throw new Error('Telegram did not confirm delivery.');
+    if (status) status.textContent = `Delivered to ${sent} recipient${sent === 1 ? '' : 's'}.`;
     toast(`Telegram test sent to ${sent} recipient${sent === 1 ? '' : 's'}.`);
   } catch (error) {
+    if (status) status.textContent = error?.message || 'Telegram test could not be sent.';
     toast(error?.message || 'Telegram test could not be sent.', 'err');
   } finally {
     if (button) button.disabled = false;
