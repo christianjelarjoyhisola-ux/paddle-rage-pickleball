@@ -13535,7 +13535,6 @@ async function sendHostTelegramTest() {
     toast('Only an owner can test Telegram alerts.', 'err');
     return;
   }
-  if (!confirm('Send one clearly labeled Telegram test message now?')) return;
   const button = $('hostTelegramTestBtn');
   if (button) button.disabled = true;
   try {
