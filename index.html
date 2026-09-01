@@ -2593,6 +2593,19 @@ body.light #splashScreen { background: #071320; }
 .wiz-date-row .fi { flex:1; }
 .wiz-summary { background:var(--input); border:1px solid var(--border); border-radius:var(--r-sm); padding:12px 16px; margin-top:8px; }
 .wiz-summary-lbl { font-size:.68rem; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin-bottom:6px; font-weight:700; }
+.wiz-summary.wiz-summary--booking {
+  overflow:hidden; padding:0;
+  border:1px solid rgba(var(--lime-rgb),.28); border-radius:12px;
+  background:linear-gradient(145deg,rgba(var(--lime-rgb),.075),rgba(var(--ac),.02));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 12px 28px rgba(0,0,0,.16);
+}
+.wiz-summary--booking .wiz-summary-lbl { margin:0; padding:11px 12px 0; }
+.wiz-summary--booking .pbs-price-card { border:0; border-radius:0; background:transparent; }
+.wiz-summary--booking .pbs-rental-breakdown { padding-top:7px; }
+@media(max-width:480px) {
+  .wiz-summary.wiz-summary--booking { border-radius:11px; }
+  .wiz-summary--booking .wiz-summary-lbl { padding:10px 9px 0; }
+}
 .btn-lg { padding:13px 28px; font-size:.95rem; }
 
 @media(max-width:640px) {
@@ -3871,7 +3884,7 @@ try {
             <label class="fl" for="bEmail">Email Address</label>
             <input type="email" class="fi" id="bEmail" placeholder="youremail@gmail.com" autocomplete="off" />
           </div>
-          <div class="wiz-summary">
+          <div class="wiz-summary wiz-summary--booking">
             <div class="wiz-summary-lbl">Booking Summary</div>
             <div id="wiz3Summary" style="font-size:.84rem;line-height:1.55"></div>
           </div>
