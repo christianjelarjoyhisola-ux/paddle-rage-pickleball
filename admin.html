@@ -789,20 +789,71 @@ tr:hover td { background: var(--bg2); }
 .booking-quick-confirm:disabled { opacity:.68; cursor:wait; transform:none; }
 .mb-book-quick-confirm { width:100%; min-height:44px; margin-top:10px; justify-content:center; }
 .booking-section-toolbar { margin-bottom: 12px; }
-.booking-type-tabs {
-  display:flex; gap:6px; margin-bottom:12px; padding:5px;
-  border:1px solid var(--border); border-radius:14px; background:var(--surface);
-  box-shadow:var(--shadow); overflow-x:auto; scrollbar-width:thin;
+.booking-quick-nav {
+  display:grid; grid-template-columns:auto 1px minmax(0,1fr); gap:14px; align-items:end;
+  margin-bottom:12px; padding:11px 12px; overflow:hidden;
+  border:1px solid rgba(var(--green-rgb),.2); border-radius:16px;
+  background:
+    radial-gradient(circle at 8% 0,rgba(var(--green-rgb),.08),transparent 34%),
+    linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.012));
+  box-shadow:0 14px 34px rgba(0,0,0,.12),inset 0 1px rgba(255,255,255,.035);
 }
-.booking-type-tab {
-  display:inline-flex; align-items:center; justify-content:center; gap:8px;
-  min-height:40px; padding:8px 14px; border:0; border-radius:10px;
-  background:transparent; color:var(--text2); font:800 .82rem 'DM Sans',sans-serif;
-  white-space:nowrap; cursor:pointer; transition:background .18s,color .18s,box-shadow .18s;
+.booking-quick-nav[aria-busy="true"] { opacity:.78; }
+.booking-quick-nav[hidden] { display:none !important; }
+.booking-quick-group { min-width:0; }
+.booking-quick-label {
+  display:block; margin:0 0 6px 4px; color:var(--text3);
+  font-size:.61rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase;
 }
-.booking-type-tab span { min-width:24px; padding:2px 7px; border-radius:999px; background:var(--bg2); color:var(--text3); font-size:.68rem; }
-.booking-type-tab.active { background:var(--green); color:#fff; box-shadow:0 6px 16px rgba(var(--green-rgb),.2); }
-.booking-type-tab.active span { background:rgba(255,255,255,.16); color:#fff; }
+.booking-quick-divider { align-self:stretch; width:1px; min-height:44px; background:linear-gradient(transparent,var(--border),transparent); }
+.booking-quick-actions {
+  display:flex; align-items:center; gap:6px; min-width:0;
+}
+.booking-filter-chip {
+  --booking-chip:#b6f000; --booking-chip-rgb:182,240,0;
+  position:relative; display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  min-height:42px; padding:8px 12px; border:1px solid transparent; border-radius:11px;
+  background:rgba(255,255,255,.025); color:var(--text2);
+  font:850 .78rem 'DM Sans',sans-serif; line-height:1.1; white-space:nowrap; cursor:pointer;
+  transition:background .18s ease,border-color .18s ease,color .18s ease,box-shadow .18s ease,transform .18s ease;
+}
+.booking-filter-chip:hover { color:var(--text); background:rgba(var(--booking-chip-rgb),.07); border-color:rgba(var(--booking-chip-rgb),.22); }
+.booking-filter-chip:focus-visible { outline:3px solid rgba(var(--booking-chip-rgb),.36); outline-offset:2px; }
+.booking-filter-chip.active,
+.booking-filter-chip[aria-pressed="true"] {
+  color:var(--text); border-color:rgba(var(--booking-chip-rgb),.46);
+  background:linear-gradient(145deg,rgba(var(--booking-chip-rgb),.16),rgba(var(--booking-chip-rgb),.065));
+  box-shadow:0 8px 20px rgba(var(--booking-chip-rgb),.09),inset 0 1px rgba(255,255,255,.06);
+}
+.booking-filter-chip.active::after,
+.booking-filter-chip[aria-pressed="true"]::after {
+  content:''; position:absolute; left:18%; right:18%; bottom:-1px; height:2px; border-radius:999px;
+  background:var(--booking-chip); box-shadow:0 0 10px rgba(var(--booking-chip-rgb),.46);
+}
+.booking-filter-dot { width:6px; height:6px; flex:0 0 6px; border-radius:999px; background:var(--booking-chip); box-shadow:0 0 0 3px rgba(var(--booking-chip-rgb),.1); }
+.booking-filter-count {
+  min-width:23px; padding:3px 7px; border-radius:999px; color:var(--text3);
+  background:rgba(255,255,255,.055); font-size:.66rem; font-weight:900; line-height:1;
+  font-variant-numeric:tabular-nums; text-align:center;
+}
+.booking-filter-chip.active .booking-filter-count,
+.booking-filter-chip[aria-pressed="true"] .booking-filter-count { color:var(--text); background:rgba(var(--booking-chip-rgb),.14); }
+.booking-type-short { display:none; }
+.booking-status-tab[data-booking-status="pending"] { --booking-chip:#e7b541; --booking-chip-rgb:231,181,65; }
+.booking-status-tab[data-booking-status="confirmed"] { --booking-chip:#b6f000; --booking-chip-rgb:182,240,0; }
+.booking-status-tab[data-booking-status="completed"] { --booking-chip:#71aef8; --booking-chip-rgb:113,174,248; }
+.booking-status-tab[data-booking-status="closed"] { --booking-chip:#ef706f; --booking-chip-rgb:239,112,111; }
+.booking-type-tab[data-booking-type="host"] { --booking-chip:#bd8cff; --booking-chip-rgb:189,140,255; }
+.booking-type-tab[data-booking-type="court"] { --booking-chip:#71aef8; --booking-chip-rgb:113,174,248; }
+@media (min-width:761px) and (max-width:1480px) {
+  .booking-quick-nav { grid-template-columns:1fr; gap:8px; align-items:stretch; }
+  .booking-quick-divider { display:none; }
+  .booking-quick-group { display:grid; grid-template-columns:118px minmax(0,1fr); align-items:center; gap:8px; }
+  .booking-quick-label { margin:0; }
+  .booking-quick-actions { width:100%; }
+  .booking-status-actions { flex-wrap:wrap; }
+  .booking-status-actions .booking-filter-chip { flex:1 1 150px; }
+}
 .booking-toolbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .booking-toolbar-actions .view-toggle {
   display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--border);
@@ -815,7 +866,7 @@ tr:hover td { background: var(--bg2); }
   padding: 12px; background: var(--surface); border-bottom: 1px solid var(--border);
 }
 .booking-filter-panel .filters {
-  display: grid; grid-template-columns: minmax(220px, 1fr) 150px 150px 170px auto;
+  display: grid; grid-template-columns: minmax(220px, 1fr) 150px 170px auto;
   gap: 8px; align-items: center; width: 100%;
 }
 .booking-filter-panel .booking-search-input,
@@ -1130,8 +1181,21 @@ tr:hover td { background: var(--bg2); }
     font-size: .86rem !important; white-space: nowrap;
   }
   #sec-bookings .booking-toolbar-actions .booking-export-btn { padding-inline: 10px; }
-  #sec-bookings .booking-type-tabs { margin-bottom:10px; border-radius:12px; }
-  #sec-bookings .booking-type-tab { min-height:38px; padding:7px 11px; font-size:.76rem; }
+  #sec-bookings .booking-quick-nav {
+    grid-template-columns:1fr; gap:10px; align-items:stretch;
+    margin-bottom:10px; padding:10px; border-radius:14px;
+  }
+  #sec-bookings .booking-quick-divider { display:none; }
+  #sec-bookings .booking-quick-type-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  #sec-bookings .booking-quick-type-actions .booking-filter-chip { min-width:0; padding-inline:8px; }
+  #sec-bookings .booking-status-actions {
+    overflow-x:auto; overscroll-behavior-inline:contain; scroll-snap-type:x proximity;
+    scrollbar-width:none; padding:1px 2px 5px;
+  }
+  #sec-bookings .booking-status-actions::-webkit-scrollbar { display:none; }
+  #sec-bookings .booking-status-actions .booking-filter-chip {
+    flex:0 0 auto; min-height:44px; scroll-snap-align:start;
+  }
   #tableView .tbl-wrap {
     border-radius: 12px; overflow: hidden; background: var(--surface);
   }
@@ -1246,6 +1310,9 @@ tr:hover td { background: var(--bg2); }
   .stat-cards { grid-template-columns: 1fr; }
   #sec-bookings .booking-toolbar-actions { grid-template-columns: 1fr 1fr; }
   #sec-bookings .booking-toolbar-actions .view-toggle { grid-column: 1 / -1; }
+  #sec-bookings .booking-filter-chip { gap:6px; padding-inline:9px; font-size:.73rem; }
+  #sec-bookings .booking-type-long { display:none; }
+  #sec-bookings .booking-type-short { display:inline; }
   #tableView .tbl-hd { padding: 8px; }
   #tableView .filters { grid-template-columns: minmax(108px, .9fr) minmax(118px, 1fr) auto; gap: 7px; }
   #tableView .filters > input, #tableView .booking-filter-field { height: 40px; padding: 7px 9px; font-size: .84rem !important; }
@@ -2900,8 +2967,8 @@ th {
 
 td { padding: 14px 16px; border-bottom-color: rgba(182, 240, 0, .075); line-height: 1.45; }
 tr:hover td { background: rgba(182, 240, 0, .035); }
-.booking-type-tabs { border-color: var(--admin-line); border-radius: 14px; background: rgba(255, 255, 255, .02); }
-.booking-type-tab { min-height: 42px; }
+.booking-quick-nav { border-color: var(--admin-line); }
+.booking-filter-chip { min-height:42px; }
 
 .sidebar-overlay {
   top: var(--admin-topbar-h);
@@ -2991,9 +3058,12 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
   #tableView .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #tableView .filters input[type="search"] { grid-column: 1 / -1; }
   #tableView .filters .btn { width: 100%; }
-  .booking-type-tabs { display: flex; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
-  .booking-type-tabs::-webkit-scrollbar { display: none; }
-  .booking-type-tab { flex: 0 0 auto; white-space: nowrap; }
+  .booking-quick-nav { grid-template-columns:1fr; gap:10px; }
+  .booking-quick-divider { display:none; }
+  .booking-quick-type-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .booking-status-actions { display:flex; overflow-x:auto; overscroll-behavior-inline:contain; scrollbar-width:none; }
+  .booking-status-actions::-webkit-scrollbar { display:none; }
+  .booking-status-tab { flex:0 0 auto; white-space:nowrap; }
   .modal-bg { align-items: flex-end; padding: 0; }
   .modal {
     width: 100%;
@@ -4150,19 +4220,24 @@ body[data-theme="light"] th {
 }
 body[data-theme="light"] td { color: #2f3d2e; border-bottom-color: rgba(64, 88, 54, .1); }
 body[data-theme="light"] tr:hover td { background: rgba(136, 174, 58, .065); }
-body[data-theme="light"] .booking-type-tabs {
-  border-color: var(--admin-line);
-  background: #eef3e9;
+body[data-theme="light"] .booking-quick-nav {
+  border-color: rgba(89, 123, 34, .22);
+  background:
+    radial-gradient(circle at 8% 0,rgba(148, 190, 54, .13),transparent 34%),
+    linear-gradient(145deg,#fff,#f3f7ef);
+  box-shadow:0 12px 30px rgba(44, 67, 38, .08),inset 0 1px #fff;
 }
-body[data-theme="light"] .booking-type-tab { color: #657163; }
-body[data-theme="light"] .booking-type-tab:hover { color: #35452f; background: rgba(255, 255, 255, .65); }
-body[data-theme="light"] .booking-type-tab.active,
-body[data-theme="light"] .booking-type-tab.on {
-  color: #38570d;
-  background: #fff;
-  box-shadow: 0 4px 14px rgba(36, 57, 30, .08);
+body[data-theme="light"] .booking-quick-divider { background:linear-gradient(transparent,#d6e0d0,transparent); }
+body[data-theme="light"] .booking-filter-chip { color:#657163; background:rgba(255,255,255,.58); }
+body[data-theme="light"] .booking-filter-chip:hover { color:#2f3e2c; background:#fff; }
+body[data-theme="light"] .booking-filter-chip.active,
+body[data-theme="light"] .booking-filter-chip[aria-pressed="true"] {
+  color:#263423; background:linear-gradient(145deg,rgba(var(--booking-chip-rgb),.15),#fff);
+  box-shadow:0 7px 18px rgba(43, 65, 37, .075),inset 0 1px #fff;
 }
-body[data-theme="light"] .booking-type-tab span { color: #5e6d5c; background: #e9efe5; }
+body[data-theme="light"] .booking-filter-count { color:#667262; background:#e9efe5; }
+body[data-theme="light"] .booking-filter-chip.active .booking-filter-count,
+body[data-theme="light"] .booking-filter-chip[aria-pressed="true"] .booking-filter-count { color:#2d3b2a; background:rgba(var(--booking-chip-rgb),.14); }
 body[data-theme="light"] :is(.booking-mobile-card, .booking-filter-shell, .booking-filter-panel, .booking-detail-card, .booking-detail-hero, .booking-notice-item, .booking-pagination) {
   color: var(--text);
   border-color: var(--admin-line);
@@ -4811,11 +4886,43 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
           <button class="btn btn-p btn-sm" onclick="openNewBookingModal()">+ New</button>
         </div>
       </div>
-      <div class="booking-type-tabs" role="tablist" aria-label="Booking type">
-        <button type="button" class="booking-type-tab active" data-booking-type="all" onclick="setBookingType('all')">All Bookings <span id="bookingCountAll">0</span></button>
-        <button type="button" class="booking-type-tab" data-booking-type="court" onclick="setBookingType('court')">Court Bookings <span id="bookingCountCourt">0</span></button>
-        <button type="button" class="booking-type-tab" data-booking-type="host" onclick="setBookingType('host')">Open Play Host Bookings <span id="bookingCountHost">0</span></button>
-      </div>
+      <nav class="booking-quick-nav" id="bookingQuickNav" aria-label="Booking list quick filters" aria-busy="false">
+        <div class="booking-quick-group booking-quick-type">
+          <span class="booking-quick-label">Booking type</span>
+          <div class="booking-quick-actions booking-quick-type-actions" role="group" aria-label="Filter by booking type">
+            <button type="button" class="booking-filter-chip booking-type-tab active" data-booking-type="all" aria-pressed="true" onclick="setBookingType('all')" onkeydown="bookingQuickFilterKeydown(event)">
+              <span class="booking-filter-text">All</span><span class="booking-filter-count" id="bookingCountAll">0</span>
+            </button>
+            <button type="button" class="booking-filter-chip booking-type-tab" data-booking-type="court" aria-pressed="false" onclick="setBookingType('court')" onkeydown="bookingQuickFilterKeydown(event)">
+              <span class="booking-filter-text">Court</span><span class="booking-filter-count" id="bookingCountCourt">0</span>
+            </button>
+            <button type="button" class="booking-filter-chip booking-type-tab" data-booking-type="host" aria-pressed="false" aria-label="Host bookings" title="Bookings created through a host account" onclick="setBookingType('host')" onkeydown="bookingQuickFilterKeydown(event)">
+              <span class="booking-filter-text"><span class="booking-type-long">Host Bookings</span><span class="booking-type-short">Host</span></span><span class="booking-filter-count" id="bookingCountHost">0</span>
+            </button>
+          </div>
+        </div>
+        <span class="booking-quick-divider" aria-hidden="true"></span>
+        <div class="booking-quick-group booking-quick-status">
+          <span class="booking-quick-label">Reservation status</span>
+          <div class="booking-quick-actions booking-status-actions" role="group" aria-label="Filter by reservation status">
+            <button type="button" class="booking-filter-chip booking-status-tab active" data-booking-status="all" aria-pressed="true" onclick="setBookingStatusView('all')" onkeydown="bookingQuickFilterKeydown(event)">
+              <span class="booking-filter-dot" aria-hidden="true"></span><span class="booking-filter-text">Any Status</span><span class="booking-filter-count" id="bookingStatusCountAll">0</span>
+            </button>
+            <button type="button" class="booking-filter-chip booking-status-tab" data-booking-status="pending" aria-pressed="false" title="Includes Pending and Processing bookings" onclick="setBookingStatusView('pending')" onkeydown="bookingQuickFilterKeydown(event)">
+              <span class="booking-filter-dot" aria-hidden="true"></span><span class="booking-filter-text">Pending</span><span class="booking-filter-count" id="bookingStatusCountPending">0</span>
+            </button>
+            <button type="button" class="booking-filter-chip booking-status-tab" data-booking-status="confirmed" aria-pressed="false" onclick="setBookingStatusView('confirmed')" onkeydown="bookingQuickFilterKeydown(event)">
+              <span class="booking-filter-dot" aria-hidden="true"></span><span class="booking-filter-text">Confirmed</span><span class="booking-filter-count" id="bookingStatusCountConfirmed">0</span>
+            </button>
+            <button type="button" class="booking-filter-chip booking-status-tab" data-booking-status="completed" aria-pressed="false" onclick="setBookingStatusView('completed')" onkeydown="bookingQuickFilterKeydown(event)">
+              <span class="booking-filter-dot" aria-hidden="true"></span><span class="booking-filter-text">Completed</span><span class="booking-filter-count" id="bookingStatusCountCompleted">0</span>
+            </button>
+            <button type="button" class="booking-filter-chip booking-status-tab" data-booking-status="closed" aria-pressed="false" title="Includes cancelled, forfeited, failed, and rejected initial payments" onclick="setBookingStatusView('closed')" onkeydown="bookingQuickFilterKeydown(event)">
+              <span class="booking-filter-dot" aria-hidden="true"></span><span class="booking-filter-text">Cancelled / Rejected</span><span class="booking-filter-count" id="bookingStatusCountClosed">0</span>
+            </button>
+          </div>
+        </div>
+      </nav>
 
       <!-- CALENDAR VIEW -->
       <div id="calendarView" style="display:none">
@@ -4844,18 +4951,6 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
                 <span>Date</span>
                 <input type="date" id="fDate" aria-label="Filter bookings by court date" onchange="bookingFiltersChanged()"/>
               </label>
-              <label class="booking-filter-field" for="fStatus">
-                <span>Status</span>
-                <select id="fStatus" aria-label="Filter bookings by status" onchange="bookingFiltersChanged()">
-                  <option value="">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="completed">Completed</option>
-                  <option value="verifying">Processing</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="forfeited">Forfeited</option>
-                </select>
-              </label>
               <label class="booking-filter-field" for="fPayment">
                 <span>Payment</span>
                 <select id="fPayment" aria-label="Filter bookings by payment status" onchange="bookingFiltersChanged()">
@@ -4869,7 +4964,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
               </label>
               <button type="button" class="btn btn-g btn-sm" id="bookingClearBtn" onclick="clearFilters()">Clear</button>
             </div>
-            <div id="bookingFilterMeta">Showing all bookings</div>
+            <div id="bookingFilterMeta" role="status" aria-live="polite">Showing all bookings</div>
           </div>
           <div class="tbl-scroll booking-table-scroll">
             <table>
@@ -8425,19 +8520,129 @@ async function autoCompleteBookings(bks) {
 
 let _bookingRenderSeq = 0;
 let _bookingType = 'all';
+let _bookingStatusView = 'all';
 let _bookingPage = 1;
 let _bookingPageSize = 50;
 let _balanceProcessorStarted = false;
+
+const BOOKING_TYPE_VIEWS = Object.freeze(['all','court','host']);
+const BOOKING_STATUS_VIEWS = Object.freeze(['all','pending','confirmed','completed','closed']);
+
+function bookingQuickGroupItems(group = {}) {
+  const items = Array.isArray(group.allItems) && group.allItems.length
+    ? group.allItems
+    : Array.isArray(group.items) && group.items.length
+      ? group.items
+      : [group];
+  return items.filter(Boolean);
+}
+
+function bookingGroupIsHost(group = {}) {
+  return Boolean(group.hostBooking)
+    || String(group.createdVia || group.created_via || '').toLowerCase() === 'host'
+    || bookingQuickGroupItems(group).some(item =>
+      Boolean(item.hostBooking || item.host_booking)
+      || String(item.createdVia || item.created_via || '').toLowerCase() === 'host'
+    );
+}
+
+function bookingQuickStatusKey(group = {}) {
+  const items = bookingQuickGroupItems(group);
+  const reservationStates = items.map(item => String(item.status || '').toLowerCase()).filter(Boolean);
+  const paymentStates = items.map(item => String(item.paymentStatus || item.payment_status || '').toLowerCase()).filter(Boolean);
+  const isClosed = reservationStates.some(status => ['cancelled','forfeited','rejected'].includes(status))
+    || paymentStates.some(status => ['failed','rejected','deposit_retained'].includes(status));
+  if (isClosed) return 'closed';
+  if (reservationStates.some(status => ['pending','verifying'].includes(status))) return 'pending';
+  if (reservationStates.length && reservationStates.every(status => status === 'completed')) return 'completed';
+  if (reservationStates.some(status => status === 'confirmed')) return 'confirmed';
+  if (reservationStates.some(status => status === 'completed')) return 'completed';
+  return 'pending';
+}
+
+function bookingMatchesQuickStatus(group, view = _bookingStatusView) {
+  const safeView = BOOKING_STATUS_VIEWS.includes(view) ? view : 'all';
+  return safeView === 'all' || bookingQuickStatusKey(group) === safeView;
+}
+
+function bookingMatchesQuickType(group, type = _bookingType) {
+  const safeType = BOOKING_TYPE_VIEWS.includes(type) ? type : 'all';
+  if (safeType === 'all') return true;
+  const host = bookingGroupIsHost(group);
+  return safeType === 'host' ? host : !host;
+}
+
+function bookingGroupMatchesFormFilters(group, filters = {}) {
+  const items = bookingQuickGroupItems(group);
+  if (filters.q) {
+    const values = [
+      group.ref, group.primaryRef, group.displayRef, group.groupRef,
+      group.fullName, group.email, group.courtName, group.gcashRef,
+      ...items.flatMap(item => [item.ref, item.groupRef, item.fullName, item.email, item.courtName, item.gcashRef]),
+    ];
+    if (!values.some(value => String(value || '').toLowerCase().includes(filters.q))) return false;
+  }
+  if (filters.fd && !items.some(item => String(item.date || '') === filters.fd)) return false;
+  if (filters.fp && !items.some(item => String(item.paymentStatus || item.payment_status || '').toLowerCase() === filters.fp)) return false;
+  return true;
+}
+
+function setBookingQuickCount(id, value) {
+  const node = $(id);
+  if (node) node.textContent = String(Math.max(0, Number(value) || 0));
+}
+
+function updateBookingQuickCounts(groups = []) {
+  const statusFacet = groups.filter(group => bookingMatchesQuickType(group));
+  setBookingQuickCount('bookingStatusCountAll', statusFacet.length);
+  ['pending','confirmed','completed','closed'].forEach(status => {
+    const id = `bookingStatusCount${status.charAt(0).toUpperCase()}${status.slice(1)}`;
+    setBookingQuickCount(id, statusFacet.filter(group => bookingMatchesQuickStatus(group, status)).length);
+  });
+
+  const typeFacet = groups.filter(group => bookingMatchesQuickStatus(group));
+  setBookingQuickCount('bookingCountAll', typeFacet.length);
+  setBookingQuickCount('bookingCountCourt', typeFacet.filter(group => bookingMatchesQuickType(group, 'court')).length);
+  setBookingQuickCount('bookingCountHost', typeFacet.filter(group => bookingMatchesQuickType(group, 'host')).length);
+}
+
+function updateBookingQuickFilterControls() {
+  document.querySelectorAll('.booking-type-tab').forEach(button => {
+    const active = button.dataset.bookingType === _bookingType;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('.booking-status-tab').forEach(button => {
+    const active = button.dataset.bookingStatus === _bookingStatusView;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}
+
+function bookingQuickFilterKeydown(event) {
+  if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+  const group = event.currentTarget?.closest?.('[role="group"]');
+  const buttons = group ? [...group.querySelectorAll('button:not(:disabled)')] : [];
+  if (!buttons.length) return;
+  const current = Math.max(0, buttons.indexOf(event.currentTarget));
+  const next = event.key === 'Home'
+    ? 0
+    : event.key === 'End'
+      ? buttons.length - 1
+      : (current + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
+  event.preventDefault();
+  buttons[next].focus();
+}
+
 function bookingFilters() {
   return {
     q: (($('srch') || {}).value || '').trim().toLowerCase(),
     fd: (($('fDate') || {}).value || '').trim(),
-    fs: (($('fStatus') || {}).value || '').trim(),
-    fp: (($('fPayment') || {}).value || '').trim(),
+    fp: (($('fPayment') || {}).value || '').trim().toLowerCase(),
   };
 }
 function bookingFiltersActive(filters = bookingFilters()) {
-  return Boolean(filters.q || filters.fd || filters.fs || filters.fp);
+  return Boolean(filters.q || filters.fd || filters.fp || _bookingStatusView !== 'all');
 }
 function updateBookingFilterMeta(total, shown, filters = bookingFilters()) {
   const meta = $('bookingFilterMeta');
@@ -8448,24 +8653,28 @@ function updateBookingFilterMeta(total, shown, filters = bookingFilters()) {
     clearBtn.style.opacity = active ? '1' : '.5';
   }
   if (!meta) return;
+  const noun = _bookingType === 'host' ? 'host booking' : _bookingType === 'court' ? 'court booking' : 'booking';
   if (!active) {
-    meta.textContent = `Showing ${shown} of ${total} booking${total === 1 ? '' : 's'}`;
+    meta.textContent = `Showing ${shown} of ${total} ${noun}${total === 1 ? '' : 's'}`;
     return;
   }
   const parts = [];
   if (filters.q) parts.push(`search "${filters.q}"`);
   if (filters.fd) parts.push(`date ${fmtD(filters.fd)}`);
-  if (filters.fs) parts.push(`status ${filters.fs}`);
+  if (_bookingStatusView !== 'all') {
+    parts.push(`status ${{ pending:'Pending / Processing', confirmed:'Confirmed', completed:'Completed', closed:'Cancelled / Rejected' }[_bookingStatusView]}`);
+  }
   if (filters.fp) parts.push(`payment ${payStatusText(filters.fp)}`);
-  meta.textContent = `Showing ${shown} of ${total} booking${total === 1 ? '' : 's'} filtered by ${parts.join(', ')}`;
+  meta.textContent = `Showing ${shown} of ${total} ${noun}${total === 1 ? '' : 's'} filtered by ${parts.join(', ')}`;
 }
 function resetBookingFilters({ render = true } = {}) {
   if ($('srch')) $('srch').value = '';
   if ($('fDate')) $('fDate').value = '';
-  if ($('fStatus')) $('fStatus').value = '';
   if ($('fPayment')) $('fPayment').value = '';
+  _bookingStatusView = 'all';
   _bookingPage = 1;
-  updateBookingFilterMeta(0, 0, { q: '', fd: '', fs: '', fp: '' });
+  updateBookingQuickFilterControls();
+  updateBookingFilterMeta(0, 0, { q: '', fd: '', fp: '' });
   if (render) renderBookings();
 }
 function bookingFiltersChanged() {
@@ -8473,13 +8682,15 @@ function bookingFiltersChanged() {
   renderBookings();
 }
 function setBookingType(type) {
-  _bookingType = ['all','court','host'].includes(type) ? type : 'all';
+  _bookingType = BOOKING_TYPE_VIEWS.includes(type) ? type : 'all';
   _bookingPage = 1;
-  document.querySelectorAll('.booking-type-tab').forEach(btn => {
-    const active = btn.dataset.bookingType === _bookingType;
-    btn.classList.toggle('active', active);
-    btn.setAttribute('aria-selected', active ? 'true' : 'false');
-  });
+  updateBookingQuickFilterControls();
+  renderBookings();
+}
+function setBookingStatusView(status) {
+  _bookingStatusView = BOOKING_STATUS_VIEWS.includes(status) ? status : 'all';
+  _bookingPage = 1;
+  updateBookingQuickFilterControls();
   renderBookings();
 }
 function setBookingPageSize(value) {
@@ -8504,6 +8715,8 @@ async function renderBookings(){
   const seq = ++_bookingRenderSeq;
   const canDelete=Auth.can('booking_delete', sess.role);
   const body = $('bookBody');
+  const quickNav = $('bookingQuickNav');
+  if (quickNav) quickNav.setAttribute('aria-busy', 'true');
   if (body) body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:28px">Loading bookings...</td></tr>';
   let bks;
   try {
@@ -8518,6 +8731,7 @@ async function renderBookings(){
     console.error('renderBookings getBookings failed:', e);
     updateBookingFilterMeta(0, 0, bookingFilters());
     if (body) body.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:28px">Could not load bookings. Please refresh and try again.</td></tr>';
+    if (seq === _bookingRenderSeq && quickNav) quickNav.setAttribute('aria-busy', 'false');
     return;
   }
   if (seq !== _bookingRenderSeq) return;
@@ -8537,32 +8751,29 @@ async function renderBookings(){
   // carries the real customer email, so any row still on reserve@hold.internal is
   // just an in-progress or abandoned hold and adds no value to the admin list.
   bks=bks.filter(b=>b.email!=='reserve@hold.internal');
-  const duplicateScopeBookings = bks;
-  const allGroups = groupBookings(bks);
-  const allCount = allGroups.length;
-  const hostCount = allGroups.filter(b => b.hostBooking).length;
-  const courtCount = allCount - hostCount;
-  if ($('bookingCountAll')) $('bookingCountAll').textContent = String(allCount);
-  if ($('bookingCountCourt')) $('bookingCountCourt').textContent = String(courtCount);
-  if ($('bookingCountHost')) $('bookingCountHost').textContent = String(hostCount);
-  if (_bookingType === 'host') bks = bks.filter(b => b.hostBooking);
-  else if (_bookingType === 'court') bks = bks.filter(b => !b.hostBooking);
-  const totalRawBookings = groupBookings(bks, duplicateScopeBookings).length;
-  const { q, fd, fs, fp } = bookingFilters();
-  if(q) bks=bks.filter(b=>[b.ref,b.groupRef,b.fullName,b.email,b.courtName,b.gcashRef].some(v=>String(v||'').toLowerCase().includes(q)));
-  if(fd) bks=bks.filter(b=>b.date===fd);
-  if(fs) bks=bks.filter(b=>b.status===fs);
-  if(fp) bks=bks.filter(b=>b.paymentStatus===fp);
-  const filteredBookings = groupBookings(bks, duplicateScopeBookings);
+  const allGroups = groupBookings(bks, bks);
+  const filters = bookingFilters();
+  const { q, fd, fp } = filters;
+  const formFilteredGroups = allGroups.filter(group => bookingGroupMatchesFormFilters(group, filters));
+
+  // Counts are faceted: status counts respect the selected booking type, while
+  // booking-type counts respect the selected status. Every filter operates on a
+  // complete reservation group so multi-court bookings never lose rows or totals.
+  updateBookingQuickCounts(formFilteredGroups);
+  updateBookingQuickFilterControls();
+  const totalRawBookings = allGroups.filter(group => bookingMatchesQuickType(group)).length;
+  const filteredBookings = formFilteredGroups
+    .filter(group => bookingMatchesQuickType(group))
+    .filter(group => bookingMatchesQuickStatus(group));
   const filteredCount = filteredBookings.length;
   updateBookingPagination(filteredCount);
   const pageStart = (_bookingPage - 1) * _bookingPageSize;
   const groupedBookings = filteredBookings.slice(pageStart, pageStart + _bookingPageSize);
-  updateBookingFilterMeta(totalRawBookings, groupedBookings.length, { q, fd, fs, fp });
+  updateBookingFilterMeta(totalRawBookings, groupedBookings.length, filters);
 
   // Inject maintenance/block rows when a date filter is active
   let mtRowsHtml = '';
-  if (fd && !q && _bookingType !== 'host') {
+  if (fd && !q && !fp && _bookingType !== 'host' && _bookingStatusView === 'all') {
     if (!_nbMaintenanceCfg) {
       const s = await DB.getSettings();
       if (seq !== _bookingRenderSeq) return;
@@ -8627,9 +8838,11 @@ async function renderBookings(){
       <td data-label="Reservation"><div class="booking-status-stack">${hostBalanceBookingStatus(b)}${bookingQuickConfirmButton(b)}</div></td>
       <td data-label="Actions"><div style="display:flex;gap:5px;flex-wrap:wrap">${bookingActionsHtml(b, canDelete)}</div></td>
     </tr>`).join('');
-  const noCopy = bookingFiltersActive({ q, fd, fs, fp }) ? 'No bookings match these filters.' : 'No bookings yet.';
+  const emptyScope = _bookingType === 'host' ? 'host bookings' : _bookingType === 'court' ? 'court bookings' : 'bookings';
+  const noCopy = bookingFiltersActive(filters) ? 'No bookings match these filters.' : `No ${emptyScope} yet.`;
   const noResults = !mtRowsHtml && !bkRowsHtml ? `<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:28px">${noCopy}</td></tr>` : '';
   $('bookBody').innerHTML = mtRowsHtml + bkRowsHtml + noResults;
+  if (quickNav) quickNav.setAttribute('aria-busy', 'false');
 }
 
 function clearFilters(){
@@ -8962,9 +9175,11 @@ function switchBookingView(mode){
   const isCal = mode==='cal';
   $('viewBtnCal').classList.toggle('active', isCal);
   $('viewBtnList').classList.toggle('active', !isCal);
+  if ($('bookingQuickNav')) $('bookingQuickNav').hidden = isCal;
   $('calendarView').style.display = isCal ? '' : 'none';
   $('tableView').style.display    = isCal ? 'none' : '';
   if(isCal) renderCalendar();
+  else renderBookings();
 }
 
 function calNav(dir){
@@ -9077,9 +9292,9 @@ async function calDayClick(dateStr){
 }
 
 function calViewDayBookings(dateStr){
-  switchBookingView('list');
   $('fDate').value=dateStr;
-  renderBookings();
+  _bookingPage = 1;
+  switchBookingView('list');
 }
 
 function calStatusBreakdownHtml(counts = {}) {
