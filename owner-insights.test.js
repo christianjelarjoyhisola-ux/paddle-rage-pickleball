@@ -39,6 +39,7 @@ function baseInput(overrides = {}) {
     bookings: [],
     blockedDates: [],
     settings: { open_hour: '8', close_hour: '10' },
+    openingDate: '2026-01-01',
     ...overrides,
   };
 }
@@ -52,6 +53,54 @@ test('fresh production data stays explicitly at day zero and invents no forecast
   assert.equal(snapshot.recommendation, null);
   assert.equal(snapshot.kpis.booked_next_28_hours, 0);
   assert.ok(snapshot.kpis.sellable_next_28_hours > 0, 'actual upcoming capacity may still be reported');
+});
+
+test('pre-opening forecast counts only opening-day onward capacity and advance reservations', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({
+    now: '2026-09-02T12:00:00+08:00',
+    openingDate: Insights.OPENING_DATE,
+    bookings: [
+      booking({ ref: 'LEGACY-PREOPEN', date: '2026-09-18', status: 'confirmed', paymentStatus: 'paid' }),
+      booking({ ref: 'ADVANCE', date: '2026-09-19', status: 'pending', paymentStatus: 'unpaid', createdAt: '2026-09-02T08:00:00+08:00' }),
+    ],
+  }));
+
+  assert.equal(snapshot.period.is_preopening, true);
+  assert.equal(snapshot.period.forecast_from, '2026-09-19');
+  assert.equal(snapshot.period.forecast_to, '2026-09-30');
+  assert.equal(snapshot.kpis.sellable_next_28_hours, 24, '12 opening-aware days at 2 hours per day');
+  assert.equal(snapshot.kpis.booked_next_28_hours, 1, 'the Sep 19 advance reservation reserves inventory immediately');
+  assert.equal(snapshot.period.from, null, 'future reservations do not teach demand');
+  assert.equal(snapshot.period.learning_days, 0);
+});
+
+test('learning begins after opening-day play and ignores imported pre-opening history', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({
+    now: '2026-09-20T00:05:00+08:00',
+    openingDate: Insights.OPENING_DATE,
+    bookings: [
+      booking({ ref: 'PREOPEN', date: '2026-09-18', createdAt: '2026-09-01T00:00:00Z' }),
+      booking({ ref: 'OPENING-DAY', date: '2026-09-19', createdAt: '2026-09-02T00:00:00Z' }),
+    ],
+  }));
+
+  assert.equal(snapshot.period.from, '2026-09-19');
+  assert.equal(snapshot.period.to, '2026-09-19');
+  assert.equal(snapshot.period.learning_days, 1);
+  assert.equal(snapshot.data_quality.successful_booking_rows, 1);
+});
+
+test('30 venue days do not overpromise a Court Pick before comparable-weekday evidence is ready', () => {
+  const snapshot = Insights.buildSnapshot(baseInput({
+    now: '2026-10-19T08:00:00+08:00',
+    openingDate: Insights.OPENING_DATE,
+    bookings: [booking({ ref: 'OPENING-DAY', date: '2026-09-19' })],
+  }));
+
+  assert.equal(snapshot.period.learning_days, 30);
+  assert.equal(snapshot.period.recommendation_evidence_ready, false);
+  assert.ok(snapshot.period.max_comparable_days < snapshot.period.minimum_recommendation_comparable_days);
+  assert.equal(snapshot.recommendation, null);
 });
 
 test('Manila midnight includes yesterday but never trains on today', () => {

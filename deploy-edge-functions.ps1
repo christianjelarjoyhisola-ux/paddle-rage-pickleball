@@ -53,6 +53,8 @@ $mailerooApiKey = Resolve-ConfigValue "MAILEROO_API_KEY" $envMap
 $mailerooFromAddress = Resolve-ConfigValue "MAILEROO_FROM_ADDRESS" $envMap
 $mailerooFromName = Resolve-ConfigValue "MAILEROO_FROM_NAME" $envMap
 $mailerooReplyTo = Resolve-ConfigValue "MAILEROO_REPLY_TO" $envMap
+$telegramBotToken = Resolve-ConfigValue "TELEGRAM_BOT_TOKEN" $envMap
+$telegramChatId = Resolve-ConfigValue "TELEGRAM_CHAT_ID" $envMap
 
 if ($paymentProvider -eq "paymongo" -and -not $paymentWebhookSecret) {
   throw "PAYMENT_WEBHOOK_SECRET is required when PAYMENT_PROVIDER=paymongo."
@@ -60,6 +62,10 @@ if ($paymentProvider -eq "paymongo" -and -not $paymentWebhookSecret) {
 
 if (($mailerooApiKey -and -not $mailerooFromAddress) -or ($mailerooFromAddress -and -not $mailerooApiKey)) {
   throw "MAILEROO_API_KEY and MAILEROO_FROM_ADDRESS must be configured together."
+}
+
+if (($telegramBotToken -and -not $telegramChatId) -or ($telegramChatId -and -not $telegramBotToken)) {
+  throw "TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be configured together."
 }
 
 if ($projectRef -notmatch '^[a-z0-9]{20}$') {
@@ -134,7 +140,9 @@ try {
     @{ Name = "APP_PUBLIC_URL"; Value = $appPublicUrl },
     @{ Name = "APP_ADMIN_URL"; Value = $appAdminUrl },
     @{ Name = "PUBLIC_LOGO_URL"; Value = $publicLogoUrl },
-    @{ Name = "EMAIL_ALLOWED_ORIGINS"; Value = $emailAllowedOrigins }
+    @{ Name = "EMAIL_ALLOWED_ORIGINS"; Value = $emailAllowedOrigins },
+    @{ Name = "TELEGRAM_BOT_TOKEN"; Value = $telegramBotToken },
+    @{ Name = "TELEGRAM_CHAT_ID"; Value = $telegramChatId }
   )
   foreach ($requiredSecret in $requiredIntegrationSecrets) {
     if ([string]::IsNullOrWhiteSpace([string]$requiredSecret.Value) -and
@@ -165,6 +173,8 @@ try {
   if ($mailerooFromAddress) { $secretArgs += "MAILEROO_FROM_ADDRESS=$mailerooFromAddress" }
   if ($mailerooFromName) { $secretArgs += "MAILEROO_FROM_NAME=$mailerooFromName" }
   if ($mailerooReplyTo) { $secretArgs += "MAILEROO_REPLY_TO=$mailerooReplyTo" }
+  if ($telegramBotToken) { $secretArgs += "TELEGRAM_BOT_TOKEN=$telegramBotToken" }
+  if ($telegramChatId) { $secretArgs += "TELEGRAM_CHAT_ID=$telegramChatId" }
   Invoke-Supabase @secretArgs
 
   $functions = @(

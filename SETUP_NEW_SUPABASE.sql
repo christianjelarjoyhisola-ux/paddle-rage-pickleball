@@ -296,11 +296,70 @@ create table if not exists public.open_play_host_applications (
   reviewed_by uuid,
   reviewed_at timestamptz,
   review_note text,
+  email_verified_at timestamptz,
+  telegram_notification_sent_at timestamptz,
+  telegram_notification_attempts integer not null default 0,
+  telegram_notification_last_error text,
+  telegram_notification_next_attempt_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  constraint open_play_host_applications_telegram_attempts_check
+    check (telegram_notification_attempts between 0 and 20),
   constraint open_play_host_applications_status_check
     check (status in ('pending','approved','rejected'))
 );
+
+alter table public.open_play_host_applications
+  add column if not exists email_verified_at timestamptz,
+  add column if not exists telegram_notification_sent_at timestamptz,
+  add column if not exists telegram_notification_attempts integer not null default 0,
+  add column if not exists telegram_notification_last_error text,
+  add column if not exists telegram_notification_next_attempt_at timestamptz;
+
+update public.open_play_host_applications h
+   set email_verified_at = coalesce(h.email_verified_at, u.email_confirmed_at),
+       telegram_notification_next_attempt_at = coalesce(h.telegram_notification_next_attempt_at, now())
+  from auth.users u
+ where h.host_user_id = u.id
+   and h.status = 'pending'
+   and h.email_verified_at is null
+   and u.email_confirmed_at is not null
+   and lower(h.email) = lower(u.email);
+
+create index if not exists idx_host_applications_pending_telegram
+  on public.open_play_host_applications (telegram_notification_next_attempt_at, created_at)
+  where status = 'pending'
+    and email_verified_at is not null
+    and telegram_notification_sent_at is null
+    and telegram_notification_attempts < 20;
+
+create or replace function public.mark_host_application_email_verified(
+  p_host_user_id uuid,
+  p_email text
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  application_id uuid;
+begin
+  update public.open_play_host_applications
+     set email_verified_at = coalesce(email_verified_at, now()),
+         telegram_notification_next_attempt_at = coalesce(telegram_notification_next_attempt_at, now())
+   where host_user_id = p_host_user_id
+     and lower(email) = lower(trim(p_email))
+     and status = 'pending'
+  returning id into application_id;
+  return application_id;
+end;
+$$;
+
+revoke all on function public.mark_host_application_email_verified(uuid, text)
+  from public, anon, authenticated;
+grant execute on function public.mark_host_application_email_verified(uuid, text)
+  to service_role;
 
 create table if not exists public.open_play_host_sessions (
   id uuid primary key default gen_random_uuid(),

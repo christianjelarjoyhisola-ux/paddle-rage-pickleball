@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendTelegramHtml } from "../_shared/telegram.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -184,37 +185,7 @@ function bookingMessage(
 }
 
 async function sendTelegram(message: string): Promise<Record<string, unknown>> {
-  const botToken = text(Deno.env.get("TELEGRAM_BOT_TOKEN"), 500);
-  const chatIds = text(Deno.env.get("TELEGRAM_CHAT_ID"), 1000)
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-  if (!botToken || !chatIds.length) {
-    return { ok: true, skipped: true, reason: "Telegram not configured" };
-  }
-
-  const results = await Promise.allSettled(chatIds.map(async (chatId) => {
-    const response = await fetch(
-      `https://api.telegram.org/bot${botToken}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: message,
-          parse_mode: "HTML",
-          disable_web_page_preview: true,
-        }),
-      },
-    );
-    if (!response.ok) throw new Error(`Telegram HTTP ${response.status}`);
-  }));
-  const failed = results.filter((result) => result.status === "rejected");
-  return {
-    ok: failed.length === 0,
-    sent: chatIds.length - failed.length,
-    failed: failed.length,
-  };
+  return await sendTelegramHtml(message);
 }
 
 Deno.serve(async (req) => {

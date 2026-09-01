@@ -888,6 +888,8 @@ function rowToOpenPlayHostApplication(r) {
     reviewedBy: r.reviewed_by || null,
     reviewedAt: r.reviewed_at || null,
     reviewNote: r.review_note || '',
+    emailVerifiedAt: r.email_verified_at || null,
+    telegramNotificationSentAt: r.telegram_notification_sent_at || null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -1557,6 +1559,23 @@ window.DB = {
     const data = await _invokeEdgeFunction('host-application', {
       action: 'resend-verification',
       email,
+    }, { preferDirect: true });
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
+  async confirmOpenPlayHostVerification() {
+    const data = await _invokeEdgeFunction('host-application', {
+      action: 'confirm-verification',
+    }, { preferDirect: true });
+    if (data?.error) throw new Error(data.error);
+    if (!data?.ok || !data?.reviewable) throw new Error('Host verification was not recorded.');
+    return data;
+  },
+
+  async dispatchOpenPlayHostReviewNotifications() {
+    const data = await _invokeEdgeFunction('host-application', {
+      action: 'dispatch-review-notifications',
     }, { preferDirect: true });
     if (data?.error) throw new Error(data.error);
     return data;
@@ -3994,6 +4013,7 @@ window.DB = {
         reviewNote: '',
         reviewedBy: null,
         reviewedAt: null,
+        emailVerifiedAt: nowIso(),
         createdAt: nowIso(),
         updatedAt: nowIso(),
       });
@@ -4801,6 +4821,8 @@ window.DB = {
     async sendRescheduleEmail() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async sendBookingStatusEmail() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async sendTelegramNotification() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
+    async confirmOpenPlayHostVerification() { return { ok: true, reviewable: true, skipped: true, reason: 'Local data mode' }; },
+    async dispatchOpenPlayHostReviewNotifications() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async notifyBookingSubmitted() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async notifyBookingUpdate() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async getIntegrationStatus() {

@@ -6,8 +6,10 @@
   'use strict';
 
   const MINIMUM_LEARNING_DAYS = 30;
+  const MINIMUM_RECOMMENDATION_COMPARABLE_DAYS = 8;
   const FORECAST_DAYS = 28;
   const RECENCY_HALF_LIFE_DAYS = 56;
+  const OPENING_DATE = '2026-09-19';
   const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const MANILA_TIME_ZONE = 'Asia/Manila';
 
@@ -250,6 +252,8 @@
     const nowMs = new Date(nowValue).getTime();
     const today = manilaDateKey(nowValue);
     const throughDate = addDays(today, -1);
+    const requestedOpeningDate = dateOnly(input.openingDate || input.opening_date || OPENING_DATE);
+    const openingDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedOpeningDate) ? requestedOpeningDate : OPENING_DATE;
     const allCourts = Array.isArray(input.courts) ? input.courts : [];
     const courts = allCourts.filter(court => !input.courtId || String(court.id) === String(input.courtId));
     const courtMap = new Map(courts.map(court => [String(court.id), court]));
@@ -258,8 +262,10 @@
     const closeHour = clamp(parseInt(input.settings?.close_hour || 22, 10) || 22, openHour + 1, 24);
     const slots = Array.from({ length: closeHour - openHour }, (_, index) => openHour + index);
     const venueRows = uniqueSuccessfulRows(input.bookings, throughDate, null)
+      .filter(row => dateOnly(row.date) >= openingDate)
       .filter(row => allCourts.some(court => String(court.id) === String(row.courtId || row.court_id)));
-    const historicalRows = uniqueSuccessfulRows(input.bookings, throughDate, input.courtId);
+    const historicalRows = uniqueSuccessfulRows(input.bookings, throughDate, input.courtId)
+      .filter(row => dateOnly(row.date) >= openingDate);
     const eligibleRows = historicalRows.filter(row => courtMap.has(String(row.courtId || row.court_id)));
     // A newly filtered court learns against the venue's operating history even
     // when that court has not won a booking yet. Per-court creation dates still
@@ -335,10 +341,11 @@
     });
 
     const futureOccupied = new Map();
+    const futureFrom = [addDays(today, 1), openingDate].sort().pop();
     const futureEnd = addDays(today, FORECAST_DAYS);
     (Array.isArray(input.bookings) ? input.bookings : []).forEach(row => {
       const date = dateOnly(row.date);
-      if (!date || date <= today || date > futureEnd) return;
+      if (!date || date < futureFrom || date > futureEnd) return;
       const status = String(row.status || '').toLowerCase();
       const createdAt = new Date(row.createdAt || row.created_at || '').getTime();
       const freshHold = status === 'verifying' && Number.isFinite(createdAt)
@@ -352,7 +359,7 @@
       });
     });
 
-    datesBetween(addDays(today, 1), futureEnd).forEach(date => {
+    datesBetween(futureFrom, futureEnd).forEach(date => {
       if (blockedDates.has(date)) return;
       const weekday = isoWeekday(date);
       courts.filter(court => !court.blocked).forEach(court => slots.forEach(hour => {
@@ -411,6 +418,9 @@
     const expectedTotalFill = evidenceSellable > 0 ? clamp((evidenceBooked + expectedAdditional) * 100 / evidenceSellable) : null;
     const likelyOpen = evidenceOpen > 0 ? Math.max(0, evidenceOpen - expectedAdditional) : null;
     const enoughHistory = historyDates.length >= MINIMUM_LEARNING_DAYS;
+    const maxComparableDays = Math.max(0, ...signals.map(item => item.comparable_days));
+    const recommendationEvidenceReady = signals.some(item => item.comparable_days >= MINIMUM_RECOMMENDATION_COMPARABLE_DAYS
+      && item.available_hours >= MINIMUM_RECOMMENDATION_COMPARABLE_DAYS);
     const candidates = enoughHistory ? signals
       .filter(item => ['medium', 'high'].includes(item.confidence))
       .filter(item => ['quiet', 'underused'].includes(item.state))
@@ -440,6 +450,13 @@
         generated_at: new Date().toISOString(),
         learning_days: historyDates.length,
         minimum_learning_days: MINIMUM_LEARNING_DAYS,
+        minimum_recommendation_comparable_days: MINIMUM_RECOMMENDATION_COMPARABLE_DAYS,
+        max_comparable_days: maxComparableDays,
+        recommendation_evidence_ready: recommendationEvidenceReady,
+        opening_date: openingDate,
+        forecast_from: futureFrom <= futureEnd ? futureFrom : null,
+        forecast_to: futureFrom <= futureEnd ? futureEnd : null,
+        is_preopening: today < openingDate,
       },
       kpis: {
         booked_next_28_hours: bookedNext28,
@@ -463,8 +480,10 @@
 
   return {
     MINIMUM_LEARNING_DAYS,
+    MINIMUM_RECOMMENDATION_COMPARABLE_DAYS,
     FORECAST_DAYS,
     RECENCY_HALF_LIFE_DAYS,
+    OPENING_DATE,
     WEEKDAYS,
     manilaDateKey,
     timeLabel,

@@ -5,6 +5,11 @@ import {
   renderHostDecisionEmail,
   renderHostVerificationEmail,
 } from "../_shared/paddle-rage-email.ts";
+import {
+  sendTelegramHtml,
+  telegramChatIds,
+  telegramConfigured,
+} from "../_shared/telegram.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +30,8 @@ type SignupPayload = {
   action?:
     | "signup"
     | "resend-verification"
+    | "confirm-verification"
+    | "dispatch-review-notifications"
     | "sign-valid-id"
     | "review"
     | "repair-activation";
@@ -218,6 +225,193 @@ class HostActivationError extends Error {
 
 function normalizedEmail(value: unknown) {
   return clean(value).toLowerCase();
+}
+
+function telegramEsc(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function telegramAttr(value: unknown): string {
+  return telegramEsc(value).replace(/"/g, "&quot;");
+}
+
+function maskedEmail(value: unknown): string {
+  const email = normalizedEmail(value);
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return "Verified";
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}${"*".repeat(Math.max(3, local.length - visible.length))}@${domain}`;
+}
+
+function manilaDateTime(value: unknown): string {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) return "—";
+  const day = date.toLocaleDateString("en-PH", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    timeZone: "Asia/Manila",
+  });
+  const time = date.toLocaleTimeString("en-PH", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Manila",
+  });
+  return `${day} · ${time}`;
+}
+
+function hostAdminUrl(): string {
+  const base = (Deno.env.get("APP_ADMIN_URL") ||
+    "https://paddleragecdo.ph/admin.html").replace(/#.*$/, "");
+  return `${base}#hosts`;
+}
+
+function hostReviewTelegramMessage(app: Record<string, unknown>): string {
+  const shortId = clean(app.id).replace(/-/g, "").slice(0, 8).toUpperCase();
+  return (
+    `🧑‍💼 <b>HOST APPLICATION NEEDS REVIEW</b>\n` +
+    `👤 Applicant: ${telegramEsc(clean(app.full_name) || "Host applicant")}\n` +
+    `✉️ Email: ${telegramEsc(maskedEmail(app.email))}\n` +
+    `✅ Email verified: Yes\n` +
+    `🕒 Applied: ${telegramEsc(manilaDateTime(app.created_at))}\n` +
+    `📋 Application: <code>${telegramEsc(shortId)}</code>\n\n` +
+    `🔗 <a href="${telegramAttr(hostAdminUrl())}">Open Host Center</a>`
+  );
+}
+
+async function telegramRecipientKey(chatId: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(chatId),
+  );
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("").slice(0, 16);
+}
+
+async function dispatchHostReviewNotifications(
+  db: any,
+  applicationId = "",
+): Promise<Record<string, unknown>> {
+  if (!telegramConfigured()) {
+    return { ok: true, skipped: true, reason: "Telegram not configured" };
+  }
+
+  const now = new Date().toISOString();
+  let query = db.from("open_play_host_applications")
+    .select(
+      "id,full_name,email,status,email_verified_at,created_at,telegram_notification_sent_at,telegram_notification_attempts,telegram_notification_next_attempt_at",
+    )
+    .eq("status", "pending")
+    .not("email_verified_at", "is", null)
+    .is("telegram_notification_sent_at", null)
+    .lt("telegram_notification_attempts", 20)
+    .order("created_at", { ascending: true })
+    .limit(applicationId ? 1 : 20)
+    .or(
+      `telegram_notification_next_attempt_at.is.null,telegram_notification_next_attempt_at.lte.${now}`,
+    );
+  if (applicationId) query = query.eq("id", applicationId);
+  const { data: applications, error: loadError } = await query;
+  if (loadError) throw new Error(`Host notification queue failed: ${errMsg(loadError)}`);
+
+  let sentApplications = 0;
+  let failedApplications = 0;
+  for (const app of applications || []) {
+    // Claim a short processing lease by comparing the exact queue timestamp
+    // that was loaded. Only one concurrent verifier/dashboard refresh can win.
+    const previousNextAttempt = clean(app.telegram_notification_next_attempt_at);
+    const leaseUntil = new Date(Date.now() + 2 * 60_000).toISOString();
+    let leaseQuery = db.from("open_play_host_applications")
+      .update({ telegram_notification_next_attempt_at: leaseUntil })
+      .eq("id", app.id)
+      .eq("status", "pending")
+      .is("telegram_notification_sent_at", null);
+    leaseQuery = previousNextAttempt
+      ? leaseQuery.eq("telegram_notification_next_attempt_at", previousNextAttempt)
+      : leaseQuery.is("telegram_notification_next_attempt_at", null);
+    const { data: leased, error: leaseError } = await leaseQuery
+      .select("id")
+      .maybeSingle();
+    if (leaseError) {
+      console.error("Host Telegram lease failed:", errMsg(leaseError));
+      failedApplications += 1;
+      continue;
+    }
+    if (!leased) continue;
+
+    const recipients = telegramChatIds();
+    const message = hostReviewTelegramMessage(app);
+    let allDelivered = recipients.length > 0;
+    const errors: string[] = [];
+
+    for (const chatId of recipients) {
+      const recipientKey = await telegramRecipientKey(chatId);
+      const eventKey = `telegram:host_review:${clean(app.id)}:${recipientKey}`;
+      const { error: claimError } = await db.from("notification_event_claims")
+        .insert({
+          event_key: eventKey,
+          event_type: "host_application_review_needed",
+          subject_type: "host_application",
+          subject_id: clean(app.id),
+        });
+      if (claimError && String(claimError.code || "") === "23505") continue;
+      if (claimError) {
+        allDelivered = false;
+        errors.push("delivery claim failed");
+        continue;
+      }
+
+      const delivery = await sendTelegramHtml(message, [chatId]);
+      if (!delivery.ok || delivery.sent !== 1) {
+        allDelivered = false;
+        errors.push("Telegram delivery failed");
+        await db.from("notification_event_claims").delete().eq("event_key", eventKey);
+      }
+    }
+
+    const attempts = Math.min(20, Number(app.telegram_notification_attempts || 0) + 1);
+    const retryMinutes = Math.min(360, 5 * Math.pow(2, Math.max(0, attempts - 1)));
+    const update = allDelivered
+      ? {
+        telegram_notification_sent_at: new Date().toISOString(),
+        telegram_notification_attempts: attempts,
+        telegram_notification_last_error: null,
+        telegram_notification_next_attempt_at: null,
+      }
+      : {
+        telegram_notification_attempts: attempts,
+        telegram_notification_last_error: errors.join("; ").slice(0, 500) ||
+          "Telegram delivery incomplete",
+        telegram_notification_next_attempt_at: new Date(
+          Date.now() + retryMinutes * 60_000,
+        ).toISOString(),
+      };
+    const { error: updateError } = await db.from("open_play_host_applications")
+      .update(update)
+      .eq("id", app.id)
+      .eq("status", "pending")
+      .eq("telegram_notification_next_attempt_at", leaseUntil)
+      .is("telegram_notification_sent_at", null);
+    if (updateError) {
+      console.error("Host Telegram state update failed:", errMsg(updateError));
+      failedApplications += 1;
+    } else if (allDelivered) {
+      sentApplications += 1;
+    } else {
+      failedApplications += 1;
+    }
+  }
+
+  return {
+    ok: failedApplications === 0,
+    processed: (applications || []).length,
+    sent: sentApplications,
+    failed: failedApplications,
+  };
 }
 
 // This standalone function has no generated Database type.
@@ -855,6 +1049,67 @@ Deno.serve(async (req): Promise<Response> => {
   } catch (error) {
     const status = error instanceof RequestBodyError ? error.status : 400;
     return json({ error: errMsg(error) }, status);
+  }
+
+  if (body.action === "confirm-verification") {
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const { data: authData, error: authError } = await db.auth.getUser(token);
+    const authUser = authData?.user;
+    const userId = clean(authUser?.id);
+    const email = normalizedEmail(authUser?.email);
+    if (authError || !userId || !email) {
+      return json({ error: "Verified applicant session required" }, 401);
+    }
+    if (!authUser?.email_confirmed_at) {
+      return json({ error: "Email verification is not complete" }, 409);
+    }
+
+    const { data: applicationId, error: markError } = await db.rpc(
+      "mark_host_application_email_verified",
+      { p_host_user_id: userId, p_email: email },
+    );
+    if (markError) {
+      console.error("Host verification transition failed:", errMsg(markError));
+      return json({ error: "Host verification could not be recorded" }, 503);
+    }
+    if (!applicationId) {
+      return json({ error: "Pending host application was not found" }, 404);
+    }
+
+    let notification: Record<string, unknown> = {
+      ok: true,
+      skipped: true,
+      reason: "Notification will retry later",
+    };
+    try {
+      notification = await dispatchHostReviewNotifications(
+        db,
+        clean(applicationId),
+      );
+    } catch (error) {
+      // Email verification and application state are authoritative. Telegram
+      // is an operational alert and must never invalidate either one.
+      console.error("Host review Telegram attempt failed:", errMsg(error));
+    }
+    return json({
+      ok: true,
+      applicationId,
+      reviewable: true,
+      notification,
+    });
+  }
+
+  if (body.action === "dispatch-review-notifications") {
+    const reviewer = await requireReviewer(req, db);
+    if ("error" in reviewer) return reviewer.error;
+    try {
+      const notification = await dispatchHostReviewNotifications(db);
+      return json({ ok: true, notification });
+    } catch (error) {
+      console.error("Host review Telegram retry failed:", errMsg(error));
+      return json({ error: "Host notification retry failed" }, 503);
+    }
   }
 
   if (body.action === "resend-verification") {

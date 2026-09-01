@@ -50,6 +50,8 @@ const bookingStatusEmailEdge = read('supabase/functions/send-booking-status-emai
 const paymentSessionEdge = read('supabase/functions/create-payment-session/index.ts');
 const manageAccountEdge = read('supabase/functions/manage-account/index.ts');
 const hostApplicationEdge = read('supabase/functions/host-application/index.ts');
+const hostTelegramMigration = read('supabase/migrations/20260902120000_host_application_telegram_review_alerts.sql');
+const telegramShared = read('supabase/functions/_shared/telegram.ts');
 const fullPaymentMigration = read('supabase/migrations/20260719130000_regular_bookings_full_payment.sql');
 const gcashParser = read('supabase/functions/_shared/gcash-receipt.ts');
 const receiptProviderDispatch = read(
@@ -611,6 +613,59 @@ test('receipt clients preserve only a persisted canonical auto-verification resu
     registrationEdge,
     /p_client_receipt_status:\s*text\(body\.receiptStatus/
   );
+});
+
+test('verified host applications enqueue one privacy-safe retryable Telegram review alert', () => {
+  const hostPage = read('host.html');
+  const admin = read('admin.html');
+  const config = read('supabase-config.js');
+  const deploy = read('deploy-edge-functions.ps1');
+  const message = functionSource(hostApplicationEdge, 'hostReviewTelegramMessage');
+  const dispatch = functionSource(hostApplicationEdge, 'dispatchHostReviewNotifications');
+  const confirm = hostApplicationEdge.slice(
+    hostApplicationEdge.indexOf('if (body.action === "confirm-verification")'),
+    hostApplicationEdge.indexOf('if (body.action === "dispatch-review-notifications")')
+  );
+
+  assert.match(confirm, /db\.auth\.getUser\(token\)/);
+  assert.match(confirm, /authUser\?\.email_confirmed_at/);
+  assert.match(confirm, /mark_host_application_email_verified/);
+  assert.match(confirm, /dispatchHostReviewNotifications/);
+  assert.ok(confirm.indexOf('email_confirmed_at') < confirm.indexOf('mark_host_application_email_verified'));
+  assert.match(hostTelegramMigration, /email_verified_at timestamptz/);
+  assert.match(hostTelegramMigration, /telegram_notification_sent_at timestamptz/);
+  assert.match(hostTelegramMigration, /telegram_notification_next_attempt_at timestamptz/);
+  assert.match(hostTelegramMigration, /from auth\.users u[\s\S]*u\.email_confirmed_at is not null/);
+  assert.match(hostTelegramMigration, /security definer/);
+  assert.match(hostTelegramMigration, /revoke all on function public\.mark_host_application_email_verified[\s\S]*from public, anon, authenticated/);
+  assert.match(dispatch, /\.eq\("status", "pending"\)/);
+  assert.match(dispatch, /\.not\("email_verified_at", "is", null\)/);
+  assert.match(dispatch, /notification_event_claims/);
+  assert.match(dispatch, /telegramRecipientKey\(chatId\)/);
+  assert.match(dispatch, /const leaseUntil = new Date\(Date\.now\(\) \+ 2 \* 60_000\)/);
+  assert.match(dispatch, /\.eq\("telegram_notification_next_attempt_at", previousNextAttempt\)/);
+  assert.match(dispatch, /\.eq\("telegram_notification_next_attempt_at", leaseUntil\)/);
+  assert.match(dispatch, /delete\(\)\.eq\("event_key", eventKey\)/);
+  assert.match(dispatch, /Math\.min\(360, 5 \* Math\.pow\(2/);
+  assert.match(telegramShared, /Promise\.all\(chatIds\.map/);
+  assert.match(telegramShared, /deliveredChatIds/);
+  assert.match(telegramShared, /failedChatIds/);
+
+  assert.match(message, /HOST APPLICATION NEEDS REVIEW/);
+  assert.match(message, /maskedEmail\(app\.email\)/);
+  assert.match(message, /Email verified: Yes/);
+  assert.match(message, /Open Host Center/);
+  assert.doesNotMatch(message, /password|gcash|valid_id|notes|contact_number/i);
+
+  assert.match(hostPage, /await DB\.confirmOpenPlayHostVerification\(\)/);
+  assert.ok(hostPage.indexOf('await DB.confirmOpenPlayHostVerification()') < hostPage.indexOf("await _sb.auth.signOut({ scope: 'local' })"));
+  assert.match(config, /action: 'confirm-verification'/);
+  assert.match(config, /action: 'dispatch-review-notifications'/);
+  assert.match(admin, /a\.status === 'pending' && a\.emailVerifiedAt/);
+  assert.match(admin, /dispatchOpenPlayHostReviewNotifications\(\)\.catch/);
+  assert.match(deploy, /TELEGRAM_BOT_TOKEN/);
+  assert.match(deploy, /TELEGRAM_CHAT_ID/);
+  assert.match(config, /confirmOpenPlayHostVerification\(\) \{ return \{ ok: true, reviewable: true, skipped: true, reason: 'Local data mode'/);
 });
 
 test('public court schedules use compact stacked court headings without filter buttons', () => {

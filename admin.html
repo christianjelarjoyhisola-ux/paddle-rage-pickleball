@@ -4797,7 +4797,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
           <div class="pr-insights-hero-copy">
             <div class="pr-insights-eyebrow">Paddle Rage Intelligence</div>
             <h2 id="prInsightsTitle">Find quiet hours. Fill more courts.</h2>
-            <p>Paddle Rage learns from successful paid bookings, maps reliable demand patterns, and recommends one regular-price court hour at a time.</p>
+            <p>Paddle Rage separates future reservations from past qualifying booking history, maps reliable demand patterns, and recommends one regular-price court hour at a time.</p>
           </div>
           <div class="pr-insights-controls" aria-label="Insights controls">
             <select class="pr-insights-select" id="prInsightCourt" aria-label="Filter Insights by court" onchange="renderPaddleInsights({force:true})">
@@ -4841,14 +4841,14 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
                 <span>Low</span><i style="--legend:.12"></i><i style="--legend:.28"></i><i style="--legend:.48"></i><i style="--legend:.7"></i><span>High</span>
               </div>
             </div>
-            <div class="pr-insights-map-summary" id="prInsightMapSummary">Learning begins after the first successful paid booking.</div>
+            <div class="pr-insights-map-summary" id="prInsightMapSummary">Learning starts after the first qualifying court session has occurred.</div>
             <div class="pr-insights-heatmap-wrap">
               <div class="pr-insights-heatmap" id="prInsightHeatmap" role="grid" aria-label="Demand by weekday and time"></div>
             </div>
             <div class="pr-insights-mobile-map" id="prInsightMobileMap" aria-label="Mobile demand by weekday and time">
               <div class="pr-insights-mobile-learning" role="status">
                 <div class="pr-insights-mobile-learning-head">
-                  <div><strong>Learning your booking pattern</strong><span>Successful paid bookings build the hourly map.</span></div>
+                  <div><strong>Learning your booking pattern</strong><span>Qualifying completed court sessions build the hourly map.</span></div>
                   <b>0 / 30</b>
                 </div>
                 <div class="pr-insights-mobile-progress" role="progressbar" aria-label="Learning progress" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0"><i style="--progress:0%"></i></div>
@@ -4861,7 +4861,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
               <div>
                 <div class="pr-insights-empty-icon" aria-hidden="true">&#10022;</div>
                 <strong>Collecting reliable history</strong>
-                <p>After 30 calendar days of successful paid play, Paddle Rage can identify one evidence-backed regular-price hour to feature.</p>
+                <p>Forecasting needs a 30-day venue baseline. A Court Pick also needs at least eight comparable occurrences of the same weekday and hour.</p>
               </div>
             </div>
           </aside>
@@ -4869,7 +4869,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
 
         <details class="pr-insights-method">
           <summary>How Paddle Rage decides</summary>
-          <p id="prInsightMethod">Only paid or downpayment-paid confirmed/completed court bookings through yesterday teach demand. Failed payments, temporary holds, cancelled or forfeited bookings, blocked dates, Maintenance, and Open Play are excluded. Recent comparable weeks carry more weight. Current saved schedules are applied to historical capacity, so review Insights after major operating-hour changes.</p>
+          <p id="prInsightMethod">Future reservations affect upcoming capacity, not demand history. Only paid or downpayment-paid confirmed/completed court sessions through yesterday teach demand. Failed payments, temporary holds, cancelled or forfeited bookings, pre-opening dates, blocked dates, Maintenance, and Open Play are excluded. Recent comparable weeks carry more weight. Current saved schedules are applied to historical capacity, so review Insights after major operating-hour changes.</p>
         </details>
       </section>
     </div>
@@ -7704,6 +7704,11 @@ function prInsightMoney(value){
   return '₱'+Number(value||0).toLocaleString('en-PH',{minimumFractionDigits:0,maximumFractionDigits:0});
 }
 
+function prInsightDateRange(from,to){
+  if(!from||!to) return '';
+  return `${window.PaddleRageInsights.formatDate(from)} – ${window.PaddleRageInsights.formatDate(to)}`;
+}
+
 async function ensurePaddleInsightCourts(courts=null){
   const select=$('prInsightCourt');
   if(!select) return [];
@@ -7776,9 +7781,10 @@ function renderPaddleInsightMobileMap(){
     const learning=fresh?0:Math.min(comparable,4);
     const targetDays=fresh?minimum:4;
     const progress=Math.min(100,Math.round(learning*100/targetDays));
+    const recommendationMinimum=Math.max(1,Number(snapshot.period?.minimum_recommendation_comparable_days||8));
     const message=fresh
-      ? 'Successful paid bookings build the hourly map.'
-      : `Hourly demand appears after 4 comparable days. Recommendations still require ${minimum} venue learning days.`;
+      ? 'Learning starts after the first qualifying court session has occurred.'
+      : `Hourly demand appears after 4 comparable days. A Court Pick needs ${minimum} venue days and ${recommendationMinimum} comparable occurrences.`;
     target.innerHTML=`<div class="pr-insights-mobile-learning" role="status"><div class="pr-insights-mobile-learning-head"><div><strong>Learning your booking pattern</strong><span>${esc(message)}</span></div><b>${prInsightNumber(learning)} / ${prInsightNumber(targetDays)}</b></div><div class="pr-insights-mobile-progress" role="progressbar" aria-label="Demand-map learning progress: ${prInsightNumber(learning)} of ${prInsightNumber(targetDays)} comparable days" aria-valuemin="0" aria-valuemax="${targetDays}" aria-valuenow="${learning}"><i style="--progress:${progress}%"></i></div></div>`;
     return;
   }
@@ -7930,6 +7936,9 @@ function renderPaddleInsightAction(snapshot){
   if(!target) return;
   const learning=Number(snapshot?.period?.learning_days||0);
   const minimum=Number(snapshot?.period?.minimum_learning_days||30);
+  const comparable=Number(snapshot?.period?.max_comparable_days||0);
+  const comparableMinimum=Number(snapshot?.period?.minimum_recommendation_comparable_days||8);
+  const comparisonReady=Boolean(snapshot?.period?.recommendation_evidence_ready);
   const recommendation=snapshot?.recommendation;
   if(recommendation){
     target.innerHTML=`
@@ -7950,7 +7959,15 @@ function renderPaddleInsightAction(snapshot){
   }
   const noHistory=!snapshot?.period?.from;
   const enough=learning>=minimum;
-  target.innerHTML=`<div class="pr-insights-empty"><div><div class="pr-insights-empty-icon" aria-hidden="true">&#10022;</div><strong>${noHistory?'Collecting reliable history':enough?'No quiet-hour action is ready':'Building a reliable baseline'}</strong><p>${noHistory?'Learning begins after the first successful paid court booking. No test data will be added.':enough?'Current evidence does not identify a safe hour to feature. Keep regular booking operations unchanged.':`${learning} of ${minimum} calendar learning days complete. Recommendations stay locked until the baseline is reliable.`}</p></div></div>`;
+  const title=noHistory?'Collecting reliable history':!enough?'Building a reliable baseline':!comparisonReady?'Building comparable-weekday evidence':'No quiet-hour action is ready';
+  const copy=noHistory
+    ? 'Learning starts after the first paid or downpayment-paid confirmed/completed court session has occurred. Future reservations affect capacity only.'
+    : !enough
+      ? `${learning} of ${minimum} calendar learning days complete. A Court Pick also needs ${comparableMinimum} comparable occurrences of the same weekday and hour.`
+      : !comparisonReady
+        ? `The ${minimum}-day venue baseline is complete. The strongest court-hour has ${comparable} of ${comparableMinimum} comparable occurrences required for a Court Pick.`
+        : 'Current evidence does not identify a safe hour to feature. Keep regular booking operations unchanged.';
+  target.innerHTML=`<div class="pr-insights-empty"><div><div class="pr-insights-empty-icon" aria-hidden="true">&#10022;</div><strong>${esc(title)}</strong><p>${esc(copy)}</p></div></div>`;
 }
 
 function renderPaddleInsightSnapshot(snapshot,courtName){
@@ -7958,23 +7975,38 @@ function renderPaddleInsightSnapshot(snapshot,courtName){
   const k=snapshot?.kpis||{};
   const learning=Number(snapshot?.period?.learning_days||0);
   const minimum=Number(snapshot?.period?.minimum_learning_days||30);
+  const comparable=Number(snapshot?.period?.max_comparable_days||0);
+  const comparableMinimum=Number(snapshot?.period?.minimum_recommendation_comparable_days||8);
+  const comparisonReady=Boolean(snapshot?.period?.recommendation_evidence_ready);
   const noHistory=!snapshot?.period?.from;
   const enough=learning>=minimum;
   const booked=Number(k.booked_next_28_hours||0);
   const sellable=Number(k.sellable_next_28_hours||0);
+  const forecastRange=prInsightDateRange(snapshot?.period?.forecast_from,snapshot?.period?.forecast_to);
   $('prInsightBooked').textContent=`${prInsightNumber(booked,booked%1?1:0)} hr`;
-  $('prInsightBookedNote').textContent=sellable?`${prInsightNumber(k.booked_next_28_pct,1)}% of ${prInsightNumber(sellable)} sellable hours already reserved`:'No sellable court-hours found';
+  $('prInsightBookedNote').textContent=sellable
+    ? `${prInsightNumber(k.booked_next_28_pct,1)}% of ${prInsightNumber(sellable)} sellable hours reserved${forecastRange?` · ${forecastRange}`:''}`
+    : `No sellable court-hours found${forecastRange?` for ${forecastRange}`:''}`;
   $('prInsightExpected').textContent=k.expected_total_fill_pct==null?'—':`${prInsightNumber(k.expected_total_fill_pct,1)}%`;
-  $('prInsightExpectedNote').textContent=k.expected_total_fill_pct==null?(noHistory?'Begins after the first successful paid booking':`${learning} of ${minimum} learning days complete`):`${prInsightNumber(k.forecast_coverage_pct)}% of the next schedule has comparable evidence`;
-  $('prInsightActionCount').textContent=snapshot?.recommendation?'1 Ready':enough?'0 Ready':'Learning';
-  $('prInsightActionNote').textContent=snapshot?.recommendation?'One regular-price Court Pick is ready':enough?'No safe quiet-hour action right now':`${learning} of ${minimum} days complete`;
+  $('prInsightExpectedNote').textContent=k.expected_total_fill_pct==null?(noHistory?'Begins after the first qualifying court session occurs':`${learning} of ${minimum} learning days complete`):`${prInsightNumber(k.forecast_coverage_pct)}% of the next schedule has comparable evidence`;
+  $('prInsightActionCount').textContent=snapshot?.recommendation?'1 Ready':!enough?'Learning':!comparisonReady?'Comparing':'0 Ready';
+  $('prInsightActionNote').textContent=snapshot?.recommendation
+    ? 'One regular-price Court Pick is ready'
+    : !enough
+      ? `${learning} of ${minimum} venue days complete`
+      : !comparisonReady
+        ? `${comparable} of ${comparableMinimum} comparable occurrences`
+        : 'No safe quiet-hour action right now';
   $('prInsightActionKpi').dataset.state=snapshot?.recommendation?'ready':'learning';
   $('prInsightMapTitle').textContent=`Demand by time · ${courtName||'All courts'}`;
   if(noHistory){
-    $('prInsightStatus').innerHTML='<span>Learning begins after the first successful paid booking.</span><span>Nothing has been changed.</span>';
-    $('prInsightMapSummary').textContent='Demand percentages stay blank until real booking evidence exists.';
+    const reservationStatus=snapshot?.period?.is_preopening&&forecastRange
+      ? `Advance reservations count for ${forecastRange}.`
+      : forecastRange?`Upcoming reservations count for ${forecastRange}.`:'No upcoming sellable period is available.';
+    $('prInsightStatus').innerHTML=`<span>${esc(reservationStatus)}</span><span>Learning starts only after a qualifying court session has occurred.</span>`;
+    $('prInsightMapSummary').textContent='Future reservations affect capacity, not demand history. Demand percentages stay blank until completed-session evidence exists.';
   }else{
-    $('prInsightStatus').innerHTML=`<span>${esc(window.PaddleRageInsights.formatDate(snapshot.period.from))} – ${esc(window.PaddleRageInsights.formatDate(snapshot.period.to))}</span><span>${learning} calendar learning days · successful bookings through yesterday only</span>`;
+    $('prInsightStatus').innerHTML=`<span>${esc(window.PaddleRageInsights.formatDate(snapshot.period.from))} – ${esc(window.PaddleRageInsights.formatDate(snapshot.period.to))}</span><span>${learning} calendar learning days · qualifying court sessions through yesterday only</span>`;
     $('prInsightMapSummary').textContent=k.likely_open_hours==null?`Still learning: ${learning} of ${minimum} days complete.`:`About ${prInsightNumber(Math.round(k.likely_open_hours))} evidence-qualified court-hours may remain open over the next 28 days. Forecast coverage: ${prInsightNumber(k.forecast_coverage_pct)}%.`;
   }
   renderPaddleInsightHeatmap(snapshot);
@@ -8004,7 +8036,7 @@ async function renderPaddleInsights({force=false}={}){
     await ensurePaddleInsightCourts(courts);
     const courtId=$('prInsightCourt')?.value||null;
     const courtName=courtId?(courts.find(court=>String(court.id)===String(courtId))?.name||courtId):'All courts';
-    const snapshot=window.PaddleRageInsights.buildSnapshot({bookings,courts,settings,blockedDates,courtId});
+    const snapshot=window.PaddleRageInsights.buildSnapshot({bookings,courts,settings,blockedDates,courtId,openingDate:window.PaddleRageInsights.OPENING_DATE});
     renderPaddleInsightSnapshot(snapshot,courtName);
   }catch(error){
     if(requestSeq!==_prInsightRequestSeq) return;
@@ -13376,6 +13408,7 @@ async function openHostFinanceBooking(ref, mode) {
    OPEN PLAY HOST CENTER
    ============================================== */
 let _hostCenter = { courts: [], applications: [], sessions: [] };
+let _hostReviewNotificationRetryAt = 0;
 const _hostActivationState = new Map();
 
 function rememberHostActivationState(applicationId, result = {}, fallbackStatus = '') {
@@ -13506,6 +13539,10 @@ function hostVisibleSessions(sessions) {
 
 async function renderHostCenter() {
   hostPopulateTimePickers();
+  if(hostCanManageApplications()&&DB.dispatchOpenPlayHostReviewNotifications&&Date.now()-_hostReviewNotificationRetryAt>60000){
+    _hostReviewNotificationRetryAt=Date.now();
+    DB.dispatchOpenPlayHostReviewNotifications().catch(error=>console.warn('Host review notification retry:',error?.message||error));
+  }
   const [courts, sessions, applications] = await Promise.all([
     DB.getCourts(),
     DB.getOpenPlayHostSessions(),
@@ -13670,10 +13707,11 @@ function renderHostApplications() {
   const count = $('hostAppCount');
   const apps = _hostCenter.applications || [];
   const pending = apps.filter(a => a.status === 'pending').length;
+  const reviewable = apps.filter(a => a.status === 'pending' && a.emailVerifiedAt).length;
   const activationNeeded = apps.filter(a => hostApplicationLoginState(a).needsActivation).length;
   if (count) count.textContent = activationNeeded
-    ? `${pending} pending · ${activationNeeded} need activation`
-    : `${pending} pending`;
+    ? `${reviewable} to review · ${pending} pending · ${activationNeeded} need activation`
+    : `${reviewable} to review · ${pending} pending`;
   if (!apps.length) {
     list.innerHTML = '<div class="gm-empty">No host applications yet.</div>';
     return;
@@ -13691,6 +13729,7 @@ function renderHostApplications() {
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
           ${badge(a.status)}
+          ${a.status==='pending'?`<span class="bdg ${a.emailVerifiedAt?'bdg-c':'bdg-d'}">${a.emailVerifiedAt?'Email verified':'Awaiting email verification'}</span>`:''}
           <span class="bdg ${loginState.badgeClass}">${esc(loginState.label)}</span>
         </div>
       </div>
@@ -13699,7 +13738,8 @@ function renderHostApplications() {
       ${a.validIdFileName ? `<div class="host-mini-row"><span>Valid ID</span><strong>${esc(a.validIdFileName)}</strong></div>` : ''}
       ${a.notes ? `<div class="host-meta">${esc(a.notes)}</div>` : ''}
       <div class="host-session-actions">
-        ${a.status === 'pending' ? `<button class="btn btn-p btn-sm host-app-action" data-host-application-id="${esc(a.id)}" onclick="reviewHostApplication('${jsArg(a.id)}','approved')">Approve</button><button class="btn btn-d btn-sm host-app-action" data-host-application-id="${esc(a.id)}" onclick="reviewHostApplication('${jsArg(a.id)}','rejected')">Reject</button>` : ''}
+        ${a.status === 'pending' && a.emailVerifiedAt ? `<button class="btn btn-p btn-sm host-app-action" data-host-application-id="${esc(a.id)}" onclick="reviewHostApplication('${jsArg(a.id)}','approved')">Approve</button>` : ''}
+        ${a.status === 'pending' ? `<button class="btn btn-d btn-sm host-app-action" data-host-application-id="${esc(a.id)}" onclick="reviewHostApplication('${jsArg(a.id)}','rejected')">Reject</button>` : ''}
         ${a.status === 'approved' ? `<button class="btn btn-p btn-sm host-app-action" data-host-application-id="${esc(a.id)}" onclick="repairHostApplicationActivation('${jsArg(a.id)}')">${repairLabel}</button>` : ''}
         ${a.validIdPath ? `<button class="btn btn-g btn-sm host-app-action" data-host-application-id="${esc(a.id)}" onclick="openHostValidId('${jsArg(a.id)}')">View ID</button>` : ''}
       </div>

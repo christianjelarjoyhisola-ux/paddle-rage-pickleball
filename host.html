@@ -232,6 +232,7 @@ async function handleHostEntryState() {
 
   if (url.searchParams.get('apply') === '1') showPanel('apply');
   if (!verificationReturn && !authError) return;
+  let verificationRecorded = !verificationReturn;
 
   if (authError) {
     showPanel('apply');
@@ -242,12 +243,18 @@ async function handleHostEntryState() {
     );
   } else {
     showPanel('login');
-    setMsg(
-      'loginMsg',
-      'Email verified successfully. Your application is awaiting court owner review; you can sign in after approval.',
-      'ok',
-    );
     try {
+      if (!DB.confirmOpenPlayHostVerification) throw new Error('Host verification service is unavailable.');
+      const verification = await DB.confirmOpenPlayHostVerification();
+      verificationRecorded = true;
+      const ownerAlertSent = Number(verification?.notification?.sent || 0) > 0;
+      setMsg(
+        'loginMsg',
+        ownerAlertSent
+          ? 'Email verified successfully. The court owner has been notified and your application is awaiting review. You can sign in after approval.'
+          : 'Email verified successfully. Your application is awaiting court owner review. You can sign in after approval.',
+        'ok',
+      );
       const activeRole = await _pbCurrentAccountRole();
       if (!activeRole) {
         await _sb.auth.signOut({ scope: 'local' });
@@ -255,12 +262,16 @@ async function handleHostEntryState() {
         localStorage.removeItem('pb_session');
         sessionStorage.removeItem('pb_session');
       }
-    } catch (_) {
-      // URL cleanup below still removes one-time Auth material from the page.
+    } catch (error) {
+      setMsg(
+        'loginMsg',
+        `${error?.message || 'Host verification could not be finalized.'} Refresh this page to try again.`,
+        'err',
+      );
     }
   }
 
-  url.searchParams.delete('email_verified');
+  if (verificationRecorded) url.searchParams.delete('email_verified');
   url.searchParams.delete('error');
   url.searchParams.delete('error_code');
   url.searchParams.delete('error_description');
