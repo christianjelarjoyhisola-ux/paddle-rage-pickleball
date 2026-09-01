@@ -6,6 +6,28 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
+const PUBLIC_COURT_OPENING_DATE = "2026-09-19";
+
+function manilaToday(): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Manila",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date())
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function minimumBookingDate(): string {
+  const today = manilaToday();
+  return today > PUBLIC_COURT_OPENING_DATE
+    ? today
+    : PUBLIC_COURT_OPENING_DATE;
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -213,6 +235,16 @@ Deno.serve(async (req) => {
       return json({
         ok: false,
         error: "Secure booking access token is invalid.",
+      }, 400);
+    }
+    const minimumDate = minimumBookingDate();
+    if (bookings.some((booking) => {
+      const date = text(booking.date, 10);
+      return !/^\d{4}-\d{2}-\d{2}$/.test(date) || date < minimumDate;
+    })) {
+      return json({
+        ok: false,
+        error: `Advance booking is available from ${minimumDate}.`,
       }, 400);
     }
 

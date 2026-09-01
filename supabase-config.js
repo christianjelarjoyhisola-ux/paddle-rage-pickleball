@@ -675,6 +675,28 @@ function rowToDeletedBookingArchive(r) {
 }
 
 const PB_RESERVATION_HOLD_MINUTES = 15;
+const PB_PUBLIC_COURT_OPENING_DATE = '2026-09-19';
+
+function _pbManilaToday() {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(new Date()).filter(part => part.type !== 'literal').map(part => [part.type, part.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function _pbMinimumPublicBookingDate() {
+  const today = _pbManilaToday();
+  return today > PB_PUBLIC_COURT_OPENING_DATE ? today : PB_PUBLIC_COURT_OPENING_DATE;
+}
+
+function _pbAssertPublicBookingDate(date) {
+  const value = String(date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < _pbMinimumPublicBookingDate()) {
+    throw new Error('Advance booking is available from September 19, 2026.');
+  }
+}
 
 function bookingHoldsSlotForConflict(b) {
   if (!b || b.status === 'cancelled' || b.status === 'forfeited') return false;
@@ -1102,6 +1124,7 @@ window.DB = {
     if (batch.length < 1 || batch.length > 8) {
       throw new Error('Choose between one and eight booking items.');
     }
+    batch.forEach(booking => _pbAssertPublicBookingDate(booking.date));
     const authenticated = await _pbHasActiveAccount();
 
     // Fast client feedback only. The database serializes and re-checks every
@@ -1181,6 +1204,7 @@ window.DB = {
   },
 
   async updateBooking(ref, updates) {
+    if (updates.date !== undefined) _pbAssertPublicBookingDate(updates.date);
     // Map only the fields provided (camelCase → snake_case)
     const row = {};
     if (updates.status    !== undefined) row.status = updates.status;
@@ -1410,6 +1434,7 @@ window.DB = {
   },
 
   async addOpenPlayRegistration(reg) {
+    _pbAssertPublicBookingDate(reg.date);
     const paymentMethod = String(reg.paymentMethod || 'cash').toLowerCase();
     try {
       const response = await _invokeEdgeFunction('submit-public-registration', {
@@ -1589,12 +1614,14 @@ window.DB = {
   },
 
   async createOpenPlayHostSession(session) {
+    _pbAssertPublicBookingDate(session.date);
     const { data, error } = await _sb.from('open_play_host_sessions').insert(hostSessionToRow(session)).select('*').single();
     if (error) { console.error('createOpenPlayHostSession:', error); throw error; }
     return rowToOpenPlayHostSession(data);
   },
 
   async updateOpenPlayHostSession(id, updates) {
+    if (updates.date !== undefined) _pbAssertPublicBookingDate(updates.date);
     const row = {};
     if (updates.status !== undefined) row.status = updates.status;
     if (updates.title !== undefined) row.title = updates.title;
@@ -3340,6 +3367,7 @@ window.DB = {
       if (batch.length < 1 || batch.length > 8) {
         throw new Error('Choose between one and eight booking items.');
       }
+      batch.forEach(booking => _pbAssertPublicBookingDate(booking.date));
 
       const db = readDb();
       const rows = [];
@@ -3370,6 +3398,7 @@ window.DB = {
     },
     async getBookingByRef(ref) { return readDb().bookings.find(b => String(b.ref) === String(ref)) || null; },
     async updateBooking(ref, updates) {
+      if (updates.date !== undefined) _pbAssertPublicBookingDate(updates.date);
       const db = readDb();
       let updated = false;
       db.bookings = db.bookings.map(b => {
@@ -3806,6 +3835,7 @@ window.DB = {
       return readDb().openPlayRegistrations.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
     },
     async addOpenPlayRegistration(reg) {
+      _pbAssertPublicBookingDate(reg.date);
       const db = readDb();
       let config = null;
       try { config = JSON.parse(db.settings.open_play_config || 'null'); } catch (_) {}
@@ -4048,6 +4078,7 @@ window.DB = {
       );
     },
     async createOpenPlayHostSession(session) {
+      _pbAssertPublicBookingDate(session.date);
       const db = readDb();
       const row = {
         id: localRef('hosts'),
@@ -4073,6 +4104,7 @@ window.DB = {
       return row;
     },
     async updateOpenPlayHostSession(id, updates) {
+      if (updates.date !== undefined) _pbAssertPublicBookingDate(updates.date);
       const db = readDb();
       let saved = null;
       db.openPlayHostSessions = db.openPlayHostSessions.map(session => {

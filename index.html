@@ -224,6 +224,11 @@ body.dark .shared-date-display {
 .shared-date-today:focus-visible {
   outline:none; border-color:var(--accent); background:rgba(var(--ac),.1);
 }
+.shared-date-nav:disabled,
+.date-picker-nav:disabled {
+  opacity:.34; cursor:not-allowed; color:var(--muted);
+  border-color:var(--border); background:var(--input); transform:none;
+}
 .shared-date-native {
   position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;
 }
@@ -326,16 +331,21 @@ body.dark .shared-date-display {
 .ft-result-price { color:var(--accent); font-size:.8rem; font-weight:800; margin-top:3px; }
 .ft-result .btn { padding:8px 13px; }
 
-/* PADDLE RAGE PRICE PROMISE */
+/* PADDLE RAGE LAUNCH OFFER */
 .price-promise {
   position:relative; isolation:isolate; overflow:hidden;
   display:flex; align-items:center; justify-content:center;
   min-height:50px; margin:0 0 16px; padding:11px 15px;
-  border:1px solid rgba(var(--lime-rgb),.46); border-radius:14px;
+  border:1px solid rgba(var(--lime-rgb),.5); border-radius:14px;
   background:
-    radial-gradient(circle at 8% 50%,rgba(var(--lime-rgb),.16),transparent 34%),
-    linear-gradient(115deg,rgba(var(--lime-rgb),.095),rgba(var(--ac),.025) 62%,rgba(var(--lime-rgb),.055));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 10px 30px rgba(var(--lime-rgb),.07);
+    radial-gradient(circle at 50% 150%,rgba(var(--lime-rgb),.18),transparent 58%),
+    linear-gradient(115deg,rgba(var(--lime-rgb),.085),rgba(5,12,7,.78) 48%,rgba(var(--lime-rgb),.075));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 10px 30px rgba(var(--lime-rgb),.075);
+}
+.price-promise::before {
+  content:''; position:absolute; z-index:0; left:14px; right:14px; top:50%; height:1px;
+  background:linear-gradient(90deg,rgba(var(--lime-rgb),.02),rgba(var(--lime-rgb),.2) 28%,transparent 42% 58%,rgba(var(--lime-rgb),.2) 72%,rgba(var(--lime-rgb),.02));
+  transform:translateY(-50%); pointer-events:none;
 }
 .price-promise::after {
   content:''; position:absolute; inset:-85% auto -85% -20%; width:18%; z-index:0;
@@ -348,11 +358,20 @@ body.dark .shared-date-display {
   76% { opacity:1; }
   92% { left:118%; opacity:0; }
 }
-.price-promise-title {
-  position:relative; z-index:1;
-  color:var(--lime-ink); font-family:'Bebas Neue',sans-serif;
-  font-size:1.24rem; line-height:1; letter-spacing:1.9px;
+.price-promise-lockup {
+  position:relative; z-index:1; display:inline-flex; align-items:center; gap:9px;
+  padding:0 13px; background:rgba(6,13,8,.88);
   animation:pricePromiseTitleIn .52s cubic-bezier(.22,1,.36,1) both;
+}
+.price-promise-no {
+  min-width:31px; min-height:25px; padding:3px 7px; display:inline-grid; place-items:center;
+  border-radius:7px; background:linear-gradient(145deg,var(--lime),var(--accent));
+  box-shadow:0 0 0 1px rgba(var(--lime-rgb),.24),0 0 22px rgba(var(--lime-rgb),.2);
+  color:#071006; font-size:.69rem; font-weight:950; line-height:1; letter-spacing:.8px;
+}
+.price-promise-title {
+  color:var(--lime-ink); font-family:'Bebas Neue',sans-serif;
+  font-size:1.28rem; line-height:1; letter-spacing:2.25px;
 }
 @keyframes pricePromiseTitleIn {
   from { opacity:0; transform:translateY(6px); }
@@ -360,7 +379,7 @@ body.dark .shared-date-display {
 }
 @media (prefers-reduced-motion: reduce) {
   .price-promise::after { display:none; animation:none; }
-  .price-promise-title { animation:none; }
+  .price-promise-lockup { animation:none; opacity:1; transform:none; }
 }
 @media(max-width:700px) {
   .find-time-entry { margin-top:-6px; gap:10px; }
@@ -373,14 +392,14 @@ body.dark .shared-date-display {
   }
   .shared-date-title span { font-size:.6rem; }
   .shared-date-control {
-    grid-template-columns:32px minmax(0,1fr) 32px 58px;
+    grid-template-columns:32px minmax(0,1fr) 32px 76px;
     gap:5px; min-width:0;
   }
   .shared-date-nav,
   .shared-date-today,
   .shared-date-display { min-height:34px; border-radius:9px; }
   .shared-date-display { font-size:.86rem; padding:0 8px; }
-  .shared-date-today { font-size:.64rem; padding:0 8px; }
+  .shared-date-today { font-size:.58rem; padding:0 6px; white-space:nowrap; }
   .date-picker-overlay { align-items:flex-end; padding:12px; }
   .date-picker { width:100%; border-radius:18px 18px 14px 14px; padding:13px; }
   .date-day { border-radius:9px; font-size:.76rem; }
@@ -398,8 +417,10 @@ body.dark .shared-date-display {
   .ft-note { font-size:.72rem; padding:8px 9px; }
   .ft-result { align-items:stretch; flex-direction:column; }
   .ft-result .btn { width:100%; justify-content:center; }
-  .price-promise { min-height:44px; margin-bottom:12px; padding:9px 11px; border-radius:12px; }
-  .price-promise-title { font-size:1.05rem; letter-spacing:1.4px; }
+  .price-promise { min-height:44px; margin-bottom:12px; padding:8px 10px; border-radius:12px; }
+  .price-promise-lockup { gap:7px; padding:0 10px; }
+  .price-promise-no { min-width:27px; min-height:22px; padding:3px 6px; font-size:.61rem; border-radius:6px; }
+  .price-promise-title { font-size:1.08rem; letter-spacing:1.65px; }
 }
 
 /* COURTS — LANDSCAPE LAYOUT */
@@ -3390,7 +3411,7 @@ body.host-mode .courts { padding-bottom:140px; }
 @media(prefers-reduced-motion:reduce) { .host-balance-progress::after { animation:none; width:100%; background:var(--lime); } }
 
 </style>
-<link rel="stylesheet" href="brand-theme.css?v=20260831-book-now-v31">
+<link rel="stylesheet" href="brand-theme.css?v=20260901-opening-campaign-v32">
 </head>
 <body class="dark">
 <script>
@@ -3529,6 +3550,9 @@ try {
       <span class="pr-splash-sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="pr-splash-sound-label">Play music</span>
     </button>
+    <div class="pr-splash-offer" role="note" aria-label="No booking fees.">
+      <span class="pr-splash-offer-no">NO</span><strong>BOOKING FEES</strong>
+    </div>
     <button class="pr-splash-enter" type="button" onclick="event.stopPropagation();dismissSplashAndBook()">
       <span class="pr-splash-enter-label">Book Now</span>
       <span class="pr-splash-enter-arrow" aria-hidden="true">&rarr;</span>
@@ -3662,17 +3686,18 @@ try {
   <div class="shared-date-entry">
     <div class="shared-date-title">
       <strong>Booking date</strong>
+      <span>Advance booking · opening Sep 19</span>
     </div>
     <div class="shared-date-control">
-      <button class="shared-date-nav" type="button" onclick="shiftSharedCourtDate(-1)" aria-label="Previous day">‹</button>
+      <button class="shared-date-nav" id="courtSharedPrev" type="button" onclick="shiftSharedCourtDate(-1)" aria-label="Previous day">‹</button>
       <button class="shared-date-display" id="courtSharedDateDisplay" type="button" onclick="openSharedCourtDatePicker()">Today</button>
       <button class="shared-date-nav" type="button" onclick="shiftSharedCourtDate(1)" aria-label="Next day">›</button>
-      <button class="shared-date-today" type="button" onclick="setSharedCourtDateToday()">Today</button>
+      <button class="shared-date-today" id="courtSharedQuickDate" type="button" onclick="setSharedCourtDateToday()">Today</button>
       <input class="shared-date-native" type="date" id="courtSharedDate" onchange="onSharedCourtDate(this.value)" aria-label="Booking date" />
     </div>
   </div>
   <div class="price-promise" id="pricePromise" role="note" aria-label="No booking fees.">
-    <strong class="price-promise-title">NO BOOKING FEES</strong>
+    <span class="price-promise-lockup"><span class="price-promise-no">NO</span><strong class="price-promise-title">BOOKING FEES</strong></span>
   </div>
   <div class="courts" id="courtsGrid">
     <div class="pb-loader">
@@ -3685,7 +3710,7 @@ try {
 <div class="date-picker-overlay" id="sharedDatePicker" onclick="datePickerBackdrop(event)">
   <div class="date-picker" role="dialog" aria-modal="true" aria-labelledby="datePickerTitle">
     <div class="date-picker-head">
-      <button class="date-picker-nav" type="button" onclick="navSharedDatePicker(-1)" aria-label="Previous month">‹</button>
+      <button class="date-picker-nav" id="sharedDatePickerPrev" type="button" onclick="navSharedDatePicker(-1)" aria-label="Previous month">‹</button>
       <div class="date-picker-title" id="datePickerTitle">Select date</div>
       <button class="date-picker-nav" type="button" onclick="navSharedDatePicker(1)" aria-label="Next month">›</button>
       <button class="date-picker-close" type="button" onclick="closeSharedDatePicker()" aria-label="Close">×</button>
@@ -3696,7 +3721,7 @@ try {
     <div class="date-picker-grid" id="sharedDatePickerGrid"></div>
     <div class="date-picker-foot">
       <button class="btn btn-g" type="button" onclick="closeSharedDatePicker()">Cancel</button>
-      <button class="btn btn-p" type="button" onclick="setSharedDatePickerToday()">Today</button>
+      <button class="btn btn-p" id="sharedDatePickerQuickDate" type="button" onclick="setSharedDatePickerToday()">Today</button>
     </div>
   </div>
 </div>
@@ -4771,6 +4796,10 @@ async function verifyHostSessionReceipt(ref, method, inlineData) {
 async function submitHostSessionJoin() {
   const session = _hostSessionCurrent;
   if (!session) return;
+  if (!isPublicBookingDateAllowed(session.date)) {
+    toast(publicBookingDateMessage(), 'err');
+    return;
+  }
   const btn = $('hsJoinBtn');
   const name = $('hsJoinName')?.value?.trim() || '';
   const phone = $('hsJoinPhone')?.value?.trim() || '';
@@ -4860,6 +4889,10 @@ async function submitHostSessionJoin() {
 }
 
 function renderPublicHostSession(session) {
+  if (!isPublicBookingDateAllowed(session?.date)) {
+    toast(publicBookingDateMessage(), 'inf');
+    return;
+  }
   const title = session.title || 'Open Play Session';
   const time = `${fmtT(session.startHour)} - ${fmtT(session.endHour)}`;
   _hostSessionCurrent = session;
@@ -4890,7 +4923,7 @@ async function maybeOpenHostSessionLink() {
   if (!id) return;
   try {
     const sessions = await DB.getOpenPlayHostSessions({ publicOnly: true, id });
-    const session = sessions.find(s => String(s.id) === String(id) && s.status !== 'cancelled');
+    const session = sessions.find(s => String(s.id) === String(id) && s.status !== 'cancelled' && isPublicBookingDateAllowed(s.date));
     if (!session) { toast('Open Play session is not available.', 'err'); return; }
     renderPublicHostSession(session);
   } catch (_) {
@@ -4918,17 +4951,33 @@ let bookingItems = [];
 let sharedCourtDate = '';
 let sharedDatePickerYear = 0;
 let sharedDatePickerMonth = 0;
+const PUBLIC_COURT_OPENING_DATE = '2026-09-19';
+
+function minimumPublicBookingDate() {
+  const today = todayStr();
+  return today > PUBLIC_COURT_OPENING_DATE ? today : PUBLIC_COURT_OPENING_DATE;
+}
+
+function isPublicBookingDateAllowed(date) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) && String(date) >= minimumPublicBookingDate();
+}
+
+function publicBookingDateMessage() {
+  return todayStr() < PUBLIC_COURT_OPENING_DATE
+    ? 'Advance booking is open from September 19, 2026.'
+    : 'Please choose today or a future date.';
+}
 
 function normalizedCourtBrowseDate(date) {
-  const today = todayStr();
-  return date && date >= today ? date : today;
+  const minimumDate = minimumPublicBookingDate();
+  return date && date >= minimumDate ? date : minimumDate;
 }
 
 function selectedCourtBrowseDate() {
   const input = $('courtSharedDate');
-  sharedCourtDate = normalizedCourtBrowseDate(input?.value || sharedCourtDate || cardSelectionDate() || todayStr());
+  sharedCourtDate = normalizedCourtBrowseDate(input?.value || sharedCourtDate || cardSelectionDate() || minimumPublicBookingDate());
   if (input) {
-    input.min = todayStr();
+    input.min = minimumPublicBookingDate();
     input.value = sharedCourtDate;
   }
   updateSharedCourtDateDisplay(sharedCourtDate);
@@ -4940,9 +4989,15 @@ function syncSharedCourtDateUI(date = selectedCourtBrowseDate()) {
   sharedCourtDate = safeDate;
   const sharedInput = $('courtSharedDate');
   if (sharedInput) {
-    sharedInput.min = todayStr();
+    sharedInput.min = minimumPublicBookingDate();
     sharedInput.value = safeDate;
   }
+  const previousDay = $('courtSharedPrev');
+  if (previousDay) previousDay.disabled = safeDate <= minimumPublicBookingDate();
+  const quickDate = $('courtSharedQuickDate');
+  if (quickDate) quickDate.textContent = todayStr() < PUBLIC_COURT_OPENING_DATE ? 'Opening Day' : 'Today';
+  const pickerQuickDate = $('sharedDatePickerQuickDate');
+  if (pickerQuickDate) pickerQuickDate.textContent = todayStr() < PUBLIC_COURT_OPENING_DATE ? 'Opening Day' : 'Today';
   updateSharedCourtDateDisplay(safeDate);
   document.querySelectorAll('[id^="cDate_"]').forEach(inp => { inp.value = safeDate; });
 }
@@ -4951,6 +5006,7 @@ function sharedCourtDateLabel(date) {
   if (!date) return 'Select date';
   const d = new Date(date + 'T00:00:00');
   if (Number.isNaN(d.getTime())) return 'Select date';
+  if (date === PUBLIC_COURT_OPENING_DATE && todayStr() < PUBLIC_COURT_OPENING_DATE) return 'Opening Day · Sep 19';
   if (date === todayStr()) return 'Today';
   return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
 }
@@ -4981,6 +5037,12 @@ function navSharedDatePicker(delta) {
   sharedDatePickerMonth += Number(delta || 0);
   if (sharedDatePickerMonth > 11) { sharedDatePickerMonth = 0; sharedDatePickerYear++; }
   if (sharedDatePickerMonth < 0) { sharedDatePickerMonth = 11; sharedDatePickerYear--; }
+  const minimumMonth = minimumPublicBookingDate().slice(0, 7);
+  const requestedMonth = `${sharedDatePickerYear}-${String(sharedDatePickerMonth + 1).padStart(2,'0')}`;
+  if (requestedMonth < minimumMonth) {
+    sharedDatePickerYear = Number(minimumMonth.slice(0, 4));
+    sharedDatePickerMonth = Number(minimumMonth.slice(5, 7)) - 1;
+  }
   renderSharedDatePicker();
 }
 
@@ -4992,6 +5054,11 @@ function renderSharedDatePicker() {
   title.textContent = `${months[sharedDatePickerMonth]} ${sharedDatePickerYear}`;
   const selected = selectedCourtBrowseDate();
   const today = todayStr();
+  const minimumDate = minimumPublicBookingDate();
+  const minimumMonth = minimumDate.slice(0, 7);
+  const visibleMonth = `${sharedDatePickerYear}-${String(sharedDatePickerMonth + 1).padStart(2,'0')}`;
+  const previousMonth = $('sharedDatePickerPrev');
+  if (previousMonth) previousMonth.disabled = visibleMonth <= minimumMonth;
   const firstDow = new Date(sharedDatePickerYear, sharedDatePickerMonth, 1).getDay();
   const daysInMonth = new Date(sharedDatePickerYear, sharedDatePickerMonth + 1, 0).getDate();
   const cells = [];
@@ -5000,10 +5067,10 @@ function renderSharedDatePicker() {
     const ds = `${sharedDatePickerYear}-${String(sharedDatePickerMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     const cls = [
       'date-day',
-      ds === today ? 'today' : '',
+      ds === today && ds >= minimumDate ? 'today' : '',
       ds === selected ? 'selected' : ''
     ].filter(Boolean).join(' ');
-    cells.push(`<button class="${cls}" type="button" ${ds < today ? 'disabled' : ''} onclick="selectSharedDateFromPicker('${ds}')">${day}</button>`);
+    cells.push(`<button class="${cls}" type="button" ${ds < minimumDate ? 'disabled' : ''} onclick="selectSharedDateFromPicker('${ds}')">${day}</button>`);
   }
   grid.innerHTML = cells.join('');
 }
@@ -5022,15 +5089,16 @@ async function shiftSharedCourtDate(days) {
 }
 
 async function setSharedCourtDateToday() {
-  await onSharedCourtDate(todayStr());
+  await onSharedCourtDate(minimumPublicBookingDate());
 }
 
 async function setSharedDatePickerToday() {
   closeSharedDatePicker();
-  await onSharedCourtDate(todayStr());
+  await onSharedCourtDate(minimumPublicBookingDate());
 }
 
 async function onSharedCourtDate(date) {
+  if (date && !isPublicBookingDateAllowed(date)) toast(publicBookingDateMessage(), 'inf');
   const nextDate = normalizedCourtBrowseDate(date);
   const prevDate = selectedCourtBrowseDate();
   sharedCourtDate = nextDate;
@@ -5495,8 +5563,17 @@ const fmtDc = s => {
 };
 const fmtOpenPlayMeta = (courtName, date, start, end) => `${courtName || 'Court'} · ${fmtDc(date)} · ${fmtTc(start)}–${fmtTc(end)}`;
 const genRef = () => 'PB-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).substr(2,4).toUpperCase();
-const nowHour = () => new Date().getHours();
-const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const manilaDateTimeParts = (date = new Date()) => Object.fromEntries(
+  new Intl.DateTimeFormat('en-US', {
+    timeZone:'Asia/Manila', year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', hourCycle:'h23',
+  }).formatToParts(date).filter(part => part.type !== 'literal').map(part => [part.type, part.value])
+);
+const nowHour = () => Number(manilaDateTimeParts().hour || 0) % 24;
+const todayStr = () => {
+  const parts = manilaDateTimeParts();
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
 const isToday = d => d === todayStr();
 const dayOfWeek = d => new Date(`${d}T00:00:00`).getDay();
 function addDaysYmd(dateStr, days) {
@@ -5568,7 +5645,7 @@ function getOpenPlaySessionForDate(date, courtId = null) {
 
 function getOpenPlaySessionState(date, session, spotsLeft = 1) {
   if (!session || !date) return 'unavailable';
-  if (date < todayStr()) return 'ended';
+  if (!isPublicBookingDateAllowed(date)) return 'ended';
   if (isToday(date)) {
     const end = Number(session.end);
     const hour = nowHour();
@@ -5581,7 +5658,7 @@ function getOpenPlaySessionState(date, session, spotsLeft = 1) {
 function courtAvailabilityBadge({ blocked, date, allSlots, curHour, bookedHours, courtId }) {
   if (blocked) return { cls: 'mnt', text: '🔧 Maintenance' };
 
-  const isPastDate_ = date < todayStr();
+  const isPastDate_ = !isPublicBookingDateAllowed(date);
   const futureHours = allSlots.filter(h => h > curHour);
   const maintenanceHours = futureHours.filter(h => isMaintenanceHour(date, h, courtId));
   if (futureHours.length > 0 && maintenanceHours.length === futureHours.length) {
@@ -6076,9 +6153,9 @@ function populateFindTimeControls() {
   const durEl = $('ftDuration');
   if (!dateEl || !startEl || !durEl) return;
 
-  const today = todayStr();
-  dateEl.min = today;
-  if (!dateEl.value || dateEl.value < today) dateEl.value = cardSelectionDate() || today;
+  const minimumDate = minimumPublicBookingDate();
+  dateEl.min = minimumDate;
+  if (!dateEl.value || dateEl.value < minimumDate) dateEl.value = normalizedCourtBrowseDate(cardSelectionDate() || minimumDate);
 
   const latestStart = Math.max(openHour, closeHour - 1);
   const preferredStart = Math.min(latestStart, Math.max(openHour, isToday(dateEl.value) ? nowHour() + 1 : openHour));
@@ -6128,7 +6205,7 @@ function findTimeBookedMap(bookings = []) {
 function findTimeSlotsAvailable({ court, date, slots, bookedSet, blockedDates }) {
   if (!court || court.blocked || blockedDates.includes(date)) return false;
   if (getCourtRepair(court.name, date)) return false;
-  const isPastDate = date < todayStr();
+  const isPastDate = !isPublicBookingDateAllowed(date);
   const curHour = isToday(date) ? nowHour() : -1;
   return slots.every(h =>
     h >= openHour &&
@@ -6142,6 +6219,7 @@ function findTimeSlotsAvailable({ court, date, slots, bookedSet, blockedDates })
 }
 
 async function findAvailableTimeMatches(date, preferredStart, duration) {
+  if (!isPublicBookingDateAllowed(date)) return [];
   await loadOperatingHours();
   const [courts, bookings, blockedDates] = await Promise.all([
     DB.getCourts(),
@@ -6191,13 +6269,13 @@ function findTimeResultHtml(item) {
 }
 
 async function searchAvailableTime() {
-  const date = $('ftDate')?.value || todayStr();
+  const date = $('ftDate')?.value || minimumPublicBookingDate();
   const preferredStart = parseInt($('ftStart')?.value || String(openHour), 10);
   const duration = parseInt($('ftDuration')?.value || '1', 10);
   const resultsEl = $('ftResults');
   if (!resultsEl) return;
-  if (!date || date < todayStr()) {
-    resultsEl.innerHTML = '<div class="ft-note">Please choose today or a future date.</div>';
+  if (!isPublicBookingDateAllowed(date)) {
+    resultsEl.innerHTML = `<div class="ft-note">${publicBookingDateMessage()}</div>`;
     return;
   }
   resultsEl.innerHTML = '<div class="ft-note">Searching all courts...</div>';
@@ -6220,6 +6298,10 @@ async function searchAvailableTime() {
 }
 
 async function selectFindTimeResult(courtId, date, start, duration) {
+  if (!isPublicBookingDateAllowed(date)) {
+    toast(publicBookingDateMessage(), 'err');
+    return;
+  }
   const slots = Array.from({ length: duration }, (_, i) => start + i);
   closeFindTimeModal();
   clearCardSelection();
@@ -6247,7 +6329,7 @@ async function selectFindTimeResult(courtId, date, start, duration) {
    CARD SLOT MULTI-SELECT
    ============================================= */
 async function toggleCardSlot(courtId, date, h) {
-  if (date < todayStr()) { toast('Cannot book a past date.', 'err'); return; }
+  if (!isPublicBookingDateAllowed(date)) { toast(publicBookingDateMessage(), 'err'); return; }
   await ensureCourt(courtId);
   if (isOpenPlayHour(date, h, courtId)) {
     openPlaySignup(courtId, date, h, court ? court.name : '');
@@ -6494,6 +6576,15 @@ async function maybeResumeGuestBooking() {
     return;
   }
 
+  if (rows.some(booking => !isPublicBookingDateAllowed(booking.date))) {
+    await Promise.allSettled(rows.map(booking =>
+      DB.updateBooking(booking.ref, { status: 'cancelled', paymentStatus: 'rejected' }).catch(() => {})
+    ));
+    clearGuestBookingResume();
+    toast('That saved reservation was before Paddle Rage opens. Please book from September 19.', 'inf');
+    return;
+  }
+
   bookingItems = rows.map(bookingItemFromReservedBooking);
   _reservedRefs = rows.map(b => b.ref);
   _reservedRef = _reservedRefs[0] || null;
@@ -6665,6 +6756,11 @@ async function proceedToBookLegacy(courtId) {
     clearCardSelection();
     toast('Please select at least one time slot.', 'inf'); return;
   }
+  if (!isPublicBookingDateAllowed(cardSel.date)) {
+    clearCardSelection();
+    toast(publicBookingDateMessage(), 'err');
+    return;
+  }
   if (cardSel.slots.some(h => isOpenPlayHour(cardSel.date, h, cardSel.courtId) || isMaintenanceHour(cardSel.date, h, cardSel.courtId))) {
     toast('Some selected slots are unavailable. Please choose another time.', 'err');
     if (cardSel.date) await onCardDate(courtId, cardSel.date);
@@ -6742,9 +6838,9 @@ async function proceedToBook(courtId = null) {
     return;
   }
 
-  if (selectedDate < todayStr()) {
+  if (!isPublicBookingDateAllowed(selectedDate)) {
     clearCardSelection();
-    toast('Cannot book a past date.', 'err');
+    toast(publicBookingDateMessage(), 'err');
     return;
   }
 
@@ -7016,6 +7112,7 @@ async function wizNext() {
     wizGoTo(2);
   } else if (wizStep === 2) {
     if (!$('bDate').value) { bookingValidationError('Please pick a date.', 'bDate', 2); return; }
+    if (!isPublicBookingDateAllowed($('bDate').value)) { bookingValidationError(publicBookingDateMessage(), 'bDate', 2); return; }
     if (selSlots.length === 0) { bookingValidationError('Please select at least one time slot.', 'slotsGrid', 2); return; }
     wizGoTo(3);
   } else if (wizStep === 3) {
@@ -7081,6 +7178,11 @@ async function onCardDate(courtId, date, options = {}) {
   if (!grid) return;
   clearCardSelection({ preserveBookingItems: !!options.preserveBookingItems });
 
+  if (!isPublicBookingDateAllowed(date)) {
+    grid.innerHTML = `<span class="cc-slots-empty" style="grid-column:1 / -1">${publicBookingDateMessage()}</span>`;
+    return;
+  }
+
   grid.innerHTML = `<div class="cc-slots-empty"><div class="pb-loader mini"><div class="pb-ball" aria-hidden="true"></div><div class="pb-loader-txt">Loading times</div></div></div>`;
 
   const [courts, bookings, blockedDates] = await Promise.all([
@@ -7111,7 +7213,7 @@ async function onCardDate(courtId, date, options = {}) {
 
   const allSlots = Array.from({length: closeHour - openHour}, (_, i) => i + openHour);
   const isToday_ = date === todayStr();
-  const isPastDate_ = date < todayStr();
+  const isPastDate_ = !isPublicBookingDateAllowed(date);
   const curHour  = nowHour();
   const openPlaySession = getOpenPlaySessionForDate(date, courtId);
   let openPlayCardHtml = '';
@@ -7366,6 +7468,12 @@ async function selectCourt(id) {
    ============================================= */
 async function onDate() {
   const v = $('bDate').value;
+  if (!isPublicBookingDateAllowed(v)) {
+    $('bDate').value = minimumPublicBookingDate();
+    toast(publicBookingDateMessage(), 'err');
+    await renderSlots();
+    return;
+  }
   const blocked = await DB.getBlockedDates();
   if (blocked.includes(v)) {
     toast('This date is blocked for maintenance.', 'err');
@@ -7404,6 +7512,13 @@ async function renderSlots() {
     g.innerHTML = '';
     m.style.display = '';
     m.textContent = court ? 'Now pick a date to see real-time availability.' : 'Select a court and date to see available slots.';
+    return;
+  }
+
+  if (!isPublicBookingDateAllowed(date)) {
+    g.innerHTML = '';
+    m.style.display = '';
+    m.textContent = publicBookingDateMessage();
     return;
   }
 
@@ -7518,6 +7633,7 @@ function toggleSlot(h) {
   if (!court) { toast('Select a court first.', 'inf'); return; }
   const date = $('bDate').value;
   if (!date) { toast('Select a date first.', 'inf'); return; }
+  if (!isPublicBookingDateAllowed(date)) { toast(publicBookingDateMessage(), 'err'); return; }
 
   const curHour = nowHour();
   const todayFlag = isToday(date);
@@ -7984,6 +8100,7 @@ async function submitBookingLegacy(e) {
   const checks = [
     [!court, 'Please select a court.', 'courtDisp', 1],
     [!$('bDate').value, 'Please select a date.', 'bDate', 2],
+    [!isPublicBookingDateAllowed($('bDate').value), publicBookingDateMessage(), 'bDate', 2],
     [selSlots.length === 0, 'Please select at least one time slot.', 'slotsGrid', 2],
     [!$('bName').value.trim(), 'Please enter your full name.', 'bName', 3],
     [$('bName').value.trim().length < 3, 'Name must be at least 3 characters.', 'bName', 3],
@@ -8234,6 +8351,7 @@ async function submitBooking(e) {
   const checks = [
     [items.length === 0, 'Please select at least one time slot.', 'slotsGrid', 2],
     [!bookingDate, 'Please select a date.', 'bDate', 2],
+    [items.some(item => !isPublicBookingDateAllowed(item.date)), publicBookingDateMessage(), 'bDate', 2],
     [items.some(item => !item.slots?.length), 'Please select at least one time slot.', 'slotsGrid', 2],
     [!$('bName').value.trim(), 'Please enter your full name.', 'bName', 3],
     [$('bName').value.trim().length < 3, 'Name must be at least 3 characters.', 'bName', 3],
@@ -10625,7 +10743,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await maybeOpenHostSessionLink();
   initHostInvitePopup();
   startRealtime();
-  $('bDate').min = todayStr();
+  $('bDate').min = minimumPublicBookingDate();
   initBookingValidationHighlights();
   $('invModal').addEventListener('click', e => { if (e.target === $('invModal')) closeModal(); });
   $('invModal').addEventListener('keydown', e => {
@@ -10779,6 +10897,10 @@ function firstEnabledPaymentMethod() {
 async function openPlaySignup(courtId, date, h, courtName) {
   if (!OPEN_PLAY_AVAILABLE) {
     toast('Open Play is currently unavailable.', 'inf');
+    return;
+  }
+  if (!isPublicBookingDateAllowed(date)) {
+    toast(publicBookingDateMessage(), 'err');
     return;
   }
   const defaultPayMethod = firstEnabledPaymentMethod();
@@ -11162,6 +11284,10 @@ async function submitOpenPlay() {
     toast('Open Play is currently unavailable.', 'inf');
     return;
   }
+  if (!isPublicBookingDateAllowed(_opSignupData.date)) {
+    toast(publicBookingDateMessage(), 'err');
+    return;
+  }
   const nameEl = $('opFullName');
   const name = (nameEl?.value || '').trim();
   if (!name) {
@@ -11316,7 +11442,7 @@ async function submitOpenPlay() {
 }
 </script>
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20260830-host-balance-v1"></script>
+<script src="supabase-config.js?v=20260901-opening-gate-v2"></script>
 
 <!-- MOBILE STICKY BOOK NOW BAR -->
 <div id="mobileBookBar" class="mobile-book-bar" style="display:none">
