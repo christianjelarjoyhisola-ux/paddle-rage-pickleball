@@ -476,14 +476,18 @@ test('admin accounting uses immutable fee snapshots and net court revenue', () =
   assert.match(adminSite, /b\?\.bookingFeeAmountSnapshot \?\? b\?\.booking_fee_amount_snapshot/);
   assert.match(
     adminSite,
-    /const totalFee = filtered\.reduce\(\(sum, b\) => sum \+ platformFeeAmountForBooking\(b, fallbackCfg\), 0\);/,
+    /DB\.getBookingFeeRemittanceDashboard\(\)/,
+    'the dashboard must use the authoritative server ledger instead of recalculating fees from mutable bookings',
   );
+  assert.match(adminSite, /const PLATFORM_ALLOCATION_RATE = 10/);
+  assert.match(adminSite, /Net Court Revenue/);
   assert.match(
     adminSite,
     /const rev=activeTxns\.reduce\(\(s,b\)=>s\+netCourtRevenueForBooking\(b,feeCfg\),0\)\+retainedRevenue;/,
   );
   assert.match(adminSite, /revByMonth\[mk\] \+= netCourtRevenueForBooking\(b, feeCfg\)/);
   assert.doesNotMatch(adminSite, /const totalFee = isFlat \? totalBookings \* _maintRate : totalHours \* _maintRate/);
+  assert.doesNotMatch(adminSite, /id="maintRateInput"|id="saveMaintRate"/);
 });
 
 test('remote and local booking clients expose the same canonical confirmation result', () => {

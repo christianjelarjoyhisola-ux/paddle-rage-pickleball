@@ -2749,8 +2749,8 @@ window.DB = {
     payment_method_pnb: '0',
     gcash_merchant_number: '09XXXXXXXXX',
     gcash_merchant_name: 'Court Owner Name',
-    service_fee_rate: '15',
-    maintenance_fee: '5',
+    service_fee_rate: '10',
+    maintenance_fee: '10',
     fee_type: 'per_hour',
   });
 
@@ -2811,7 +2811,7 @@ window.DB = {
     const makeHostBooking = ({ ref, groupRef = null, courtId, courtName, date, slots, rate, method = 'gcash', gcashRef = '', paymentStatus = 'downpayment_paid', status = 'confirmed', createdDaysAgo = 0 }) => {
       const duration = slots.length;
       const total = duration * rate;
-      const serviceFee = Math.min(total, duration * 5);
+      const serviceFee = Math.min(total, duration * 10);
       const courtFee = Math.max(0, total - serviceFee);
       const downpayment = Math.round(((courtFee * 0.25) + serviceFee) * 100) / 100;
       const start = Math.min(...slots);
@@ -2833,7 +2833,7 @@ window.DB = {
         rate,
         total,
         bookingFeeAmountSnapshot: serviceFee,
-        bookingFeeRateSnapshot: 5,
+        bookingFeeRateSnapshot: 10,
         bookingFeeTypeSnapshot: 'per_hour',
         bookingFeeUnitsSnapshot: duration,
         bookingFeeSnapshotSource: 'local_seed',
@@ -2848,6 +2848,10 @@ window.DB = {
         hostEmail: 'host.test@paddlerage.local',
         paymentStatus,
         status,
+        bookingFeeEarnedAt: ['confirmed', 'completed'].includes(status)
+          && ['paid', 'downpayment_paid'].includes(paymentStatus)
+          ? new Date(Date.now() - createdDaysAgo * 86400000).toISOString()
+          : null,
         createdAt: new Date(Date.now() - createdDaysAgo * 86400000).toISOString(),
       };
     };
@@ -3657,6 +3661,9 @@ window.DB = {
         };
         if (['paid', 'downpayment_paid'].includes(targetPaymentStatus)) {
           next.paidAt = booking.paidAt || booking.paid_at || confirmedAt;
+          next.bookingFeeEarnedAt = booking.bookingFeeEarnedAt
+            || booking.booking_fee_earned_at
+            || confirmedAt;
         }
         return next;
       });
@@ -5027,13 +5034,85 @@ window.DB = {
     async getBookingFeeRemittanceDashboard() {
       const now = new Date();
       const next = new Date(now.getFullYear(), now.getMonth() + (now.getDate() > 14 ? 1 : 0), 14);
+      const earned = readDb().bookings.filter(booking => {
+        const earnedAt = booking.bookingFeeEarnedAt || booking.booking_fee_earned_at;
+        const eligible = booking.bookingFeeLedgerEligibleSnapshot
+          ?? booking.booking_fee_ledger_eligible_snapshot;
+        const amount = Number(
+          booking.bookingFeeAmountSnapshot ?? booking.booking_fee_amount_snapshot ?? 0,
+        );
+        return !!earnedAt && eligible !== false && Number.isFinite(amount) && amount > 0;
+      });
+      const reservations = new Set(earned.map(booking => String(
+        booking.groupRef || booking.bookingGroupRef || booking.booking_group_ref || booking.ref,
+      )).filter(Boolean));
+      const breakdown = new Map();
+      let billableHours = 0;
+      let accumulatedAmount = 0;
+      earned.forEach(booking => {
+        const reservationKey = String(
+          booking.groupRef || booking.bookingGroupRef || booking.booking_group_ref || booking.ref || '',
+        );
+        const type = String(
+          booking.bookingFeeTypeSnapshot ?? booking.booking_fee_type_snapshot ?? 'per_hour',
+        ).toLowerCase() === 'flat' ? 'flat' : 'per_hour';
+        const rate = Math.max(0, Number(
+          booking.bookingFeeRateSnapshot ?? booking.booking_fee_rate_snapshot ?? 0,
+        ) || 0);
+        const units = Math.max(0, Number(
+          booking.bookingFeeUnitsSnapshot ?? booking.booking_fee_units_snapshot ?? 0,
+        ) || 0);
+        const amount = Math.max(0, Number(
+          booking.bookingFeeAmountSnapshot ?? booking.booking_fee_amount_snapshot ?? 0,
+        ) || 0);
+        const key = `${type}|${rate.toFixed(2)}`;
+        const row = breakdown.get(key) || {
+          fee_type: type,
+          fee_rate: rate,
+          booking_rows_count: 0,
+          reservation_count: 0,
+          fee_units: 0,
+          billable_hours: 0,
+          amount: 0,
+          _reservationKeys: new Set(),
+        };
+        row.booking_rows_count += 1;
+        if (reservationKey) row._reservationKeys.add(reservationKey);
+        row.fee_units += units;
+        row.billable_hours += type === 'per_hour' ? units : 0;
+        row.amount += amount;
+        breakdown.set(key, row);
+        billableHours += type === 'per_hour' ? units : 0;
+        accumulatedAmount += amount;
+      });
+      for (const row of breakdown.values()) {
+        row.reservation_count = row._reservationKeys.size;
+        delete row._reservationKeys;
+      }
+      const earnedTimes = earned
+        .map(booking => booking.bookingFeeEarnedAt || booking.booking_fee_earned_at)
+        .filter(Boolean)
+        .sort();
+      const live = {
+        reservation_count: reservations.size,
+        booking_rows_count: earned.length,
+        billable_hours: billableHours,
+        fee_breakdown: [...breakdown.values()],
+        amount: Math.round(accumulatedAmount * 100) / 100,
+        coverage_start_at: earnedTimes[0] || null,
+      };
       return {
         server_now: now.toISOString(),
         role: Auth.getSession()?.role || 'court_owner',
         next_due_on: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-14`,
         can_prepare: false,
-        live: { booking_groups_count: 0, booking_rows_count: 0, total_billable_hours: 0, amount: 0 },
-        active: null,
+        accumulated: live,
+        live,
+        open_remaining_balance: 0,
+        total_outstanding_balance: live.amount,
+        settled_total: 0,
+        open_remittances: [],
+        active: [],
         history: [],
       };
     },

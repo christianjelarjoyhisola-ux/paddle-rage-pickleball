@@ -212,6 +212,13 @@ h1, h2, h3, h4 { font-family: 'Bebas Neue', sans-serif; letter-spacing: 1px; }
 .rm-fee-line { display:inline-flex; align-items:center; gap:6px; min-height:30px; padding:6px 9px; border:1px solid var(--border); border-radius:9px; background:var(--bg2); color:var(--text2); font:800 .67rem 'DM Mono',monospace; }
 .rm-fee-line strong { color:var(--green); font-weight:900; }
 .rm-fee-line.legacy { color:var(--text3); font-family:'DM Sans',sans-serif; }
+.rm-fee-line.adjustment.credit { color:#8ab8e5; border-color:rgba(117,169,221,.24); background:rgba(117,169,221,.07); }
+.rm-fee-line.adjustment.credit strong { color:#9cc9f3; }
+.rm-fee-line.adjustment.debit { color:var(--yellow); border-color:rgba(var(--yellow-rgb),.25); background:rgba(var(--yellow-rgb),.07); }
+.rm-fee-line.adjustment.debit strong { color:var(--yellow); }
+.rm-fee-line.net { border-color:rgba(var(--green-rgb),.24); background:rgba(var(--green-rgb),.07); color:var(--text); }
+.rm-fee-line.carry { color:#9cc9f3; border-color:rgba(117,169,221,.24); background:rgba(117,169,221,.07); }
+.rm-fee-line.carry strong { color:#9cc9f3; }
 .rm-live-action { min-width:210px; text-align:right; }
 .rm-live-action .btn { width:100%; justify-content:center; min-height:46px; }
 .rm-live-hint { margin-top:6px; color:var(--text3); font-size:.65rem; line-height:1.35; }
@@ -303,6 +310,26 @@ h1, h2, h3, h4 { font-family: 'Bebas Neue', sans-serif; letter-spacing: 1px; }
 .rm-booking strong { display:block; color:var(--text); font-size:.78rem; overflow-wrap:anywhere; }
 .rm-booking span { display:block; margin-top:2px; color:var(--text3); font-size:.66rem; line-height:1.35; }
 .rm-booking-fee { color:var(--green); font:900 .78rem 'DM Mono',monospace; white-space:nowrap; }
+.rm-adjustment-list { display:grid; gap:7px; }
+.rm-adjustment-row {
+  display:grid; grid-template-columns:minmax(170px,.8fr) minmax(150px,.7fr) minmax(0,1.5fr) auto;
+  gap:10px; align-items:center; padding:11px 12px; border:1px solid var(--border);
+  border-radius:11px; background:var(--bg2);
+}
+.rm-adjustment-row.released { opacity:.72; border-style:dashed; }
+.rm-adjustment-ref { color:var(--text); font:850 .72rem 'DM Mono',monospace; overflow-wrap:anywhere; }
+.rm-adjustment-ref small,
+.rm-adjustment-copy small { display:block; margin-top:3px; color:var(--text3); font:700 .62rem/1.35 'DM Sans',sans-serif; }
+.rm-adjustment-type { color:var(--text2); font-size:.68rem; font-weight:900; text-transform:capitalize; }
+.rm-adjustment-copy { min-width:0; color:var(--text2); font-size:.69rem; line-height:1.4; overflow-wrap:anywhere; }
+.rm-adjustment-side { display:grid; justify-items:end; gap:6px; min-width:115px; }
+.rm-adjustment-amount { color:var(--yellow); font:900 .82rem 'DM Mono',monospace; white-space:nowrap; }
+.rm-adjustment-amount.credit { color:#8ab8e5; }
+.rm-adjustment-status { display:inline-flex; align-items:center; min-height:23px; padding:3px 7px; border:1px solid rgba(var(--green-rgb),.25); border-radius:999px; color:var(--green); background:rgba(var(--green-rgb),.07); font-size:.55rem; font-weight:900; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; }
+.rm-adjustment-status.released { color:var(--text3); border-color:var(--border); background:var(--surface); }
+.rm-detail-title-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+.rm-detail-title-row .rm-detail-title { margin-bottom:0; }
+.rm-readonly-chip { display:inline-flex; align-items:center; min-height:23px; padding:3px 7px; border:1px solid var(--border); border-radius:999px; color:var(--text3); background:var(--bg2); font-size:.55rem; font-weight:900; letter-spacing:.05em; text-transform:uppercase; }
 .rm-modal :is(button,input,select,textarea,a):focus-visible, #sec-remittances :is(button,input,select,a):focus-visible { outline:3px solid rgba(var(--green-rgb),.3); outline-offset:2px; }
 @media(max-width:900px) {
   .rm-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -352,6 +379,8 @@ h1, h2, h3, h4 { font-family: 'Bebas Neue', sans-serif; letter-spacing: 1px; }
   .rm-audit-row span:last-child { text-align:left; }
   .rm-booking { grid-template-columns:1fr auto; }
   .rm-booking > div:nth-child(2) { grid-column:1 / -1; }
+  .rm-adjustment-row { grid-template-columns:1fr; }
+  .rm-adjustment-side { grid-template-columns:auto auto; justify-content:space-between; justify-items:start; min-width:0; }
 }
 @media(prefers-reduced-motion:reduce) {
   .rm-spinner { animation:none; }
@@ -1264,42 +1293,6 @@ tr:hover td { background: var(--bg2); }
     min-height: 40px; justify-content: center; padding: 8px 6px;
     font-size: .72rem; border-radius: 10px; min-width: 0;
   }
-  #maintFeePanel {
-    padding: 12px !important; margin-bottom: 12px !important;
-    border-radius: 12px !important;
-  }
-  #maintFeePanel .mf-head { margin-bottom: 10px !important; gap: 8px !important; }
-  #maintFeePanel .mf-head h4 {
-    font-size: .72rem !important; letter-spacing: .4px; flex: 1 1 100%;
-  }
-  #maintFeePanel .mf-month-wrap { width: 100%; justify-content: space-between; }
-  #maintFeePanel .mf-month-wrap input { flex: 1; max-width: 190px; min-height: 36px; }
-  #maintFeePanel .mf-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 8px !important; margin-bottom: 10px !important;
-  }
-  #maintFeePanel .mf-tile {
-    padding: 10px 8px !important; border-radius: 10px !important;
-    min-height: 74px; display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-  }
-  #maintFeePanel .mf-tile-val,
-  #maintFeePanel #mfRateDisplay,
-  #maintFeePanel #mfFee { font-size: 1.28rem !important; line-height: 1 !important; }
-  #maintFeePanel .mf-tile-label { font-size: .6rem !important; line-height: 1.15 !important; }
-  .mf-toggle {
-    display: flex; width: 100%; justify-content: center; align-items: center;
-    min-height: 38px; margin: 2px 0 8px; border-radius: 10px;
-    border: 1px solid rgba(var(--yellow-rgb),.35);
-    background: rgba(var(--yellow-rgb),.1); color: var(--yellow);
-    font: inherit; font-size: .76rem; font-weight: 900; cursor: pointer;
-  }
-  #maintFeePanel.mf-collapsed #mfBreakdown { display: none; }
-  #maintFeePanel #mfBreakdown {
-    max-height: 260px; overflow: auto; padding: 10px !important;
-    font-size: .76rem !important; border-radius: 10px !important;
-  }
-  #maintFeePanel .mf-note { margin-top: 8px !important; font-size: .66rem !important; line-height: 1.35; }
   #sec-dash .rev-grid { grid-template-columns: 1fr; gap: 12px; margin-bottom: 12px; }
   #sec-dash .rev-grid .panel { padding: 13px; border-radius: 12px; }
   #sec-dash .rev-grid canvas { max-height: 180px; }
@@ -2829,47 +2822,6 @@ a, button, input, select, textarea, .nav-item { -webkit-tap-highlight-color: tra
   justify-content: flex-start;
 }
 
-#maintFeePanel {
-  margin-bottom: 18px !important;
-  padding: 20px !important;
-  border: 1px solid rgba(var(--yellow-rgb), .22) !important;
-  background:
-    radial-gradient(circle at 100% 0, rgba(var(--yellow-rgb), .08), transparent 42%),
-    linear-gradient(145deg, var(--admin-panel), rgba(9, 14, 10, .95)) !important;
-}
-
-#maintFeePanel .mf-head { margin-bottom: 14px !important; }
-#maintFeePanel .mf-month-wrap {
-  min-height: 42px;
-  padding: 5px 6px 5px 12px;
-  border: 1px solid var(--admin-line);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, .025);
-}
-
-#maintFeePanel #maintMonth { min-height: 32px; border-radius: 9px !important; }
-#maintFeePanel .mf-summary { gap: 10px !important; margin-bottom: 14px !important; }
-#maintFeePanel .mf-tile {
-  min-height: 94px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  border-color: var(--admin-line) !important;
-  border-radius: 13px !important;
-  background: rgba(255, 255, 255, .025) !important;
-}
-
-#maintFeePanel .mf-tile:last-child {
-  border-color: rgba(var(--yellow-rgb), .32) !important;
-  background: rgba(var(--yellow-rgb), .075) !important;
-}
-
-#mfBreakdown {
-  border-color: var(--admin-line) !important;
-  border-radius: 13px !important;
-  background: rgba(255, 255, 255, .024) !important;
-}
-
 .pay-row { margin-bottom: 8px; color: #d6ddd3; }
 .bar { height: 8px; margin-bottom: 16px; background: rgba(255, 255, 255, .06); }
 
@@ -3029,11 +2981,6 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
 
   .dash-mobile-actions .btn { min-width: 0; padding-inline: 8px; justify-content: center; }
   .panel, #maintFeePanel { padding: 15px !important; border-radius: 15px; }
-  #maintFeePanel .mf-head { align-items: stretch !important; }
-  #maintFeePanel .mf-month-wrap { width: 100%; justify-content: space-between; }
-  #maintFeePanel .mf-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-  #maintFeePanel .mf-tile { min-height: 84px; padding: 10px !important; }
-  #maintFeePanel .mf-note { text-align: left !important; line-height: 1.5; }
   #sec-dash .rev-grid .panel > div[style*="flex-direction:column"] { grid-template-columns: 1fr; }
   #sec-dash .rev-grid .panel > div[style*="flex-direction:column"] .btn { justify-content: center; }
   .tbl-wrap { border-radius: 15px; }
@@ -3068,7 +3015,6 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
   .stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sc { min-height: 112px; padding: 13px; }
   .sc-val { font-size: 1.4rem; }
-  #maintFeePanel .mf-summary { gap: 7px !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3407,6 +3353,311 @@ tr:hover td { background: rgba(182, 240, 0, .035); }
   #sec-blocked > .panel:nth-child(3) > div:first-child > div { grid-template-columns: 1fr; }
 }
 
+/* Platform allocation — one role-aware position backed by the remittance ledger. */
+#maintFeePanel.pa-card {
+  position: relative;
+  isolation: isolate;
+  margin: 0 0 18px !important;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid rgba(182, 240, 0, .24) !important;
+  border-radius: 19px !important;
+  background:
+    radial-gradient(circle at 0 0, rgba(182, 240, 0, .13), transparent 24rem),
+    radial-gradient(circle at 100% 100%, rgba(232, 185, 77, .07), transparent 22rem),
+    linear-gradient(145deg, rgba(15, 23, 17, .98), rgba(8, 13, 10, .98)) !important;
+  box-shadow: 0 20px 54px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .025) !important;
+}
+
+.pa-accent {
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 2%, var(--pr-neon-bright) 18%, rgba(182, 240, 0, .12) 72%, transparent);
+  box-shadow: 0 0 18px rgba(182, 240, 0, .35);
+}
+
+.pa-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px 15px;
+  border-bottom: 1px solid rgba(182, 240, 0, .11);
+}
+
+.pa-heading { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.pa-mark {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(215, 255, 63, .42);
+  border-radius: 14px;
+  color: #071006;
+  background: linear-gradient(145deg, var(--pr-neon-bright), var(--pr-neon));
+  box-shadow: 0 8px 24px rgba(182, 240, 0, .19), inset 0 1px 0 rgba(255, 255, 255, .45);
+  font-size: 1.05rem;
+}
+
+.pa-eyebrow,
+.pa-position-label,
+.pa-due-label {
+  color: #9aa697;
+  font-size: .59rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.pa-heading h3 {
+  margin: 2px 0 0;
+  color: #f7faf3;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1.03rem;
+  font-weight: 850;
+  letter-spacing: -.02em;
+}
+
+.pa-heading p {
+  margin: 4px 0 0;
+  color: #8e9a8c;
+  font-size: .7rem;
+  line-height: 1.35;
+}
+
+.pa-heading p strong { color: var(--pr-neon-bright); font-weight: 850; }
+.pa-head-actions { display: flex; align-items: center; gap: 9px; flex: 0 0 auto; }
+.pa-sync { color: #7f8b7d; font-size: .64rem; font-weight: 750; white-space: nowrap; }
+.pa-refresh {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(182, 240, 0, .17);
+  border-radius: 11px;
+  color: #c6d0c2;
+  background: rgba(255, 255, 255, .025);
+  cursor: pointer;
+  font-size: .95rem;
+  font-weight: 900;
+  transition: color .18s ease, border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.pa-refresh:hover { color: var(--pr-neon-bright); border-color: rgba(182, 240, 0, .4); background: rgba(182, 240, 0, .065); transform: translateY(-1px); }
+.pa-refresh:disabled { opacity: .55; cursor: wait; transform: none; }
+.pa-card[aria-busy="true"] .pa-refresh { animation: paSpin .85s linear infinite; }
+
+.pa-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(230px, .78fr) minmax(0, 1.72fr);
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.pa-position {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 17px;
+  border: 1px solid rgba(182, 240, 0, .22);
+  border-radius: 15px;
+  background: linear-gradient(145deg, rgba(182, 240, 0, .095), rgba(182, 240, 0, .025));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.pa-position-value {
+  margin-top: 7px;
+  color: var(--pr-neon-bright);
+  font: 900 clamp(2rem, 3.4vw, 3.05rem)/.95 'Bebas Neue', sans-serif;
+  letter-spacing: .02em;
+  overflow-wrap: anywhere;
+  text-shadow: 0 0 24px rgba(182, 240, 0, .11);
+}
+
+.pa-position-copy { margin-top: 7px; color: #aab4a7; font-size: .69rem; font-weight: 750; line-height: 1.4; }
+.pa-formula {
+  display: inline-flex;
+  align-self: flex-start;
+  max-width: 100%;
+  margin-top: 10px;
+  padding: 6px 8px;
+  border: 1px solid rgba(232, 185, 77, .18);
+  border-radius: 8px;
+  color: var(--yellow);
+  background: rgba(232, 185, 77, .055);
+  font: 800 .64rem/1.35 'DM Mono', monospace;
+  overflow-wrap: anywhere;
+}
+
+.pa-buckets { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; min-width: 0; }
+.pa-bucket {
+  position: relative;
+  min-width: 0;
+  min-height: 91px;
+  padding: 12px 13px;
+  overflow: hidden;
+  border: 1px solid rgba(182, 240, 0, .105);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, .022);
+}
+
+.pa-bucket::after {
+  content: '';
+  position: absolute;
+  width: 62px;
+  height: 62px;
+  right: -26px;
+  bottom: -31px;
+  border-radius: 50%;
+  background: rgba(182, 240, 0, .045);
+}
+
+.pa-bucket-top { display: flex; align-items: center; gap: 6px; color: #8f9b8d; font-size: .59rem; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+.pa-dot { width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--pr-neon); box-shadow: 0 0 0 3px rgba(182, 240, 0, .075); }
+.pa-bucket.due .pa-dot { background: var(--yellow); box-shadow: 0 0 0 3px rgba(232, 185, 77, .075); }
+.pa-bucket.review .pa-dot { background: #75a9dd; box-shadow: 0 0 0 3px rgba(117, 169, 221, .08); }
+.pa-bucket.settled .pa-dot { background: #77d39a; box-shadow: 0 0 0 3px rgba(119, 211, 154, .08); }
+.pa-bucket strong { display: block; margin-top: 7px; color: #edf3e9; font: 850 1.05rem/1 'DM Mono', monospace; overflow-wrap: anywhere; }
+.pa-bucket.live strong { color: var(--pr-neon-bright); }
+.pa-bucket.due strong { color: var(--yellow); }
+.pa-bucket.review strong { color: #8ab8e5; }
+.pa-bucket small { position: relative; z-index: 1; display: block; margin-top: 6px; color: #748072; font-size: .59rem; line-height: 1.35; }
+
+.pa-foot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 20px 16px;
+  border-top: 1px solid rgba(182, 240, 0, .1);
+}
+
+.pa-due { display: grid; gap: 4px; min-width: 0; }
+.pa-due strong { color: #d9e0d6; font-size: .75rem; font-weight: 850; line-height: 1.3; }
+.pa-primary { min-width: 182px; min-height: 42px; justify-content: center; color: #071006 !important; background: linear-gradient(135deg, var(--pr-neon-bright), var(--pr-neon)) !important; box-shadow: 0 9px 24px rgba(182, 240, 0, .13); }
+.pa-primary:hover { box-shadow: 0 11px 28px rgba(182, 240, 0, .21); }
+.pa-error { margin: 0 20px 16px; padding: 10px 12px; border: 1px solid rgba(255, 104, 109, .25); border-radius: 10px; color: #f28b8f; background: rgba(255, 104, 109, .07); font-size: .7rem; line-height: 1.45; }
+.pa-card[aria-busy="true"] :is(.pa-position-value, .pa-bucket strong, .pa-formula) { opacity: .5; }
+
+/* Remittance buckets are mutually exclusive; only the total combines them. */
+#sec-remittances,
+.rm-modal {
+  --surface:#0f1711;
+  --card:#0c130e;
+  --bg2:#111c14;
+  --input:#111c14;
+  --border:rgba(182,240,0,.14);
+  --text:#eff4ec;
+  --text2:#a8b3a5;
+  --text3:#7f8b7c;
+  --green:var(--pr-neon-bright);
+  --green-rgb:182,240,0;
+  --yellow:#e8b94d;
+  --yellow-rgb:232,185,77;
+  --shadow:0 16px 38px rgba(0,0,0,.23);
+}
+
+#sec-remittances .rm-page-head,
+#sec-remittances .rm-cycle-banner,
+#sec-remittances .rm-stat,
+#sec-remittances .rm-panel { box-shadow:var(--shadow); }
+#sec-remittances .rm-page-head h2 { color:var(--text); }
+
+#sec-remittances .rm-stat.total {
+  border-color: rgba(182, 240, 0, .3);
+  background: linear-gradient(145deg, rgba(182, 240, 0, .095), rgba(182, 240, 0, .025));
+}
+
+#sec-remittances .rm-stat.total .rm-stat-value { color: var(--pr-neon-bright); }
+#sec-remittances .rm-live-card { border-color: rgba(182, 240, 0, .24); background: linear-gradient(145deg, rgba(182, 240, 0, .085), rgba(232, 185, 77, .025)); }
+#sec-remittances .rm-live-kicker { color: var(--pr-neon-bright); }
+
+/* System-owner allocation rule — a single supported calculation method. */
+#sec-payments .fee-rule-panel {
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 20px !important;
+  border: 1px solid rgba(182, 240, 0, .24) !important;
+  background:
+    radial-gradient(circle at 100% 0, rgba(182, 240, 0, .09), transparent 22rem),
+    linear-gradient(145deg, rgba(15, 23, 17, .98), rgba(9, 14, 10, .98)) !important;
+}
+
+.fee-rule-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.fee-rule-head h4 { margin: 3px 0 0 !important; color: #f4f8f0 !important; font: 850 1rem/1.2 'DM Sans', sans-serif !important; letter-spacing: -.015em !important; }
+.fee-rule-eyebrow { color: var(--pr-neon-bright); font-size: .59rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.fee-rule-owner,
+.fee-rule-lock { display: inline-flex; align-items: center; min-height: 25px; padding: 4px 8px; border: 1px solid rgba(182, 240, 0, .2); border-radius: 999px; color: var(--pr-neon-bright); background: rgba(182, 240, 0, .065); font-size: .57rem; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+.fee-rule-copy { max-width: 760px; margin: 11px 0 14px; color: #909c8e; font-size: .76rem; line-height: 1.55; }
+.fee-rule-copy strong { color: #dce4d8; }
+.fee-rule-method { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 11px; align-items: center; padding: 12px 13px; border: 1px solid rgba(182, 240, 0, .16); border-radius: 13px; background: rgba(182, 240, 0, .045); }
+.fee-rule-method-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: #071006; background: var(--pr-neon); font-size: .9rem; }
+.fee-rule-method small { display: block; color: #778475; font-size: .56rem; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.fee-rule-method strong { display: block; margin-top: 3px; color: #e7ede3; font-size: .79rem; }
+.fee-rule-controls { display: grid; grid-template-columns: minmax(190px, .65fr) minmax(250px, 1.35fr); gap: 9px; margin-top: 13px; }
+.fee-rule-locked-rate,
+.fee-rule-deploy-note { min-width: 0; min-height: 67px; padding: 11px 12px; border: 1px solid rgba(182, 240, 0, .13); border-radius: 11px; background: rgba(255, 255, 255, .02); }
+.fee-rule-locked-rate small { display: block; color: #788575; font-size: .56rem; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+.fee-rule-locked-rate strong { display: block; margin-top: 6px; color: var(--pr-neon-bright); font: 900 1.15rem/1 'DM Mono', monospace; }
+.fee-rule-deploy-note { display: flex; align-items: center; gap: 10px; color: #7d897a; font-size: .65rem; line-height: 1.35; }
+.fee-rule-deploy-note > span:first-child { width: 30px; height: 30px; flex: 0 0 30px; display: grid; place-items: center; border-radius: 9px; color: var(--yellow); background: rgba(232, 185, 77, .08); }
+.fee-rule-deploy-note strong { display: block; margin-bottom: 2px; color: #c8d0c4; font-size: .67rem; }
+.fee-rule-summary { margin-top: 11px; padding: 9px 11px; border: 1px solid rgba(182, 240, 0, .105); border-radius: 10px; color: #8d998a; background: rgba(255, 255, 255, .02); font-size: .68rem; line-height: 1.45; }
+.fee-rule-summary strong { color: var(--pr-neon-bright); }
+
+@keyframes paSpin { to { transform: rotate(360deg); } }
+
+@media (max-width: 900px) {
+  .pa-body { grid-template-columns: 1fr; }
+  .pa-position { min-height: 148px; }
+}
+
+@media (max-width: 700px) {
+  #maintFeePanel.pa-card { padding: 0 !important; border-radius: 16px !important; }
+  .pa-head { align-items: flex-start; padding: 15px 14px 13px; }
+  .pa-heading { align-items: flex-start; gap: 10px; }
+  .pa-mark { width: 38px; height: 38px; flex-basis: 38px; border-radius: 12px; }
+  .pa-heading h3 { font-size: .94rem; }
+  .pa-heading p { max-width: 245px; }
+  .pa-sync { display: none; }
+  .pa-body { padding: 13px 14px; }
+  .pa-position { min-height: 0; padding: 14px; }
+  .pa-position-value { font-size: 2.3rem; }
+  .pa-foot { padding: 12px 14px 14px; }
+}
+
+@media (max-width: 480px) {
+  .pa-heading p span { display: none; }
+  .pa-heading p strong { display: block; }
+  .pa-buckets { gap: 7px; }
+  .pa-bucket { min-height: 98px; padding: 10px; }
+  .pa-bucket-top { font-size: .54rem; letter-spacing: .045em; }
+  .pa-bucket strong { font-size: .88rem; }
+  .pa-bucket small { font-size: .54rem; }
+  .pa-foot { align-items: stretch; flex-direction: column; }
+  .pa-primary { width: 100%; min-width: 0; }
+  .pa-error { margin-inline: 14px; }
+  .fee-rule-controls { grid-template-columns: 1fr; }
+  .fee-rule-method { grid-template-columns: auto minmax(0, 1fr); }
+  .fee-rule-lock { grid-column: 2; justify-self: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pa-refresh, .pa-primary { transition: none; }
+  .pa-card[aria-busy="true"] .pa-refresh { animation: none; }
+}
+
 .admin-boot-splash {
   position: fixed;
   inset: 0;
@@ -3592,7 +3843,7 @@ body.admin-booting .admin-boot-splash {
       <div class="stat-cards">
         <div class="sc"><div class="sc-lbl">Total Bookings</div><div class="sc-val" id="dTotal">0</div><div class="sc-ic">📋</div></div>
         <div class="sc"><div class="sc-lbl">Today's Bookings</div><div class="sc-val" id="dToday">0</div><div class="sc-ic">📅</div></div>
-        <div class="sc"><div class="sc-lbl">Total Revenue</div><div class="sc-val" id="dRev">₱0</div><div class="sc-ic">💰</div></div>
+        <div class="sc"><div class="sc-lbl">Net Court Revenue</div><div class="sc-val" id="dRev">₱0</div><div class="sc-ic">💰</div></div>
         <div class="sc"><div class="sc-lbl">Most Booked</div><div class="sc-val" style="font-size:1rem;margin-top:4px" id="dMost">—</div><div class="sc-ic">🏆</div></div>
       </div>
 
@@ -3602,41 +3853,62 @@ body.admin-booting .admin-boot-splash {
         <button class="btn btn-g" data-perm="payment_review" onclick="goto('payreview')">Review</button>
       </div>
 
-      <!-- BOOKING-DATE FEE SUMMARY -->
-      <div class="panel mf-collapsed" id="maintFeePanel" style="margin-bottom:16px;border:1.5px solid rgba(var(--yellow-rgb),.35);background:rgba(var(--yellow-rgb),.04)">
-        <div class="mf-head" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-          <h4 style="margin:0;color:var(--yellow)">⚡ Platform Booking Fee</h4>
-          <div class="mf-month-wrap" style="display:flex;align-items:center;gap:8px">
-            <label style="font-size:.78rem;color:var(--text3)">Booking Month:</label>
-            <input type="month" id="maintMonth" style="font-size:.82rem;padding:5px 10px;border-radius:7px;border:1.5px solid var(--border);background:var(--input);color:var(--text);cursor:pointer" onchange="renderMaintFee()"/>
+      <!-- AUTHORITATIVE PLATFORM ALLOCATION POSITION (system + court owner only) -->
+      <section class="panel pa-card" id="maintFeePanel" data-perm="remittances" aria-labelledby="paTitle" aria-busy="true">
+        <div class="pa-accent" aria-hidden="true"></div>
+        <header class="pa-head">
+          <div class="pa-heading">
+            <span class="pa-mark" aria-hidden="true">&#9889;</span>
+            <div>
+              <div class="pa-eyebrow">Internal finance</div>
+              <h3 id="paTitle">Platform Allocation</h3>
+              <p id="mfRuleCopy"><strong id="mfRuleValue">&#8369;10 per booked court-hour</strong><span aria-hidden="true"> &middot; </span>included in the court price</p>
+            </div>
+          </div>
+          <div class="pa-head-actions">
+            <span class="pa-sync" id="mfUpdated" aria-live="polite">Connecting to secure ledger&hellip;</span>
+            <button class="pa-refresh" id="mfRefreshBtn" type="button" aria-label="Refresh platform allocation" title="Refresh platform allocation" onclick="renderMaintFee({announce:true})">&#8635;</button>
+          </div>
+        </header>
+
+        <div class="pa-body">
+          <div class="pa-position">
+            <div class="pa-position-label" id="mfPositionLabel">Total outstanding</div>
+            <div class="pa-position-value" id="mfFee" aria-live="polite">&#8369;0.00</div>
+            <div class="pa-position-copy" id="mfPositionCopy">Live accumulation plus unpaid remittance balances</div>
+            <div class="pa-formula" id="mfFormula">No eligible platform allocation yet</div>
+          </div>
+
+          <div class="pa-buckets" aria-label="Platform allocation position">
+            <div class="pa-bucket live">
+              <div class="pa-bucket-top"><span class="pa-dot"></span><span>Accumulating</span></div>
+              <strong id="mfLive">&#8369;0.00</strong>
+              <small id="mfLiveMeta">0 court-hours in the live ledger</small>
+            </div>
+            <div class="pa-bucket due">
+              <div class="pa-bucket-top"><span class="pa-dot"></span><span>Awaiting remittance</span></div>
+              <strong id="mfPrepared">&#8369;0.00</strong>
+              <small id="mfPreparedMeta">No frozen balance awaiting payment</small>
+            </div>
+            <div class="pa-bucket review">
+              <div class="pa-bucket-top"><span class="pa-dot"></span><span>Under review</span></div>
+              <strong id="mfReview">&#8369;0.00</strong>
+              <small id="mfReviewMeta">Included in outstanding, never added twice</small>
+            </div>
+            <div class="pa-bucket settled">
+              <div class="pa-bucket-top"><span class="pa-dot"></span><span>Accepted all-time</span></div>
+              <strong id="mfSettled">&#8369;0.00</strong>
+              <small id="mfSettledMeta">Permanent settlement history</small>
+            </div>
           </div>
         </div>
-        <div class="mf-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px">
-          <div class="mf-tile" style="background:var(--input);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
-            <div class="mf-tile-val" style="font-size:1.6rem;font-weight:800;color:var(--text)" id="mfBookings">0</div>
-            <div class="mf-tile-label" style="font-size:.72rem;color:var(--text3);margin-top:3px;text-transform:uppercase;letter-spacing:.5px">Bookings</div>
-          </div>
-          <div class="mf-tile" style="background:var(--input);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
-            <div class="mf-tile-val" style="font-size:1.6rem;font-weight:800;color:var(--text)" id="mfHours">0</div>
-            <div class="mf-tile-label" style="font-size:.72rem;color:var(--text3);margin-top:3px;text-transform:uppercase;letter-spacing:.5px">Total Hours</div>
-          </div>
-          <div class="mf-tile" style="background:var(--input);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center">
-            <div class="mf-tile-label" style="font-size:.72rem;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.5px">Rate</div>
-            <div style="font-size:1rem;font-weight:700;color:var(--text)" id="mfRateDisplay">₱5.00 / hr</div>
-          </div>
-          <div class="mf-tile" style="background:rgba(var(--yellow-rgb),.12);border:1.5px solid rgba(var(--yellow-rgb),.4);border-radius:10px;padding:14px;text-align:center">
-            <div style="font-size:1.6rem;font-weight:800;color:var(--yellow)" id="mfFee">₱0.00</div>
-            <div style="font-size:.72rem;color:var(--text3);margin-top:3px;text-transform:uppercase;letter-spacing:.5px">Fee to Collect</div>
-          </div>
-        </div>
-        <button type="button" class="mf-toggle" id="mfToggle" onclick="toggleMaintBreakdown()">Show breakdown</button>
-        <div style="background:var(--input);border:1px solid var(--border);border-radius:9px;padding:12px 14px;font-size:.82rem;color:var(--text2);line-height:1.7" id="mfBreakdown">
-          —
-        </div>
-        <div class="mf-note" style="margin-top:10px;font-size:.75rem;color:var(--text3);text-align:center">
-          Counts by the month the booking was made, not the future court play date · Only <strong>confirmed</strong> and <strong>completed</strong> bookings are included
-        </div>
-      </div>
+
+        <footer class="pa-foot">
+          <div class="pa-due"><span class="pa-due-label">Remittance cycle</span><strong id="mfDueStatus">Next due &mdash;</strong></div>
+          <button class="btn btn-p pa-primary" id="mfAction" type="button" onclick="goto('remittances')">View Remittances <span aria-hidden="true">&#8594;</span></button>
+        </footer>
+        <div class="pa-error" id="mfError" role="status" hidden></div>
+      </section>
 
       <div class="rev-grid">
         <div class="panel">
@@ -4111,13 +4383,13 @@ body.admin-booting .admin-boot-splash {
       </div>
     </div>
 
-    <!-- BOOKING FEE REMITTANCES (system owner + court owner) -->
+    <!-- PLATFORM ALLOCATION REMITTANCES (system owner + court owner) -->
     <div id="sec-remittances" class="adm-sec">
       <div class="rm-page-head">
         <div class="rm-page-copy">
           <div class="rm-kicker">People &amp; Finance</div>
-          <h2>BOOKING FEE REMITTANCES</h2>
-          <p id="rmPageCopy">Track the running booking-fee balance, exact payment cutoffs, submitted proof, and permanent settlement history.</p>
+          <h2>PLATFORM ALLOCATION REMITTANCES</h2>
+          <p id="rmPageCopy">Track the allocation included in court prices, exact payment cutoffs, submitted proof, and permanent settlement history.</p>
         </div>
         <div class="rm-head-actions">
           <button class="btn btn-g" id="rmRefreshBtn" type="button" onclick="renderRemittances({announce:true})">&#8635; Refresh</button>
@@ -4137,27 +4409,27 @@ body.admin-booting .admin-boot-splash {
 
       <div class="rm-stat-grid" aria-label="Remittance summary">
         <div class="rm-stat">
-          <div class="rm-stat-label">Current Accumulated</div>
+          <div class="rm-stat-label">Accumulating</div>
           <div class="rm-stat-value money" id="rmLiveStat">&#8369;0.00</div>
-          <div class="rm-stat-note" id="rmLiveStatNote">Unsettled booking fees</div>
+          <div class="rm-stat-note" id="rmLiveStatNote">Available for the next cutoff</div>
         </div>
         <div class="rm-stat">
-          <div class="rm-stat-label">Reservations</div>
-          <div class="rm-stat-value" id="rmReservationStat">0</div>
-          <div class="rm-stat-note" id="rmReservationStatNote">Unique confirmed reservations</div>
-        </div>
-        <div class="rm-stat">
-          <div class="rm-stat-label">Billable Court-Hours</div>
-          <div class="rm-stat-value" id="rmHoursStat">0</div>
-          <div class="rm-stat-note" id="rmHoursStatNote">Per-hour fee units</div>
+          <div class="rm-stat-label">Awaiting Remittance</div>
+          <div class="rm-stat-value money" id="rmPreparedStat">&#8369;0.00</div>
+          <div class="rm-stat-note" id="rmPreparedStatNote">Prepared balance awaiting payment</div>
         </div>
         <div class="rm-stat warn">
           <div class="rm-stat-label">Under Review</div>
           <div class="rm-stat-value" id="rmReviewStat">&#8369;0.00</div>
-          <div class="rm-stat-note" id="rmReviewStatNote">No payment proof waiting</div>
+          <div class="rm-stat-note" id="rmReviewStatNote">Included in outstanding—not added twice</div>
+        </div>
+        <div class="rm-stat total">
+          <div class="rm-stat-label" id="rmOutstandingLabel">Total Outstanding</div>
+          <div class="rm-stat-value money" id="rmOutstandingStat">&#8369;0.00</div>
+          <div class="rm-stat-note" id="rmOutstandingStatNote">Accumulating plus every unpaid balance</div>
         </div>
         <div class="rm-stat">
-          <div class="rm-stat-label">Settled Total</div>
+          <div class="rm-stat-label">Accepted All-time</div>
           <div class="rm-stat-value money" id="rmSettledStat">&#8369;0.00</div>
           <div class="rm-stat-note" id="rmSettledStatNote">Permanent remittance history</div>
         </div>
@@ -4165,7 +4437,7 @@ body.admin-booting .admin-boot-splash {
 
       <section class="rm-live-card" aria-labelledby="rmLiveTitle">
         <div>
-          <div class="rm-live-kicker" id="rmLiveTitle">Live accumulated balance</div>
+          <div class="rm-live-kicker" id="rmLiveTitle">Accumulating platform allocation</div>
           <div class="rm-live-amount" id="rmLiveAmount" aria-live="polite">&#8369;0.00</div>
           <div class="rm-live-meta">
             <span id="rmLivePeriod">Accumulation start: &mdash;</span>
@@ -4178,7 +4450,7 @@ body.admin-booting .admin-boot-splash {
             <div class="rm-calc-metric wide"><div class="rm-calc-label">Fee Calculation</div><div class="rm-calc-value formula" id="rmLiveFormula">No eligible fee yet</div></div>
           </div>
           <div class="rm-fee-breakdown" id="rmLiveFeeBreakdown" aria-label="Fee rate breakdown"></div>
-          <div class="rm-live-note" id="rmLiveNote">One reservation may contain several court bookings. Billable court-hours come from the immutable fee snapshot; the private platform allocation remains separate from net court revenue.</div>
+          <div class="rm-live-note" id="rmLiveNote">Each booked court-hour is one fee unit. The amount shown here comes from immutable booking snapshots and is already included in the player-facing court price.</div>
         </div>
         <div class="rm-live-action" id="rmLiveAction">
           <button class="btn btn-p rm-action" id="rmPrepareBtn" type="button" onclick="openRemittancePrepare()" hidden>Prepare Remittance</button>
@@ -4189,7 +4461,7 @@ body.admin-booting .admin-boot-splash {
       <section class="rm-panel" aria-label="Remittance records">
         <div class="rm-panel-top">
           <div class="rm-tabs" id="rmTabs" role="tablist" aria-label="Remittance record filters">
-            <button class="rm-tab active" id="rmActiveTab" type="button" role="tab" aria-selected="true" aria-controls="rmRecordList" onclick="setRemittanceTab('active')">Active <span class="rm-tab-count" id="rmActiveCount">0</span></button>
+            <button class="rm-tab active" id="rmActiveTab" type="button" role="tab" aria-selected="true" aria-controls="rmRecordList" onclick="setRemittanceTab('active')">To Remit <span class="rm-tab-count" id="rmActiveCount">0</span></button>
             <button class="rm-tab" id="rmHistoryTab" type="button" role="tab" aria-selected="false" aria-controls="rmRecordList" onclick="setRemittanceTab('history')">History <span class="rm-tab-count" id="rmHistoryCount">0</span></button>
           </div>
           <span class="rm-pill" id="rmRolePill">Secure ledger</span>
@@ -4715,31 +4987,29 @@ body.admin-booting .admin-boot-splash {
         </div>
       </div>
 
-      <!-- EMBEDDED BOOKING FEE — System Owner only -->
-      <div class="panel" data-perm="owner_only" style="max-width:680px;margin-bottom:20px;border:2px solid var(--green);">
-        <h4>💰 Embedded Booking Fee <span style="font-size:.72rem;background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:8px;margin-left:8px;font-family:'DM Mono',monospace;letter-spacing:1px">SYSTEM OWNER</span></h4>
-        <p style="color:var(--muted);font-size:.84rem;margin:8px 0 12px">Court prices are the complete player totals. The private platform allocation is taken from within that price—not added at checkout—and eligible fee snapshots continue accumulating for remittance on the 14th.</p>
-        <div class="fg" style="margin-bottom:16px">
-          <label class="fl">Charging Method</label>
-          <div style="display:grid;gap:8px">
-            <label style="display:flex;align-items:flex-start;gap:8px;padding:9px 11px;background:rgba(var(--green-rgb),.06);border:1px solid rgba(var(--green-rgb),.24);border-radius:8px;cursor:pointer;font-size:.84rem;color:var(--text)">
-              <input type="radio" name="feeType" value="per_hour" checked style="accent-color:var(--green);margin-top:2px" />
-              <span><strong>Per booked hour</strong> per confirmed booking transaction</span>
-            </label>
-            <label style="display:flex;align-items:flex-start;gap:8px;padding:9px 11px;background:var(--input);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:.84rem;color:var(--text)">
-              <input type="radio" name="feeType" value="flat" style="accent-color:var(--green);margin-top:2px" />
-              <span><strong>Per confirmed booking transaction</strong> fee</span>
-            </label>
-          </div>
-        </div>
-        <div style="display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap">
+      <!-- EMBEDDED PLATFORM ALLOCATION — System Owner only -->
+      <div class="panel fee-rule-panel" data-perm="owner_only">
+        <div class="fee-rule-head">
           <div>
-            <label class="fl" id="maintRateLabel">💰 Embedded Fee (₱/hr)</label>
-            <input type="number" class="fi" id="maintRateInput" min="0" step="0.5" style="width:140px" placeholder="e.g. 15" />
+            <div class="fee-rule-eyebrow">Internal finance</div>
+            <h4>&#9889; Platform Allocation</h4>
           </div>
-          <button class="btn btn-s btn-sm" onclick="saveMaintRate()" style="margin-bottom:1px">💾 Save Rate</button>
+          <span class="fee-rule-owner">System Owner</span>
         </div>
-        <div id="maintRateSummary" style="margin-top:12px;padding:10px 14px;background:var(--input);border:1px solid var(--border);border-radius:8px;font-size:.84rem;color:var(--muted);display:none"></div>
+        <p class="fee-rule-copy">The allocation is calculated only by <strong>booked court-hour</strong> and is already inside the complete court price shown to players. Existing bookings keep their original locked rate.</p>
+        <div class="fee-rule-method" aria-label="Platform allocation method">
+          <span class="fee-rule-method-icon" aria-hidden="true">&#9201;</span>
+          <div><small>Calculation method</small><strong>Per booked court-hour</strong></div>
+          <span class="fee-rule-lock">Standard</span>
+        </div>
+        <div class="fee-rule-controls" aria-label="Locked platform allocation rate">
+          <div class="fee-rule-locked-rate">
+            <small>Allocation per booked court-hour</small>
+            <strong id="maintRateLockedValue">&#8369;10.00</strong>
+          </div>
+          <div class="fee-rule-deploy-note"><span aria-hidden="true">&#128274;</span><span><strong>Policy locked</strong>Changes require an audited deployment.</span></div>
+        </div>
+        <div class="fee-rule-summary" id="maintRateSummary" aria-live="polite"></div>
       </div>
 
       <!-- BOOKING FEE REMITTANCE — System Owner only (where court owners send fees) -->
@@ -6899,11 +7169,8 @@ async function renderPaddleInsights({force=false}={}){
    DASHBOARD
    ============================================== */
 async function renderDash(){
-  // Set maintenance fee month picker to current month and render
-  const _now = new Date();
-  const _curMonth = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}`;
-  const _mEl = $('maintMonth');
-  if (_mEl && !_mEl.value) _mEl.value = _curMonth;
+  // The private platform-allocation position comes from the authoritative
+  // remittance RPC. It loads alongside the operational dashboard metrics.
   renderMaintFee();
 
   const [bks, settings]=await Promise.all([DB.getBookings(), DB.getSettings()]);
@@ -6937,112 +7204,141 @@ async function renderDash(){
   renderDashCharts(activeTxns,feeCfg);
 }
 
-// ── MAINTENANCE FEE ─────────────────────────────────────────
-let _maintRate = 5; // cached from DB settings
-let _maintFeeType = 'per_hour'; // selected booking fee charging method
+// ── PLATFORM ALLOCATION POSITION ─────────────────────────────
+const PLATFORM_ALLOCATION_RATE = 10; // server policy is deployment-locked to per court-hour
+let _maintFeeRequestSeq = 0;
 
-function toggleMaintBreakdown() {
-  const panel = $('maintFeePanel');
-  const btn = $('mfToggle');
-  if (!panel) return;
-  const collapsed = panel.classList.toggle('mf-collapsed');
-  if (btn) btn.textContent = collapsed ? 'Show breakdown' : 'Hide breakdown';
+function platformAllocationDashboard(response) {
+  return response?.data && !response.live ? response.data : (response || {});
 }
 
-async function renderMaintFee() {
-  const monthInput = $('maintMonth');
-  const selectedMonth = monthInput?.value; // e.g. "2026-04"
-  if (!selectedMonth) return;
-
-  // Load rate and charging method from DB settings.
-  const settings = await DB.getSettings();
-  _maintRate = parseFloat(settings.maintenance_fee ?? settings.service_fee_rate ?? settings.booking_fee ?? '5');
-  _maintFeeType = normalizePlatformFeeType(settings.fee_type);
-  const isFlat = _maintFeeType === 'flat';
-  if ($('mfRateDisplay')) $('mfRateDisplay').textContent = isFlat ? `₱${_maintRate.toFixed(2)} / transaction` : `₱${_maintRate.toFixed(2)} / hr`;
-
-  const bks = await DB.getBookings();
-  // Only bill confirmed/completed platform bookings made in the selected month.
-  // Spreadsheet/manual imports remain visible but do not generate a platform fee.
-  const filtered = bks.filter(b =>
-    bookingRevenueDate(b).startsWith(selectedMonth) &&
-    isPlatformBillableBooking(b)
-  );
-
-  const filteredTxns = groupBookings(filtered);
-  const totalBookings = filteredTxns.length;
-  const totalHours = filtered.reduce((s, b) => s + (parseInt(b.duration) || 0), 0);
-  const fallbackCfg = { amount: _maintRate, type: _maintFeeType };
-  const totalFee = filtered.reduce((sum, b) => sum + platformFeeAmountForBooking(b, fallbackCfg), 0);
-
-  $('mfBookings').textContent = totalBookings;
-  $('mfHours').textContent = totalHours;
-  $('mfFee').textContent = fmt(totalFee);
-
-  // Breakdown by court
-  const byCourtMap = {};
-  filtered.forEach(b => {
-    const cn = b.courtName || 'Unknown';
-    if (!byCourtMap[cn]) byCourtMap[cn] = { bookings: 0, hours: 0, fees: 0 };
-    byCourtMap[cn].bookings++;
-    byCourtMap[cn].hours += parseInt(b.duration) || 0;
-    byCourtMap[cn].fees += platformFeeAmountForBooking(b, fallbackCfg);
-  });
-
-  const [yr, mo] = selectedMonth.split('-');
-  const monthLabel = new Date(yr, parseInt(mo) - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-
-  if (totalBookings === 0) {
-    $('mfBreakdown').innerHTML = `<span style="color:var(--text3)">No billable online bookings made in ${monthLabel}. Manual spreadsheet imports are excluded.</span>`;
+async function renderMaintFee({ announce = false } = {}) {
+  const panel = $('maintFeePanel');
+  if (!panel) return;
+  if (!Auth.can('remittances', sess?.role)) {
+    panel.hidden = true;
     return;
   }
 
-  const rows = Object.entries(byCourtMap)
-    .sort((a, b) => b[1].hours - a[1].hours)
-    .map(([court, d]) => {
-      const courtFee = d.fees;
-      const feeDetail = `${d.bookings} booking${d.bookings !== 1 ? 's' : ''} · ${d.hours} hr${d.hours !== 1 ? 's' : ''}`;
-      return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)">
-        <span>🏟️ ${court}</span>
-        <span>${feeDetail} = <span style="color:var(--yellow)">${fmt(courtFee)}</span></span>
-      </div>`;
-    }).join('');
+  panel.hidden = false;
+  panel.setAttribute('aria-busy', 'true');
+  const refresh = $('mfRefreshBtn');
+  const errorBox = $('mfError');
+  const requestId = ++_maintFeeRequestSeq;
+  if (refresh) refresh.disabled = true;
+  if (errorBox) errorBox.hidden = true;
 
-  const totalLine = `${totalBookings} immutable booking snapshot${totalBookings !== 1 ? 's' : ''} = <span style="color:var(--yellow);font-size:1rem">${fmt(totalFee)}</span>`;
-
-  $('mfBreakdown').innerHTML = `
-    <div style="font-weight:700;margin-bottom:8px;color:var(--text)">📊 Booking-date breakdown for ${monthLabel}</div>
-    ${rows}
-    <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;font-weight:700;font-size:.9rem">
-      <span>Total</span>
-      <span>${totalLine}</span>
-    </div>`;
-}
-
-async function saveMaintRate() {
-  const val = parseFloat($('maintRateInput').value);
-  if (isNaN(val) || val < 0) { toast('Please enter a valid rate (0 or more).', 'err'); return; }
-  const feeType = document.querySelector('input[name="feeType"]:checked')?.value || 'per_hour';
   try {
-    await DB.saveSetting('maintenance_fee', String(val));
-    await DB.saveSetting('fee_type', feeType);
-    _maintRate = val;
-    await renderMaintFee();
-    const sum = $('maintRateSummary');
-    if (sum) {
-      sum.style.display = 'block';
-      const typeLabel = feeType === 'flat'
-        ? 'per confirmed booking transaction fee'
-        : 'per booked hour per confirmed booking transaction';
-      sum.innerHTML = `🛠️ Booking fee: <strong style="color:var(--green)">₱${val.toFixed(2)}</strong> — ${typeLabel}.`;
+    if (typeof DB.getBookingFeeRemittanceDashboard !== 'function') throw new Error('The secure remittance ledger is not available yet.');
+    const response = await DB.getBookingFeeRemittanceDashboard();
+    if (requestId !== _maintFeeRequestSeq) return;
+
+    const dashboard = platformAllocationDashboard(response);
+    const live = rmPick(dashboard, 'live', 'current', 'accumulated', 'live_balance', 'liveBalance') || {};
+    const active = rmRows(rmPick(dashboard, 'active', 'active_remittances', 'activeRemittances', 'open_remittances', 'openRemittances'));
+    const history = rmRows(rmPick(dashboard, 'history', 'remittance_history', 'remittanceHistory', 'last_settled', 'lastSettled'));
+    const role = String(rmPick(dashboard, 'role', 'account_role', 'accountRole') || sess?.role || '');
+    const liveAmount = rmAmountDue(live);
+    const activeRemaining = active.reduce((sum, record) => sum + rmAmountRemaining(record), 0);
+    const explicitOpen = rmPick(dashboard, 'open_remaining_balance', 'openRemainingBalance');
+    const openAmount = explicitOpen === undefined ? activeRemaining : Math.max(0, rmNumber(explicitOpen));
+    const reviewRows = active.filter(record => rmStatusKey(record) === 'under-review');
+    const reviewAmountRaw = reviewRows.reduce((sum, record) => sum + rmAmountUnderReview(record), 0);
+    const reviewAmount = Math.min(openAmount, reviewAmountRaw);
+    const preparedAmount = Math.max(0, openAmount - reviewAmount);
+    const preparedRecordCount = active.filter(record =>
+      rmStatusKey(record) !== 'under-review' || rmAmountRemaining(record) > rmAmountUnderReview(record)
+    ).length;
+    const settledRows = history.filter(record => rmStatusKey(record) === 'settled');
+    const dashboardAccepted = rmPick(dashboard, 'accepted_total', 'acceptedTotal', 'settled_total', 'settledTotal');
+    const acceptedAmount = dashboardAccepted !== undefined
+      ? Math.max(0, rmNumber(dashboardAccepted))
+      : settledRows.reduce((sum, record) => sum + (rmAmountSettled(record) || rmAcceptedAmount(record) || rmAmountDue(record)), 0);
+    const explicitOutstanding = rmPick(dashboard, 'total_outstanding_balance', 'totalOutstandingBalance');
+    const totalOutstanding = explicitOutstanding === undefined
+      ? liveAmount + openAmount
+      : Math.max(0, rmNumber(explicitOutstanding));
+    const liveHours = rmBillableHours(live);
+    const liveReservations = rmReservationCount(live);
+    const liveBreakdown = rmFeeBreakdown(live);
+    const serverNow = rmPick(dashboard, 'server_now', 'serverNow') || new Date().toISOString();
+    const nextDue = rmPick(dashboard, 'next_due_on', 'nextDueOn', 'next_due_at', 'nextDueAt');
+    const canPrepare = rmCanPrepareInfo(dashboard);
+
+    // The current policy is deployment-locked. Historical/mixed immutable
+    // snapshots remain truthful in the formula immediately below.
+    $('mfRuleValue').textContent = `${fmt(PLATFORM_ALLOCATION_RATE)} per booked court-hour`;
+
+    const snapshotKeys = new Set(liveBreakdown.map(row => {
+      const type = String(rmPick(row, 'fee_type', 'feeType') || '').toLowerCase();
+      const rate = Math.max(0, rmNumber(rmPick(row, 'fee_rate', 'feeRate'))).toFixed(2);
+      return `${type}|${rate}`;
+    }));
+    const hasLiveActivity = liveBreakdown.length > 0 || rmAdjustmentCount(live) > 0 || rmAdjustmentAmount(live) !== 0;
+    const formula = hasLiveActivity ? rmFeeBreakdownText(live) : 'No eligible platform allocation yet';
+    $('mfFormula').textContent = snapshotKeys.size > 1 ? `Rates locked per booking · ${formula}` : formula;
+
+    const isOwner = role === 'owner';
+    $('mfPositionLabel').textContent = isOwner ? 'Platform fees receivable' : 'Platform share payable';
+    $('mfFee').textContent = fmt(totalOutstanding);
+    $('mfPositionCopy').textContent = totalOutstanding > 0
+      ? `${fmt(liveAmount)} accumulating + ${fmt(openAmount)} unpaid remittance balance`
+      : 'Nothing is currently due in the secure ledger';
+    $('mfLive').textContent = fmt(liveAmount);
+    $('mfLiveMeta').textContent = liveHours === null
+      ? 'Court-hours not recorded for legacy data'
+      : `${rmMetricNumber(liveHours)} court-hour${liveHours === 1 ? '' : 's'} · ${liveReservations === null ? 'reservations not recorded' : `${rmMetricNumber(liveReservations, 0)} reservation${liveReservations === 1 ? '' : 's'}`}`;
+    $('mfPrepared').textContent = fmt(preparedAmount);
+    $('mfPreparedMeta').textContent = preparedAmount > 0
+      ? `${preparedRecordCount} prepared balance${preparedRecordCount === 1 ? '' : 's'} awaiting action`
+      : 'No frozen balance awaiting payment';
+    $('mfReview').textContent = fmt(reviewAmount);
+    $('mfReviewMeta').textContent = reviewRows.length
+      ? `${reviewRows.length} proof${reviewRows.length === 1 ? '' : 's'} waiting · already included above`
+      : 'No proof waiting for verification';
+    $('mfSettled').textContent = fmt(acceptedAmount);
+    $('mfSettledMeta').textContent = `Accepted across all reviews · ${settledRows.length} fully settled`;
+    $('mfUpdated').textContent = `Ledger updated ${rmDateTime(serverNow)}`;
+
+    const dueKey = nextDue ? String(nextDue).slice(0, 10) : '';
+    const todayKey = rmPhDateKey(serverNow);
+    const duePrefix = dueKey && dueKey < todayKey ? 'Overdue since' : dueKey === todayKey ? 'Due today' : 'Next due';
+    $('mfDueStatus').textContent = `${duePrefix} ${rmDateOnly(nextDue)}`;
+
+    const action = $('mfAction');
+    if (isOwner) {
+      action.innerHTML = reviewRows.length
+        ? `Review ${reviewRows.length} Proof${reviewRows.length === 1 ? '' : 's'} <span aria-hidden="true">&#8594;</span>`
+        : 'Review Remittances <span aria-hidden="true">&#8594;</span>';
+    } else if (reviewRows.length) {
+      action.innerHTML = 'View Review Status <span aria-hidden="true">&#8594;</span>';
+    } else if (preparedAmount > 0) {
+      action.innerHTML = 'View &amp; Remit <span aria-hidden="true">&#8594;</span>';
+    } else if (liveAmount > 0 && canPrepare.allowed) {
+      action.innerHTML = 'Prepare Remittance <span aria-hidden="true">&#8594;</span>';
+    } else {
+      action.innerHTML = 'View Remittances <span aria-hidden="true">&#8594;</span>';
     }
-    toast(`Booking fee set to ₱${val.toFixed(2)} (${feeType === 'flat' ? 'per transaction' : 'per booked hour'}).`);
-  } catch(e) {
-    console.error('saveMaintRate error:', e);
-    toast('Failed to save rate.', 'err');
+
+    // Reuse the same authoritative snapshot when the Remittances section opens.
+    _rmState.dashboard = dashboard;
+    if (announce) toast('Platform allocation refreshed.', 'inf');
+  } catch (error) {
+    if (requestId !== _maintFeeRequestSeq) return;
+    console.error('[renderMaintFee]', error);
+    $('mfUpdated').textContent = 'Secure ledger unavailable';
+    if (errorBox) {
+      errorBox.textContent = `${error?.message || 'Could not load the platform allocation.'} Use refresh to try again.`;
+      errorBox.hidden = false;
+    }
+    if (announce) toast(error?.message || 'Could not refresh the platform allocation.', 'err');
+  } finally {
+    if (requestId === _maintFeeRequestSeq) {
+      panel.setAttribute('aria-busy', 'false');
+      if (refresh) refresh.disabled = false;
+    }
   }
 }
-// ─────────────────────────────────────────────────────────────
 
 let _chartBookings = null, _chartRevenue = null;
 function renderDashCharts(bookings, feeCfg = { amount: 0, type: 'per_hour' }) {
@@ -9966,31 +10262,12 @@ function fmtH(h) {
 }
 
 async function renderMaintRateSettings() {
-  const settings = await DB.getSettings();
-  const rate = parseFloat(settings.maintenance_fee ?? settings.service_fee_rate ?? settings.booking_fee ?? '5');
-  if ($('maintRateInput')) $('maintRateInput').value = rate;
-  const feeType = normalizePlatformFeeType(settings.fee_type);
-  const ftEl = document.querySelector(`input[name="feeType"][value="${feeType}"]`);
-  if (ftEl) ftEl.checked = true;
-  updateMaintRateLabel();
+  if ($('maintRateLockedValue')) $('maintRateLockedValue').textContent = fmt(PLATFORM_ALLOCATION_RATE);
   const sum = $('maintRateSummary');
   if (sum) {
-    const typeLabel = feeType === 'flat'
-      ? 'per confirmed booking transaction fee'
-      : 'per booked hour per confirmed booking transaction';
-    sum.style.display = 'block';
-    sum.innerHTML = `🛠️ Booking fee: <strong style="color:var(--green)">₱${rate.toFixed(2)}</strong> — ${typeLabel}.`;
+    sum.innerHTML = `<strong>${fmt(PLATFORM_ALLOCATION_RATE)} per booked court-hour</strong> · included inside the displayed court price · historical bookings keep their locked snapshots`;
   }
 }
-
-function updateMaintRateLabel() {
-  const isFlat = document.querySelector('input[name="feeType"][value="flat"]')?.checked;
-  const lbl = document.getElementById('maintRateLabel');
-  if (lbl) lbl.textContent = isFlat ? '🛠️ Booking Fee (₱/transaction)' : '🛠️ Booking Fee (₱/hr)';
-  const input = document.getElementById('maintRateInput');
-  if (input) input.placeholder = isFlat ? 'e.g. 10' : 'e.g. 15';
-}
-document.addEventListener('change', e => { if (e.target.name === 'feeType') updateMaintRateLabel(); });
 async function renderHours() {
   const settings = await DB.getSettings();
   const openHr  = parseInt(settings.open_hour  || '6');
@@ -10159,6 +10436,7 @@ async function renderIntegrationStatus() {
 async function renderPaymentSettings() {
   if (!Auth.can('payments', sess.role)) { toast('You do not have access to this section.', 'err'); return; }
   const settings = await DB.getSettings();
+  await renderMaintRateSettings();
   const cashOn = settings.payment_method_cash === '1';
   const gcashOn = settings.payment_method_gcash === '1';
   const bdopayOn = settings.payment_method_bdopay === '1';
@@ -10309,6 +10587,12 @@ function rmPaymentAmount(record) {
   return Math.max(0, rmNumber(rmPick(payment, 'amount', 'amount_submitted', 'amountSubmitted', 'submitted_amount', 'submittedAmount', 'amount_paid', 'amountPaid') ?? rmPick(record, 'submitted_amount', 'submittedAmount', 'amount_remitted', 'amountRemitted')));
 }
 
+function rmAmountUnderReview(record) {
+  const remaining = rmAmountRemaining(record);
+  const submitted = rmPaymentAmount(record);
+  return Math.min(remaining, submitted > 0 ? submitted : remaining);
+}
+
 function rmAcceptedAmount(record) {
   const payment = rmRecordPayment(record);
   return Math.max(0, rmNumber(rmPick(payment, 'amount_accepted', 'amountAccepted', 'accepted_amount', 'acceptedAmount') ?? rmPick(record, 'amount_accepted', 'amountAccepted', 'paid_amount', 'paidAmount')));
@@ -10364,6 +10648,35 @@ function rmMetricNumber(value, maximumFractionDigits = 2) {
   return new Intl.NumberFormat('en-PH', { maximumFractionDigits, minimumFractionDigits:0 }).format(Math.max(0, rmNumber(value)));
 }
 
+function rmAdjustmentCount(record) {
+  return Math.max(0, Math.trunc(rmNumber(rmPick(record, 'adjustment_count', 'adjustmentCount'))));
+}
+
+function rmAdjustmentItems(record) {
+  return rmRows(rmPick(record, 'adjustments', 'applied_adjustments', 'appliedAdjustments', 'adjustment_applications', 'adjustmentApplications'));
+}
+
+function rmAdjustmentAmount(record) {
+  return rmNumber(rmPick(record, 'adjustment_amount', 'adjustmentAmount'), 0);
+}
+
+function rmGrossAllocationAmount(record, rows = rmFeeBreakdown(record)) {
+  const explicit = rmPick(record, 'gross_booking_fee_amount', 'grossBookingFeeAmount', 'base_fee_amount', 'baseFeeAmount');
+  if (explicit !== undefined && explicit !== null && explicit !== '') return Math.max(0, rmNumber(explicit));
+  return rows.reduce((sum, row) => sum + Math.max(0, rmNumber(rmPick(row, 'amount', 'fee_amount', 'feeAmount', 'total_amount', 'totalAmount'))), 0);
+}
+
+function rmNetAllocationAmount(record, rows = rmFeeBreakdown(record)) {
+  const explicit = rmPick(record, 'net_amount', 'netAmount', 'calculated_amount_due', 'calculatedAmountDue');
+  if (explicit !== undefined && explicit !== null && explicit !== '') return rmNumber(explicit);
+  return rmGrossAllocationAmount(record, rows) + rmAdjustmentAmount(record);
+}
+
+function rmSignedMoney(value) {
+  const amount = rmNumber(value);
+  return `${amount < 0 ? '\u2212' : '+'}${fmt(Math.abs(amount))}`;
+}
+
 function rmFeeBreakdown(record) {
   let raw = rmPick(record, 'fee_breakdown', 'feeBreakdown', 'rate_type_breakdown', 'rateTypeBreakdown', 'rate_breakdown', 'rateBreakdown');
   if (typeof raw === 'string' && raw.trim()) {
@@ -10389,8 +10702,9 @@ function rmFeeBreakdown(record) {
 
 function rmFeeBreakdownText(record) {
   const rows = rmFeeBreakdown(record);
-  if (!rows.length) return (record?.is_legacy || record?.legacy_weekly_fee_id) ? 'Not recorded in the legacy ledger' : 'Fee breakdown unavailable';
-  return rows.map(row => {
+  const hasAdjustments = rmAdjustmentCount(record) > 0 || rmAdjustmentAmount(record) !== 0;
+  if (!rows.length && !hasAdjustments) return (record?.is_legacy || record?.legacy_weekly_fee_id) ? 'Not recorded in the legacy ledger' : 'Fee breakdown unavailable';
+  const bookingFormula = rows.length ? rows.map(row => {
     const type = String(rmPick(row, 'fee_type', 'feeType') || '').toLowerCase();
     const rate = Math.max(0, rmNumber(rmPick(row, 'fee_rate', 'feeRate')));
     const amount = Math.max(0, rmNumber(rmPick(row, 'amount', 'fee_amount', 'feeAmount', 'total_amount', 'totalAmount')));
@@ -10399,13 +10713,21 @@ function rmFeeBreakdownText(record) {
     return type === 'flat'
       ? `${fmt(rate)} flat × ${rmMetricNumber(courtBookings, 0)} court booking${courtBookings === 1 ? '' : 's'} = ${fmt(amount)}`
       : `${fmt(rate)}/hr × ${rmMetricNumber(units)} court-hr${units === 1 ? '' : 's'} = ${fmt(amount)}`;
-  }).join(' + ');
+  }).join(' + ') : `Booking allocation = ${fmt(rmGrossAllocationAmount(record, rows))}`;
+  const adjustment = rmAdjustmentAmount(record);
+  if (adjustment === 0 && rmAdjustmentCount(record) === 0) return bookingFormula;
+  const net = rmNetAllocationAmount(record, rows);
+  const carry = Math.max(0, rmNumber(rmPick(record, 'credit_carryforward', 'creditCarryforward'), Math.max(-net, 0)));
+  const adjustmentLabel = adjustment < 0 ? 'credit' : adjustment > 0 ? 'debit' : 'net adjustments';
+  const payable = Math.max(0, net);
+  return `${bookingFormula} ${rmSignedMoney(adjustment)} ${adjustmentLabel} = ${fmt(payable)} payable${carry > 0 ? ` · ${fmt(carry)} credit carried forward` : ''}`;
 }
 
 function rmFeeBreakdownHtml(record) {
   const rows = rmFeeBreakdown(record);
-  if (!rows.length) return `<span class="rm-fee-line legacy">${esc((record?.is_legacy || record?.legacy_weekly_fee_id) ? 'Calculation not recorded in the legacy ledger' : 'Fee calculation unavailable')}</span>`;
-  return rows.map(row => {
+  const hasAdjustments = rmAdjustmentCount(record) > 0 || rmAdjustmentAmount(record) !== 0;
+  if (!rows.length && !hasAdjustments) return `<span class="rm-fee-line legacy">${esc((record?.is_legacy || record?.legacy_weekly_fee_id) ? 'Calculation not recorded in the legacy ledger' : 'Fee calculation unavailable')}</span>`;
+  const bookingLines = rows.length ? rows.map(row => {
     const type = String(rmPick(row, 'fee_type', 'feeType') || '').toLowerCase();
     const rate = Math.max(0, rmNumber(rmPick(row, 'fee_rate', 'feeRate')));
     const amount = Math.max(0, rmNumber(rmPick(row, 'amount', 'fee_amount', 'feeAmount', 'total_amount', 'totalAmount')));
@@ -10415,7 +10737,13 @@ function rmFeeBreakdownHtml(record) {
       ? `${fmt(rate)} flat × ${rmMetricNumber(courtBookings, 0)} court booking${courtBookings === 1 ? '' : 's'}`
       : `${fmt(rate)}/hr × ${rmMetricNumber(units)} court-hr${units === 1 ? '' : 's'}`;
     return `<span class="rm-fee-line">${esc(equation)} <strong>= ${fmt(amount)}</strong></span>`;
-  }).join('');
+  }).join('') : `<span class="rm-fee-line">Booking allocation <strong>= ${fmt(rmGrossAllocationAmount(record, rows))}</strong></span>`;
+  const adjustment = rmAdjustmentAmount(record);
+  if (adjustment === 0 && rmAdjustmentCount(record) === 0) return bookingLines;
+  const net = rmNetAllocationAmount(record, rows);
+  const carry = Math.max(0, rmNumber(rmPick(record, 'credit_carryforward', 'creditCarryforward'), Math.max(-net, 0)));
+  const adjustmentLabel = adjustment < 0 ? 'Credit' : adjustment > 0 ? 'Debit' : 'Net adjustments';
+  return `${bookingLines}<span class="rm-fee-line adjustment ${adjustment < 0 ? 'credit' : 'debit'}">${esc(adjustmentLabel)} <strong>${esc(rmSignedMoney(adjustment))}</strong></span><span class="rm-fee-line net">Net payable <strong>= ${fmt(Math.max(0, net))}</strong></span>${carry > 0 ? `<span class="rm-fee-line carry">Credit carried forward <strong>${fmt(carry)}</strong></span>` : ''}`;
 }
 
 function rmStatusKey(record) {
@@ -10552,12 +10880,14 @@ async function rmLoadRecordDetail(id) {
   const items = rmRows(rmPick(payload, 'items', 'booking_items', 'bookingItems', 'bookings'));
   const payments = rmRows(rmPick(payload, 'payments', 'remittance_payments', 'remittancePayments'));
   const events = rmRows(rmPick(payload, 'events', 'remittance_events', 'remittanceEvents', 'audit_events', 'auditEvents'));
+  const adjustments = rmRows(rmPick(payload, 'adjustments', 'applied_adjustments', 'appliedAdjustments', 'adjustment_applications', 'adjustmentApplications'));
   const latestPayment = rmPick(payload, 'latest_payment', 'latestPayment') || payments[payments.length - 1];
   const merged = { ...summary, ...remittance };
   if (items.length) merged.booking_items = items;
   if (payments.length) merged.payments = payments;
   if (latestPayment) merged.latest_payment = latestPayment;
   if (events.length) merged.events = events;
+  merged.adjustments = adjustments;
   _rmState.records.set(rmRecordId(merged) || key, merged);
   return merged;
 }
@@ -10702,35 +11032,52 @@ async function renderRemittances({ announce = false } = {}) {
     const serverNow = rmPick(dashboard, 'server_now', 'serverNow') || new Date().toISOString();
     const nextDue = rmPick(dashboard, 'next_due_on', 'nextDueOn', 'next_due_at', 'nextDueAt');
     const reviewRows = active.filter(record => rmStatusKey(record) === 'under-review');
-    const reviewAmount = reviewRows.reduce((sum, record) => sum + (rmPaymentAmount(record) || rmAmountDue(record)), 0);
+    const activeRemaining = active.reduce((sum, record) => sum + rmAmountRemaining(record), 0);
+    const dashboardOpen = rmPick(dashboard, 'open_remaining_balance', 'openRemainingBalance');
+    const openAmount = dashboardOpen === undefined ? activeRemaining : Math.max(0, rmNumber(dashboardOpen));
+    const reviewAmount = Math.min(openAmount, reviewRows.reduce((sum, record) => sum + rmAmountUnderReview(record), 0));
+    const preparedAmount = Math.max(0, openAmount - reviewAmount);
+    const preparedRecordCount = active.filter(record =>
+      rmStatusKey(record) !== 'under-review' || rmAmountRemaining(record) > rmAmountUnderReview(record)
+    ).length;
     const settledRows = history.filter(record => rmStatusKey(record) === 'settled');
-    const dashboardSettled = rmPick(dashboard, 'settled_total', 'settledTotal');
-    const settledAmount = dashboardSettled !== undefined
-      ? Math.max(0, rmNumber(dashboardSettled))
+    const dashboardAccepted = rmPick(dashboard, 'accepted_total', 'acceptedTotal', 'settled_total', 'settledTotal');
+    const acceptedAmount = dashboardAccepted !== undefined
+      ? Math.max(0, rmNumber(dashboardAccepted))
       : settledRows.reduce((sum, record) => sum + (rmAmountSettled(record) || rmAcceptedAmount(record) || rmAmountDue(record)), 0);
+    const dashboardOutstanding = rmPick(dashboard, 'total_outstanding_balance', 'totalOutstandingBalance');
+    const totalOutstanding = dashboardOutstanding === undefined
+      ? liveAmount + openAmount
+      : Math.max(0, rmNumber(dashboardOutstanding));
     const canPrepare = rmCanPrepareInfo(dashboard);
 
     $('rmPageCopy').textContent = role === 'owner'
-      ? 'Monitor the venue’s live booking-fee balance, verify submitted proof, and inspect every permanent settlement record.'
-      : 'See the venue’s live booking-fee balance, prepare an exact cutoff, submit proof, and keep every settlement record.';
+      ? 'Monitor platform allocations receivable, verify submitted proof, and inspect every permanent settlement record.'
+      : 'See the platform share already included in court prices, prepare an exact cutoff, submit proof, and keep every settlement record.';
     $('rmRolePill').textContent = role === 'owner' ? 'System Owner · Verification' : 'Court Owner · Remittance';
     $('rmLiveStat').textContent = fmt(liveAmount);
-    $('rmLiveStatNote').textContent = liveAmount > 0 ? 'Available for the next cutoff' : 'No unsettled booking fees';
-    $('rmReservationStat').textContent = liveReservations === null ? '\u2014' : rmMetricNumber(liveReservations, 0);
-    $('rmReservationStatNote').textContent = `${rmMetricNumber(liveBookings, 0)} court booking${liveBookings === 1 ? '' : 's'} in the fee ledger`;
-    $('rmHoursStat').textContent = liveHours === null ? '\u2014' : flatOnly ? 'N/A' : rmMetricNumber(liveHours);
-    $('rmHoursStatNote').textContent = liveHours === null ? 'Not recorded for legacy data' : flatOnly ? 'Flat-fee bookings only' : `${liveFlatBookings > 0 ? `${liveFlatBookings} flat court booking${liveFlatBookings === 1 ? '' : 's'} kept separate` : 'Per-hour fee units'}`;
+    $('rmLiveStatNote').textContent = liveAmount > 0 ? 'Available for the next exact cutoff' : 'No allocation accumulating now';
+    $('rmPreparedStat').textContent = fmt(preparedAmount);
+    $('rmPreparedStatNote').textContent = preparedRecordCount
+      ? `${preparedRecordCount} prepared balance${preparedRecordCount === 1 ? '' : 's'} awaiting action`
+      : 'No frozen balance awaiting payment';
     $('rmReviewStat').textContent = fmt(reviewAmount);
-    $('rmReviewStatNote').textContent = reviewRows.length ? `${reviewRows.length} payment proof${reviewRows.length === 1 ? '' : 's'} waiting` : 'No payment proof waiting';
-    $('rmSettledStat').textContent = fmt(settledAmount);
-    $('rmSettledStatNote').textContent = `${settledRows.length} settled remittance${settledRows.length === 1 ? '' : 's'}`;
+    $('rmReviewStatNote').textContent = reviewRows.length
+      ? `${reviewRows.length} payment proof${reviewRows.length === 1 ? '' : 's'} · included in outstanding`
+      : 'No payment proof waiting';
+    $('rmOutstandingLabel').textContent = role === 'owner' ? 'Total Receivable' : 'Total Payable';
+    $('rmOutstandingStat').textContent = fmt(totalOutstanding);
+    $('rmOutstandingStatNote').textContent = `${fmt(liveAmount)} accumulating + ${fmt(openAmount)} unpaid`;
+    $('rmSettledStat').textContent = fmt(acceptedAmount);
+    $('rmSettledStatNote').textContent = `All accepted payments · ${settledRows.length} fully settled`;
     $('rmLiveAmount').textContent = fmt(liveAmount);
     $('rmLiveReservations').textContent = liveReservations === null ? 'Not recorded' : `${rmMetricNumber(liveReservations, 0)} unique`;
     $('rmLiveBookings').textContent = `${rmMetricNumber(liveBookings, 0)} fee line${liveBookings === 1 ? '' : 's'}`;
     $('rmLiveHours').textContent = liveHours === null ? 'Not recorded' : flatOnly ? 'Not applicable' : `${rmMetricNumber(liveHours)} hr${liveHours === 1 ? '' : 's'}`;
     $('rmLiveFormula').textContent = rmFeeBreakdownText(live);
-    $('rmLiveFeeBreakdown').innerHTML = liveBreakdown.length > 1 ? rmFeeBreakdownHtml(live) : '';
-    $('rmLiveFeeBreakdown').hidden = liveBreakdown.length <= 1;
+    const showLiveBreakdown = liveBreakdown.length > 1 || rmAdjustmentCount(live) > 0 || rmAdjustmentAmount(live) !== 0;
+    $('rmLiveFeeBreakdown').innerHTML = showLiveBreakdown ? rmFeeBreakdownHtml(live) : '';
+    $('rmLiveFeeBreakdown').hidden = !showLiveBreakdown;
     $('rmLivePeriod').textContent = rmPeriodStart(live) ? `Accumulating since ${rmDateTime(rmPeriodStart(live))}` : 'Starts with the first eligible booking';
     $('rmLiveAsOf').textContent = `Updated ${rmDateTime(serverNow)}`;
     $('rmActiveCount').textContent = String(active.length);
@@ -11031,6 +11378,26 @@ function rmBookingCard(item) {
   return `<div class="rm-booking"><div><strong>${esc(ref)}${customer ? ` · ${esc(customer)}` : ''}</strong><span>${groupRef ? `Reservation ${esc(groupRef)} · ` : ''}${esc(court)}</span></div><div><strong>${esc(formula)}</strong><span>${earnedAt ? `Fee earned ${esc(rmDateTime(earnedAt))}` : (bookedAt ? esc(rmDateTime(bookedAt)) : 'Reference retained for audit')}</span></div><div class="rm-booking-fee">${hasFeeBasis ? fmt(fee) : '\u2014'}</div></div>`;
 }
 
+function rmAdjustmentAuditRow(item) {
+  const ref = String(rmPick(item, 'adjustment_ref', 'adjustmentRef', 'reference', 'ref', 'adjustment_id', 'adjustmentId') || 'Adjustment');
+  const bookingRef = String(rmPick(item, 'booking_ref', 'bookingRef') || 'Booking not recorded');
+  const groupRef = String(rmPick(item, 'booking_group_ref', 'bookingGroupRef') || '').trim();
+  const rawType = String(rmPick(item, 'adjustment_type', 'adjustmentType', 'type') || 'adjustment');
+  const type = rawType.replace(/[_-]+/g, ' ');
+  const amount = rmNumber(rmPick(item, 'amount', 'adjustment_amount', 'adjustmentAmount'));
+  const reason = String(rmPick(item, 'reason', 'note', 'description') || 'No reason recorded');
+  const effectiveAt = rmPick(item, 'effective_at', 'effectiveAt', 'created_at', 'createdAt');
+  const releasedAt = rmPick(item, 'released_at', 'releasedAt');
+  const releaseReason = String(rmPick(item, 'release_reason', 'releaseReason') || '').trim();
+  const released = !!releasedAt;
+  return `<div class="rm-adjustment-row${released ? ' released' : ''}">
+    <div class="rm-adjustment-ref">${esc(ref)}<small>Booking ${esc(bookingRef)}${groupRef ? ` · Reservation ${esc(groupRef)}` : ''}</small></div>
+    <div class="rm-adjustment-type">${esc(type)}</div>
+    <div class="rm-adjustment-copy">${esc(reason)}<small>Effective ${esc(rmDateTime(effectiveAt))}${released ? ` · Released ${esc(rmDateTime(releasedAt))}${releaseReason ? ` · ${esc(releaseReason)}` : ''}` : ''}</small></div>
+    <div class="rm-adjustment-side"><span class="rm-adjustment-amount${amount < 0 ? ' credit' : ''}">${esc(rmSignedMoney(amount))}</span><span class="rm-adjustment-status${released ? ' released' : ''}">${released ? 'Released' : 'Applied'}</span></div>
+  </div>`;
+}
+
 async function openRemittanceDetails(id) {
   let record = rmRecordById(id);
   if (!record) { toast('Remittance record not found. Please refresh.', 'err'); return; }
@@ -11049,6 +11416,7 @@ async function openRemittanceDetails(id) {
   const bookingRows = rmBookingCount(record);
   const billableHours = rmBillableHours(record);
   const flatBookingCount = rmFlatBookingCount(record);
+  const adjustmentItems = rmAdjustmentItems(record);
   const billableHoursLabel = billableHours === null ? 'Not recorded' : (billableHours === 0 && flatBookingCount > 0) ? 'Not applicable - flat fee' : `${rmMetricNumber(billableHours)} hr${billableHours === 1 ? '' : 's'}`;
   const remainingLabel = status === 'cancelled' ? 'Released back to live balance' : fmt(rmAmountRemaining(record));
   const eventItems = rmRows(rmPick(record, 'events', 'remittance_events', 'remittanceEvents', 'audit_events', 'auditEvents'));
@@ -11077,6 +11445,7 @@ async function openRemittanceDetails(id) {
       <div class="rm-field"><div class="rm-field-label">Remaining Balance</div><div class="rm-field-value${status === 'cancelled' ? '' : ' money'}">${esc(remainingLabel)}</div></div>
     </div>
     <section class="rm-detail-section"><div class="rm-detail-title">Fee calculation</div><div class="rm-fee-breakdown">${rmFeeBreakdownHtml(record)}</div></section>
+    ${adjustmentItems.length ? `<section class="rm-detail-section"><div class="rm-detail-title-row"><div class="rm-detail-title">Applied adjustments</div><span class="rm-readonly-chip">Read only</span></div><div class="rm-adjustment-list">${adjustmentItems.map(rmAdjustmentAuditRow).join('')}</div></section>` : ''}
     <section class="rm-detail-section"><div class="rm-detail-title">Audit trail</div><div class="rm-audit-list">${audit.map(([label, value]) => `<div class="rm-audit-row"><span>${esc(label)}</span><span>${esc(value)}</span></div>`).join('')}</div></section>
     ${eventItems.length ? `<section class="rm-detail-section"><div class="rm-detail-title">Recorded activity</div><div class="rm-audit-list">${eventItems.map(event => {
       const eventLabel = String(rmPick(event, 'event_type', 'eventType', 'action', 'status', 'type') || 'Remittance updated').replace(/[_-]+/g, ' ');
