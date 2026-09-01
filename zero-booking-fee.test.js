@@ -128,6 +128,7 @@ test('premium price promise sits beside each court rate without exposing the pri
   assert.doesNotMatch(page, /\.cc-rate-promise\s*\{[^}]*(?:border|background|box-shadow):/s);
   assert.match(page, /\.cc-mobile-meta \.cc-rate-promise\s*\{[^}]*font-size:\.51rem;[^}]*letter-spacing:\.4px;[^}]*\}/s);
   assert.match(page, /\.cc-mobile-meta \.cc-rate-promise::before\s*\{[^}]*margin:0 3px;[^}]*\}/s);
+  assert.match(page, /@media\(max-width:330px\)\s*\{[^}]*\.cc-mobile-meta\s*\{[^}]*white-space:normal;[^}]*overflow:visible;[^}]*\}[^}]*\.cc-mobile-meta \.cc-rate-line\s*\{[^}]*flex-wrap:wrap;[^}]*\}/s);
 
   const splashOffer = sourceBetween('<p class="pr-splash-offer"', '</p>');
   assert.match(splashOffer, /role="note"/);
