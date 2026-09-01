@@ -1581,6 +1581,14 @@ window.DB = {
     return data;
   },
 
+  async sendOpenPlayHostTelegramTest() {
+    const data = await _invokeEdgeFunction('host-application', {
+      action: 'test-review-notification',
+    }, { preferDirect: true });
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
   async getOpenPlayHostIdSignedUrl(applicationId) {
     const data = await _invokeEdgeFunction('host-application', { action: 'sign-valid-id', applicationId }, { preferDirect: true });
     if (!data?.url) throw new Error(data?.error || 'No valid ID available.');
@@ -4823,6 +4831,7 @@ window.DB = {
     async sendTelegramNotification() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async confirmOpenPlayHostVerification() { return { ok: true, reviewable: true, skipped: true, reason: 'Local data mode' }; },
     async dispatchOpenPlayHostReviewNotifications() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
+    async sendOpenPlayHostTelegramTest() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async notifyBookingSubmitted() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async notifyBookingUpdate() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async getIntegrationStatus() {

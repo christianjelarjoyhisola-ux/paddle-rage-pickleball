@@ -32,6 +32,7 @@ type SignupPayload = {
     | "resend-verification"
     | "confirm-verification"
     | "dispatch-review-notifications"
+    | "test-review-notification"
     | "sign-valid-id"
     | "review"
     | "repair-activation";
@@ -1110,6 +1111,21 @@ Deno.serve(async (req): Promise<Response> => {
       console.error("Host review Telegram retry failed:", errMsg(error));
       return json({ error: "Host notification retry failed" }, 503);
     }
+  }
+
+  if (body.action === "test-review-notification") {
+    const reviewer = await requireReviewer(req, db);
+    if ("error" in reviewer) return reviewer.error;
+    const delivery = await sendTelegramHtml(
+      `🧪 <b>PADDLE RAGE TELEGRAM TEST</b>\n\n` +
+        `✅ Host application approval alerts are connected.\n` +
+        `🕒 ${telegramEsc(manilaDateTime(new Date().toISOString()))}\n\n` +
+        `This is a test only. No host application was created.`,
+    );
+    if (delivery.skipped || !delivery.ok || delivery.sent < 1) {
+      return json({ error: "Telegram test could not be delivered", delivery }, 503);
+    }
+    return json({ ok: true, delivery });
   }
 
   if (body.action === "resend-verification") {

@@ -5471,6 +5471,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
       <div class="toolbar">
         <h2>OPEN PLAY HOST CENTER</h2>
         <div class="booking-toolbar-actions">
+          <button class="btn btn-g btn-sm" id="hostTelegramTestBtn" onclick="sendHostTelegramTest()">Test Telegram</button>
           <button class="btn btn-g btn-sm" onclick="renderHostCenter()">Refresh</button>
           <button class="btn btn-p btn-sm" onclick="hostResetForm()">New Session</button>
         </div>
@@ -13527,6 +13528,26 @@ async function hostCopy(text, ok = 'Copied.') {
 
 function hostCanManageApplications() {
   return !!(sess && ['owner', 'court_owner'].includes(sess.role));
+}
+
+async function sendHostTelegramTest() {
+  if (!hostCanManageApplications() || !DB.sendOpenPlayHostTelegramTest) {
+    toast('Only an owner can test Telegram alerts.', 'err');
+    return;
+  }
+  if (!confirm('Send one clearly labeled Telegram test message now?')) return;
+  const button = $('hostTelegramTestBtn');
+  if (button) button.disabled = true;
+  try {
+    const result = await DB.sendOpenPlayHostTelegramTest();
+    const sent = Number(result?.delivery?.sent || 0);
+    if (sent < 1) throw new Error('Telegram did not confirm delivery.');
+    toast(`Telegram test sent to ${sent} recipient${sent === 1 ? '' : 's'}.`);
+  } catch (error) {
+    toast(error?.message || 'Telegram test could not be sent.', 'err');
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 function hostVisibleSessions(sessions) {

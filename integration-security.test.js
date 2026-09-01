@@ -661,8 +661,18 @@ test('verified host applications enqueue one privacy-safe retryable Telegram rev
   assert.ok(hostPage.indexOf('await DB.confirmOpenPlayHostVerification()') < hostPage.indexOf("await _sb.auth.signOut({ scope: 'local' })"));
   assert.match(config, /action: 'confirm-verification'/);
   assert.match(config, /action: 'dispatch-review-notifications'/);
+  assert.match(config, /action: 'test-review-notification'/);
   assert.match(admin, /a\.status === 'pending' && a\.emailVerifiedAt/);
   assert.match(admin, /dispatchOpenPlayHostReviewNotifications\(\)\.catch/);
+  assert.match(admin, /sendOpenPlayHostTelegramTest\(\)/);
+  const testAlert = hostApplicationEdge.slice(
+    hostApplicationEdge.indexOf('if (body.action === "test-review-notification")'),
+    hostApplicationEdge.indexOf('if (body.action === "resend-verification")')
+  );
+  assert.match(testAlert, /requireReviewer\(req, db\)/);
+  assert.match(testAlert, /PADDLE RAGE TELEGRAM TEST/);
+  assert.match(testAlert, /No host application was created/);
+  assert.doesNotMatch(testAlert, /body\.(?:message|chatId|botToken)/);
   assert.match(deploy, /TELEGRAM_BOT_TOKEN/);
   assert.match(deploy, /TELEGRAM_CHAT_ID/);
   assert.match(config, /confirmOpenPlayHostVerification\(\) \{ return \{ ok: true, reviewable: true, skipped: true, reason: 'Local data mode'/);
