@@ -218,7 +218,8 @@ test('premium rental breakdown groups three identical courts into one auditable 
 
   const html = harness.html(items);
   assert.match(html, /3 courts · 3 hrs each/);
-  assert.match(html, /₱400\/hr × 3 hrs × 3 courts/);
+  assert.match(html, /₱400\/hr × 3 hrs/);
+  assert.doesNotMatch(html, /× 3 courts/);
   assert.match(html, /₱1,200 per court · 9 court-hours/);
   assert.match(html, /₱3,600\.00/);
 });
@@ -242,12 +243,13 @@ test('Step 3 itemizes each schedule and price exactly once', () => {
   assert.equal((html.match(/4:00 PM - 6:00 PM/g) || []).length, 1);
   assert.match(html, /₱350\/hr × 2 hrs/);
   assert.match(html, /₱700\.00/);
-  assert.match(html, /₱400\/hr × 2 hrs × 2 courts/);
-  assert.match(html, /₱1,600\.00/);
+  assert.match(html, /₱400\/hr × 2 hrs/);
+  assert.match(html, /₱800 each/);
+  assert.doesNotMatch(html, /× 2 courts|₱1,600\.00/);
   assert.doesNotMatch(html, /matching courts|per court|court-hours|Court rental/i);
 });
 
-test('a single itemized price group leaves the amount to the grand total row', () => {
+test('a grouped Step 3 price stays per court while the grand total stays combined', () => {
   const harness = rentalBreakdownHarness();
   const items = [1, 2, 3].map(number => ({
     courtId: String(number),
@@ -256,14 +258,35 @@ test('a single itemized price group leaves the amount to the grand total row', (
     slots: [8, 9, 10],
     timeLabel: '8:00 AM - 11:00 AM',
     duration: 3,
-    rate: 400,
-    slotRates: [400, 400, 400],
-    total: 1200,
+    rate: 350,
+    slotRates: [350, 350, 350],
+    total: 1050,
   }));
   const html = harness.html(items, { itemizeSchedule: true, dateFormatter: value => value });
-  assert.match(html, /₱400\/hr × 3 hrs × 3 courts/);
-  assert.doesNotMatch(html, /₱3,600\.00/);
+  assert.match(html, /₱350\/hr × 3 hrs/);
+  assert.match(html, /₱1,050 each/);
+  assert.doesNotMatch(html, /× 3 courts|₱3,150\.00/);
   assert.doesNotMatch(html, /per court|court-hours/);
+});
+
+test('grouped tiered prices never multiply the formula by the court count', () => {
+  const harness = rentalBreakdownHarness();
+  const items = [1, 2].map(number => ({
+    courtId: String(number),
+    courtName: `Court ${number}`,
+    date: '2026-09-01',
+    slots: [15, 16],
+    timeLabel: '3:00 PM - 5:00 PM',
+    duration: 2,
+    rate: 350,
+    slotRates: [350, 400],
+    total: 750,
+  }));
+  const html = harness.html(items, { itemizeSchedule: true, dateFormatter: value => value });
+  assert.match(html, /₱350\/hr × 1 hr \+ ₱400\/hr × 1 hr/);
+  assert.match(html, /₱750 each/);
+  assert.doesNotMatch(html, /× 2 courts|\) ×/);
+  assert.equal(harness.model(items)[0].subtotal, 1500);
 });
 
 test('itemized rows keep multiple dates and separate hours truthful', () => {

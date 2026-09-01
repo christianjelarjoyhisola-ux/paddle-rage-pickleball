@@ -1926,6 +1926,7 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
 .pbs-rental-math { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px 12px; }
 .pbs-rental-formula { color:var(--text); font-size:.76rem; font-weight:850; line-height:1.35; overflow-wrap:anywhere; }
 .pbs-rental-subtotal { color:var(--text); font-size:.83rem; font-weight:950; white-space:nowrap; }
+.pbs-rental-subtotal.is-each { color:var(--muted); font-size:.72rem; font-weight:850; }
 .pbs-rental-note { display:block; margin-top:3px; color:var(--muted); font-size:.61rem; line-height:1.3; }
 .pbs-price-row {
   display:flex; align-items:center; justify-content:space-between; gap:12px;
@@ -5327,20 +5328,20 @@ function bookingRentalBreakdownHtml(items = uniqueBookingSelections(activeBookin
     const groupDate = itemizeSchedule && firstItem.date ? dateFormatter(firstItem.date) : '';
     const timeLabel = itemizeSchedule ? (firstItem.timeLabel || itemTimeLabel(firstItem) || 'Schedule saved') : '';
     const scheduleLabel = itemizeSchedule ? [dates.length > 1 ? groupDate : '', timeLabel].filter(Boolean).join(' · ') : '';
-    const formula = count > 1
-      ? group.components.length === 1
-        ? `${group.formula} × ${count} courts`
-        : `(${group.formula}) × ${count} courts`
-      : group.formula;
+    const formula = group.formula;
     const defaultNote = count > 1
       ? `${compactPeso(group.total)} per court · ${group.duration * count} court-hours`
       : `${group.duration} court-hour${group.duration === 1 ? '' : 's'}`;
     const contextHtml = itemizeSchedule
       ? `<div class="pbs-rental-context is-itemized"><strong>${esc(bookingCourtGroupLabel(group.entries))}</strong><span>${esc(scheduleLabel)}</span></div>`
       : defaultContext ? `<div class="pbs-rental-context">${esc(defaultContext)}</div>` : '';
-    const subtotalHtml = !itemizeSchedule || groups.length > 1
-      ? `<strong class="pbs-rental-subtotal">${fmt(group.subtotal)}</strong>`
-      : '';
+    const subtotalHtml = itemizeSchedule
+      ? count > 1
+        ? `<strong class="pbs-rental-subtotal is-each">${esc(compactPeso(group.total))} each</strong>`
+        : groups.length > 1
+          ? `<strong class="pbs-rental-subtotal">${fmt(group.subtotal)}</strong>`
+          : ''
+      : `<strong class="pbs-rental-subtotal">${fmt(group.subtotal)}</strong>`;
     const noteHtml = !itemizeSchedule && defaultNote
       ? `<small class="pbs-rental-note">${esc(defaultNote)}</small>`
       : '';
