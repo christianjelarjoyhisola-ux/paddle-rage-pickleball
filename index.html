@@ -331,27 +331,25 @@ body.dark .shared-date-display {
 .ft-result-price { color:var(--accent); font-size:.8rem; font-weight:800; margin-top:3px; }
 .ft-result .btn { padding:8px 13px; }
 
-/* Borderless price promise: supporting copy, never another card. */
-.sec-hd-support {
-  display:flex; align-items:baseline; justify-content:space-between; gap:18px;
+/* Borderless price promise beside each court's displayed rate. */
+.cc-rate-line {
+  display:inline-flex; align-items:center; min-width:0; white-space:nowrap;
 }
-.sec-hd-support > p { margin:0; }
-.price-promise {
-  display:inline-block; flex:none; margin-left:10px;
-  color:var(--lime-ink); font-family:'Bebas Neue',sans-serif;
-  font-size:1.06rem; font-weight:700; line-height:1;
-  letter-spacing:1.8px; white-space:nowrap;
-  animation:pricePromiseTitleIn .42s cubic-bezier(.22,1,.36,1) both;
+.cc-rate-promise {
+  display:inline-block; color:var(--lime-ink); font-family:'Outfit',sans-serif;
+  font-size:.58rem; font-weight:900; line-height:1; letter-spacing:.72px;
+  text-transform:uppercase;
+  animation:courtRatePromiseIn .38s cubic-bezier(.22,1,.36,1) both;
 }
-.price-promise-title {
-  color:inherit; font:inherit; letter-spacing:inherit;
+.cc-rate-promise::before {
+  content:'·'; margin:0 5px; color:rgba(var(--lime-rgb),.58);
 }
-@keyframes pricePromiseTitleIn {
-  from { opacity:0; transform:translateY(4px); }
-  to { opacity:1; transform:translateY(0); }
+@keyframes courtRatePromiseIn {
+  from { opacity:0; transform:translateX(-3px); }
+  to { opacity:1; transform:translateX(0); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .price-promise { animation:none; opacity:1; transform:none; }
+  .cc-rate-promise { animation:none; opacity:1; transform:none; }
 }
 @media(max-width:700px) {
   .find-time-entry { margin-top:-6px; gap:10px; }
@@ -389,8 +387,6 @@ body.dark .shared-date-display {
   .ft-note { font-size:.72rem; padding:8px 9px; }
   .ft-result { align-items:stretch; flex-direction:column; }
   .ft-result .btn { width:100%; justify-content:center; }
-  .sec-hd-support { align-items:flex-start; flex-direction:column; gap:7px; }
-  .price-promise { margin-left:0; font-size:.98rem; letter-spacing:1.55px; }
 }
 
 /* COURTS — LANDSCAPE LAYOUT */
@@ -431,6 +427,7 @@ body.dark .shared-date-display {
 }
 .cc-photo-name { font-family:'Bebas Neue',sans-serif; font-size:1.2rem; letter-spacing:1.5px; color:#fff; display:block; }
 .cc-photo-rate { font-size:.75rem; color:rgba(255,255,255,.7); margin-top:1px; }
+.cc-photo-rate .cc-rate-promise { color:var(--lime); }
 
 /* RIGHT: Times panel */
 .cc-times {
@@ -628,6 +625,8 @@ body.dark .shared-date-display {
     color:var(--muted); font-size:.7rem; font-weight:700; line-height:1.2;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
+  .cc-mobile-meta .cc-rate-promise { font-size:.51rem; letter-spacing:.4px; }
+  .cc-mobile-meta .cc-rate-promise::before { margin:0 3px; }
   .cc-mobile-side {
     display:flex; flex-direction:column; align-items:flex-end; gap:5px; flex:0 0 auto;
   }
@@ -3642,10 +3641,7 @@ try {
 <div class="sec" id="courts" style="padding-top:24px">
   <div class="sec-hd">
     <h2>🏟️ SELECT A COURT</h2>
-    <div class="sec-hd-support">
-      <p>Select a date, choose a court and time, then book.</p>
-      <span class="price-promise" id="pricePromise" role="note" aria-label="No booking fees."><strong class="price-promise-title">NO BOOKING FEES</strong></span>
-    </div>
+    <p>Select a date, choose a court and time, then book.</p>
   </div>
   <div class="find-time-entry">
     <div>
@@ -4317,10 +4313,6 @@ function allInSlotPriceHtml(baseRate) {
 }
 function allInSlotAriaLabel(baseRate) {
   return `${compactPeso(allInSlotRate(baseRate))} per hour, zero booking fee`;
-}
-function syncPricePromiseMessaging() {
-  const promise = $('pricePromise');
-  if (promise) promise.setAttribute('aria-label', 'No booking fees.');
 }
 function activeHostSession() {
   const sess = window.Auth?.getSession?.();
@@ -5834,7 +5826,6 @@ async function loadOperatingHours() {
   }
   _serviceFeeRate = parseFloat(settings.maintenance_fee ?? settings.service_fee_rate ?? settings.booking_fee ?? '0') || 0;
   _serviceFeeType  = normalizePlatformFeeType(settings.fee_type);
-  syncPricePromiseMessaging();
   applyPaymentSettings(settings);
   const note = $('slotHoursNote');
   if (note) note.textContent = `(${fmtT(openHour)} – ${fmtT(closeHour)} · select any available hours)`;
@@ -7352,7 +7343,7 @@ async function renderCourts() {
       <div class="cc-mobile-hd">
         <div class="cc-mobile-title">
           <span class="cc-mobile-name">${courtTimesHeading}</span>
-          <span class="cc-mobile-meta">${esc(rateRange)}</span>
+          <span class="cc-mobile-meta"><span class="cc-rate-line"><span>${esc(rateRange)}</span><span class="cc-rate-promise">NO BOOKING FEES</span></span></span>
         </div>
         <div class="cc-mobile-side">
           <span class="cc-mobile-status ${availBadgeCls}" id="cMobAvail_${esc(c.id)}">${esc(availBadgeTxt)}</span>
@@ -7365,7 +7356,7 @@ async function renderCourts() {
         <div class="cc-photo-avail ${availBadgeCls}" id="cAvail_${esc(c.id)}">${esc(availBadgeTxt)}</div>
         <div class="cc-photo-bar">
           <span class="cc-photo-name">${esc(c.name)}</span>
-          <div class="cc-photo-rate">${esc(rateRange)}</div>
+          <div class="cc-photo-rate"><span class="cc-rate-line"><span>${esc(rateRange)}</span><span class="cc-rate-promise">NO BOOKING FEES</span></span></div>
         </div>
       </div>
 

@@ -18,13 +18,6 @@ function pricingHarness() {
   return new Function(`
     let _serviceFeeType = 'per_hour';
     let _serviceFeeRate = 0;
-    const elements = {
-      pricePromise: {
-        ariaLabel: '',
-        setAttribute(name, value) { if (name === 'aria-label') this.ariaLabel = value; },
-      },
-    };
-    const $ = id => elements[id] || null;
     ${source}
     return {
       quote(type, fee, base) {
@@ -35,14 +28,6 @@ function pricingHarness() {
           rate: allInSlotRate(base),
           html: allInSlotPriceHtml(base),
           aria: allInSlotAriaLabel(base),
-        };
-      },
-      message(type, fee) {
-        _serviceFeeType = type;
-        _serviceFeeRate = fee;
-        syncPricePromiseMessaging();
-        return {
-          label: elements.pricePromise.ariaLabel,
         };
       },
     };
@@ -130,19 +115,19 @@ function hostDepositHarness() {
   `)();
 }
 
-test('premium price promise markets zero booking fees without exposing the private rate', () => {
-  const banner = sourceBetween('<span class="price-promise"', '</span>\n    </div>');
-  assert.match(banner, /role="note" aria-label="No booking fees\."/);
-  assert.match(banner, /class="price-promise-title">NO BOOKING FEES<\/strong>/);
-  assert.equal(banner.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(), 'NO BOOKING FEES');
-  assert.doesNotMatch(banner, /price-promise-lockup|price-promise-no|<svg|price-promise-mark|price-promise-sub/);
-  assert.doesNotMatch(banner, /aria-live/);
-  assert.doesNotMatch(banner, /Final Prices|Live Total/i);
-  assert.doesNotMatch(banner, /₱\s*10|\/hr\s*[×x]/i);
+test('premium price promise sits beside each court rate without exposing the private rate', () => {
+  const courtCards = sourceBetween('async function renderCourts()', 'async function selectCourt(id)');
+  assert.equal((courtCards.match(/class="cc-rate-promise">NO BOOKING FEES/g) || []).length, 2);
+  assert.match(courtCards, /cc-mobile-meta[^\n]*cc-rate-line[^\n]*\$\{esc\(rateRange\)\}[^\n]*cc-rate-promise/);
+  assert.match(courtCards, /cc-photo-rate[^\n]*cc-rate-line[^\n]*\$\{esc\(rateRange\)\}[^\n]*cc-rate-promise/);
+  assert.doesNotMatch(courtCards, /₱\s*10|\/hr\s*[×x]/i);
+  assert.doesNotMatch(sourceBetween('<!-- COURTS -->', '<div class="find-time-entry">'), /NO BOOKING FEES/);
 
-  assert.match(page, /\.price-promise\s*\{[^}]*animation:pricePromiseTitleIn\s+\.42s[^}]*\}/s);
-  assert.match(page, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.price-promise\s*\{[^}]*animation:none;[^}]*\}\s*\}/s);
-  assert.doesNotMatch(page, /\.price-promise\s*\{[^}]*(?:border|background|box-shadow):/s);
+  assert.match(page, /\.cc-rate-promise\s*\{[^}]*animation:courtRatePromiseIn\s+\.38s[^}]*\}/s);
+  assert.match(page, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.cc-rate-promise\s*\{[^}]*animation:none;[^}]*\}\s*\}/s);
+  assert.doesNotMatch(page, /\.cc-rate-promise\s*\{[^}]*(?:border|background|box-shadow):/s);
+  assert.match(page, /\.cc-mobile-meta \.cc-rate-promise\s*\{[^}]*font-size:\.51rem;[^}]*letter-spacing:\.4px;[^}]*\}/s);
+  assert.match(page, /\.cc-mobile-meta \.cc-rate-promise::before\s*\{[^}]*margin:0 3px;[^}]*\}/s);
 
   const splashOffer = sourceBetween('<p class="pr-splash-offer"', '</p>');
   assert.match(splashOffer, /role="note"/);
@@ -171,8 +156,6 @@ test('flat configuration never repeats the flat share on every slot', () => {
   assert.doesNotMatch(quote.html, /₱360/);
   assert.match(quote.aria, /₱350 per hour, zero booking fee/);
 
-  const message = pricingHarness().message('flat', 10);
-  assert.equal(message.label, 'No booking fees.');
 });
 
 test('tiered and multi-court totals preserve the private allocation exactly once', () => {
