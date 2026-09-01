@@ -5034,6 +5034,15 @@ window.DB = {
     async getBookingFeeRemittanceDashboard() {
       const now = new Date();
       const next = new Date(now.getFullYear(), now.getMonth() + (now.getDate() > 14 ? 1 : 0), 14);
+      const role = Auth.getSession()?.role || 'court_owner';
+      const roundLedger = value => Math.round((Number(value) || 0) * 100) / 100;
+      const reservationKeyFor = booking => {
+        const groupRef = String(
+          booking.groupRef || booking.bookingGroupRef || booking.booking_group_ref || '',
+        ).trim();
+        const bookingRef = String(booking.ref || '').trim();
+        return groupRef ? `group:${groupRef}` : bookingRef ? `booking:${bookingRef}` : '';
+      };
       const earned = readDb().bookings.filter(booking => {
         const earnedAt = booking.bookingFeeEarnedAt || booking.booking_fee_earned_at;
         const eligible = booking.bookingFeeLedgerEligibleSnapshot
@@ -5043,16 +5052,13 @@ window.DB = {
         );
         return !!earnedAt && eligible !== false && Number.isFinite(amount) && amount > 0;
       });
-      const reservations = new Set(earned.map(booking => String(
-        booking.groupRef || booking.bookingGroupRef || booking.booking_group_ref || booking.ref,
-      )).filter(Boolean));
+      const reservations = new Set(earned.map(reservationKeyFor).filter(Boolean));
       const breakdown = new Map();
+      const courtBreakdown = new Map();
       let billableHours = 0;
       let accumulatedAmount = 0;
       earned.forEach(booking => {
-        const reservationKey = String(
-          booking.groupRef || booking.bookingGroupRef || booking.booking_group_ref || booking.ref || '',
-        );
+        const reservationKey = reservationKeyFor(booking);
         const type = String(
           booking.bookingFeeTypeSnapshot ?? booking.booking_fee_type_snapshot ?? 'per_hour',
         ).toLowerCase() === 'flat' ? 'flat' : 'per_hour';
@@ -5065,6 +5071,20 @@ window.DB = {
         const amount = Math.max(0, Number(
           booking.bookingFeeAmountSnapshot ?? booking.booking_fee_amount_snapshot ?? 0,
         ) || 0);
+        const courtId = String(
+          booking.courtId ?? booking.court_id ?? '',
+        ).trim();
+        const courtName = String(booking.courtName ?? booking.court_name ?? '').trim();
+        const courtKey = courtId
+          ? `court-id:${courtId}`
+          : courtName
+            ? `court-name:${courtName.toLowerCase().replace(/\s+/g, ' ')}`
+            : 'court-unknown';
+        const courtKeySource = courtId
+          ? 'court_id'
+          : courtName
+            ? 'court_name_fallback'
+            : 'unknown';
         const key = `${type}|${rate.toFixed(2)}`;
         const row = breakdown.get(key) || {
           fee_type: type,
@@ -5082,34 +5102,187 @@ window.DB = {
         row.billable_hours += type === 'per_hour' ? units : 0;
         row.amount += amount;
         breakdown.set(key, row);
+
+        const court = courtBreakdown.get(courtKey) || {
+          court_key: courtKey,
+          court_key_source: courtKeySource,
+          court_id: courtId || null,
+          court_name: courtName || null,
+          booking_rows_count: 0,
+          reservation_count: 0,
+          billable_hours: 0,
+          court_hours: 0,
+          flat_fee_booking_count: 0,
+          gross_booking_fee_amount: 0,
+          adjustment_count: 0,
+          adjustment_amount: 0,
+          net_contribution: 0,
+          fee_breakdown: new Map(),
+          _reservationKeys: new Set(),
+        };
+        court.booking_rows_count += 1;
+        if (reservationKey) court._reservationKeys.add(reservationKey);
+        court.billable_hours += type === 'per_hour' ? units : 0;
+        court.court_hours = court.billable_hours;
+        court.flat_fee_booking_count += type === 'flat' ? 1 : 0;
+        court.gross_booking_fee_amount += amount;
+        court.net_contribution += amount;
+
+        const courtRate = court.fee_breakdown.get(key) || {
+          fee_type: type,
+          fee_rate: rate,
+          booking_rows_count: 0,
+          reservation_count: 0,
+          fee_units: 0,
+          unit_count: 0,
+          billable_hours: 0,
+          court_hours: 0,
+          flat_fee_booking_count: 0,
+          amount: 0,
+          _reservationKeys: new Set(),
+        };
+        courtRate.booking_rows_count += 1;
+        if (reservationKey) courtRate._reservationKeys.add(reservationKey);
+        courtRate.fee_units += units;
+        courtRate.unit_count = courtRate.fee_units;
+        courtRate.billable_hours += type === 'per_hour' ? units : 0;
+        courtRate.court_hours = courtRate.billable_hours;
+        courtRate.flat_fee_booking_count += type === 'flat' ? 1 : 0;
+        courtRate.amount += amount;
+        court.fee_breakdown.set(key, courtRate);
+        courtBreakdown.set(courtKey, court);
+
         billableHours += type === 'per_hour' ? units : 0;
         accumulatedAmount += amount;
       });
       for (const row of breakdown.values()) {
         row.reservation_count = row._reservationKeys.size;
+        row.booking_count = row.booking_rows_count;
+        row.item_count = row.booking_rows_count;
+        row.flat_fee_booking_count = row.fee_type === 'flat' ? row.booking_rows_count : 0;
+        row.fee_units = roundLedger(row.fee_units);
+        row.unit_count = row.fee_units;
+        row.billable_hours = roundLedger(row.billable_hours);
+        row.court_hours = row.billable_hours;
+        row.amount = roundLedger(row.amount);
         delete row._reservationKeys;
       }
+      const rateRows = [...breakdown.values()].sort((a, b) => {
+        const typeOrder = value => value === 'per_hour' ? 1 : 2;
+        return typeOrder(a.fee_type) - typeOrder(b.fee_type) || a.fee_rate - b.fee_rate;
+      });
+      const courtRows = [...courtBreakdown.values()].map(court => {
+        court.reservation_count = court._reservationKeys.size;
+        court.billable_hours = roundLedger(court.billable_hours);
+        court.court_hours = court.billable_hours;
+        court.gross_booking_fee_amount = roundLedger(court.gross_booking_fee_amount);
+        court.adjustment_amount = roundLedger(court.adjustment_amount);
+        court.net_contribution = roundLedger(court.gross_booking_fee_amount + court.adjustment_amount);
+        court.fee_breakdown = [...court.fee_breakdown.values()].map(rateRow => {
+          rateRow.reservation_count = rateRow._reservationKeys.size;
+          rateRow.booking_count = rateRow.booking_rows_count;
+          rateRow.item_count = rateRow.booking_rows_count;
+          rateRow.fee_units = roundLedger(rateRow.fee_units);
+          rateRow.unit_count = rateRow.fee_units;
+          rateRow.billable_hours = roundLedger(rateRow.billable_hours);
+          rateRow.court_hours = rateRow.billable_hours;
+          rateRow.amount = roundLedger(rateRow.amount);
+          delete rateRow._reservationKeys;
+          return rateRow;
+        }).sort((a, b) => {
+          const typeOrder = value => value === 'per_hour' ? 1 : 2;
+          return typeOrder(a.fee_type) - typeOrder(b.fee_type) || a.fee_rate - b.fee_rate;
+        });
+        court.rate_type_breakdown = court.fee_breakdown;
+        delete court._reservationKeys;
+        return court;
+      }).sort((a, b) => String(a.court_name || a.court_id || a.court_key)
+        .localeCompare(String(b.court_name || b.court_id || b.court_key))
+        || a.court_key.localeCompare(b.court_key));
       const earnedTimes = earned
         .map(booking => booking.bookingFeeEarnedAt || booking.booking_fee_earned_at)
         .filter(Boolean)
         .sort();
+      const accumulatedGross = roundLedger(accumulatedAmount);
+      const flatFeeBookingCount = rateRows.reduce(
+        (sum, row) => sum + (Number(row.flat_fee_booking_count) || 0),
+        0,
+      );
+      const courtTotals = courtRows.reduce((totals, row) => ({
+        booking_rows_count: totals.booking_rows_count + row.booking_rows_count,
+        billable_hours: totals.billable_hours + row.billable_hours,
+        flat_fee_booking_count: totals.flat_fee_booking_count + row.flat_fee_booking_count,
+        gross_booking_fee_amount: totals.gross_booking_fee_amount + row.gross_booking_fee_amount,
+        attributed_adjustment_amount: totals.attributed_adjustment_amount + row.adjustment_amount,
+        net_contribution: totals.net_contribution + row.net_contribution,
+      }), {
+        booking_rows_count: 0,
+        billable_hours: 0,
+        flat_fee_booking_count: 0,
+        gross_booking_fee_amount: 0,
+        attributed_adjustment_amount: 0,
+        net_contribution: 0,
+      });
+      Object.keys(courtTotals).forEach(key => { courtTotals[key] = roundLedger(courtTotals[key]); });
+      courtTotals.court_hours = courtTotals.billable_hours;
       const live = {
+        bookings_count: earned.length,
         reservation_count: reservations.size,
         booking_rows_count: earned.length,
-        billable_hours: billableHours,
-        fee_breakdown: [...breakdown.values()],
-        amount: Math.round(accumulatedAmount * 100) / 100,
+        billable_hours: roundLedger(billableHours),
+        court_hours: roundLedger(billableHours),
+        flat_fee_booking_count: flatFeeBookingCount,
+        fee_breakdown: rateRows,
+        rate_type_breakdown: rateRows,
+        court_breakdown: courtRows,
+        court_breakdown_meta: {
+          version: 1,
+          basis: 'local_earned_booking_fee_snapshots',
+          court_grouping: 'court_id_then_normalized_court_name_then_unknown',
+          reservation_count_scope: 'distinct_within_each_court',
+          reservation_count_additive: false,
+          adjustment_attribution: {
+            basis: 'not_available_local_data',
+            coverage: 'not_applicable',
+            exactly_attributed_rows_included: true,
+            top_level_count: 0,
+            top_level_amount: 0,
+            attributed_count: 0,
+            attributed_amount: 0,
+            unattributed_count: 0,
+            unattributed_amount: 0,
+            unknown_court_count: 0,
+          },
+          court_totals: courtTotals,
+          reconciliation: {
+            booking_rows_match: courtTotals.booking_rows_count === earned.length,
+            billable_hours_match: courtTotals.billable_hours === roundLedger(billableHours),
+            flat_fee_booking_count_match: courtTotals.flat_fee_booking_count === flatFeeBookingCount,
+            gross_booking_fee_amount_match: courtTotals.gross_booking_fee_amount === accumulatedGross,
+            adjustment_amount_match: courtTotals.attributed_adjustment_amount === 0,
+            net_amount_match: courtTotals.net_contribution === accumulatedGross,
+          },
+        },
+        gross_booking_fee_amount: accumulatedGross,
+        adjustment_count: 0,
+        adjustment_amount: 0,
+        net_amount: accumulatedGross,
+        credit_carryforward: 0,
+        amount: accumulatedGross,
         coverage_start_at: earnedTimes[0] || null,
       };
       return {
         server_now: now.toISOString(),
-        role: Auth.getSession()?.role || 'court_owner',
+        timezone: 'Asia/Manila',
+        role,
         next_due_on: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-14`,
         can_prepare: false,
+        can_owner_override: role === 'owner',
         accumulated: live,
         live,
         open_remaining_balance: 0,
         total_outstanding_balance: live.amount,
+        accepted_total: 0,
         settled_total: 0,
         open_remittances: [],
         active: [],
