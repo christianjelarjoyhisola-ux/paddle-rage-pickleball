@@ -1895,19 +1895,7 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
 .host-summary-row.balance strong { color: var(--red); }
 .host-summary-note { color: var(--muted); font-size: .68rem; line-height: 1.25; margin: -1px 0 4px; }
 
-.premium-booking-summary { display:flex; flex-direction:column; gap:10px; }
-.pbs-session {
-  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); gap:8px 12px;
-  padding-bottom:10px; border-bottom:1px solid rgba(var(--ac),.14);
-}
-.pbs-detail { min-width:0; }
-.pbs-detail.wide { grid-column:1 / -1; }
-.pbs-detail-label {
-  display:block; margin-bottom:2px; color:var(--muted); font-size:.54rem;
-  font-weight:900; letter-spacing:.7px; text-transform:uppercase;
-}
-.pbs-detail-value { display:block; color:var(--text); font-size:.78rem; font-weight:760; line-height:1.35; overflow-wrap:anywhere; }
-.pbs-time-list { display:flex; flex-direction:column; gap:4px; }
+.premium-booking-summary { display:flex; flex-direction:column; }
 .pbs-price-card {
   overflow:hidden; border:1px solid rgba(var(--lime-rgb),.28); border-radius:12px;
   background:linear-gradient(145deg,rgba(var(--lime-rgb),.075),rgba(var(--ac),.02));
@@ -1920,8 +1908,21 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
   color:var(--text); font-size:.61rem; font-weight:950; letter-spacing:.8px; text-transform:uppercase;
 }
 .pbs-rental-heading small { color:var(--muted); font-size:.66rem; font-weight:750; text-align:right; }
+.pbs-rental-heading.is-itemized { align-items:center; margin-bottom:9px; }
+.pbs-rental-heading.is-itemized span {
+  min-width:0; font-size:.72rem; line-height:1.35; letter-spacing:0; text-transform:none; overflow-wrap:anywhere;
+}
+.pbs-rental-heading.is-itemized small {
+  flex:none; font-size:.62rem; font-weight:900; letter-spacing:.55px; text-transform:uppercase; white-space:nowrap;
+}
 .pbs-rental-entry + .pbs-rental-entry { margin-top:8px; padding-top:8px; border-top:1px dashed rgba(var(--lime-rgb),.18); }
 .pbs-rental-context { margin-bottom:3px; color:var(--muted); font-size:.64rem; font-weight:760; line-height:1.3; }
+.pbs-rental-context.is-itemized {
+  display:flex; align-items:baseline; justify-content:space-between; gap:3px 12px;
+  margin-bottom:4px; font-size:.7rem;
+}
+.pbs-rental-context.is-itemized strong { min-width:0; color:var(--text); font-weight:900; overflow-wrap:anywhere; }
+.pbs-rental-context.is-itemized span { min-width:0; color:var(--muted); font-weight:720; text-align:right; overflow-wrap:anywhere; }
 .pbs-rental-math { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:8px 12px; }
 .pbs-rental-formula { color:var(--text); font-size:.76rem; font-weight:850; line-height:1.35; overflow-wrap:anywhere; }
 .pbs-rental-subtotal { color:var(--text); font-size:.83rem; font-weight:950; white-space:nowrap; }
@@ -1948,12 +1949,12 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
 .pbs-price-row.due strong { color:var(--accent); font-size:.95rem; }
 .pbs-price-row.balance strong { color:var(--text); }
 @media(max-width:480px) {
-  .premium-booking-summary { gap:8px; }
-  .pbs-session { gap:7px 9px; padding-bottom:8px; }
-  .pbs-detail-value { font-size:.72rem; }
   .pbs-rental-breakdown { padding:9px; }
   .pbs-rental-heading { align-items:flex-start; margin-bottom:6px; }
   .pbs-rental-heading small { max-width:58%; }
+  .pbs-rental-heading.is-itemized small { max-width:none; }
+  .pbs-rental-context.is-itemized { align-items:flex-start; flex-wrap:wrap; }
+  .pbs-rental-context.is-itemized span { text-align:left; }
   .pbs-rental-math { gap:6px 9px; }
   .pbs-rental-formula { font-size:.72rem; }
   .pbs-rental-subtotal { font-size:.78rem; }
@@ -5285,36 +5286,72 @@ function bookingRentalBreakdownModel(items = uniqueBookingSelections(activeBooki
   return [...groups.values()];
 }
 
-function bookingRentalBreakdownHtml(items = uniqueBookingSelections(activeBookingItems())) {
+function bookingNaturalList(values = []) {
+  const clean = values.map(value => String(value || '').trim()).filter(Boolean);
+  if (clean.length <= 1) return clean[0] || '';
+  if (clean.length === 2) return `${clean[0]} & ${clean[1]}`;
+  return `${clean.slice(0, -1).join(', ')} & ${clean[clean.length - 1]}`;
+}
+
+function bookingCourtGroupLabel(entries = []) {
+  const names = [...new Set(entries.map(entry => entry.item?.courtName || 'Court'))];
+  if (names.length <= 1) return names[0] || 'Court';
+  const numbered = names.map(name => String(name).match(/^(.*?\bCourt)\s+(.+)$/i));
+  const commonPrefix = numbered[0]?.[1] || '';
+  if (commonPrefix && numbered.every(match => match && match[1].toLowerCase() === commonPrefix.toLowerCase())) {
+    return `${commonPrefix.replace(/Court$/i, 'Courts')} ${bookingNaturalList(numbered.map(match => match[2]))}`;
+  }
+  return bookingNaturalList(names);
+}
+
+function bookingRentalBreakdownHtml(items = uniqueBookingSelections(activeBookingItems()), options = {}) {
   const groups = bookingRentalBreakdownModel(items);
+  const itemizeSchedule = options?.itemizeSchedule === true;
+  const dateFormatter = typeof options?.dateFormatter === 'function' ? options.dateFormatter : value => String(value || '');
   const totalHours = bookingItemsDuration(items);
   const totalCourts = new Set(items.map(item => String(item.courtId || item.courtName || ''))).size;
+  const dates = [...new Set(items.map(item => item.date).filter(Boolean))];
   const sameDuration = groups.length === 1 && groups[0].entries.length > 1;
   const overview = sameDuration
     ? `${groups[0].entries.length} courts · ${groups[0].duration} hr${groups[0].duration === 1 ? '' : 's'} each`
     : `${totalCourts} court${totalCourts === 1 ? '' : 's'} · ${totalHours} court-hour${totalHours === 1 ? '' : 's'}`;
+  const itemizedHeading = dates.length === 1 ? dateFormatter(dates[0]) : dates.length > 1 ? `${dates.length} booking dates` : 'Booking schedule';
+  const courtCountLabel = `${totalCourts} court${totalCourts === 1 ? '' : 's'}`;
   const rows = groups.map(group => {
     const count = group.entries.length;
     const courtNames = group.entries.map(entry => entry.item.courtName || 'Court').join(', ');
-    const context = count > 1
+    const defaultContext = count > 1
       ? (groups.length > 1 ? `${count} matching courts · ${group.duration} hr${group.duration === 1 ? '' : 's'} each` : '')
       : `${courtNames} · ${group.duration} hr${group.duration === 1 ? '' : 's'}`;
+    const firstItem = group.entries[0]?.item || {};
+    const groupDate = itemizeSchedule && firstItem.date ? dateFormatter(firstItem.date) : '';
+    const timeLabel = itemizeSchedule ? (firstItem.timeLabel || itemTimeLabel(firstItem) || 'Schedule saved') : '';
+    const scheduleLabel = itemizeSchedule ? [dates.length > 1 ? groupDate : '', timeLabel].filter(Boolean).join(' · ') : '';
     const formula = count > 1
       ? group.components.length === 1
         ? `${group.formula} × ${count} courts`
         : `(${group.formula}) × ${count} courts`
       : group.formula;
-    const note = count > 1
+    const defaultNote = count > 1
       ? `${compactPeso(group.total)} per court · ${group.duration * count} court-hours`
       : `${group.duration} court-hour${group.duration === 1 ? '' : 's'}`;
+    const contextHtml = itemizeSchedule
+      ? `<div class="pbs-rental-context is-itemized"><strong>${esc(bookingCourtGroupLabel(group.entries))}</strong><span>${esc(scheduleLabel)}</span></div>`
+      : defaultContext ? `<div class="pbs-rental-context">${esc(defaultContext)}</div>` : '';
+    const subtotalHtml = !itemizeSchedule || groups.length > 1
+      ? `<strong class="pbs-rental-subtotal">${fmt(group.subtotal)}</strong>`
+      : '';
+    const noteHtml = !itemizeSchedule && defaultNote
+      ? `<small class="pbs-rental-note">${esc(defaultNote)}</small>`
+      : '';
     return `<div class="pbs-rental-entry">
-      ${context ? `<div class="pbs-rental-context">${esc(context)}</div>` : ''}
-      <div class="pbs-rental-math"><span class="pbs-rental-formula">${esc(formula)}</span><strong class="pbs-rental-subtotal">${fmt(group.subtotal)}</strong></div>
-      <small class="pbs-rental-note">${esc(note)}</small>
+      ${contextHtml}
+      <div class="pbs-rental-math"><span class="pbs-rental-formula">${esc(formula)}</span>${subtotalHtml}</div>
+      ${noteHtml}
     </div>`;
   }).join('');
   return `<div class="pbs-rental-breakdown">
-    <div class="pbs-rental-heading"><span>Court rental</span><small>${esc(overview)}</small></div>
+    <div class="pbs-rental-heading${itemizeSchedule ? ' is-itemized' : ''}"><span>${esc(itemizeSchedule ? itemizedHeading : 'Court rental')}</span><small>${esc(itemizeSchedule ? courtCountLabel : overview)}</small></div>
     ${rows}
   </div>`;
 }
@@ -5325,21 +5362,10 @@ function hostBookingItemsSummaryHtml(items = uniqueBookingSelections(activeBooki
   const total = bookingItemsTotal(items);
   const dueToday = downpaymentAmount(total, courtFee, svcFee);
   const balance = Math.max(0, total - dueToday);
-  const dates = [...new Set(items.map(item => item.date).filter(Boolean))];
-  const dateStr = dates.length > 1 ? dates.map(fmtDc).join(' + ') : bookingItemsDate(items) ? fmtDc(bookingItemsDate(items)) : '-';
-  const timeRows = items.map(item => {
-    const datePart = dates.length > 1 ? ` · ${fmtDc(item.date)}` : '';
-    return `<span>${esc(item.courtName)}${esc(datePart)} · ${esc(item.timeLabel || itemTimeLabel(item))} (${Number(item.duration || 0)} hr${Number(item.duration || 0) === 1 ? '' : 's'})</span>`;
-  }).join('');
   return `
     <div class="premium-booking-summary">
-      <div class="pbs-session">
-        <div class="pbs-detail"><span class="pbs-detail-label">Court</span><strong class="pbs-detail-value">${esc(bookingItemsCourtLabel(items))}</strong></div>
-        <div class="pbs-detail"><span class="pbs-detail-label">Date</span><strong class="pbs-detail-value">${esc(dateStr)}</strong></div>
-        <div class="pbs-detail wide"><span class="pbs-detail-label">Session${items.length > 1 ? 's' : ''}</span><strong class="pbs-detail-value pbs-time-list">${timeRows}</strong></div>
-      </div>
       <div class="pbs-price-card">
-        ${bookingRentalBreakdownHtml(items)}
+        ${bookingRentalBreakdownHtml(items, { itemizeSchedule: true, dateFormatter: fmtDc })}
         <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
         <div class="pbs-price-row total"><span>Booking total</span><strong>${fmt(total)}</strong></div>
         <div class="pbs-price-row due"><span>Reservation payment today</span><strong>${fmt(dueToday)}</strong></div>
@@ -5352,22 +5378,10 @@ function hostBookingItemsSummaryHtml(items = uniqueBookingSelections(activeBooki
 function bookingItemsSummaryHtml(items = uniqueBookingSelections(activeBookingItems())) {
   if (isVerifiedHostBooking()) return hostBookingItemsSummaryHtml(items);
   const total = bookingItemsTotal(items);
-  const dates = [...new Set(items.map(item => item.date).filter(Boolean))];
-  const dateStr = dates.length > 1 ? dates.map(fmtD).join(' + ') : bookingItemsDate(items) ? fmtD(bookingItemsDate(items)) : '-';
-  const timeRows = items.map(item => {
-    const datePart = dates.length > 1 ? ` · ${fmtDc(item.date)}` : '';
-    const separateNote = slotsAreConsecutive(item.slots) ? '' : ' · Separate hours';
-    return `<span>${esc(item.courtName)}${esc(datePart)} · ${esc(item.timeLabel || itemTimeLabel(item))} (${Number(item.duration || 0)} hr${Number(item.duration || 0) === 1 ? '' : 's'})${esc(separateNote)}</span>`;
-  }).join('');
   return `
     <div class="premium-booking-summary">
-      <div class="pbs-session">
-        <div class="pbs-detail"><span class="pbs-detail-label">Court</span><strong class="pbs-detail-value">${esc(bookingItemsCourtLabel(items))}</strong></div>
-        <div class="pbs-detail"><span class="pbs-detail-label">Date</span><strong class="pbs-detail-value">${esc(dateStr)}</strong></div>
-        <div class="pbs-detail wide"><span class="pbs-detail-label">Session${items.length > 1 ? 's' : ''}</span><strong class="pbs-detail-value pbs-time-list">${timeRows}</strong></div>
-      </div>
       <div class="pbs-price-card">
-        ${bookingRentalBreakdownHtml(items)}
+        ${bookingRentalBreakdownHtml(items, { itemizeSchedule: true, dateFormatter: fmtD })}
         <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
         <div class="pbs-price-row total"><span>Total</span><strong>${fmt(total)}</strong></div>
       </div>

@@ -223,6 +223,67 @@ test('premium rental breakdown groups three identical courts into one auditable 
   assert.match(html, /₱3,600\.00/);
 });
 
+test('Step 3 itemizes each schedule and price exactly once', () => {
+  const harness = rentalBreakdownHarness();
+  const items = [
+    { courtId: '1', courtName: 'Court 1', date: '2026-09-02', slots: [8, 9], timeLabel: '8:00 AM - 10:00 AM', duration: 2, rate: 350, slotRates: [350, 350], total: 700 },
+    { courtId: '2', courtName: 'Court 2', date: '2026-09-02', slots: [16, 17], timeLabel: '4:00 PM - 6:00 PM', duration: 2, rate: 400, slotRates: [400, 400], total: 800 },
+    { courtId: '3', courtName: 'Court 3', date: '2026-09-02', slots: [16, 17], timeLabel: '4:00 PM - 6:00 PM', duration: 2, rate: 400, slotRates: [400, 400], total: 800 },
+  ];
+  const html = harness.html(items, {
+    itemizeSchedule: true,
+    dateFormatter: () => 'Wednesday, September 2, 2026',
+  });
+
+  assert.equal((html.match(/Wednesday, September 2, 2026/g) || []).length, 1);
+  assert.equal((html.match(/Court 1/g) || []).length, 1);
+  assert.equal((html.match(/Courts 2 & 3/g) || []).length, 1);
+  assert.equal((html.match(/8:00 AM - 10:00 AM/g) || []).length, 1);
+  assert.equal((html.match(/4:00 PM - 6:00 PM/g) || []).length, 1);
+  assert.match(html, /₱350\/hr × 2 hrs/);
+  assert.match(html, /₱700\.00/);
+  assert.match(html, /₱400\/hr × 2 hrs × 2 courts/);
+  assert.match(html, /₱1,600\.00/);
+  assert.doesNotMatch(html, /matching courts|per court|court-hours|Court rental/i);
+});
+
+test('a single itemized price group leaves the amount to the grand total row', () => {
+  const harness = rentalBreakdownHarness();
+  const items = [1, 2, 3].map(number => ({
+    courtId: String(number),
+    courtName: `Court ${number}`,
+    date: '2026-09-01',
+    slots: [8, 9, 10],
+    timeLabel: '8:00 AM - 11:00 AM',
+    duration: 3,
+    rate: 400,
+    slotRates: [400, 400, 400],
+    total: 1200,
+  }));
+  const html = harness.html(items, { itemizeSchedule: true, dateFormatter: value => value });
+  assert.match(html, /₱400\/hr × 3 hrs × 3 courts/);
+  assert.doesNotMatch(html, /₱3,600\.00/);
+  assert.doesNotMatch(html, /per court|court-hours/);
+});
+
+test('itemized rows keep multiple dates and separate hours truthful', () => {
+  const harness = rentalBreakdownHarness();
+  const items = [
+    { courtId: '1', courtName: 'Court 1', date: '2026-09-02', slots: [8, 10], timeLabel: '8:00 AM - 9:00 AM, 10:00 AM - 11:00 AM', duration: 2, rate: 350, slotRates: [350, 350], total: 700 },
+    { courtId: '2', courtName: 'Court 2', date: '2026-09-03', slots: [16], timeLabel: '4:00 PM - 5:00 PM', duration: 1, rate: 400, slotRates: [400], total: 400 },
+  ];
+  const html = harness.html(items, {
+    itemizeSchedule: true,
+    dateFormatter: value => value === '2026-09-02' ? 'Sep 2, 2026' : 'Sep 3, 2026',
+  });
+  assert.match(html, /2 booking dates/);
+  assert.equal((html.match(/Sep 2, 2026/g) || []).length, 1);
+  assert.equal((html.match(/Sep 3, 2026/g) || []).length, 1);
+  assert.match(html, /8:00 AM - 9:00 AM, 10:00 AM - 11:00 AM/);
+  assert.match(html, /₱350\/hr × 2 hrs/);
+  assert.match(html, /₱400\/hr × 1 hr/);
+});
+
 test('rental breakdown expands mixed courts and preserves real tier components', () => {
   const harness = rentalBreakdownHarness();
   const items = [
@@ -279,7 +340,8 @@ test('player summary and confirmation show the fee-free all-in price only', () =
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
   assert.doesNotMatch(summaries, /bookingFeeDisplay\(/);
   assert.doesNotMatch(summaries, /Fee paid in full|25% court/i);
-  assert.equal((summaries.match(/bookingRentalBreakdownHtml\(items\)/g) || []).length, 2, 'regular and host summaries must share the same rental breakdown');
+  assert.equal((summaries.match(/bookingRentalBreakdownHtml\(items, \{ itemizeSchedule: true,/g) || []).length, 2, 'regular and host summaries must share the itemized rental breakdown');
+  assert.doesNotMatch(summaries, /<div class="pbs-session">/, 'Step 3 must not render a second court/session summary');
   assert.match(page, /@media\(max-width:480px\)[\s\S]*?\.pbs-rental-math\s*\{[^}]*gap:/);
 
   const confirmation = sourceBetween('<section class="inv-payment-card', '</section>');
