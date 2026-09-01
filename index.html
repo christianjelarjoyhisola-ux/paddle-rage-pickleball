@@ -331,55 +331,27 @@ body.dark .shared-date-display {
 .ft-result-price { color:var(--accent); font-size:.8rem; font-weight:800; margin-top:3px; }
 .ft-result .btn { padding:8px 13px; }
 
-/* PADDLE RAGE LAUNCH OFFER */
+/* Borderless price promise: supporting copy, never another card. */
+.sec-hd-support {
+  display:flex; align-items:baseline; justify-content:space-between; gap:18px;
+}
+.sec-hd-support > p { margin:0; }
 .price-promise {
-  position:relative; isolation:isolate; overflow:hidden;
-  display:flex; align-items:center; justify-content:center;
-  min-height:50px; margin:0 0 16px; padding:11px 15px;
-  border:1px solid rgba(var(--lime-rgb),.5); border-radius:14px;
-  background:
-    radial-gradient(circle at 50% 150%,rgba(var(--lime-rgb),.18),transparent 58%),
-    linear-gradient(115deg,rgba(var(--lime-rgb),.085),rgba(5,12,7,.78) 48%,rgba(var(--lime-rgb),.075));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 10px 30px rgba(var(--lime-rgb),.075);
-}
-.price-promise::before {
-  content:''; position:absolute; z-index:0; left:14px; right:14px; top:50%; height:1px;
-  background:linear-gradient(90deg,rgba(var(--lime-rgb),.02),rgba(var(--lime-rgb),.2) 28%,transparent 42% 58%,rgba(var(--lime-rgb),.2) 72%,rgba(var(--lime-rgb),.02));
-  transform:translateY(-50%); pointer-events:none;
-}
-.price-promise::after {
-  content:''; position:absolute; inset:-85% auto -85% -20%; width:18%; z-index:0;
-  pointer-events:none;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.11),transparent);
-  transform:skewX(-18deg); animation:pricePromiseSweep 7s cubic-bezier(.4,0,.2,1) infinite;
-}
-@keyframes pricePromiseSweep {
-  0%,70%,100% { left:-22%; opacity:0; }
-  76% { opacity:1; }
-  92% { left:118%; opacity:0; }
-}
-.price-promise-lockup {
-  position:relative; z-index:1; display:inline-flex; align-items:center; gap:9px;
-  padding:0 13px; background:rgba(6,13,8,.88);
-  animation:pricePromiseTitleIn .52s cubic-bezier(.22,1,.36,1) both;
-}
-.price-promise-no {
-  min-width:31px; min-height:25px; padding:3px 7px; display:inline-grid; place-items:center;
-  border-radius:7px; background:linear-gradient(145deg,var(--lime),var(--accent));
-  box-shadow:0 0 0 1px rgba(var(--lime-rgb),.24),0 0 22px rgba(var(--lime-rgb),.2);
-  color:#071006; font-size:.69rem; font-weight:950; line-height:1; letter-spacing:.8px;
+  display:inline-block; flex:none; margin-left:10px;
+  color:var(--lime-ink); font-family:'Bebas Neue',sans-serif;
+  font-size:1.06rem; font-weight:700; line-height:1;
+  letter-spacing:1.8px; white-space:nowrap;
+  animation:pricePromiseTitleIn .42s cubic-bezier(.22,1,.36,1) both;
 }
 .price-promise-title {
-  color:var(--lime-ink); font-family:'Bebas Neue',sans-serif;
-  font-size:1.28rem; line-height:1; letter-spacing:2.25px;
+  color:inherit; font:inherit; letter-spacing:inherit;
 }
 @keyframes pricePromiseTitleIn {
-  from { opacity:0; transform:translateY(6px); }
+  from { opacity:0; transform:translateY(4px); }
   to { opacity:1; transform:translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .price-promise::after { display:none; animation:none; }
-  .price-promise-lockup { animation:none; opacity:1; transform:none; }
+  .price-promise { animation:none; opacity:1; transform:none; }
 }
 @media(max-width:700px) {
   .find-time-entry { margin-top:-6px; gap:10px; }
@@ -417,10 +389,8 @@ body.dark .shared-date-display {
   .ft-note { font-size:.72rem; padding:8px 9px; }
   .ft-result { align-items:stretch; flex-direction:column; }
   .ft-result .btn { width:100%; justify-content:center; }
-  .price-promise { min-height:44px; margin-bottom:12px; padding:8px 10px; border-radius:12px; }
-  .price-promise-lockup { gap:7px; padding:0 10px; }
-  .price-promise-no { min-width:27px; min-height:22px; padding:3px 6px; font-size:.61rem; border-radius:6px; }
-  .price-promise-title { font-size:1.08rem; letter-spacing:1.65px; }
+  .sec-hd-support { align-items:flex-start; flex-direction:column; gap:7px; }
+  .price-promise { margin-left:0; font-size:.98rem; letter-spacing:1.55px; }
 }
 
 /* COURTS — LANDSCAPE LAYOUT */
@@ -3411,7 +3381,7 @@ body.host-mode .courts { padding-bottom:140px; }
 @media(prefers-reduced-motion:reduce) { .host-balance-progress::after { animation:none; width:100%; background:var(--lime); } }
 
 </style>
-<link rel="stylesheet" href="brand-theme.css?v=20260901-opening-campaign-v32">
+<link rel="stylesheet" href="brand-theme.css?v=20260901-opening-campaign-v33">
 </head>
 <body class="dark">
 <script>
@@ -3550,13 +3520,11 @@ try {
       <span class="pr-splash-sound-bars" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="pr-splash-sound-label">Play music</span>
     </button>
-    <div class="pr-splash-offer" role="note" aria-label="No booking fees.">
-      <span class="pr-splash-offer-no">NO</span><strong>BOOKING FEES</strong>
-    </div>
     <button class="pr-splash-enter" type="button" onclick="event.stopPropagation();dismissSplashAndBook()">
       <span class="pr-splash-enter-label">Book Now</span>
       <span class="pr-splash-enter-arrow" aria-hidden="true">&rarr;</span>
     </button>
+    <p class="pr-splash-offer" role="note">NO BOOKING FEES</p>
   </div>
   <div class="pr-splash-footer">Court booking &nbsp;&middot;&nbsp; Open play &nbsp;&middot;&nbsp; Community</div>
 </div>
@@ -3674,7 +3642,10 @@ try {
 <div class="sec" id="courts" style="padding-top:24px">
   <div class="sec-hd">
     <h2>🏟️ SELECT A COURT</h2>
-    <p>Select a date, choose a court and time, then book.</p>
+    <div class="sec-hd-support">
+      <p>Select a date, choose a court and time, then book.</p>
+      <span class="price-promise" id="pricePromise" role="note" aria-label="No booking fees."><strong class="price-promise-title">NO BOOKING FEES</strong></span>
+    </div>
   </div>
   <div class="find-time-entry">
     <div>
@@ -3695,9 +3666,6 @@ try {
       <button class="shared-date-today" id="courtSharedQuickDate" type="button" onclick="setSharedCourtDateToday()">Today</button>
       <input class="shared-date-native" type="date" id="courtSharedDate" onchange="onSharedCourtDate(this.value)" aria-label="Booking date" />
     </div>
-  </div>
-  <div class="price-promise" id="pricePromise" role="note" aria-label="No booking fees.">
-    <span class="price-promise-lockup"><span class="price-promise-no">NO</span><strong class="price-promise-title">BOOKING FEES</strong></span>
   </div>
   <div class="courts" id="courtsGrid">
     <div class="pb-loader">

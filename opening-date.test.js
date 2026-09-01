@@ -62,7 +62,7 @@ test('opening boundary follows Manila business date and never moves before Septe
 });
 
 test('public date controls clamp navigation and disable every date before launch', () => {
-  const controls = sourceBetween(page, '<div class="shared-date-entry">', '<div class="price-promise"');
+  const controls = sourceBetween(page, '<div class="shared-date-entry">', '<div class="courts" id="courtsGrid">');
   assert.match(controls, /id="courtSharedPrev"/);
   assert.match(controls, /id="courtSharedQuickDate"/);
   assert.match(controls, /Advance booking · opening Sep 19/);
