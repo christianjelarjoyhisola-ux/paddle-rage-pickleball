@@ -19,7 +19,7 @@ function pricingHarness() {
     let _serviceFeeRate = 0;
     const elements = {
       pricePromiseSub: { textContent: '' },
-      pricePromiseChip: { textContent: '' },
+      pricePromise: { setAttribute() {} },
     };
     const $ = id => elements[id] || null;
     ${source}
@@ -40,7 +40,6 @@ function pricingHarness() {
         syncPricePromiseMessaging();
         return {
           sub: elements.pricePromiseSub.textContent,
-          chip: elements.pricePromiseChip.textContent,
         };
       },
     };
@@ -48,7 +47,7 @@ function pricingHarness() {
 }
 
 function selectionHarness() {
-  const selectionSource = sourceBetween('function selectionCourtFee(sel)', 'function normalizedSlots(slots)');
+  const selectionSource = sourceBetween('function selectionListedPrice(sel)', 'function normalizedSlots(slots)');
   const totalsSource = sourceBetween('function bookingItemsCourtFee', 'function bookingItemsCourtLabel');
   return new Function(`
     let pricingTiers = [];
@@ -105,8 +104,8 @@ test('premium price promise markets zero booking fees without exposing the priva
   const banner = sourceBetween('<div class="price-promise"', '<div class="courts" id="courtsGrid">');
   assert.match(banner, /Paddle Rage Price Promise/);
   assert.match(banner, /Zero Booking Fees/);
-  assert.match(banner, /Book at the price shown/);
-  assert.match(banner, /Final Prices/);
+  assert.match(banner, /The price shown is what you pay/);
+  assert.doesNotMatch(banner, /Final Prices|Live Total/i);
   assert.doesNotMatch(banner, /₱\s*10|\/hr\s*[×x]/i);
 
   assert.match(page, /@media\s*\(prefers-reduced-motion:\s*reduce\)[^{]*\{[^}]*\.price-promise::after[^}]*animation\s*:\s*none/s);
@@ -115,24 +114,23 @@ test('premium price promise markets zero booking fees without exposing the priva
 test('per-hour configuration creates exact all-in slot prices', () => {
   const quote = pricingHarness().quote('per_hour', 10, 350);
   assert.equal(quote.exact, true);
-  assert.equal(quote.rate, 360);
-  assert.match(quote.html, /₱360/);
-  assert.match(quote.html, />Final</);
-  assert.match(quote.aria, /₱360 final price, zero booking fee/);
+  assert.equal(quote.rate, 350);
+  assert.match(quote.html, /₱350/);
+  assert.doesNotMatch(quote.html, /Final|Live total|csl-final/i);
+  assert.match(quote.aria, /₱350 per hour, zero booking fee/);
 });
 
 test('flat configuration never repeats the flat share on every slot', () => {
   const quote = pricingHarness().quote('flat', 10, 350);
-  assert.equal(quote.exact, false);
+  assert.equal(quote.exact, true);
   assert.equal(quote.rate, 350);
-  assert.match(quote.html, /₱350\/hr/);
-  assert.match(quote.html, /Live total/);
+  assert.match(quote.html, /₱350/);
+  assert.doesNotMatch(quote.html, /Live total|Final|csl-final/i);
   assert.doesNotMatch(quote.html, /₱360/);
-  assert.match(quote.aria, /final total shown after selection/);
+  assert.match(quote.aria, /₱350 per hour, zero booking fee/);
 
   const message = pricingHarness().message('flat', 10);
-  assert.equal(message.sub, 'Your final total updates as you select.');
-  assert.equal(message.chip, 'Live Total');
+  assert.equal(message.sub, 'The price shown is what you pay.');
 });
 
 test('tiered and multi-court totals preserve the private allocation exactly once', () => {
@@ -145,19 +143,19 @@ test('tiered and multi-court totals preserve the private allocation exactly once
       { from: 16, to: 24, rate: 450 },
     ],
   });
-  assert.deepEqual(tiered, { court: 800, fee: 20, total: 820 });
+  assert.deepEqual(tiered, { court: 780, fee: 20, total: 800 });
 
   const group = harness.aggregate([
-    { courtFee: 800, serviceFee: 20, total: 820, duration: 2 },
-    { courtFee: 500, serviceFee: 10, total: 510, duration: 1 },
+    { courtFee: 780, serviceFee: 20, total: 800, duration: 2 },
+    { courtFee: 490, serviceFee: 10, total: 500, duration: 1 },
   ]);
-  assert.deepEqual(group, { court: 1300, fee: 30, total: 1330, duration: 3 });
+  assert.deepEqual(group, { court: 1270, fee: 30, total: 1300, duration: 3 });
 });
 
 test('host reservation amount keeps the internal share private without changing the money', () => {
-  const due = hostDepositHarness()(1330, 1300, 30);
-  assert.equal(due, 355, '₱30 platform share plus 25% of ₱1,300 court revenue');
-  assert.equal(1330 - due, 975, 'remaining balance is derived from the same authoritative total');
+  const due = hostDepositHarness()(1300, 1270, 30);
+  assert.equal(due, 347.5, '₱30 platform share plus 25% of ₱1,270 court revenue');
+  assert.equal(1300 - due, 952.5, 'remaining balance is derived from the same authoritative total');
 
   const hostSummary = sourceBetween('function hostBookingItemsSummaryHtml', 'function bookingItemsSummaryHtml');
   assert.doesNotMatch(hostSummary, /\$\{fmt\(svcFee\)\}/);
@@ -165,7 +163,16 @@ test('host reservation amount keeps the internal share private without changing 
   assert.match(hostSummary, /Reservation payment today/);
 });
 
-test('both court renderers use final player pricing and accessible selection state', () => {
+test('₱400 inclusive-price contract stays exact through regular and host checkout', () => {
+  const allocation = selectionHarness().selection({ slots: [18], rate: 400 }, 10);
+  assert.deepEqual(allocation, { court: 390, fee: 10, total: 400 });
+
+  const hostDue = hostDepositHarness()(allocation.total, allocation.court, allocation.fee);
+  assert.equal(hostDue, 107.5);
+  assert.equal(allocation.total - hostDue, 292.5);
+});
+
+test('both court renderers use the configured player price and accessible selection state', () => {
   const onCardDate = sourceBetween('async function onCardDate', 'async function ensureCourt');
   const renderCourts = sourceBetween('async function renderCourts()', 'async function selectCourt');
 
@@ -180,12 +187,13 @@ test('both court renderers use final player pricing and accessible selection sta
   assert.match(page, /\.cc-slot-btn\s*\{[^}]*min-height\s*:\s*48px/s);
 });
 
-test('player summary and confirmation show fee-free final pricing only', () => {
+test('player summary and confirmation show the fee-free all-in price only', () => {
   const summaries = sourceBetween('function hostBookingItemsSummaryHtml', 'async function refreshBookingItemViews');
   assert.match(summaries, /Booking fee/);
   assert.match(summaries, /pbs-free-badge">Free/);
-  assert.match(summaries, /Final booking total/);
-  assert.match(summaries, /Final total/);
+  assert.match(summaries, /Booking total/);
+  assert.match(summaries, />Total</);
+  assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
   assert.doesNotMatch(summaries, /bookingFeeDisplay\(/);
   assert.doesNotMatch(summaries, /Fee paid in full|25% court/i);
 
@@ -195,8 +203,26 @@ test('player summary and confirmation show fee-free final pricing only', () => {
   assert.match(confirmation, />Free</);
 });
 
-test('mobile sticky booking total leads with the final amount', () => {
+test('mobile sticky booking total leads with the all-in amount', () => {
   const updateCard = sourceBetween('function updateCardUI', '// Holds the ref');
-  assert.match(updateCard, /`FINAL · \$\{fmt\(total\)\} · \$\{hrs\}/);
+  assert.match(updateCard, /`\$\{fmt\(total\)\} · \$\{hrs\}/);
+  assert.doesNotMatch(updateCard, /FINAL ·|Live total/i);
   assert.doesNotMatch(updateCard, /mobileSumEl\.textContent\s*=\s*selectionSummaryText/);
+});
+
+test('stored bookings keep their immutable total and fee snapshot', () => {
+  const source = sourceBetween('function bookingItemFromReservedBooking', 'function restoreGuestResumeDraft');
+  assert.match(source, /bookingFeeAmountSnapshot\s*\?\?\s*b\.booking_fee_amount_snapshot/);
+  assert.match(source, /storedFee !== null && storedFee !== undefined/);
+  assert.match(source, /courtFee:\s*Math\.max\(0, total - serviceFee\)/);
+  assert.doesNotMatch(source, /total:\s*courtFee \+ serviceFee/);
+});
+
+test('pricing surfaces never present the internal allocation as an add-on', () => {
+  const slotPricing = sourceBetween('function allInSlotRate', 'function activeHostSession');
+  const summaries = sourceBetween('function hostBookingItemsSummaryHtml', 'async function refreshBookingItemViews');
+  assert.doesNotMatch(slotPricing, /Final Prices|Live Total|csl-final/i);
+  assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
+  assert.match(summaries, /Booking fee/);
+  assert.match(summaries, /pbs-free-badge">Free/);
 });

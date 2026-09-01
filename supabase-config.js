@@ -2727,6 +2727,36 @@ window.DB = {
     fee_type: 'per_hour',
   });
 
+  const localBookingFeeSnapshot = (booking, settings = {}) => {
+    const total = Math.max(0, Number(booking?.total || 0));
+    const slots = Array.isArray(booking?.slots) ? booking.slots : [];
+    const configuredRate = Number(
+      settings.maintenance_fee ?? settings.service_fee_rate ?? settings.booking_fee ?? 0,
+    );
+    const feeRate = Number.isFinite(configuredRate) ? Math.max(0, configuredRate) : 0;
+    const feeType = ['flat', 'booking', 'per_booking', 'per_transaction'].includes(
+      String(settings.fee_type || '').toLowerCase(),
+    ) ? 'flat' : 'per_hour';
+    const feeUnits = feeType === 'flat' ? 1 : slots.length;
+    const explicitAmount = booking?.bookingFeeAmountSnapshot ?? booking?.booking_fee_amount_snapshot;
+    const parsedExplicitAmount = Number(explicitAmount);
+    const calculatedAmount = explicitAmount !== null && explicitAmount !== undefined && Number.isFinite(parsedExplicitAmount)
+      ? parsedExplicitAmount
+      : feeRate * feeUnits;
+    const amount = Math.round(Math.min(total, Math.max(0, calculatedAmount)) * 100) / 100;
+    return {
+      bookingFeeAmountSnapshot: amount,
+      bookingFeeRateSnapshot: feeRate,
+      bookingFeeTypeSnapshot: feeType,
+      bookingFeeUnitsSnapshot: feeUnits,
+      bookingFeeSnapshotSource: booking?.bookingFeeSnapshotSource || 'local_insert',
+      bookingFeeLedgerEligibleSnapshot: booking?.bookingFeeLedgerEligibleSnapshot !== undefined
+        ? !!booking.bookingFeeLedgerEligibleSnapshot
+        : String(booking?.paymentMethod || '').toLowerCase() !== 'manual'
+          && !String(booking?.ref || '').toUpperCase().startsWith('MANUAL-'),
+    };
+  };
+
   const defaultAccounts = () => ([
     {
       id: 'owner_001',
@@ -2753,10 +2783,10 @@ window.DB = {
   const defaultHostDemoBookings = () => {
     const makeHostBooking = ({ ref, groupRef = null, courtId, courtName, date, slots, rate, method = 'gcash', gcashRef = '', paymentStatus = 'downpayment_paid', status = 'confirmed', createdDaysAgo = 0 }) => {
       const duration = slots.length;
-      const courtFee = duration * rate;
-      const serviceFee = duration * 5;
-      const total = courtFee + serviceFee;
-      const downpayment = Math.round((courtFee * 0.25) + serviceFee);
+      const total = duration * rate;
+      const serviceFee = Math.min(total, duration * 5);
+      const courtFee = Math.max(0, total - serviceFee);
+      const downpayment = Math.round(((courtFee * 0.25) + serviceFee) * 100) / 100;
       const start = Math.min(...slots);
       const end = Math.max(...slots) + 1;
       return {
@@ -2775,6 +2805,12 @@ window.DB = {
         duration,
         rate,
         total,
+        bookingFeeAmountSnapshot: serviceFee,
+        bookingFeeRateSnapshot: 5,
+        bookingFeeTypeSnapshot: 'per_hour',
+        bookingFeeUnitsSnapshot: duration,
+        bookingFeeSnapshotSource: 'local_seed',
+        bookingFeeLedgerEligibleSnapshot: true,
         paymentMethod: method,
         paymentFlow: method,
         gcashRef,
@@ -3313,11 +3349,15 @@ window.DB = {
         if (hasSlotConflict(existing, booking)) {
           throw new Error('One or more time slots are no longer available. Please refresh and choose a different time.');
         }
-        rows.push({
+        const row = {
           ...booking,
           ref: booking.ref || localRef('PB'),
           receivedAccount: receivedAccountForBooking(booking),
           createdAt: booking.createdAt || nowIso(),
+        };
+        rows.push({
+          ...row,
+          ...localBookingFeeSnapshot(row, db.settings || {}),
         });
       }
 
@@ -3491,7 +3531,13 @@ window.DB = {
               const configuredServiceFee = Number.isFinite(feeRate) && feeRate >= 0
                 ? feeRate * (flatFee ? 1 : slotCount)
                 : 0;
-              const serviceFee = Math.min(Math.max(configuredServiceFee, 0), total);
+              const storedServiceFee = item.bookingFeeAmountSnapshot ?? item.booking_fee_amount_snapshot;
+              const parsedStoredServiceFee = Number(storedServiceFee);
+              const requestedServiceFee = storedServiceFee !== null && storedServiceFee !== undefined
+                  && Number.isFinite(parsedStoredServiceFee)
+                ? parsedStoredServiceFee
+                : configuredServiceFee;
+              const serviceFee = Math.min(Math.max(requestedServiceFee, 0), total);
               const required = Math.round(
                 (serviceFee + ((total - serviceFee) * 0.25)) * 100,
               ) / 100;

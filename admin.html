@@ -4178,7 +4178,7 @@ body.admin-booting .admin-boot-splash {
             <div class="rm-calc-metric wide"><div class="rm-calc-label">Fee Calculation</div><div class="rm-calc-value formula" id="rmLiveFormula">No eligible fee yet</div></div>
           </div>
           <div class="rm-fee-breakdown" id="rmLiveFeeBreakdown" aria-label="Fee rate breakdown"></div>
-          <div class="rm-live-note" id="rmLiveNote">One reservation may contain several court bookings. Billable court-hours come from the immutable fee snapshot; court rental revenue and the customer's 50% court downpayment remain separate.</div>
+          <div class="rm-live-note" id="rmLiveNote">One reservation may contain several court bookings. Billable court-hours come from the immutable fee snapshot; the private platform allocation remains separate from net court revenue.</div>
         </div>
         <div class="rm-live-action" id="rmLiveAction">
           <button class="btn btn-p rm-action" id="rmPrepareBtn" type="button" onclick="openRemittancePrepare()" hidden>Prepare Remittance</button>
@@ -4718,7 +4718,7 @@ body.admin-booting .admin-boot-splash {
       <!-- EMBEDDED BOOKING FEE — System Owner only -->
       <div class="panel" data-perm="owner_only" style="max-width:680px;margin-bottom:20px;border:2px solid var(--green);">
         <h4>💰 Embedded Booking Fee <span style="font-size:.72rem;background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:8px;margin-left:8px;font-family:'DM Mono',monospace;letter-spacing:1px">SYSTEM OWNER</span></h4>
-        <p style="color:var(--muted);font-size:.84rem;margin:8px 0 12px">Private platform revenue already included in the player-facing court price. Players see one final court price and a FREE booking fee; eligible internal fee snapshots continue accumulating for remittance on the 14th.</p>
+        <p style="color:var(--muted);font-size:.84rem;margin:8px 0 12px">Court prices are the complete player totals. The private platform allocation is taken from within that price—not added at checkout—and eligible fee snapshots continue accumulating for remittance on the 14th.</p>
         <div class="fg" style="margin-bottom:16px">
           <label class="fl">Charging Method</label>
           <div style="display:grid;gap:8px">
@@ -4745,7 +4745,7 @@ body.admin-booting .admin-boot-splash {
       <!-- BOOKING FEE REMITTANCE — System Owner only (where court owners send fees) -->
       <div class="panel" data-perm="owner_only" style="max-width:680px;margin-bottom:20px;border:1.5px solid rgba(255,160,0,.35);background:rgba(255,160,0,.04)">
         <h4>🏦 Booking Fee Remittance Account <span style="font-size:.7rem;background:rgba(255,160,0,.15);color:var(--yellow);padding:2px 8px;border-radius:8px;margin-left:6px;font-family:'DM Mono',monospace;letter-spacing:1px">SYSTEM OWNER</span></h4>
-        <p style="color:var(--muted);font-size:.84rem;margin:8px 0 14px">This is the GCash account where court owners remit player-paid booking fees by booking period. Shown to them in the Remit Now dialog.</p>
+        <p style="color:var(--muted);font-size:.84rem;margin:8px 0 14px">This is the GCash account where court owners remit the private booking-fee allocations embedded in collected court prices. Shown to them in the Remit Now dialog.</p>
         <div class="frow" style="gap:10px;margin-bottom:10px;">
           <div class="fg" style="margin:0;flex:1">
             <label class="fl">Remittance GCash Number</label>
@@ -5671,6 +5671,28 @@ async function deleteBookingGroupByRef(ref) {
 }
 function calcPlatformFeeForBooking(b, cfg) {
   return cfg.type === 'flat' ? cfg.amount : cfg.amount * bookingBillableHours(b);
+}
+function storedPlatformFeeForBooking(b) {
+  const raw = b?.bookingFeeAmountSnapshot ?? b?.booking_fee_amount_snapshot;
+  if (raw === null || raw === undefined || raw === '') return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return null;
+  const total = Math.max(0, Number(b?.total) || 0);
+  return Math.min(total, Math.max(0, parsed));
+}
+function platformFeeAmountForBooking(b, fallbackCfg = { amount: 0, type: 'per_hour' }) {
+  const rows = Array.isArray(b?.items) ? uniqueBookingGroupItems(b.items) : [b];
+  return rows.reduce((sum, row) => {
+    const stored = storedPlatformFeeForBooking(row);
+    const calculated = stored === null
+      ? calcPlatformFeeForBooking(row, fallbackCfg)
+      : stored;
+    const total = Math.max(0, Number(row?.total) || 0);
+    return sum + Math.min(total, Math.max(0, Number(calculated) || 0));
+  }, 0);
+}
+function netCourtRevenueForBooking(b, fallbackCfg) {
+  return Math.max(0, (Number(b?.total) || 0) - platformFeeAmountForBooking(b, fallbackCfg));
 }
 function platformFeeFormulaText(bookings, cfg) {
   const count = bookings.length;
@@ -6884,15 +6906,16 @@ async function renderDash(){
   if (_mEl && !_mEl.value) _mEl.value = _curMonth;
   renderMaintFee();
 
-  const bks=await DB.getBookings();
+  const [bks, settings]=await Promise.all([DB.getBookings(), DB.getSettings()]);
+  const feeCfg=getPlatformFeeConfig(settings);
   const today=new Date().toISOString().split('T')[0];
   // Exclude placeholder slot-holds ("Reserving…") — they are temporary locks, not real bookings.
   const realBks=bks.filter(isDashboardReportBooking);
   const active=realBks.filter(isDashboardActiveBooking);
   const activeTxns=groupBookings(active);
   const forfeitedTxns=groupBookings(realBks.filter(b=>b.status==='forfeited' && b.paymentStatus==='deposit_retained'));
-  const retainedRevenue=forfeitedTxns.reduce((s,b)=>s+(window.BookingBalance?.paidAmount?.(b)||0),0);
-  const rev=activeTxns.reduce((s,b)=>s+b.total,0)+retainedRevenue;
+  const retainedRevenue=forfeitedTxns.reduce((s,b)=>s+Math.max(0,(window.BookingBalance?.paidAmount?.(b)||0)-platformFeeAmountForBooking(b,feeCfg)),0);
+  const rev=activeTxns.reduce((s,b)=>s+netCourtRevenueForBooking(b,feeCfg),0)+retainedRevenue;
   const todayBks=activeTxns.filter(b=>b.date===today);
   const cc={};active.forEach(b=>{cc[b.courtName]=(cc[b.courtName]||0)+1;});
   const most=Object.entries(cc).sort((a,b)=>b[1]-a[1])[0];
@@ -6911,7 +6934,7 @@ async function renderDash(){
     recent.map(b=>`<tr><td data-label="Ref"><code style="color:var(--green);font-size:.78rem">${esc(b.displayRef || b.ref)}</code></td><td data-label="Name">${esc(b.fullName)}</td><td data-label="Court">${esc(b.courtName)}</td><td data-label="Schedule">${esc(b.scheduleLabel || b.dateLabel || fmtD(b.date))}</td><td data-label="Status">${statusBdg(b.status)}</td></tr>`).join('');
 
   // ── Charts ──
-  renderDashCharts(activeTxns);
+  renderDashCharts(activeTxns,feeCfg);
 }
 
 // ── MAINTENANCE FEE ─────────────────────────────────────────
@@ -6949,7 +6972,8 @@ async function renderMaintFee() {
   const filteredTxns = groupBookings(filtered);
   const totalBookings = filteredTxns.length;
   const totalHours = filtered.reduce((s, b) => s + (parseInt(b.duration) || 0), 0);
-  const totalFee = isFlat ? totalBookings * _maintRate : totalHours * _maintRate;
+  const fallbackCfg = { amount: _maintRate, type: _maintFeeType };
+  const totalFee = filtered.reduce((sum, b) => sum + platformFeeAmountForBooking(b, fallbackCfg), 0);
 
   $('mfBookings').textContent = totalBookings;
   $('mfHours').textContent = totalHours;
@@ -6959,9 +6983,10 @@ async function renderMaintFee() {
   const byCourtMap = {};
   filtered.forEach(b => {
     const cn = b.courtName || 'Unknown';
-    if (!byCourtMap[cn]) byCourtMap[cn] = { bookings: 0, hours: 0 };
+    if (!byCourtMap[cn]) byCourtMap[cn] = { bookings: 0, hours: 0, fees: 0 };
     byCourtMap[cn].bookings++;
     byCourtMap[cn].hours += parseInt(b.duration) || 0;
+    byCourtMap[cn].fees += platformFeeAmountForBooking(b, fallbackCfg);
   });
 
   const [yr, mo] = selectedMonth.split('-');
@@ -6975,19 +7000,15 @@ async function renderMaintFee() {
   const rows = Object.entries(byCourtMap)
     .sort((a, b) => b[1].hours - a[1].hours)
     .map(([court, d]) => {
-      const courtFee = isFlat ? d.bookings * _maintRate : d.hours * _maintRate;
-      const feeDetail = isFlat
-        ? `${d.bookings} transaction${d.bookings !== 1 ? 's' : ''} × ₱${_maintRate.toFixed(2)}`
-        : `${d.hours} hr${d.hours !== 1 ? 's' : ''} × ₱${_maintRate.toFixed(2)}`;
+      const courtFee = d.fees;
+      const feeDetail = `${d.bookings} booking${d.bookings !== 1 ? 's' : ''} · ${d.hours} hr${d.hours !== 1 ? 's' : ''}`;
       return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)">
         <span>🏟️ ${court}</span>
         <span>${feeDetail} = <span style="color:var(--yellow)">${fmt(courtFee)}</span></span>
       </div>`;
     }).join('');
 
-  const totalLine = isFlat
-    ? `${totalBookings} confirmed booking transaction${totalBookings !== 1 ? 's' : ''} × ₱${_maintRate.toFixed(2)} = <span style="color:var(--yellow);font-size:1rem">${fmt(totalFee)}</span>`
-    : `${totalHours} hr${totalHours !== 1 ? 's' : ''} × ₱${_maintRate.toFixed(2)} = <span style="color:var(--yellow);font-size:1rem">${fmt(totalFee)}</span>`;
+  const totalLine = `${totalBookings} immutable booking snapshot${totalBookings !== 1 ? 's' : ''} = <span style="color:var(--yellow);font-size:1rem">${fmt(totalFee)}</span>`;
 
   $('mfBreakdown').innerHTML = `
     <div style="font-weight:700;margin-bottom:8px;color:var(--text)">📊 Booking-date breakdown for ${monthLabel}</div>
@@ -7024,7 +7045,7 @@ async function saveMaintRate() {
 // ─────────────────────────────────────────────────────────────
 
 let _chartBookings = null, _chartRevenue = null;
-function renderDashCharts(bookings) {
+function renderDashCharts(bookings, feeCfg = { amount: 0, type: 'per_hour' }) {
   // Only chart confirmed + completed — exclude verifying/pending with null totals
   const chartBks = bookings.filter(b => b.status === 'confirmed' || b.status === 'completed');
   let monthKeys = [...new Set(chartBks.map(b => (b.date || '').slice(0, 7)).filter(Boolean))].sort().slice(-6);
@@ -7045,7 +7066,7 @@ function renderDashCharts(bookings) {
   months.forEach(m => { countByMonth[m.key] = 0; revByMonth[m.key] = 0; });
   chartBks.forEach(b => {
     const mk = b.date?.slice(0,7);
-    if (mk && countByMonth[mk] !== undefined) { countByMonth[mk]++; revByMonth[mk] += Number(b.total) || 0; }
+    if (mk && countByMonth[mk] !== undefined) { countByMonth[mk]++; revByMonth[mk] += netCourtRevenueForBooking(b, feeCfg); }
   });
 
   const isDark = document.body.getAttribute('data-theme') === 'dark';
@@ -8821,9 +8842,9 @@ function nbUpdateTotal() {
   const courtId = $('nbCourt')?.value;
   const court = _nbCourts.find(c => String(c.id) === String(courtId));
   const hrs = _nbSelSlots.length;
-  const courtTotal = court ? _nbSelSlots.reduce((s, h) => s + _nbGetRateForHour(court, h), 0) : 0;
-  const bookingFee = court && hrs ? _nbBookingFeeForHours(hrs) : 0;
-  const total = courtTotal + bookingFee;
+  const total = court ? _nbSelSlots.reduce((s, h) => s + _nbGetRateForHour(court, h), 0) : 0;
+  const bookingFee = court && hrs ? Math.min(total, _nbBookingFeeForHours(hrs)) : 0;
+  const courtTotal = Math.max(0, total - bookingFee);
   const half = Math.round((courtTotal * 0.5 + bookingFee) * 100) / 100;
 
   $('nbDp50Amt').textContent = fmt(half);
@@ -8840,7 +8861,7 @@ function nbUpdateTotal() {
     <div class="nb-sum-row"><span>Duration</span><strong>${hrs} hr${hrs!==1?'s':''}</strong></div>
     <div class="nb-sum-row"><span>Court Price</span><strong>${fmt(total)}</strong></div>
     <div class="nb-sum-row"><span>Booking Fee</span><strong style="color:var(--green)">FREE</strong></div>
-    <div class="nb-sum-row nb-sum-total"><span>Final Total</span><span>${fmt(total)}</span></div>
+    <div class="nb-sum-row nb-sum-total"><span>Total</span><span>${fmt(total)}</span></div>
   </div>`;
 }
 
@@ -8860,9 +8881,7 @@ async function saveNewBooking() {
   const status = $('nbStatus').value;
 
   const court_ = _nbCourts.find(c => String(c.id) === String(courtId));
-  const courtTotal = court_ ? _nbSelSlots.reduce((s, h) => s + _nbGetRateForHour(court_, h), 0) : 0;
-  const bookingFee = court_ && _nbSelSlots.length ? _nbBookingFeeForHours(_nbSelSlots.length) : 0;
-  const total = courtTotal + bookingFee;
+  const total = court_ ? _nbSelSlots.reduce((s, h) => s + _nbGetRateForHour(court_, h), 0) : 0;
   const dpAmount = total;
   const payStatus = 'paid';
 
@@ -9059,18 +9078,17 @@ function nbSelectionGroups() {
 }
 
 function nbGroupsWithFees(groups = nbSelectionGroups()) {
-  return groups.map((group, index) => {
+  return groups.map(group => {
     const duration = Number(group.duration || group.slots?.length || 0);
-    const courtFee = Number(group.courtFee ?? group.total ?? 0);
-    const bookingFee = _nbPlatformFeeCfg.type === 'flat'
-      ? (index === 0 ? _nbBookingFeeForHours(duration) : 0)
-      : _nbBookingFeeForHours(duration);
+    const total = Math.max(0, Number(group.courtFee ?? group.total ?? 0));
+    const bookingFee = Math.min(total, Math.max(0, _nbBookingFeeForHours(duration)));
+    const courtFee = Math.max(0, total - bookingFee);
     return {
       ...group,
       duration,
       courtFee,
       bookingFee,
-      total: courtFee + bookingFee,
+      total,
     };
   });
 }
@@ -9234,14 +9252,14 @@ function nbUpdateTotal() {
     const duration = group.duration || group.slots.length;
     return `
     <div class="nb-sum-row">
-      <span><strong>${esc(group.court.name)}</strong><br><span class="nb-sum-muted">${fmtHour(group.startH)} - ${fmtHour(group.endH)} (${duration} hr${duration === 1 ? '' : 's'})</span><br><span class="nb-sum-muted">Final court price: ${fmt(group.total)}</span></span>
+      <span><strong>${esc(group.court.name)}</strong><br><span class="nb-sum-muted">${fmtHour(group.startH)} - ${fmtHour(group.endH)} (${duration} hr${duration === 1 ? '' : 's'})</span><br><span class="nb-sum-muted">Court price: ${fmt(group.total)}</span></span>
       <strong>${fmt(group.total)}</strong>
     </div>`;
   }).join('');
   sum.innerHTML = `<div class="nb-slots-summary">
     <div class="nb-sum-list">${rows}</div>
     <div class="nb-sum-row"><span>Booking Fee</span><strong style="color:var(--green)">FREE</strong></div>
-    <div class="nb-sum-row nb-sum-total"><span>Final Total</span><span>${fmt(total)}</span></div>
+    <div class="nb-sum-row nb-sum-total"><span>Total</span><span>${fmt(total)}</span></div>
   </div>`;
 }
 
@@ -13982,7 +14000,7 @@ function applyRoleVisibility(role) {
         <div style="font-size:1.7rem">📋</div>
         <div>
           <div style="font-size:1.05rem;font-weight:800;letter-spacing:.5px;color:var(--text,#e8eaf0)">PLATFORM ACCESS & BOOKING FEE AUTHORIZATION AGREEMENT</div>
-          <div style="font-size:.73rem;color:var(--muted,#7a8a9a);margin-top:2px">Pickleball Court Booking System — Version 12 · Accumulated Booking Fee Remittance Terms</div>
+          <div style="font-size:.73rem;color:var(--muted,#7a8a9a);margin-top:2px">Pickleball Court Booking System — Version 13 · Inclusive Price Allocation &amp; Remittance Terms</div>
         </div>
       </div>
     </div>
@@ -14006,19 +14024,19 @@ function applyRoleVisibility(role) {
         <li>Platform hosting, security, and technical maintenance</li>
       </ul>
 
-      <h4 style="margin:0 0 8px;color:var(--green);font-size:.85rem;letter-spacing:.6px;text-transform:uppercase">3. Booking Fee &amp; Accumulated Remittance</h4>
-      <p id="agreeFeeIntro" style="margin:0 0 14px">In consideration of the platform access provided at no setup fee, one-time fee, monthly subscription fee, hidden fee, or other platform charge to the Court Owner, the Court Owner <strong>authorizes</strong> the Platform Provider to add the current System Owner-selected <strong>non-refundable booking fee</strong> to each customer transaction processed through the system. This fee is charged to and paid by the <strong>customer/player</strong>, not the Court Owner, and is separate from the court rental fee.<br><br>The System Owner sets the booking fee amount and charging method. The fee may be charged <strong>per booked hour per confirmed booking transaction</strong> or as a <strong>per confirmed booking transaction fee</strong>, added to the player's checkout, and included in the booking-period remittance statement based on booking date.</p>
-      <p id="agreeFeeBillable" style="margin:0 0 14px"><strong>When it applies.</strong> The configured booking fee applies only to a <strong>confirmed booking transaction</strong> made through the platform, meaning a booking that successfully reserved a court slot. Bookings that are cancelled before confirmation, rejected during payment verification, expired, or never held a slot are <strong>not charged</strong>.</p>
-      <p id="agreeFeeCollection" style="margin:0 0 14px"><strong>Collection.</strong> The Court Owner collects the configured booking fee from the customer together with the court rental fee at the time of booking, and holds the booking fee on behalf of the Platform Provider until remittance. The booking fee is not a fee charged to the Court Owner and is not part of the Court Owner's court rental revenue.</p>
+      <h4 style="margin:0 0 8px;color:var(--green);font-size:.85rem;letter-spacing:.6px;text-transform:uppercase">3. Embedded Booking Fee Allocation &amp; Accumulated Remittance</h4>
+      <p id="agreeFeeIntro" style="margin:0 0 14px">In consideration of the platform access provided at no setup fee, one-time fee, monthly subscription fee, hidden fee, or other platform charge to the Court Owner, the Court Owner <strong>authorizes</strong> the Platform Provider to allocate the current System Owner-selected <strong>booking fee from within the Court Owner's configured player-facing price</strong> for each eligible transaction.<br><br>The configured court price is the complete amount shown to and paid by the customer. The booking fee allocation is <strong>not added on top at checkout</strong>. The System Owner sets the allocation amount and charging method, either per booked hour or per confirmed booking transaction, and the system privately records the allocation in the booking-period remittance statement.</p>
+      <p id="agreeFeeBillable" style="margin:0 0 14px"><strong>When it applies.</strong> The configured booking fee allocation applies only to a <strong>confirmed booking transaction</strong> that successfully reserved a court slot. Bookings that are released before confirmation, expire, or never hold a slot do <strong>not</strong> create a remittance allocation.</p>
+      <p id="agreeFeeCollection" style="margin:0 0 14px"><strong>Collection.</strong> The Court Owner collects the complete displayed price from the customer. From that collected amount, the configured booking fee allocation is held on behalf of the Platform Provider until remittance; the remainder is the Court Owner's net court revenue. No additional booking fee is charged to the player.</p>
       <p id="agreeFeeWeekly" style="margin:0 0 14px"><strong>Accumulated remittance every 14th.</strong> Eligible booking fees accumulate continuously until the Court Owner prepares remittance on the <strong>14th day of the month</strong>. At that moment, the system freezes an exact server-recorded cutoff in Asia/Manila time and creates a permanent snapshot of all eligible, unsettled confirmed booking transactions available before that cutoff. Each booking is included <strong>only once</strong>. Eligible bookings at or after the cutoff begin the next accumulated balance for the following 14th.</p>
       <p style="margin:0 0 14px"><strong>Due date &amp; method.</strong> The accumulated balance is scheduled for remittance on the <strong>14th of each month</strong>. The Court Owner prepares the exact cutoff, remits the frozen amount via <strong>GCash</strong> to the booking fee remittance account shown in the dashboard, and submits the transaction reference and receipt screenshot. The remittance becomes <strong>Settled</strong> only after the System Owner verifies the proof; its permanent record remains available in Remittance History.</p>
       <p style="margin:0 0 14px"><strong>Non-remittance.</strong> Statements not remitted past the due date are marked <strong>overdue</strong>. The Platform Provider may suspend or restrict the Court Owner's access to the booking system until all outstanding statements are settled. Suspension does not waive any amounts already due.</p>
 
       <h4 style="margin:0 0 8px;color:var(--green);font-size:.85rem;letter-spacing:.6px;text-transform:uppercase">4. Court Owner's Revenue</h4>
-      <p id="agreeFeeRevenue" style="margin:0 0 14px">All court rental fees set by the Court Owner (e.g. ₱200/hr, ₱250/hr) belong <strong>exclusively to the Court Owner</strong>. The Platform Provider does not take any share of the court rental revenue. The Court Owner receives 100% of the court rental rate from every confirmed booking. Only the separate configured booking fee paid by the customer is for the Platform Provider.</p>
+      <p id="agreeFeeRevenue" style="margin:0 0 14px">The Court Owner controls the complete player-facing court price. For each eligible confirmed booking, the configured booking fee allocation is deducted from that collected price for the Platform Provider; the balance belongs <strong>exclusively to the Court Owner</strong> as net court revenue. The player never pays the allocation as an additional checkout charge.</p>
 
       <h4 style="margin:0 0 8px;color:var(--green);font-size:.85rem;letter-spacing:.6px;text-transform:uppercase">5. Anti-Circumvention</h4>
-      <p id="agreeFeeCircumvention" style="margin:0 0 14px">The Court Owner agrees <strong>not to direct, encourage, or assist customers to bypass the platform</strong> in order to avoid the configured booking fee. This includes but is not limited to: advertising a direct booking channel at a lower price for platform-visible slots, accepting bookings verbally or via personal chat for slots available on the platform, waiving or hiding the booking fee outside the system, or instructing customers to "book directly" to avoid the fee.<br><br>Circumvention of the booking fee is a material breach of this Agreement and may result in immediate suspension or termination of platform access.</p>
+      <p id="agreeFeeCircumvention" style="margin:0 0 14px">The Court Owner agrees <strong>not to direct, encourage, or assist customers to bypass the platform</strong> in order to avoid the configured booking fee allocation. This includes but is not limited to: advertising a direct booking channel at a lower price for platform-visible slots, accepting bookings verbally or via personal chat for slots available on the platform, or instructing customers to "book directly" to avoid the allocation.<br><br>Circumvention of the booking fee allocation is a material breach of this Agreement and may result in immediate suspension or termination of platform access.</p>
 
       <h4 style="margin:0 0 8px;color:var(--green);font-size:.85rem;letter-spacing:.6px;text-transform:uppercase">6. Obligation to Honor Bookings</h4>
       <p style="margin:0 0 14px">The Court Owner agrees to <strong>honor all confirmed bookings</strong> made through the platform. Customers who receive a booking confirmation with a reference number must be allowed access to the court at the reserved date and time. Cancellations caused by the Court Owner's failure to honor a confirmed booking are a breach of this Agreement.</p>
@@ -14056,7 +14074,7 @@ function applyRoleVisibility(role) {
       <ul style="margin:0 0 14px;padding-left:20px">
         <li>You have read and fully understood all terms of this Agreement.</li>
         <li>You are the authorized Court Owner or duly authorized representative.</li>
-        <li id="agreeFeeConfirmCollect">You authorize the platform to collect the System Owner-selected booking fee from customers on confirmed booking transactions.</li>
+        <li id="agreeFeeConfirmCollect">You authorize the platform to allocate the System Owner-selected booking fee from within the complete player-facing price on confirmed booking transactions.</li>
         <li id="agreeFeeConfirmRemit">You agree to remit the continuously accumulated booking fees to the Platform Provider on the <strong>14th of each month</strong>, using the exact cutoff recorded when remittance is prepared.</li>
         <li>You agree to honor all platform bookings and not circumvent the booking fee.</li>
         <li>You understand the Platform Provider is the software provider only and does not operate the court.</li>
@@ -14087,7 +14105,7 @@ function applyRoleVisibility(role) {
 
         <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:20px;font-size:.84rem">
           <input id="agreeCheck" type="checkbox" style="margin-top:3px;width:16px;height:16px;flex-shrink:0;cursor:pointer" onchange="agreeCheckReady()" />
-          <span id="agreeFeeCheckboxText">I have read and fully understood the Platform Access &amp; Booking Fee Authorization Agreement above. I authorize the platform to collect the System Owner-selected booking fee from customers on confirmed booking transactions. I agree to honor all platform bookings and not direct customers to book directly to circumvent this fee. I understand that the Platform Provider is the software provider only and does not operate the court. This electronic signature is legally binding under RA 8792.</span>
+          <span id="agreeFeeCheckboxText">I have read and fully understood the Platform Access &amp; Booking Fee Authorization Agreement above. I authorize the platform to allocate the System Owner-selected booking fee from within the complete player-facing price on confirmed booking transactions. I agree to honor all platform bookings and not direct customers to book directly to circumvent this allocation. I understand that the Platform Provider is the software provider only and does not operate the court. This electronic signature is legally binding under RA 8792.</span>
         </label>
 
         <button id="agreeSubmitBtn" onclick="submitAgreement()" disabled
@@ -14103,7 +14121,7 @@ function applyRoleVisibility(role) {
 
 <script>
 /* ── AGREEMENT MODAL ── */
-const AGREEMENT_VERSION = 12;
+const AGREEMENT_VERSION = 13;
 let _agreeDrawing = false, _agreeHasSig = false;
 let _agreePrevX = 0, _agreePrevY = 0;
 
@@ -14124,15 +14142,15 @@ async function updateAgreementFeeCopy() {
     : `total booked hours from confirmed booking transactions × ${fmt(cfg.amount)}`;
   const setHtml = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
 
-  setHtml('agreeFeeIntro', `In consideration of the platform access provided at no setup fee, one-time fee, monthly subscription fee, hidden fee, or other platform charge to the Court Owner, the Court Owner <strong>authorizes</strong> the Platform Provider to add the current System Owner-selected <strong>non-refundable booking fee of ${fee}</strong> to each customer transaction processed through the system. This fee is charged to and paid by the <strong>customer/player</strong>, not the Court Owner, and is separate from the court rental fee.<br><br>The System Owner sets the booking fee amount and charging method. The fee is currently configured as <strong>${feeMethod}</strong> at <strong>${fmt(cfg.amount)}</strong>, added to the player's checkout, and recorded in the running remittance ledger when the booking becomes eligible.`);
-  setHtml('agreeFeeBillable', `<strong>When it applies.</strong> The configured ${configuredFeeText} applies only to a <strong>confirmed booking transaction</strong> made through the platform, meaning a booking that successfully reserved a court slot. Bookings that are cancelled before confirmation, rejected during payment verification, expired, or never held a slot are <strong>not charged</strong>.`);
-  setHtml('agreeFeeCollection', `<strong>Collection.</strong> The Court Owner collects the configured ${configuredFeeText} from the customer together with the court rental fee at the time of booking, and holds the booking fee on behalf of the Platform Provider until remittance. The booking fee is not a fee charged to the Court Owner and is not part of the Court Owner's court rental revenue.`);
+  setHtml('agreeFeeIntro', `In consideration of the platform access provided at no setup fee, one-time fee, monthly subscription fee, hidden fee, or other platform charge to the Court Owner, the Court Owner <strong>authorizes</strong> the Platform Provider to allocate the current System Owner-selected <strong>${fee} booking fee from within the Court Owner's configured player-facing price</strong> for each eligible transaction.<br><br>The configured court price is the complete amount shown to and paid by the customer. The allocation is <strong>not added on top at checkout</strong>. It is currently configured as a <strong>${feeMethod}</strong> at <strong>${fmt(cfg.amount)}</strong> and is privately recorded in the running remittance ledger when the booking becomes eligible.`);
+  setHtml('agreeFeeBillable', `<strong>When it applies.</strong> The configured ${configuredFeeText} allocation applies only to a <strong>confirmed booking transaction</strong> that successfully reserved a court slot. Bookings that are released before confirmation, expire, or never hold a slot do <strong>not</strong> create a remittance allocation.`);
+  setHtml('agreeFeeCollection', `<strong>Collection.</strong> The Court Owner collects the complete displayed price from the customer. From that collected amount, the configured ${configuredFeeText} allocation is held on behalf of the Platform Provider until remittance; the remainder is the Court Owner's net court revenue. No additional booking fee is charged to the player.`);
   setHtml('agreeFeeWeekly', `<strong>Accumulated remittance every 14th.</strong> Eligible booking fees accumulate continuously until the Court Owner prepares remittance on the <strong>14th day of the month</strong>. The system then freezes the exact Asia/Manila server time and snapshots all eligible, unsettled confirmed booking transactions before that cutoff. At the current configuration, the fee calculation is <strong>${formula}</strong>. Each booking is included <strong>only once</strong>; eligible bookings at or after the cutoff start the next balance for the following 14th.`);
-  setHtml('agreeFeeRevenue', `All court rental fees set by the Court Owner (e.g. ₱200/hr, ₱250/hr) belong <strong>exclusively to the Court Owner</strong>. The Platform Provider does not take any share of the court rental revenue. The Court Owner receives 100% of the court rental rate from every confirmed booking. Only the separate configured booking fee of <strong>${fee}</strong> paid by the customer is for the Platform Provider.`);
-  setHtml('agreeFeeCircumvention', `The Court Owner agrees <strong>not to direct, encourage, or assist customers to bypass the platform</strong> in order to avoid the configured booking fee of <strong>${fee}</strong>. This includes but is not limited to: advertising a direct booking channel at a lower price for platform-visible slots, accepting bookings verbally or via personal chat for slots available on the platform, waiving or hiding the booking fee outside the system, or instructing customers to "book directly" to avoid the fee.<br><br>Circumvention of the booking fee is a material breach of this Agreement and may result in immediate suspension or termination of platform access.`);
-  setHtml('agreeFeeConfirmCollect', `You authorize the platform to collect the System Owner-selected booking fee of <strong>${fee}</strong> from customers on confirmed booking transactions.`);
+  setHtml('agreeFeeRevenue', `The Court Owner controls the complete player-facing court price. For each eligible confirmed booking, the configured booking fee allocation of <strong>${fee}</strong> is deducted from that collected price for the Platform Provider; the balance belongs <strong>exclusively to the Court Owner</strong> as net court revenue. The player never pays the allocation as an additional checkout charge.`);
+  setHtml('agreeFeeCircumvention', `The Court Owner agrees <strong>not to direct, encourage, or assist customers to bypass the platform</strong> in order to avoid the configured booking fee allocation of <strong>${fee}</strong>. This includes but is not limited to: advertising a direct booking channel at a lower price for platform-visible slots, accepting bookings verbally or via personal chat for slots available on the platform, or instructing customers to "book directly" to avoid the allocation.<br><br>Circumvention of the booking fee allocation is a material breach of this Agreement and may result in immediate suspension or termination of platform access.`);
+  setHtml('agreeFeeConfirmCollect', `You authorize the platform to allocate the System Owner-selected booking fee of <strong>${fee}</strong> from within the complete player-facing price on confirmed booking transactions.`);
   setHtml('agreeFeeConfirmRemit', `You agree to remit the continuously accumulated booking fees to the Platform Provider on the <strong>14th of each month</strong>, using the exact cutoff recorded when remittance is prepared.`);
-  setHtml('agreeFeeCheckboxText', `I have read and fully understood the Platform Access &amp; Booking Fee Authorization Agreement above. I authorize the platform to collect the System Owner-selected <strong>${fee}</strong> booking fee from customers on confirmed booking transactions. I agree to honor all platform bookings and not direct customers to book directly to circumvent this fee. I understand that the Platform Provider is the software provider only and does not operate the court. This electronic signature is legally binding under RA 8792.`);
+  setHtml('agreeFeeCheckboxText', `I have read and fully understood the Platform Access &amp; Booking Fee Authorization Agreement above. I authorize the platform to allocate the System Owner-selected <strong>${fee}</strong> booking fee from within the complete player-facing price on confirmed booking transactions. I agree to honor all platform bookings and not direct customers to book directly to circumvent this allocation. I understand that the Platform Provider is the software provider only and does not operate the court. This electronic signature is legally binding under RA 8792.`);
 }
 
 function agreeInitCanvas() {

@@ -1081,7 +1081,13 @@ begin
     court_total := court_total + coalesce(matched_rate, minimum_rate, base_rate);
   end loop;
 
-  return round(court_total, 2);
+  -- Configured court/tier rates are the complete player-facing price. Existing
+  -- hardened insert paths add the private fee allocation after this function,
+  -- so return the net court share to keep the stored total equal to the rate.
+  return round(
+    court_total - public.calculate_booking_service_fee(booking_slots),
+    2
+  );
 end;
 $$;
 

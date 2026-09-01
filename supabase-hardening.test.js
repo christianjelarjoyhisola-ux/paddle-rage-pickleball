@@ -36,6 +36,16 @@ const atomicBookingConfirmation = fs.readFileSync(
   ),
   'utf8'
 );
+const inclusivePricingMigration = fs.readFileSync(
+  path.join(
+    root,
+    'supabase',
+    'migrations',
+    '20260901160000_inclusive_court_pricing.sql'
+  ),
+  'utf8'
+);
+const baselineSetup = fs.readFileSync(path.join(root, 'SETUP_NEW_SUPABASE.sql'), 'utf8');
 const gcashReviewFinalizer = gcashAutoMigration.slice(
   gcashAutoMigration.indexOf('create or replace function public.finalize_gcash_receipt_review')
 );
@@ -418,6 +428,64 @@ test('dashboard booking confirmation is an authenticated atomic group transactio
   );
 });
 
+test('database stores the configured court price while privately snapshotting its allocation', () => {
+  assert.match(
+    inclusivePricingMigration,
+    /court_total - public\.calculate_booking_service_fee\(booking_slots\)/i,
+  );
+  assert.match(
+    inclusivePricingMigration,
+    /booking_fee_amount_snapshot := least\(calculated_fee, authoritative_total\)/i,
+  );
+  assert.match(
+    inclusivePricingMigration,
+    /create trigger z10_snapshot_booking_fee_on_insert\s+before insert on public\.bookings/i,
+  );
+  assert.match(
+    inclusivePricingMigration,
+    /create trigger z20_mark_booking_fee_earned\s+before insert or update on public\.bookings/i,
+  );
+  assert.match(
+    inclusivePricingMigration,
+    /coalesce\(b\.booking_fee_amount_snapshot, public\.calculate_booking_service_fee\(b\.slots\)\)/i,
+  );
+  assert.match(
+    inclusivePricingMigration,
+    /coalesce\(wf\.billed_refs, '\[\]'::jsonb\) @> jsonb_build_array\(new\.ref\)[\s\S]*?new\.weekly_fee_id := null;\s*new\.billed_at := null;/i,
+    'client-supplied legacy billing stamps must not suppress the fee ledger',
+  );
+  assert.doesNotMatch(
+    inclusivePricingMigration,
+    /\bupdate\s+public\.bookings\b/i,
+    'historical booking totals must never be rewritten',
+  );
+  assert.match(
+    inclusivePricingMigration,
+    /if function_definition ~\* old_return_pattern then[\s\S]*?regexp_replace\(function_definition, old_return_pattern, new_return, 'i'\)[\s\S]*?elsif function_definition !~\* new_return_pattern then/i,
+    'the migration must work both after the legacy schema and after the inclusive baseline setup',
+  );
+  assert.match(
+    baselineSetup,
+    /return\s+round\(\s*court_total\s*-\s*public\.calculate_booking_service_fee\(booking_slots\)\s*,\s*2\s*\);/i,
+    'fresh Supabase setup must already use inclusive court pricing',
+  );
+});
+
+test('admin accounting uses immutable fee snapshots and net court revenue', () => {
+  assert.match(adminSite, /function storedPlatformFeeForBooking\(b\)/);
+  assert.match(adminSite, /b\?\.bookingFeeAmountSnapshot \?\? b\?\.booking_fee_amount_snapshot/);
+  assert.match(
+    adminSite,
+    /const totalFee = filtered\.reduce\(\(sum, b\) => sum \+ platformFeeAmountForBooking\(b, fallbackCfg\), 0\);/,
+  );
+  assert.match(
+    adminSite,
+    /const rev=activeTxns\.reduce\(\(s,b\)=>s\+netCourtRevenueForBooking\(b,feeCfg\),0\)\+retainedRevenue;/,
+  );
+  assert.match(adminSite, /revByMonth\[mk\] \+= netCourtRevenueForBooking\(b, feeCfg\)/);
+  assert.doesNotMatch(adminSite, /const totalFee = isFlat \? totalBookings \* _maintRate : totalHours \* _maintRate/);
+});
+
 test('remote and local booking clients expose the same canonical confirmation result', () => {
   const adapters = methodSources(client, 'confirmBookingTransaction');
   assert.equal(adapters.length, 2, 'remote and local DB adapters must both implement confirmation');
@@ -441,6 +509,16 @@ test('remote and local booking clients expose the same canonical confirmation re
   assert.match(local, /groupRef|bookingGroupRef/);
   assert.match(local, /writeDb\(db\)/);
   assert.match(local, /paidAt/);
+  assert.match(
+    local,
+    /item\.bookingFeeAmountSnapshot \?\? item\.booking_fee_amount_snapshot/,
+    'local confirmation must prefer the immutable fee snapshot',
+  );
+  assert.match(
+    local,
+    /const requestedServiceFee = storedServiceFee !== null && storedServiceFee !== undefined[\s\S]*?\? parsedStoredServiceFee\s*:\s*configuredServiceFee/,
+    'explicit zero snapshots must not fall back to current settings',
+  );
   for (const [name, pattern] of [
     ['transitioned', /\btransitioned(?:\s*:|\s*[,}])/],
     ['booking', /\bbooking(?:\s*:|\s*[,}])/],
@@ -451,6 +529,22 @@ test('remote and local booking clients expose the same canonical confirmation re
     assert.match(remote, pattern, `remote result must expose camelCase ${name}`);
     assert.match(local, pattern, `local result must expose camelCase ${name}`);
   }
+});
+
+test('local booking creation stamps the same bounded private allocation', () => {
+  assert.match(client, /const localBookingFeeSnapshot = \(booking, settings = \{\}\) =>/);
+  assert.match(
+    client,
+    /explicitAmount !== null && explicitAmount !== undefined && Number\.isFinite\(parsedExplicitAmount\)/,
+    'an explicit zero snapshot must be preserved',
+  );
+  assert.match(client, /Math\.min\(total, Math\.max\(0, calculatedAmount\)\)/);
+  assert.match(client, /\.\.\.localBookingFeeSnapshot\(row, db\.settings \|\| \{\}\)/);
+  assert.match(
+    client,
+    /const downpayment = Math\.round\(\(\(courtFee \* 0\.25\) \+ serviceFee\) \* 100\) \/ 100;/,
+    'host demo reservations must retain centavo precision (₱107.50, not ₱108)',
+  );
 });
 
 test('digital payment references are claimed once across every payment flow', () => {

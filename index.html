@@ -364,12 +364,6 @@ body.dark .shared-date-display {
   font-size:1.22rem; line-height:1; letter-spacing:1.15px;
 }
 .price-promise-sub { color:var(--muted); font-size:.72rem; font-weight:650; line-height:1.25; }
-.price-promise-chip {
-  margin-left:auto; flex:0 0 auto; padding:5px 9px; border-radius:999px;
-  color:var(--lime-ink); border:1px solid rgba(var(--lime-rgb),.38);
-  background:rgba(var(--lime-rgb),.08); font-size:.58rem; font-weight:950;
-  letter-spacing:.75px; text-transform:uppercase; white-space:nowrap;
-}
 @media(max-width:700px) {
   .find-time-entry { margin-top:-6px; gap:10px; }
   .find-time-entry span { display:none; }
@@ -412,7 +406,6 @@ body.dark .shared-date-display {
   .price-promise-title { font-size:1.02rem; letter-spacing:.9px; }
   .price-promise-kicker { font-size:.5rem; letter-spacing:1px; }
   .price-promise-sub { font-size:.65rem; }
-  .price-promise-chip { padding:4px 7px; font-size:.5rem; }
 }
 
 /* COURTS — LANDSCAPE LAYOUT */
@@ -770,16 +763,6 @@ body.dark .shared-date-display {
 
 .csl-time  { font-size:.75rem; font-weight:700; line-height:1.2; }
 .csl-price { font-size:.72rem; font-weight:800; margin-top:1px; }
-.csl-final {
-  display:inline-flex; align-items:center; justify-content:center;
-  min-height:14px; padding:1px 5px; border-radius:999px;
-  color:var(--lime-ink); background:rgba(var(--lime-rgb),.09);
-  border:1px solid rgba(var(--lime-rgb),.24);
-  font-size:.58rem; line-height:1; font-weight:950; letter-spacing:.5px; text-transform:uppercase;
-}
-.cc-slot-btn.selected .csl-final {
-  color:#fff; background:rgba(255,255,255,.13); border-color:rgba(255,255,255,.35);
-}
 .csl-name  { font-size:.62rem; font-weight:600; margin-top:1px; opacity:.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 .csl-tag   { font-size:.56rem; font-weight:900; letter-spacing:.5px; text-transform:uppercase; margin-top:2px; }
 .cc-slot-btn.selected:not(.taken):not(.past-slot):not(.open-play):not(.maintenance) .csl-price { color:#fff; }
@@ -1087,13 +1070,6 @@ select.fi option { background:var(--card); }
 }
 .bpay-title-amount strong {
   color:var(--accent); font-size:.95rem; font-weight:900; white-space:nowrap; font-variant-numeric:tabular-nums;
-}
-.bpay-fee-free {
-  display:inline-flex!important; align-items:center; justify-content:center;
-  padding:3px 7px; border:1px solid rgba(var(--lime-rgb),.36); border-radius:999px;
-  background:rgba(var(--lime-rgb),.08); color:var(--lime-ink)!important;
-  font-size:.58rem!important; font-weight:950!important; letter-spacing:.5px!important;
-  line-height:1!important; white-space:nowrap;
 }
 .bpay-method-block { margin-bottom:8px; }
 .bpay-method-block .fl { margin-bottom:7px; }
@@ -1957,15 +1933,6 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
 .pbs-price-row.total strong { color:var(--accent); font-size:1.02rem; font-weight:950; }
 .pbs-price-row.due strong { color:var(--accent); font-size:.95rem; }
 .pbs-price-row.balance strong { color:var(--text); }
-.pbs-assurance {
-  display:flex; align-items:center; justify-content:center; gap:6px;
-  padding:7px 10px; color:var(--lime-ink); background:rgba(var(--lime-rgb),.045);
-  border-top:1px solid rgba(var(--lime-rgb),.12); font-size:.64rem; font-weight:800;
-}
-.pbs-assurance-mark {
-  width:15px; height:15px; display:inline-grid; place-items:center; flex:0 0 15px;
-  border-radius:50%; color:#071006; background:var(--lime); font-size:.58rem; font-weight:950;
-}
 @media(max-width:480px) {
   .premium-booking-summary { gap:8px; }
   .pbs-session { gap:7px 9px; padding-bottom:8px; }
@@ -3490,7 +3457,7 @@ try {
       </div>
       <div class="late-ext-courts" id="lateExtCourts"></div>
       <div class="late-ext-price">
-        <span class="late-ext-price-copy"><strong>Added final price</strong><span>Booking fee · FREE</span></span>
+        <span class="late-ext-price-copy"><strong>Added price</strong><span>Booking fee · FREE</span></span>
         <strong class="late-ext-price-value" id="lateExtPrice">—</strong>
       </div>
       <div class="late-ext-note">This will be added as a separate next-day booking item in the same reservation.</div>
@@ -3668,7 +3635,7 @@ try {
       <input class="shared-date-native" type="date" id="courtSharedDate" onchange="onSharedCourtDate(this.value)" aria-label="Booking date" />
     </div>
   </div>
-  <div class="price-promise" id="pricePromise" role="note" aria-label="Zero booking fees. Book at the price shown.">
+  <div class="price-promise" id="pricePromise" role="note" aria-label="Zero booking fees. The price shown is what you pay.">
     <span class="price-promise-mark" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M20 6 9 17l-5-5"></path>
@@ -3677,9 +3644,8 @@ try {
     <span class="price-promise-copy">
       <span class="price-promise-kicker">Paddle Rage Price Promise</span>
       <strong class="price-promise-title">Zero Booking Fees</strong>
-      <span class="price-promise-sub" id="pricePromiseSub">Book at the price shown.</span>
+      <span class="price-promise-sub" id="pricePromiseSub">The price shown is what you pay.</span>
     </span>
-    <span class="price-promise-chip" id="pricePromiseChip">Final Prices</span>
   </div>
   <div class="courts" id="courtsGrid">
     <div class="pb-loader">
@@ -3808,7 +3774,7 @@ try {
         <div class="wiz-panel" id="wizPanel4">
           <div class="wiz-sec-title bpay-title">
             <span>💳 Select Payment Method</span>
-            <span class="bpay-title-amount"><span class="bpay-fee-free">Fee Free</span><span>Amount to pay</span><strong id="bStepPayAmtMethod">--</strong></span>
+            <span class="bpay-title-amount"><span>Amount to pay</span><strong id="bStepPayAmtMethod">--</strong></span>
           </div>
           <div class="fg bpay-method-block" id="payMethodBlock">
             <div class="pay-opts pay-opts-4 bpay-methods">
@@ -3886,7 +3852,7 @@ try {
         <div class="wiz-panel" id="wizPanel5">
           <div class="wiz-sec-title bpay-title">
             <span>💳 Payment</span>
-            <span class="bpay-title-amount"><span class="bpay-fee-free">Fee Free</span><span>Amount to pay</span><strong id="bStepPayAmt">--</strong></span>
+            <span class="bpay-title-amount"><span>Amount to pay</span><strong id="bStepPayAmt">--</strong></span>
           </div>
 
           <!-- GCash QR section -->
@@ -4314,12 +4280,9 @@ function normalizePlatformFeeType(type) {
   return ['flat', 'booking', 'per_booking', 'per_transaction'].includes(String(type || '').toLowerCase()) ? 'flat' : 'per_hour';
 }
 function calcSvcFee(hrs) { return _serviceFeeType === 'flat' ? _serviceFeeRate : _serviceFeeRate * hrs; }
-function hasExactAllInSlotPrice() {
-  return _serviceFeeType !== 'flat' || _serviceFeeRate <= 0;
-}
+function hasExactAllInSlotPrice() { return true; }
 function allInSlotRate(baseRate) {
-  const platformShare = hasExactAllInSlotPrice() ? Math.max(0, Number(calcSvcFee(1) || 0)) : 0;
-  return Math.round((Math.max(0, Number(baseRate || 0)) + platformShare) * 100) / 100;
+  return Math.round(Math.max(0, Number(baseRate || 0)) * 100) / 100;
 }
 function compactPeso(amount) {
   const value = Math.max(0, Number(amount || 0));
@@ -4329,27 +4292,16 @@ function compactPeso(amount) {
   })}`;
 }
 function allInSlotPriceHtml(baseRate) {
-  return hasExactAllInSlotPrice()
-    ? `<div class="csl-price">${compactPeso(allInSlotRate(baseRate))}</div><div class="csl-final">Final</div>`
-    : `<div class="csl-price">${compactPeso(allInSlotRate(baseRate))}/hr</div><div class="csl-final">Live total</div>`;
+  return `<div class="csl-price">${compactPeso(allInSlotRate(baseRate))}</div>`;
 }
 function allInSlotAriaLabel(baseRate) {
-  return hasExactAllInSlotPrice()
-    ? `${compactPeso(allInSlotRate(baseRate))} final price, zero booking fee`
-    : `${compactPeso(allInSlotRate(baseRate))} per hour, final total shown after selection, zero booking fee`;
+  return `${compactPeso(allInSlotRate(baseRate))} per hour, zero booking fee`;
 }
 function syncPricePromiseMessaging() {
   const promise = $('pricePromise');
   const sub = $('pricePromiseSub');
-  const chip = $('pricePromiseChip');
-  if (sub) sub.textContent = hasExactAllInSlotPrice() ? 'Book at the price shown.' : 'Your final total updates as you select.';
-  if (chip) chip.textContent = hasExactAllInSlotPrice() ? 'Final Prices' : 'Live Total';
-  if (promise) promise.setAttribute(
-    'aria-label',
-    hasExactAllInSlotPrice()
-      ? 'Zero booking fees. Book at the price shown.'
-      : 'Zero booking fees. Your final total updates as you select.',
-  );
+  if (sub) sub.textContent = 'The price shown is what you pay.';
+  if (promise) promise.setAttribute('aria-label', 'Zero booking fees. The price shown is what you pay.');
 }
 function activeHostSession() {
   const sess = window.Auth?.getSession?.();
@@ -5086,18 +5038,23 @@ function getCardSelection(courtId) {
   return cardSelections[String(courtId)] || null;
 }
 
-function selectionCourtFee(sel) {
+function selectionListedPrice(sel) {
   const tiers = Array.isArray(sel?.tiers) && sel.tiers.length ? sel.tiers : pricingTiers;
   const fallbackRate = Number(sel?.rate || 0);
   return (sel?.slots || []).reduce((sum, h) => sum + getRateForHourFromTiers(Number(h), tiers, fallbackRate), 0);
 }
 
 function selectionServiceFee(sel) {
-  return calcSvcFee((sel?.slots || []).length);
+  const listedPrice = Math.max(0, Number(selectionListedPrice(sel) || 0));
+  return Math.min(listedPrice, Math.max(0, Number(calcSvcFee((sel?.slots || []).length) || 0)));
+}
+
+function selectionCourtFee(sel) {
+  return Math.max(0, selectionListedPrice(sel) - selectionServiceFee(sel));
 }
 
 function selectionTotal(sel) {
-  return selectionCourtFee(sel) + selectionServiceFee(sel);
+  return selectionListedPrice(sel);
 }
 
 function normalizedSlots(slots) {
@@ -5131,18 +5088,19 @@ function itemTimeLabel(item) {
   return slotsTimeLabel(item?.slots || []);
 }
 
-function selectionSummaryText(sel, includeFee = true) {
+function selectionSummaryText(sel) {
   if (!sel || !sel.slots?.length) return '';
   const hrs = sel.slots.length;
-  const amount = includeFee ? selectionTotal(sel) : selectionCourtFee(sel);
+  const amount = selectionTotal(sel);
   const splitNote = slotsAreConsecutive(sel.slots) ? '' : ' separate';
-  return `${fmtDc(sel.date)} · ${slotsCompactTimeLabel(sel.slots)} · ${hrs}${splitNote} hr${hrs > 1 ? 's' : ''} · ${fmt(amount)} final`;
+  return `${fmtDc(sel.date)} · ${slotsCompactTimeLabel(sel.slots)} · ${hrs}${splitNote} hr${hrs > 1 ? 's' : ''} · ${fmt(amount)}`;
 }
 
 function makeBookingItemFromSelection(sel, ref = null, groupRef = null) {
   const slots = [...(sel?.slots || [])].map(Number).sort((a, b) => a - b);
   const courtFee = selectionCourtFee(sel);
   const serviceFee = selectionServiceFee(sel);
+  const total = selectionTotal(sel);
   return {
     ref,
     groupRef,
@@ -5157,7 +5115,7 @@ function makeBookingItemFromSelection(sel, ref = null, groupRef = null) {
     rate: Number(sel.rate || 0),
     courtFee,
     serviceFee,
-    total: courtFee + serviceFee,
+    total,
   };
 }
 
@@ -5274,10 +5232,9 @@ function hostBookingItemsSummaryHtml(items = uniqueBookingSelections(activeBooki
       <div class="pbs-price-card">
         <div class="pbs-price-row"><span>Court price · ${hrs} hr${hrs === 1 ? '' : 's'}</span><strong>${fmt(total)}</strong></div>
         <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
-        <div class="pbs-price-row total"><span>Final booking total</span><strong>${fmt(total)}</strong></div>
+        <div class="pbs-price-row total"><span>Booking total</span><strong>${fmt(total)}</strong></div>
         <div class="pbs-price-row due"><span>Reservation payment today</span><strong>${fmt(dueToday)}</strong></div>
         <div class="pbs-price-row balance"><span>Remaining balance</span><strong>${fmt(balance)}</strong></div>
-        <div class="pbs-assurance"><span class="pbs-assurance-mark" aria-hidden="true">✓</span><span>Final price locked. No booking fee.</span></div>
       </div>
     </div>
   `;
@@ -5304,8 +5261,7 @@ function bookingItemsSummaryHtml(items = uniqueBookingSelections(activeBookingIt
       <div class="pbs-price-card">
         <div class="pbs-price-row"><span>Court price · ${hrs} hr${hrs === 1 ? '' : 's'}</span><strong>${fmt(total)}</strong></div>
         <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
-        <div class="pbs-price-row total"><span>Final total</span><strong>${fmt(total)}</strong></div>
-        <div class="pbs-assurance"><span class="pbs-assurance-mark" aria-hidden="true">✓</span><span>Book at the price shown.</span></div>
+        <div class="pbs-price-row total"><span>Total</span><strong>${fmt(total)}</strong></div>
       </div>
     </div>
   `;
@@ -6081,7 +6037,7 @@ async function findAvailableTimeMatches(date, preferredStart, duration) {
       const slots = Array.from({ length: duration }, (_, i) => start + i);
       if (!findTimeSlotsAvailable({ court: c, date, slots, bookedSet, blockedDates })) continue;
       const tiers = getPricingTiersForCourt(c);
-      const courtFee = slots.reduce((sum, h) => sum + getRateForHourFromTiers(h, tiers, c.rate), 0);
+      const listedPrice = slots.reduce((sum, h) => sum + getRateForHourFromTiers(h, tiers, c.rate), 0);
       matches.push({
         courtId: String(c.id),
         courtName: c.name,
@@ -6089,8 +6045,8 @@ async function findAvailableTimeMatches(date, preferredStart, duration) {
         start,
         duration,
         slots,
-        courtFee,
-        total: courtFee + calcSvcFee(duration),
+        courtFee: Math.max(0, listedPrice - Math.min(listedPrice, calcSvcFee(duration))),
+        total: listedPrice,
         exact: start === preferredStart,
       });
     }
@@ -6109,7 +6065,7 @@ function findTimeResultHtml(item) {
     <div class="ft-result-main">
       <div class="ft-result-court">${esc(item.courtName)}</div>
       <div class="ft-result-time">${esc(time)} (${item.duration} hr${item.duration !== 1 ? 's' : ''})</div>
-      <div class="ft-result-price">Final price ${fmt(item.total)}</div>
+      <div class="ft-result-price">Price ${fmt(item.total)}</div>
     </div>
     <button class="btn btn-p btn-sm" type="button" onclick="selectFindTimeResult('${jsArg(item.courtId)}','${jsArg(item.date)}',${item.start},${item.duration})">Select</button>
   </div>`;
@@ -6257,7 +6213,7 @@ function updateCardUI(courtId) {
     if (selections.length > 0) {
       const total = selections.reduce((sum, item) => sum + selectionTotal(item), 0);
       const hrs = selections.reduce((sum, item) => sum + item.slots.length, 0);
-      if (mobileSumEl) mobileSumEl.textContent = `FINAL · ${fmt(total)} · ${hrs} hr${hrs !== 1 ? 's' : ''}`;
+      if (mobileSumEl) mobileSumEl.textContent = `${fmt(total)} · ${hrs} hr${hrs !== 1 ? 's' : ''}`;
       if (mobileCtEl) mobileCtEl.textContent = selections.length === 1 ? selections[0].courtName : `${selections.length} courts selected`;
       mobileBar.style.display = 'flex';
     } else {
@@ -6340,8 +6296,15 @@ function clearGuestBookingResume() {
 function bookingItemFromReservedBooking(b) {
   const slots = [...(b.slots || [])].map(Number).filter(Number.isFinite).sort((a, c) => a - c);
   const duration = Number(b.duration || slots.length || 0);
-  const serviceFee = calcSvcFee(duration);
   const total = Number(b.total || 0);
+  const storedFee = b.bookingFeeAmountSnapshot ?? b.booking_fee_amount_snapshot;
+  const parsedStoredFee = Number(storedFee);
+  const serviceFee = Math.min(
+    Math.max(0, total),
+    Math.max(0, storedFee !== null && storedFee !== undefined && Number.isFinite(parsedStoredFee)
+      ? parsedStoredFee
+      : Number(calcSvcFee(duration) || 0)),
+  );
   return {
     ref: b.ref,
     groupRef: b.groupRef || null,
@@ -6606,7 +6569,7 @@ async function proceedToBookLegacy(courtId) {
     timeLabel:     slotsTimeLabel(cardSel.slots),
     duration:      cardSel.slots.length,
     rate:          court.rate,
-    total:         cardSel.slots.reduce((s, h) => s + getRateForHour(h), 0) + calcSvcFee(cardSel.slots.length),
+    total:         cardSel.slots.reduce((s, h) => s + getRateForHour(h), 0),
     paymentMethod: 'gcash',
     paymentFlow:   null,
     paymentStatus: 'for_verification',
@@ -7199,7 +7162,7 @@ async function renderCourts() {
       <div class="cc-mobile-hd">
         <div class="cc-mobile-title">
           <span class="cc-mobile-name">${courtTimesHeading}</span>
-          <span class="cc-mobile-meta">${esc(rateRange)} · ${hasExactAllInSlotPrice() ? 'Final price' : 'Live total at selection'}</span>
+          <span class="cc-mobile-meta">${esc(rateRange)}</span>
         </div>
         <div class="cc-mobile-side">
           <span class="cc-mobile-status ${availBadgeCls}" id="cMobAvail_${esc(c.id)}">${esc(availBadgeTxt)}</span>
@@ -7212,7 +7175,7 @@ async function renderCourts() {
         <div class="cc-photo-avail ${availBadgeCls}" id="cAvail_${esc(c.id)}">${esc(availBadgeTxt)}</div>
         <div class="cc-photo-bar">
           <span class="cc-photo-name">${esc(c.name)}</span>
-          <div class="cc-photo-rate">${esc(rateRange)} · ${hasExactAllInSlotPrice() ? 'Final price' : 'Live total at selection'}</div>
+          <div class="cc-photo-rate">${esc(rateRange)}</div>
         </div>
       </div>
 
@@ -7271,7 +7234,7 @@ async function selectCourt(id) {
   const rateDisp = rates.length && Math.min(...rates) !== Math.max(...rates)
     ? `${fmt(Math.min(...rates))}–${fmt(Math.max(...rates))}/hr`
     : `${fmt(allInSlotRate(court.rate))}/hr`;
-  d.textContent = `${court.name} — ${rateDisp}${hasExactAllInSlotPrice() ? ' · Final price' : ' · Live total at selection'}`;
+  d.textContent = `${court.name} — ${rateDisp}`;
   d.classList.add('on');
 
   await renderSlots();
@@ -7476,9 +7439,9 @@ function toggleSlot(h) {
    ============================================= */
 function updatePriceLegacy() {
   const hrs   = selSlots.length;
-  const courtTotal = selSlots.reduce((s, h) => s + getRateForHour(h), 0);
-  const svcFee = calcSvcFee(hrs);
-  const total = courtTotal + svcFee;
+  const total = selSlots.reduce((s, h) => s + getRateForHour(h), 0);
+  const svcFee = Math.min(total, Math.max(0, calcSvcFee(hrs)));
+  const courtTotal = Math.max(0, total - svcFee);
   const dpAmt = downpaymentAmount(total, courtTotal, svcFee);
   const payAmt = payFull ? total : dpAmt;
   const selectedRates = [...new Set(selSlots.map(h => allInSlotRate(getRateForHour(h))))].sort((a, b) => a - b);
@@ -7940,9 +7903,9 @@ async function submitBookingLegacy(e) {
   const hrs = selSlots.length;
   const startH = Math.min(...selSlots);
   const endH = Math.max(...selSlots) + 1;
-  const courtFee = selSlots.reduce((s, h) => s + getRateForHour(h), 0);
-  const svcFee = calcSvcFee(selSlots.length);
-  const total = courtFee + svcFee;
+  const total = selSlots.reduce((s, h) => s + getRateForHour(h), 0);
+  const svcFee = Math.min(total, Math.max(0, calcSvcFee(selSlots.length)));
+  const courtFee = Math.max(0, total - svcFee);
   const downpayment = downpaymentAmount(total, courtFee, svcFee);
   const hostSession = activeHostSession();
   const bookingIdentity = hostBookingIdentity(hostSession);

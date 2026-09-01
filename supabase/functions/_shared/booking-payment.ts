@@ -11,6 +11,8 @@ export type CourtPaymentInput = {
   fallbackRateSchedule?: unknown;
   feeRate?: unknown;
   feeType?: unknown;
+  storedTotal?: unknown;
+  storedServiceFee?: unknown;
   storedDownpayment: unknown;
   hostBooking?: unknown;
   paymentAcceptanceMode?: unknown;
@@ -105,15 +107,28 @@ export function calculateCourtPayment(
     : fallbackTiers.length
     ? fallbackTiers
     : [{ from: 0, to: 24, rate: courtRate }];
-  const courtTotal = roundMoney(
+  const configuredTotal = roundMoney(
     slots.reduce((sum, hour) => sum + rateForHour(hour, tiers, courtRate), 0),
   );
 
   const feeRate = toNumber(input.feeRate);
-  const serviceFee = roundMoney(
+  const configuredServiceFee = roundMoney(
     isFlatFeeType(input.feeType) ? feeRate : feeRate * slots.length,
   );
-  const total = roundMoney(courtTotal + serviceFee);
+  const storedTotal = Number(input.storedTotal);
+  const total = input.storedTotal !== null && input.storedTotal !== undefined &&
+      Number.isFinite(storedTotal) && storedTotal >= 0
+    ? roundMoney(storedTotal)
+    : configuredTotal;
+  const storedServiceFee = Number(input.storedServiceFee);
+  const requestedServiceFee = input.storedServiceFee !== null &&
+      input.storedServiceFee !== undefined && Number.isFinite(storedServiceFee)
+    ? roundMoney(storedServiceFee)
+    : configuredServiceFee;
+  const serviceFee = roundMoney(
+    Math.min(total, Math.max(0, requestedServiceFee)),
+  );
+  const courtTotal = roundMoney(Math.max(0, total - serviceFee));
   const storedDownpayment = toNumber(input.storedDownpayment, -1);
 
   if (input.hostBooking === true) {

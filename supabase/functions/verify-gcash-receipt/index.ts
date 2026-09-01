@@ -766,6 +766,8 @@ async function expectedBookingAmounts(
     feeRate: settings.maintenance_fee ?? settings.service_fee_rate ??
       settings.booking_fee,
     feeType: settings.fee_type,
+    storedTotal: booking.total,
+    storedServiceFee: booking.booking_fee_amount_snapshot,
     storedDownpayment: booking.downpayment,
     hostBooking: booking.host_booking === true,
     paymentAcceptanceMode: settings.payment_acceptance_mode,
@@ -782,7 +784,7 @@ async function loadBookingGroup(
   let query = db
     .from("bookings")
     .select(
-      "ref, booking_group_ref, court_id, court_name, slots, total, downpayment, host_booking, gcash_ref, payment_method, date, start_time, end_time, payment_status, status, full_name, created_at",
+      "ref, booking_group_ref, court_id, court_name, slots, total, booking_fee_amount_snapshot, downpayment, host_booking, gcash_ref, payment_method, date, start_time, end_time, payment_status, status, full_name, created_at",
     )
     .eq("booking_group_ref", groupRef);
   if (scope.customerAccessTokenHash) {
@@ -1981,7 +1983,7 @@ Deno.serve(async (req) => {
     const { data: persistedRow, error: bookingErr } = await db
       .from("bookings")
       .select(
-        "ref, booking_group_ref, court_id, court_name, slots, total, downpayment, host_booking, host_user_id, created_by_user_id, customer_access_token_hash, gcash_ref, payment_method, date, start_time, end_time, email, payment_status, status, full_name, created_at, receipt_image_url, receipt_image_hash, receipt_phash, receipt_status, receipt_flags, receipt_extracted, receipt_confidence, receipt_verified_at",
+        "ref, booking_group_ref, court_id, court_name, slots, total, booking_fee_amount_snapshot, downpayment, host_booking, host_user_id, created_by_user_id, customer_access_token_hash, gcash_ref, payment_method, date, start_time, end_time, email, payment_status, status, full_name, created_at, receipt_image_url, receipt_image_hash, receipt_phash, receipt_status, receipt_flags, receipt_extracted, receipt_confidence, receipt_verified_at",
       )
       .eq("ref", bookingRef)
       .maybeSingle();

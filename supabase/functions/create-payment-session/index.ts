@@ -26,6 +26,7 @@ type BookingRow = {
   court_id: string;
   slots: Array<string | number> | null;
   total: number | null;
+  booking_fee_amount_snapshot: number | null;
   downpayment: number | null;
   host_booking: boolean;
   status: string | null;
@@ -120,6 +121,8 @@ function expectedBookingAmounts(
     feeRate: settings.maintenance_fee ?? settings.service_fee_rate ??
       settings.booking_fee,
     feeType: settings.fee_type,
+    storedTotal: booking.total,
+    storedServiceFee: booking.booking_fee_amount_snapshot,
     storedDownpayment: booking.downpayment,
     hostBooking: booking.host_booking === true,
     paymentAcceptanceMode: settings.payment_acceptance_mode,
@@ -134,7 +137,7 @@ async function loadBookingGroup(
   const { data, error } = await db
     .from("bookings")
     .select(
-      "ref,booking_group_ref,full_name,email,contact_number,court_id,slots,total,downpayment,host_booking,status,payment_status,customer_access_token_hash,host_user_id,created_by_user_id",
+      "ref,booking_group_ref,full_name,email,contact_number,court_id,slots,total,booking_fee_amount_snapshot,downpayment,host_booking,status,payment_status,customer_access_token_hash,host_user_id,created_by_user_id",
     )
     .eq("booking_group_ref", booking.booking_group_ref)
     .neq("status", "cancelled");
@@ -261,7 +264,7 @@ Deno.serve(async (req) => {
     const { data: booking, error: bookingErr } = await db
       .from("bookings")
       .select(
-        "ref,booking_group_ref,full_name,email,contact_number,court_id,slots,total,downpayment,host_booking,status,payment_status,customer_access_token_hash,host_user_id,created_by_user_id",
+        "ref,booking_group_ref,full_name,email,contact_number,court_id,slots,total,booking_fee_amount_snapshot,downpayment,host_booking,status,payment_status,customer_access_token_hash,host_user_id,created_by_user_id",
       )
       .eq("ref", bookingRef)
       .single();
