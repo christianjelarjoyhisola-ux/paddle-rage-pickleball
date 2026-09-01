@@ -325,6 +325,51 @@ body.dark .shared-date-display {
 .ft-result-time { color:var(--muted); font-size:.82rem; margin-top:2px; }
 .ft-result-price { color:var(--accent); font-size:.8rem; font-weight:800; margin-top:3px; }
 .ft-result .btn { padding:8px 13px; }
+
+/* PADDLE RAGE PRICE PROMISE */
+.price-promise {
+  position:relative; isolation:isolate; overflow:hidden;
+  display:flex; align-items:center; gap:13px;
+  margin:0 0 16px; padding:13px 15px;
+  border:1px solid rgba(var(--lime-rgb),.46); border-radius:14px;
+  background:
+    radial-gradient(circle at 8% 50%,rgba(var(--lime-rgb),.16),transparent 34%),
+    linear-gradient(115deg,rgba(var(--lime-rgb),.095),rgba(var(--ac),.025) 62%,rgba(var(--lime-rgb),.055));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 10px 30px rgba(var(--lime-rgb),.07);
+}
+.price-promise::after {
+  content:''; position:absolute; inset:-80% auto -80% -18%; width:19%; z-index:-1;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.11),transparent);
+  transform:skewX(-18deg); animation:pricePromiseSweep 7s ease-in-out infinite;
+}
+@keyframes pricePromiseSweep {
+  0%,70%,100% { left:-22%; opacity:0; }
+  76% { opacity:1; }
+  92% { left:118%; opacity:0; }
+}
+@media (prefers-reduced-motion: reduce) { .price-promise::after { display:none; animation:none; } }
+.price-promise-mark {
+  width:38px; height:38px; flex:0 0 38px; border-radius:12px;
+  display:grid; place-items:center; color:#071006;
+  background:linear-gradient(145deg,#d8ff2f,var(--lime));
+  box-shadow:0 0 0 5px rgba(var(--lime-rgb),.09),0 8px 20px rgba(var(--lime-rgb),.18);
+}
+.price-promise-mark svg { width:20px; height:20px; stroke:currentColor; }
+.price-promise-copy { min-width:0; display:flex; flex-direction:column; gap:1px; }
+.price-promise-kicker {
+  color:var(--muted); font-size:.57rem; font-weight:900; letter-spacing:1.35px; text-transform:uppercase;
+}
+.price-promise-title {
+  color:var(--lime-ink); font-family:'Bebas Neue',sans-serif;
+  font-size:1.22rem; line-height:1; letter-spacing:1.15px;
+}
+.price-promise-sub { color:var(--muted); font-size:.72rem; font-weight:650; line-height:1.25; }
+.price-promise-chip {
+  margin-left:auto; flex:0 0 auto; padding:5px 9px; border-radius:999px;
+  color:var(--lime-ink); border:1px solid rgba(var(--lime-rgb),.38);
+  background:rgba(var(--lime-rgb),.08); font-size:.58rem; font-weight:950;
+  letter-spacing:.75px; text-transform:uppercase; white-space:nowrap;
+}
 @media(max-width:700px) {
   .find-time-entry { margin-top:-6px; gap:10px; }
   .find-time-entry span { display:none; }
@@ -361,6 +406,13 @@ body.dark .shared-date-display {
   .ft-note { font-size:.72rem; padding:8px 9px; }
   .ft-result { align-items:stretch; flex-direction:column; }
   .ft-result .btn { width:100%; justify-content:center; }
+  .price-promise { gap:10px; margin-bottom:12px; padding:10px 11px; border-radius:12px; }
+  .price-promise-mark { width:32px; height:32px; flex-basis:32px; border-radius:10px; }
+  .price-promise-mark svg { width:17px; height:17px; }
+  .price-promise-title { font-size:1.02rem; letter-spacing:.9px; }
+  .price-promise-kicker { font-size:.5rem; letter-spacing:1px; }
+  .price-promise-sub { font-size:.65rem; }
+  .price-promise-chip { padding:4px 7px; font-size:.5rem; }
 }
 
 /* COURTS — LANDSCAPE LAYOUT */
@@ -501,7 +553,7 @@ body.dark .shared-date-display {
   .cc-times-head { display:none; }
   .cc-times-sub { display:none; }
   .cc-slots-grid{ grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
-  .cc-slot-btn { padding:6px 4px; min-height:auto; }
+  .cc-slot-btn { padding:6px 4px; min-height:48px; }
   .csl-time  { font-size:.7rem; }
   .csl-time .t-full { display:none; }
   .csl-time .t-compact { display:inline; }
@@ -623,6 +675,10 @@ body.dark .shared-date-display {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
+.cc-slot-btn[role="button"]:focus-visible {
+  outline:2px solid var(--accent); outline-offset:2px;
+  box-shadow:0 0 0 4px rgba(var(--ac),.16);
+}
 /* ── AVAILABLE ── blue */
 .cc-slot-btn:not(.taken):not(.past-slot):not(.open-play):not(.maintenance):not(.processing) {
   background: rgba(var(--slot-available-rgb),.10);
@@ -714,6 +770,16 @@ body.dark .shared-date-display {
 
 .csl-time  { font-size:.75rem; font-weight:700; line-height:1.2; }
 .csl-price { font-size:.72rem; font-weight:800; margin-top:1px; }
+.csl-final {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-height:14px; padding:1px 5px; border-radius:999px;
+  color:var(--lime-ink); background:rgba(var(--lime-rgb),.09);
+  border:1px solid rgba(var(--lime-rgb),.24);
+  font-size:.58rem; line-height:1; font-weight:950; letter-spacing:.5px; text-transform:uppercase;
+}
+.cc-slot-btn.selected .csl-final {
+  color:#fff; background:rgba(255,255,255,.13); border-color:rgba(255,255,255,.35);
+}
 .csl-name  { font-size:.62rem; font-weight:600; margin-top:1px; opacity:.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
 .csl-tag   { font-size:.56rem; font-weight:900; letter-spacing:.5px; text-transform:uppercase; margin-top:2px; }
 .cc-slot-btn.selected:not(.taken):not(.past-slot):not(.open-play):not(.maintenance) .csl-price { color:#fff; }
@@ -755,7 +821,7 @@ body.dark .shared-date-display {
   background:var(--card);
   border-top:2px solid var(--accent);
   box-shadow:0 -4px 24px rgba(0,0,0,.5);
-  padding:12px 16px;
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom));
   align-items:center; justify-content:space-between; gap:12px;
 }
 .mobile-book-bar.sel { border-top-color:var(--lime); box-shadow:0 -4px 24px rgba(var(--lime-rgb),.22); }
@@ -1021,6 +1087,13 @@ select.fi option { background:var(--card); }
 }
 .bpay-title-amount strong {
   color:var(--accent); font-size:.95rem; font-weight:900; white-space:nowrap; font-variant-numeric:tabular-nums;
+}
+.bpay-fee-free {
+  display:inline-flex!important; align-items:center; justify-content:center;
+  padding:3px 7px; border:1px solid rgba(var(--lime-rgb),.36); border-radius:999px;
+  background:rgba(var(--lime-rgb),.08); color:var(--lime-ink)!important;
+  font-size:.58rem!important; font-weight:950!important; letter-spacing:.5px!important;
+  line-height:1!important; white-space:nowrap;
 }
 .bpay-method-block { margin-bottom:8px; }
 .bpay-method-block .fl { margin-bottom:7px; }
@@ -1605,6 +1678,14 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
 .late-ext-time strong { color:rgb(var(--lime-rgb)); font-size:1rem; }
 .late-ext-time span { color:var(--muted); font-size:.78rem; }
 .late-ext-courts { color:var(--text); font-size:.82rem; font-weight:800; line-height:1.45; }
+.late-ext-price {
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  margin-top:12px; padding:11px 12px; border:1px solid rgba(var(--lime-rgb),.28);
+  border-radius:var(--r); background:rgba(var(--lime-rgb),.055);
+}
+.late-ext-price-copy { display:flex; flex-direction:column; gap:2px; color:var(--muted); font-size:.68rem; }
+.late-ext-price-copy strong { color:var(--text); font-size:.78rem; }
+.late-ext-price-value { color:var(--lime-ink); font-size:1.08rem; font-weight:950; white-space:nowrap; }
 .late-ext-note { color:var(--muted); font-size:.76rem; line-height:1.45; margin-top:10px; }
 .late-ext-modal .m-foot { align-items:center; justify-content:space-between; }
 @media(max-width:520px) {
@@ -1838,6 +1919,61 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
 .host-summary-row.balance strong { color: var(--red); }
 .host-summary-note { color: var(--muted); font-size: .68rem; line-height: 1.25; margin: -1px 0 4px; }
 
+.premium-booking-summary { display:flex; flex-direction:column; gap:10px; }
+.pbs-session {
+  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); gap:8px 12px;
+  padding-bottom:10px; border-bottom:1px solid rgba(var(--ac),.14);
+}
+.pbs-detail { min-width:0; }
+.pbs-detail.wide { grid-column:1 / -1; }
+.pbs-detail-label {
+  display:block; margin-bottom:2px; color:var(--muted); font-size:.54rem;
+  font-weight:900; letter-spacing:.7px; text-transform:uppercase;
+}
+.pbs-detail-value { display:block; color:var(--text); font-size:.78rem; font-weight:760; line-height:1.35; overflow-wrap:anywhere; }
+.pbs-time-list { display:flex; flex-direction:column; gap:4px; }
+.pbs-price-card {
+  overflow:hidden; border:1px solid rgba(var(--lime-rgb),.28); border-radius:12px;
+  background:linear-gradient(145deg,rgba(var(--lime-rgb),.075),rgba(var(--ac),.02));
+}
+.pbs-price-row {
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:8px 11px; color:var(--muted); font-size:.76rem;
+}
+.pbs-price-row + .pbs-price-row { border-top:1px solid rgba(var(--lime-rgb),.11); }
+.pbs-price-row strong { color:var(--text); font-size:.82rem; white-space:nowrap; }
+.pbs-price-row.fee-free { background:rgba(var(--lime-rgb),.045); }
+.pbs-free-badge {
+  display:inline-flex; align-items:center; justify-content:center; min-width:54px;
+  padding:4px 9px; border:1px solid rgba(var(--lime-rgb),.48); border-radius:999px;
+  background:linear-gradient(135deg,rgba(var(--lime-rgb),.18),rgba(var(--lime-rgb),.07));
+  color:var(--lime-ink)!important; font-size:.64rem!important; font-weight:950!important;
+  letter-spacing:.8px; text-transform:uppercase;
+}
+.pbs-price-row.total { padding:10px 11px; }
+.pbs-price-row.total span {
+  color:var(--text); font-size:.62rem; font-weight:900; letter-spacing:.7px; text-transform:uppercase;
+}
+.pbs-price-row.total strong { color:var(--accent); font-size:1.02rem; font-weight:950; }
+.pbs-price-row.due strong { color:var(--accent); font-size:.95rem; }
+.pbs-price-row.balance strong { color:var(--text); }
+.pbs-assurance {
+  display:flex; align-items:center; justify-content:center; gap:6px;
+  padding:7px 10px; color:var(--lime-ink); background:rgba(var(--lime-rgb),.045);
+  border-top:1px solid rgba(var(--lime-rgb),.12); font-size:.64rem; font-weight:800;
+}
+.pbs-assurance-mark {
+  width:15px; height:15px; display:inline-grid; place-items:center; flex:0 0 15px;
+  border-radius:50%; color:#071006; background:var(--lime); font-size:.58rem; font-weight:950;
+}
+@media(max-width:480px) {
+  .premium-booking-summary { gap:8px; }
+  .pbs-session { gap:7px 9px; padding-bottom:8px; }
+  .pbs-detail-value { font-size:.72rem; }
+  .pbs-price-row { padding:7px 9px; font-size:.72rem; }
+  .pbs-price-row.total { padding:9px; }
+}
+
 /* DOWNPAYMENT */
 .down-row {
   border-top: 1px dashed rgba(200,160,96,.35);
@@ -1960,7 +2096,7 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
   }
   .slot-time { font-size: .82rem; }
   .slot-end  { font-size: .72rem; }
-  .cc-slot-btn { padding: 6px 4px; min-height: auto; }
+  .cc-slot-btn { padding: 6px 4px; min-height: 48px; }
 }
 
 
@@ -3019,6 +3155,13 @@ body.host-mode .courts { padding-bottom:140px; }
   border-top:1px solid rgba(var(--ticket-accent-rgb),.105);
 }
 .inv-payment-top { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; }
+.inv-fee-free {
+  display:inline-flex; align-items:center; gap:6px; padding:5px 8px;
+  border:1px solid rgba(var(--lime-rgb),.32); border-radius:999px;
+  background:rgba(var(--lime-rgb),.07); color:var(--lime-ink);
+  font-size:.57rem; font-weight:900; letter-spacing:.55px; text-transform:uppercase; white-space:nowrap;
+}
+.inv-fee-free strong { color:var(--lime-ink); font-weight:950; }
 .inv-amt-total { color:var(--muted); font-size:.63rem; letter-spacing:1.05px; }
 .inv-amt-val { color:var(--ticket-accent); font-size:1.9rem; line-height:1; white-space:nowrap; }
 .inv-payment-meta {
@@ -3346,6 +3489,10 @@ try {
         <span id="lateExtDate">Next day</span>
       </div>
       <div class="late-ext-courts" id="lateExtCourts"></div>
+      <div class="late-ext-price">
+        <span class="late-ext-price-copy"><strong>Added final price</strong><span>Booking fee · FREE</span></span>
+        <strong class="late-ext-price-value" id="lateExtPrice">—</strong>
+      </div>
       <div class="late-ext-note">This will be added as a separate next-day booking item in the same reservation.</div>
     </div>
     <div class="m-foot">
@@ -3521,6 +3668,19 @@ try {
       <input class="shared-date-native" type="date" id="courtSharedDate" onchange="onSharedCourtDate(this.value)" aria-label="Booking date" />
     </div>
   </div>
+  <div class="price-promise" id="pricePromise" role="note" aria-label="Zero booking fees. Book at the price shown.">
+    <span class="price-promise-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 6 9 17l-5-5"></path>
+      </svg>
+    </span>
+    <span class="price-promise-copy">
+      <span class="price-promise-kicker">Paddle Rage Price Promise</span>
+      <strong class="price-promise-title">Zero Booking Fees</strong>
+      <span class="price-promise-sub" id="pricePromiseSub">Book at the price shown.</span>
+    </span>
+    <span class="price-promise-chip" id="pricePromiseChip">Final Prices</span>
+  </div>
   <div class="courts" id="courtsGrid">
     <div class="pb-loader">
       <div class="pb-ball" aria-hidden="true"></div>
@@ -3648,7 +3808,7 @@ try {
         <div class="wiz-panel" id="wizPanel4">
           <div class="wiz-sec-title bpay-title">
             <span>💳 Select Payment Method</span>
-            <span class="bpay-title-amount"><span>Amount to pay</span><strong id="bStepPayAmtMethod">--</strong></span>
+            <span class="bpay-title-amount"><span class="bpay-fee-free">Fee Free</span><span>Amount to pay</span><strong id="bStepPayAmtMethod">--</strong></span>
           </div>
           <div class="fg bpay-method-block" id="payMethodBlock">
             <div class="pay-opts pay-opts-4 bpay-methods">
@@ -3726,7 +3886,7 @@ try {
         <div class="wiz-panel" id="wizPanel5">
           <div class="wiz-sec-title bpay-title">
             <span>💳 Payment</span>
-            <span class="bpay-title-amount"><span>Amount to pay</span><strong id="bStepPayAmt">--</strong></span>
+            <span class="bpay-title-amount"><span class="bpay-fee-free">Fee Free</span><span>Amount to pay</span><strong id="bStepPayAmt">--</strong></span>
           </div>
 
           <!-- GCash QR section -->
@@ -4008,6 +4168,7 @@ try {
               <div class="inv-amt-total" id="iAmountLabel">Booking Total</div>
               <div class="inv-amt-val" id="iTot">₱0.00</div>
             </div>
+            <div class="inv-fee-free"><span>Booking fee</span><strong>Free</strong></div>
           </div>
           <div class="inv-payment-meta">
             <div class="inv-payment-row"><span>Payment</span><strong id="iPay">—</strong></div>
@@ -4153,6 +4314,43 @@ function normalizePlatformFeeType(type) {
   return ['flat', 'booking', 'per_booking', 'per_transaction'].includes(String(type || '').toLowerCase()) ? 'flat' : 'per_hour';
 }
 function calcSvcFee(hrs) { return _serviceFeeType === 'flat' ? _serviceFeeRate : _serviceFeeRate * hrs; }
+function hasExactAllInSlotPrice() {
+  return _serviceFeeType !== 'flat' || _serviceFeeRate <= 0;
+}
+function allInSlotRate(baseRate) {
+  const platformShare = hasExactAllInSlotPrice() ? Math.max(0, Number(calcSvcFee(1) || 0)) : 0;
+  return Math.round((Math.max(0, Number(baseRate || 0)) + platformShare) * 100) / 100;
+}
+function compactPeso(amount) {
+  const value = Math.max(0, Number(amount || 0));
+  return `₱${value.toLocaleString('en-PH', {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+function allInSlotPriceHtml(baseRate) {
+  return hasExactAllInSlotPrice()
+    ? `<div class="csl-price">${compactPeso(allInSlotRate(baseRate))}</div><div class="csl-final">Final</div>`
+    : `<div class="csl-price">${compactPeso(allInSlotRate(baseRate))}/hr</div><div class="csl-final">Live total</div>`;
+}
+function allInSlotAriaLabel(baseRate) {
+  return hasExactAllInSlotPrice()
+    ? `${compactPeso(allInSlotRate(baseRate))} final price, zero booking fee`
+    : `${compactPeso(allInSlotRate(baseRate))} per hour, final total shown after selection, zero booking fee`;
+}
+function syncPricePromiseMessaging() {
+  const promise = $('pricePromise');
+  const sub = $('pricePromiseSub');
+  const chip = $('pricePromiseChip');
+  if (sub) sub.textContent = hasExactAllInSlotPrice() ? 'Book at the price shown.' : 'Your final total updates as you select.';
+  if (chip) chip.textContent = hasExactAllInSlotPrice() ? 'Final Prices' : 'Live Total';
+  if (promise) promise.setAttribute(
+    'aria-label',
+    hasExactAllInSlotPrice()
+      ? 'Zero booking fees. Book at the price shown.'
+      : 'Zero booking fees. Your final total updates as you select.',
+  );
+}
 function activeHostSession() {
   const sess = window.Auth?.getSession?.();
   return sess && sess.role === 'host' && (!sess.status || sess.status === 'active') ? sess : null;
@@ -4241,7 +4439,7 @@ function hostBookingNoteText() {
   if (!hostBookingDepositEligible()) return 'This Open Play starts in five days or less, so full payment is required now.';
   const deadline = hostBookingBalanceDeadline();
   const label = deadline && window.BookingBalance?.formatDeadline ? window.BookingBalance.formatDeadline(deadline) : '11:59 PM Philippine time, five calendar days before Open Play';
-  return `Pay the full booking fee plus 25% of the court fee now. The remaining court balance is due by ${label}.`;
+  return `Pay the reservation amount shown today. The remaining balance is due by ${label}.`;
 }
 function downpaymentNoteHtml(prefix = '') {
   if (payFull) return '';
@@ -4938,7 +5136,7 @@ function selectionSummaryText(sel, includeFee = true) {
   const hrs = sel.slots.length;
   const amount = includeFee ? selectionTotal(sel) : selectionCourtFee(sel);
   const splitNote = slotsAreConsecutive(sel.slots) ? '' : ' separate';
-  return `${fmtDc(sel.date)} | ${slotsCompactTimeLabel(sel.slots)} | ${hrs}${splitNote} hr${hrs > 1 ? 's' : ''} | ${fmt(amount)}`;
+  return `${fmtDc(sel.date)} · ${slotsCompactTimeLabel(sel.slots)} · ${hrs}${splitNote} hr${hrs > 1 ? 's' : ''} · ${fmt(amount)} final`;
 }
 
 function makeBookingItemFromSelection(sel, ref = null, groupRef = null) {
@@ -5045,7 +5243,7 @@ function bookingItemsDate(items = activeBookingItems()) {
 function bookingItemsRateLabel(items = activeBookingItems()) {
   const rates = [];
   items.forEach(item => {
-    if (item.duration > 0 && item.courtFee > 0) rates.push(item.courtFee / item.duration);
+    if (item.duration > 0 && item.total > 0) rates.push(item.total / item.duration);
   });
   const unique = [...new Set(rates.map(rate => Math.round(rate * 100) / 100))].sort((a, b) => a - b);
   if (unique.length === 1) return `${fmt(unique[0])}/hr`;
@@ -5057,43 +5255,60 @@ function hostBookingItemsSummaryHtml(items = uniqueBookingSelections(activeBooki
   const courtFee = bookingItemsCourtFee(items);
   const svcFee = bookingItemsServiceFee(items);
   const total = bookingItemsTotal(items);
+  const hrs = bookingItemsDuration(items);
   const dueToday = downpaymentAmount(total, courtFee, svcFee);
   const balance = Math.max(0, total - dueToday);
   const dates = [...new Set(items.map(item => item.date).filter(Boolean))];
   const dateStr = dates.length > 1 ? dates.map(fmtDc).join(' + ') : bookingItemsDate(items) ? fmtDc(bookingItemsDate(items)) : '-';
-  const timeStr = bookingItemsTimeLabel(items);
+  const timeRows = items.map(item => {
+    const datePart = dates.length > 1 ? ` · ${fmtDc(item.date)}` : '';
+    return `<span>${esc(item.courtName)}${esc(datePart)} · ${esc(item.timeLabel || itemTimeLabel(item))} (${Number(item.duration || 0)} hr${Number(item.duration || 0) === 1 ? '' : 's'})</span>`;
+  }).join('');
   return `
-    <div class="host-summary-main">${esc(bookingItemsCourtLabel(items))}</div>
-    <div class="host-summary-sub">${esc(dateStr)} | ${esc(timeStr)}</div>
-    <div class="host-summary-row"><span>Court fee</span><strong>${fmt(courtFee)}</strong></div>
-    ${svcFee > 0 ? `<div class="host-summary-row"><span>Booking fee</span><strong>${fmt(svcFee)}</strong></div>` : ''}
-    <div class="host-summary-row total"><span>Total</span><strong>${fmt(total)}</strong></div>
-    <div class="host-summary-row due"><span>Due today</span><strong>${fmt(dueToday)}</strong></div>
-    <div class="host-summary-note">Fee paid in full + 25% court</div>
-    <div class="host-summary-row balance"><span>Balance</span><strong>${fmt(balance)}</strong></div>
+    <div class="premium-booking-summary">
+      <div class="pbs-session">
+        <div class="pbs-detail"><span class="pbs-detail-label">Court</span><strong class="pbs-detail-value">${esc(bookingItemsCourtLabel(items))}</strong></div>
+        <div class="pbs-detail"><span class="pbs-detail-label">Date</span><strong class="pbs-detail-value">${esc(dateStr)}</strong></div>
+        <div class="pbs-detail wide"><span class="pbs-detail-label">Session${items.length > 1 ? 's' : ''}</span><strong class="pbs-detail-value pbs-time-list">${timeRows}</strong></div>
+      </div>
+      <div class="pbs-price-card">
+        <div class="pbs-price-row"><span>Court price · ${hrs} hr${hrs === 1 ? '' : 's'}</span><strong>${fmt(total)}</strong></div>
+        <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
+        <div class="pbs-price-row total"><span>Final booking total</span><strong>${fmt(total)}</strong></div>
+        <div class="pbs-price-row due"><span>Reservation payment today</span><strong>${fmt(dueToday)}</strong></div>
+        <div class="pbs-price-row balance"><span>Remaining balance</span><strong>${fmt(balance)}</strong></div>
+        <div class="pbs-assurance"><span class="pbs-assurance-mark" aria-hidden="true">✓</span><span>Final price locked. No booking fee.</span></div>
+      </div>
+    </div>
   `;
 }
 
 function bookingItemsSummaryHtml(items = uniqueBookingSelections(activeBookingItems())) {
   if (isVerifiedHostBooking()) return hostBookingItemsSummaryHtml(items);
   const total = bookingItemsTotal(items);
-  const svcFee = bookingItemsServiceFee(items);
   const hrs = bookingItemsDuration(items);
   const dates = [...new Set(items.map(item => item.date).filter(Boolean))];
   const dateStr = dates.length > 1 ? dates.map(fmtD).join(' + ') : bookingItemsDate(items) ? fmtD(bookingItemsDate(items)) : '-';
-  const rows = [
-    `Court: ${bookingItemsCourtLabel(items)}`,
-    `Date: ${dateStr}`,
-  ];
-  items.forEach(item => {
-    const separateNote = slotsAreConsecutive(item.slots) ? '' : ` <span style="color:var(--warn);font-weight:700">(separate hours)</span>`;
-    const datePart = dates.length > 1 ? ` (${fmtDc(item.date)})` : '';
-    rows.push(`Time: ${item.courtName}${datePart}: ${item.timeLabel || itemTimeLabel(item)} &nbsp;(${item.duration} hr${item.duration !== 1 ? 's' : ''})${separateNote}`);
-  });
-  rows.push(`Court Fee: <strong style="color:var(--muted)">${fmt(bookingItemsCourtFee(items))}</strong>`);
-  if (svcFee > 0) rows.push(`Booking Fee: <strong style="color:var(--muted)">${bookingFeeDisplay(svcFee, hrs)}</strong>`);
-  rows.push(`Total: <strong style="color:var(--accent)">${fmt(total)}</strong>`);
-  return rows.filter(Boolean).map(s => `<div>${s}</div>`).join('');
+  const timeRows = items.map(item => {
+    const datePart = dates.length > 1 ? ` · ${fmtDc(item.date)}` : '';
+    const separateNote = slotsAreConsecutive(item.slots) ? '' : ' · Separate hours';
+    return `<span>${esc(item.courtName)}${esc(datePart)} · ${esc(item.timeLabel || itemTimeLabel(item))} (${Number(item.duration || 0)} hr${Number(item.duration || 0) === 1 ? '' : 's'})${esc(separateNote)}</span>`;
+  }).join('');
+  return `
+    <div class="premium-booking-summary">
+      <div class="pbs-session">
+        <div class="pbs-detail"><span class="pbs-detail-label">Court</span><strong class="pbs-detail-value">${esc(bookingItemsCourtLabel(items))}</strong></div>
+        <div class="pbs-detail"><span class="pbs-detail-label">Date</span><strong class="pbs-detail-value">${esc(dateStr)}</strong></div>
+        <div class="pbs-detail wide"><span class="pbs-detail-label">Session${items.length > 1 ? 's' : ''}</span><strong class="pbs-detail-value pbs-time-list">${timeRows}</strong></div>
+      </div>
+      <div class="pbs-price-card">
+        <div class="pbs-price-row"><span>Court price · ${hrs} hr${hrs === 1 ? '' : 's'}</span><strong>${fmt(total)}</strong></div>
+        <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
+        <div class="pbs-price-row total"><span>Final total</span><strong>${fmt(total)}</strong></div>
+        <div class="pbs-assurance"><span class="pbs-assurance-mark" aria-hidden="true">✓</span><span>Book at the price shown.</span></div>
+      </div>
+    </div>
+  `;
 }
 
 async function refreshBookingItemViews(items = activeBookingItems()) {
@@ -5499,6 +5714,7 @@ async function loadOperatingHours() {
   }
   _serviceFeeRate = parseFloat(settings.maintenance_fee ?? settings.service_fee_rate ?? settings.booking_fee ?? '0') || 0;
   _serviceFeeType  = normalizePlatformFeeType(settings.fee_type);
+  syncPricePromiseMessaging();
   applyPaymentSettings(settings);
   const note = $('slotHoursNote');
   if (note) note.textContent = `(${fmtT(openHour)} – ${fmtT(closeHour)} · select any available hours)`;
@@ -5893,7 +6109,7 @@ function findTimeResultHtml(item) {
     <div class="ft-result-main">
       <div class="ft-result-court">${esc(item.courtName)}</div>
       <div class="ft-result-time">${esc(time)} (${item.duration} hr${item.duration !== 1 ? 's' : ''})</div>
-      <div class="ft-result-price">Estimated total ${fmt(item.total)}</div>
+      <div class="ft-result-price">Final price ${fmt(item.total)}</div>
     </div>
     <button class="btn btn-p btn-sm" type="button" onclick="selectFindTimeResult('${jsArg(item.courtId)}','${jsArg(item.date)}',${item.start},${item.duration})">Select</button>
   </div>`;
@@ -6011,7 +6227,9 @@ function updateCardUI(courtId) {
   // Update button selected states
   grid.querySelectorAll('.cc-slot-btn').forEach(btn => {
     const h = parseInt(btn.dataset.h);
-    btn.classList.toggle('selected', !!sel && sel.slots.includes(h));
+    const selected = !!sel && sel.slots.includes(h);
+    btn.classList.toggle('selected', selected);
+    if (btn.hasAttribute('aria-pressed')) btn.setAttribute('aria-pressed', selected ? 'true' : 'false');
   });
 
   // Show/hide Book Now bar
@@ -6039,8 +6257,7 @@ function updateCardUI(courtId) {
     if (selections.length > 0) {
       const total = selections.reduce((sum, item) => sum + selectionTotal(item), 0);
       const hrs = selections.reduce((sum, item) => sum + item.slots.length, 0);
-      if (mobileSumEl) mobileSumEl.textContent = `${hrs} hr${hrs !== 1 ? 's' : ''} · ${fmt(total)}`;
-      if (mobileSumEl && selections.length === 1) mobileSumEl.textContent = selectionSummaryText(selections[0]);
+      if (mobileSumEl) mobileSumEl.textContent = `FINAL · ${fmt(total)} · ${hrs} hr${hrs !== 1 ? 's' : ''}`;
       if (mobileCtEl) mobileCtEl.textContent = selections.length === 1 ? selections[0].courtName : `${selections.length} courts selected`;
       mobileBar.style.display = 'flex';
     } else {
@@ -6344,12 +6561,14 @@ function showLateNightExtensionPrompt(candidate) {
   const modal = $('lateExtModal');
   if (!modal) return Promise.resolve(false);
   const courts = candidate.courts || [];
+  const addedTotal = (candidate.selections || []).reduce((sum, selection) => sum + selectionTotal(selection), 0);
   if ($('lateExtDate')) $('lateExtDate').textContent = `${fmtD(candidate.nextDate)} · next calendar day`;
   if ($('lateExtCourts')) {
     $('lateExtCourts').textContent = courts.length > 1
       ? `Applies to ${courts.join(', ')}.`
       : `Applies to ${courts[0] || 'your selected court'}.`;
   }
+  if ($('lateExtPrice')) $('lateExtPrice').textContent = fmt(addedTotal);
   modal.classList.add('show');
   modal.setAttribute('aria-hidden', 'false');
   document.body.style.overflow = 'hidden';
@@ -6762,22 +6981,8 @@ function wizBack() {
 }
 
 function updateWiz3SummaryLegacy() {
-  const mn  = selSlots.length ? Math.min(...selSlots) : null;
-  const hrs = selSlots.length;
-  const timeLabel = selSlots.length ? slotsTimeLabel(selSlots) : '';
-  const separateNote = slotsAreConsecutive(selSlots) ? '' : ` <span style="color:var(--warn);font-weight:700">(separate hours)</span>`;
-  const courtTotal = selSlots.reduce((s, h) => s + getRateForHour(h), 0);
-  const svcFee = calcSvcFee(hrs);
-  const total = courtTotal + svcFee;
-  const dateStr = $('bDate').value ? fmtD($('bDate').value) : '—';
-  $('wiz3Summary').innerHTML = [
-    `🏟️ ${court ? court.name : '—'}`,
-    `📅 ${dateStr}`,
-    mn !== null ? `⏰ ${timeLabel} &nbsp;(${hrs} hr${hrs !== 1 ? 's' : ''})${separateNote}` : '',
-    `🎾 Court Fee: <strong style="color:var(--muted)">${fmt(courtTotal)}</strong>`,
-    svcFee > 0 ? `🏷️ Booking Fee: <strong style="color:var(--muted)">${bookingFeeDisplay(svcFee, hrs)}</strong>` : ``,
-    `💰 Total: <strong style="color:var(--accent)">${fmt(total)}</strong>`,
-  ].filter(Boolean).map(s => `<div>${s}</div>`).join('');
+  const el = $('wiz3Summary');
+  if (el) el.innerHTML = bookingItemsSummaryHtml();
 }
 
 function updateWiz3Summary() {
@@ -6862,12 +7067,14 @@ async function onCardDate(courtId, date, options = {}) {
     const isOpenPlay_ = isOpenPlayHour(date, h, courtId);
     const isMaint_ = isMaintenanceHour(date, h, courtId);
     const timeRange = slotTimeLabel(h);
+    const plainTimeRange = `${fmtT(h)} to ${fmtT(h + 1)}`;
     if (isPast_)    return `<div class="cc-slot-btn past-slot"><div class="csl-time">${timeRange}</div><div class="csl-tag">${isPastDate_ ? 'Past' : 'Done'}</div></div>`;
     if (isBooked_ && verifyingHrs.has(h)) return `<div class="cc-slot-btn processing"><div class="csl-time">${timeRange}</div><div class="csl-tag">Processing...</div></div>`;
     if (isBooked_) return `<div class="cc-slot-btn taken"><div class="csl-time">${timeRange}</div><div class="csl-name">Booked</div></div>`;
     if (isMaint_)  { const _ml=getMaintenanceLabel(date,h,courtId); return `<div class="cc-slot-btn maintenance"><div class="csl-time">${timeRange}</div><div class="csl-tag">${_ml.icon} ${_ml.text}</div></div>`; }
     if (isOpenPlay_) return '';
-    return `<div class="cc-slot-btn" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${courtId}','${date}',${h})"><div class="csl-time">${timeRange}</div><div class="csl-price">₱${getRateForHourFromTiers(h, cTiers, c.rate)}</div></div>`;
+    const baseRate = getRateForHourFromTiers(h, cTiers, c.rate);
+    return `<div class="cc-slot-btn" role="button" tabindex="0" aria-pressed="false" aria-label="${esc(plainTimeRange)}, ${esc(allInSlotAriaLabel(baseRate))}" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${courtId}','${date}',${h})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();toggleCardSlot('${courtId}','${date}',${h})}"><div class="csl-time">${timeRange}</div>${allInSlotPriceHtml(baseRate)}</div>`;
   }).join('');
 }
 
@@ -6935,8 +7142,11 @@ async function renderCourts() {
     const cardSelection = getCardSelection(c.id);
 
     const rateRange = (() => {
-      const r = _cTiers.map(t => t.rate);
-      return r.length ? (Math.min(...r) === Math.max(...r) ? `₱${Math.min(...r)}/hr` : `₱${Math.min(...r)}–₱${Math.max(...r)}/hr`) : `${fmt(c.rate)}/hr`;
+      const r = _cTiers.map(t => allInSlotRate(t.rate));
+      const fallback = allInSlotRate(c.rate);
+      return r.length
+        ? (Math.min(...r) === Math.max(...r) ? `${compactPeso(Math.min(...r))}/hr` : `${compactPeso(Math.min(...r))}–${compactPeso(Math.max(...r))}/hr`)
+        : `${compactPeso(fallback)}/hr`;
     })();
     const compactCourtName = String(c.name || 'Court')
       .replace(/^(?:Paddle Rage|SMASH)\s+/i, '')
@@ -6968,12 +7178,14 @@ async function renderCourts() {
           const isMaint_ = isMaintenanceHour(selectedDate, h, c.id);
           const isSelectedSlot_ = !!cardSelection && cardSelection.date === selectedDate && cardSelection.slots.includes(h);
           const timeRange = slotTimeLabel(h);
+          const plainTimeRange = `${fmtT(h)} to ${fmtT(h + 1)}`;
           if (isPast_)    return `<div class="cc-slot-btn past-slot"><div class="csl-time">${timeRange}</div><div class="csl-tag">${isSelectedPast ? 'Past' : 'Done'}</div></div>`;
           if (isBooked_ && verifyingHoursSet.has(h)) return `<div class="cc-slot-btn processing"><div class="csl-time">${timeRange}</div><div class="csl-tag">Processing...</div></div>`;
           if (isBooked_) return `<div class="cc-slot-btn taken"><div class="csl-time">${timeRange}</div><div class="csl-name">Booked</div></div>`;
           if (isMaint_)  { const _ml=getMaintenanceLabel(selectedDate,h,c.id); return `<div class="cc-slot-btn maintenance"><div class="csl-time">${timeRange}</div><div class="csl-tag">${esc(_ml.icon)} ${esc(_ml.text)}</div></div>`; }
           if (isOpenPlay_) return '';
-          return `<div class="cc-slot-btn${isSelectedSlot_ ? ' selected' : ''}" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${jsArg(c.id)}','${jsArg(selectedDate)}',${h})"><div class="csl-time">${timeRange}</div><div class="csl-price">₱${_cRate(h)}</div></div>`;
+          const baseRate = _cRate(h);
+          return `<div class="cc-slot-btn${isSelectedSlot_ ? ' selected' : ''}" role="button" tabindex="0" aria-pressed="${isSelectedSlot_ ? 'true' : 'false'}" aria-label="${esc(plainTimeRange)}, ${esc(allInSlotAriaLabel(baseRate))}" data-h="${h}" onclick="event.stopPropagation(); toggleCardSlot('${jsArg(c.id)}','${jsArg(selectedDate)}',${h})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();toggleCardSlot('${jsArg(c.id)}','${jsArg(selectedDate)}',${h})}"><div class="csl-time">${timeRange}</div>${allInSlotPriceHtml(baseRate)}</div>`;
         }).join('');
     const isSelectedCard = !blk && !!cardSelection && cardSelection.date === selectedDate && cardSelection.slots.length > 0;
     const selectedSummary = isSelectedCard
@@ -6987,7 +7199,7 @@ async function renderCourts() {
       <div class="cc-mobile-hd">
         <div class="cc-mobile-title">
           <span class="cc-mobile-name">${courtTimesHeading}</span>
-          <span class="cc-mobile-meta">${esc(rateRange)} · ${esc(c.desc || 'Court')}</span>
+          <span class="cc-mobile-meta">${esc(rateRange)} · ${hasExactAllInSlotPrice() ? 'Final price' : 'Live total at selection'}</span>
         </div>
         <div class="cc-mobile-side">
           <span class="cc-mobile-status ${availBadgeCls}" id="cMobAvail_${esc(c.id)}">${esc(availBadgeTxt)}</span>
@@ -7000,7 +7212,7 @@ async function renderCourts() {
         <div class="cc-photo-avail ${availBadgeCls}" id="cAvail_${esc(c.id)}">${esc(availBadgeTxt)}</div>
         <div class="cc-photo-bar">
           <span class="cc-photo-name">${esc(c.name)}</span>
-          <div class="cc-photo-rate">${esc(rateRange)} · ${esc(c.desc)}</div>
+          <div class="cc-photo-rate">${esc(rateRange)} · ${hasExactAllInSlotPrice() ? 'Final price' : 'Live total at selection'}</div>
         </div>
       </div>
 
@@ -7009,7 +7221,7 @@ async function renderCourts() {
         <div class="cc-times-head">
           <div>
             <div class="cc-times-title">${courtTimesHeading}</div>
-            <div class="cc-times-sub">Join Open Play or select any available court slots</div>
+            <div class="cc-times-sub">Select any available court slots</div>
           </div>
           <input type="hidden" id="cDate_${esc(c.id)}" value="${esc(selectedDate)}" />
         </div>
@@ -7055,11 +7267,11 @@ async function selectCourt(id) {
   pricingTiers = getPricingTiersForCourt(court);
   document.querySelectorAll('.cc').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
   const d = $('courtDisp');
-  const rates = pricingTiers.map(t => t.rate);
+  const rates = pricingTiers.map(t => allInSlotRate(t.rate));
   const rateDisp = rates.length && Math.min(...rates) !== Math.max(...rates)
     ? `${fmt(Math.min(...rates))}–${fmt(Math.max(...rates))}/hr`
-    : `${fmt(court.rate)}/hr`;
-  d.textContent = `${court.name} — ${rateDisp}`;
+    : `${fmt(allInSlotRate(court.rate))}/hr`;
+  d.textContent = `${court.name} — ${rateDisp}${hasExactAllInSlotPrice() ? ' · Final price' : ' · Live total at selection'}`;
   d.classList.add('on');
 
   await renderSlots();
@@ -7269,17 +7481,17 @@ function updatePriceLegacy() {
   const total = courtTotal + svcFee;
   const dpAmt = downpaymentAmount(total, courtTotal, svcFee);
   const payAmt = payFull ? total : dpAmt;
-  const selectedRates = [...new Set(selSlots.map(h => getRateForHour(h)))].sort((a, b) => a - b);
+  const selectedRates = [...new Set(selSlots.map(h => allInSlotRate(getRateForHour(h))))].sort((a, b) => a - b);
   const rateLabel = selectedRates.length === 1
     ? `${fmt(selectedRates[0])}/hr`
     : selectedRates.length > 1
       ? `${fmt(selectedRates[0])} – ${fmt(selectedRates[selectedRates.length - 1])}/hr`
-      : (court ? fmt(court.rate) + '/hr' : '—');
+      : (court ? fmt(allInSlotRate(court.rate)) + '/hr' : '—');
   if ($('pHrs')) $('pHrs').textContent  = `${hrs} hr${hrs !== 1 ? 's' : ''}`;
   if ($('pRate')) $('pRate').textContent = rateLabel;
-  if ($('pCourtFee')) $('pCourtFee').textContent = fmt(courtTotal);
-  if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = svcFee > 0 ? '' : 'none';
-  if ($('pSvcFee'))    $('pSvcFee').textContent = bookingFeeDisplay(svcFee, hrs);
+  if ($('pCourtFee')) $('pCourtFee').textContent = fmt(total);
+  if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = '';
+  if ($('pSvcFee'))    $('pSvcFee').textContent = 'FREE';
   if ($('pTot')) $('pTot').textContent  = fmt(total);
   if ($('pDown')) $('pDown').textContent = fmt(payAmt);
 
@@ -7316,9 +7528,9 @@ function updatePrice() {
 
   if ($('pHrs')) $('pHrs').textContent  = `${hrs} hr${hrs !== 1 ? 's' : ''}`;
   if ($('pRate')) $('pRate').textContent = bookingItemsRateLabel(items);
-  if ($('pCourtFee')) $('pCourtFee').textContent = fmt(courtTotal);
-  if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = svcFee > 0 ? '' : 'none';
-  if ($('pSvcFee'))    $('pSvcFee').textContent = bookingFeeDisplay(svcFee, hrs);
+  if ($('pCourtFee')) $('pCourtFee').textContent = fmt(total);
+  if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = '';
+  if ($('pSvcFee'))    $('pSvcFee').textContent = 'FREE';
   if ($('pTot')) $('pTot').textContent  = fmt(total);
   if ($('pDown')) $('pDown').textContent = fmt(payAmt);
 
@@ -7609,7 +7821,7 @@ function updatePaymentAmountUI() {
     const btn50 = $(p + 'Pat50');
     const btn100 = $(p + 'Pat100');
     const dpLabel = btn50?.querySelector('div:first-child');
-    if (dpLabel) dpLabel.textContent = hostDeposit ? 'Fee + 25% Court' : 'Full Payment';
+    if (dpLabel) dpLabel.textContent = hostDeposit ? 'Reservation Payment' : 'Full Payment';
 
     if (true) {
       // Only downpayment — hide toggle and label, auto-select 50%
@@ -10999,7 +11211,7 @@ async function submitOpenPlay() {
 <div id="mobileBookBar" class="mobile-book-bar" style="display:none">
   <div class="mbbar-info">
     <span class="mbbar-court" id="mobileBookCourt"></span>
-    <span class="mbbar-sum" id="mobileBookSum"></span>
+    <span class="mbbar-sum" id="mobileBookSum" aria-live="polite" aria-atomic="true"></span>
   </div>
   <button class="btn btn-p btn-sm" onclick="proceedToBook()">Book Now →</button>
 </div>

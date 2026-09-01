@@ -4715,10 +4715,10 @@ body.admin-booting .admin-boot-splash {
         </div>
       </div>
 
-      <!-- BOOKING FEE — System Owner only -->
+      <!-- EMBEDDED BOOKING FEE — System Owner only -->
       <div class="panel" data-perm="owner_only" style="max-width:680px;margin-bottom:20px;border:2px solid var(--green);">
-        <h4>💰 Booking Fee <span style="font-size:.72rem;background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:8px;margin-left:8px;font-family:'DM Mono',monospace;letter-spacing:1px">SYSTEM OWNER</span></h4>
-        <p style="color:var(--muted);font-size:.84rem;margin:8px 0 12px">Player-paid booking fee added at checkout as your system revenue. Court owners collect it with each eligible booking and remit the accumulated balance on the 14th using an exact payment-time cutoff.</p>
+        <h4>💰 Embedded Booking Fee <span style="font-size:.72rem;background:var(--green-bg);color:var(--green);padding:2px 8px;border-radius:8px;margin-left:8px;font-family:'DM Mono',monospace;letter-spacing:1px">SYSTEM OWNER</span></h4>
+        <p style="color:var(--muted);font-size:.84rem;margin:8px 0 12px">Private platform revenue already included in the player-facing court price. Players see one final court price and a FREE booking fee; eligible internal fee snapshots continue accumulating for remittance on the 14th.</p>
         <div class="fg" style="margin-bottom:16px">
           <label class="fl">Charging Method</label>
           <div style="display:grid;gap:8px">
@@ -4734,7 +4734,7 @@ body.admin-booting .admin-boot-splash {
         </div>
         <div style="display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap">
           <div>
-            <label class="fl" id="maintRateLabel">💰 Booking Fee (₱/hr)</label>
+            <label class="fl" id="maintRateLabel">💰 Embedded Fee (₱/hr)</label>
             <input type="number" class="fi" id="maintRateInput" min="0" step="0.5" style="width:140px" placeholder="e.g. 15" />
           </div>
           <button class="btn btn-s btn-sm" onclick="saveMaintRate()" style="margin-bottom:1px">💾 Save Rate</button>
@@ -8838,9 +8838,9 @@ function nbUpdateTotal() {
   sum.innerHTML = `<div class="nb-slots-summary">
     <div class="nb-sum-row"><span>Time</span><strong>${fmtHour(startH)} – ${fmtHour(endH)}</strong></div>
     <div class="nb-sum-row"><span>Duration</span><strong>${hrs} hr${hrs!==1?'s':''}</strong></div>
-    <div class="nb-sum-row"><span>Court Fee</span><strong>${fmt(courtTotal)}</strong></div>
-    ${bookingFee > 0 ? `<div class="nb-sum-row"><span>Booking Fee</span><strong>${_nbBookingFeeDisplay(bookingFee, hrs)}</strong></div>` : ''}
-    <div class="nb-sum-row nb-sum-total"><span>Total</span><span>${fmt(total)}</span></div>
+    <div class="nb-sum-row"><span>Court Price</span><strong>${fmt(total)}</strong></div>
+    <div class="nb-sum-row"><span>Booking Fee</span><strong style="color:var(--green)">FREE</strong></div>
+    <div class="nb-sum-row nb-sum-total"><span>Final Total</span><span>${fmt(total)}</span></div>
   </div>`;
 }
 
@@ -9232,18 +9232,16 @@ function nbUpdateTotal() {
   }
   const rows = groups.map(group => {
     const duration = group.duration || group.slots.length;
-    const feeLine = group.bookingFee > 0
-      ? `<br><span class="nb-sum-muted">Booking Fee: ${_nbBookingFeeDisplay(group.bookingFee, duration)}</span>`
-      : '';
     return `
     <div class="nb-sum-row">
-      <span><strong>${esc(group.court.name)}</strong><br><span class="nb-sum-muted">${fmtHour(group.startH)} - ${fmtHour(group.endH)} (${duration} hr${duration === 1 ? '' : 's'})</span><br><span class="nb-sum-muted">Court Fee: ${fmt(group.courtFee)}</span>${feeLine}</span>
+      <span><strong>${esc(group.court.name)}</strong><br><span class="nb-sum-muted">${fmtHour(group.startH)} - ${fmtHour(group.endH)} (${duration} hr${duration === 1 ? '' : 's'})</span><br><span class="nb-sum-muted">Final court price: ${fmt(group.total)}</span></span>
       <strong>${fmt(group.total)}</strong>
     </div>`;
   }).join('');
   sum.innerHTML = `<div class="nb-slots-summary">
     <div class="nb-sum-list">${rows}</div>
-    <div class="nb-sum-row nb-sum-total"><span>Total</span><span>${fmt(total)}</span></div>
+    <div class="nb-sum-row"><span>Booking Fee</span><strong style="color:var(--green)">FREE</strong></div>
+    <div class="nb-sum-row nb-sum-total"><span>Final Total</span><span>${fmt(total)}</span></div>
   </div>`;
 }
 
@@ -11567,7 +11565,7 @@ function hostFinanceBookingCard(booking) {
         <div class="hf-booking-detail-row"><span>Receipt</span><span>${esc(hostFinanceReceiptLabel(booking))}</span></div>
         <div class="hf-booking-detail-row"><span>Payment reference</span><span>${esc(booking.gcashRef || '—')}</span></div>
         <div class="hf-booking-detail-row"><span>Booked on</span><span>${esc(bookedOn)}</span></div>
-        <div class="hf-booking-detail-row"><span>Initial payment policy</span><span>Booking fee + 25% court fee</span></div>
+        <div class="hf-booking-detail-row"><span>Initial payment policy</span><span>Reservation payment followed by remaining balance</span></div>
       </div>
     </details>
     <div class="hf-card-foot">
