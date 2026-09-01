@@ -18,8 +18,10 @@ function pricingHarness() {
     let _serviceFeeType = 'per_hour';
     let _serviceFeeRate = 0;
     const elements = {
-      pricePromiseSub: { textContent: '' },
-      pricePromise: { setAttribute() {} },
+      pricePromise: {
+        ariaLabel: '',
+        setAttribute(name, value) { if (name === 'aria-label') this.ariaLabel = value; },
+      },
     };
     const $ = id => elements[id] || null;
     ${source}
@@ -39,7 +41,7 @@ function pricingHarness() {
         _serviceFeeRate = fee;
         syncPricePromiseMessaging();
         return {
-          sub: elements.pricePromiseSub.textContent,
+          label: elements.pricePromise.ariaLabel,
         };
       },
     };
@@ -129,13 +131,16 @@ function hostDepositHarness() {
 
 test('premium price promise markets zero booking fees without exposing the private rate', () => {
   const banner = sourceBetween('<div class="price-promise"', '<div class="courts" id="courtsGrid">');
-  assert.match(banner, /Paddle Rage Price Promise/);
-  assert.match(banner, /Zero Booking Fees/);
-  assert.match(banner, /The price shown is what you pay/);
+  assert.match(banner, /role="note" aria-label="No booking fees\."/);
+  assert.match(banner, /<strong class="price-promise-title">NO BOOKING FEES<\/strong>/);
+  assert.doesNotMatch(banner, /Paddle Rage Price Promise|Zero Booking Fees|The price shown is what you pay|<svg|price-promise-mark|price-promise-sub/);
+  assert.doesNotMatch(banner, /aria-live/);
   assert.doesNotMatch(banner, /Final Prices|Live Total/i);
   assert.doesNotMatch(banner, /₱\s*10|\/hr\s*[×x]/i);
 
-  assert.match(page, /@media\s*\(prefers-reduced-motion:\s*reduce\)[^{]*\{[^}]*\.price-promise::after[^}]*animation\s*:\s*none/s);
+  assert.match(page, /\.price-promise-title\s*\{[^}]*animation:pricePromiseTitleIn\s+\.52s[^}]*\}/s);
+  assert.match(page, /\.price-promise::after\s*\{[^}]*animation:pricePromiseSweep\s+7s[^}]*infinite/s);
+  assert.match(page, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.price-promise::after\s*\{[^}]*animation:none;[^}]*\}\s*\.price-promise-title\s*\{[^}]*animation:none;[^}]*\}\s*\}/s);
 });
 
 test('per-hour configuration creates exact all-in slot prices', () => {
@@ -157,7 +162,7 @@ test('flat configuration never repeats the flat share on every slot', () => {
   assert.match(quote.aria, /₱350 per hour, zero booking fee/);
 
   const message = pricingHarness().message('flat', 10);
-  assert.equal(message.sub, 'The price shown is what you pay.');
+  assert.equal(message.label, 'No booking fees.');
 });
 
 test('tiered and multi-court totals preserve the private allocation exactly once', () => {

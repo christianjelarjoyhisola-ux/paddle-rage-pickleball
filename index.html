@@ -329,8 +329,8 @@ body.dark .shared-date-display {
 /* PADDLE RAGE PRICE PROMISE */
 .price-promise {
   position:relative; isolation:isolate; overflow:hidden;
-  display:flex; align-items:center; gap:13px;
-  margin:0 0 16px; padding:13px 15px;
+  display:flex; align-items:center; justify-content:center;
+  min-height:50px; margin:0 0 16px; padding:11px 15px;
   border:1px solid rgba(var(--lime-rgb),.46); border-radius:14px;
   background:
     radial-gradient(circle at 8% 50%,rgba(var(--lime-rgb),.16),transparent 34%),
@@ -338,32 +338,30 @@ body.dark .shared-date-display {
   box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 10px 30px rgba(var(--lime-rgb),.07);
 }
 .price-promise::after {
-  content:''; position:absolute; inset:-80% auto -80% -18%; width:19%; z-index:-1;
+  content:''; position:absolute; inset:-85% auto -85% -20%; width:18%; z-index:0;
+  pointer-events:none;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,.11),transparent);
-  transform:skewX(-18deg); animation:pricePromiseSweep 7s ease-in-out infinite;
+  transform:skewX(-18deg); animation:pricePromiseSweep 7s cubic-bezier(.4,0,.2,1) infinite;
 }
 @keyframes pricePromiseSweep {
   0%,70%,100% { left:-22%; opacity:0; }
   76% { opacity:1; }
   92% { left:118%; opacity:0; }
 }
-@media (prefers-reduced-motion: reduce) { .price-promise::after { display:none; animation:none; } }
-.price-promise-mark {
-  width:38px; height:38px; flex:0 0 38px; border-radius:12px;
-  display:grid; place-items:center; color:#071006;
-  background:linear-gradient(145deg,#d8ff2f,var(--lime));
-  box-shadow:0 0 0 5px rgba(var(--lime-rgb),.09),0 8px 20px rgba(var(--lime-rgb),.18);
-}
-.price-promise-mark svg { width:20px; height:20px; stroke:currentColor; }
-.price-promise-copy { min-width:0; display:flex; flex-direction:column; gap:1px; }
-.price-promise-kicker {
-  color:var(--muted); font-size:.57rem; font-weight:900; letter-spacing:1.35px; text-transform:uppercase;
-}
 .price-promise-title {
+  position:relative; z-index:1;
   color:var(--lime-ink); font-family:'Bebas Neue',sans-serif;
-  font-size:1.22rem; line-height:1; letter-spacing:1.15px;
+  font-size:1.24rem; line-height:1; letter-spacing:1.9px;
+  animation:pricePromiseTitleIn .52s cubic-bezier(.22,1,.36,1) both;
 }
-.price-promise-sub { color:var(--muted); font-size:.72rem; font-weight:650; line-height:1.25; }
+@keyframes pricePromiseTitleIn {
+  from { opacity:0; transform:translateY(6px); }
+  to { opacity:1; transform:translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .price-promise::after { display:none; animation:none; }
+  .price-promise-title { animation:none; }
+}
 @media(max-width:700px) {
   .find-time-entry { margin-top:-6px; gap:10px; }
   .find-time-entry span { display:none; }
@@ -400,12 +398,8 @@ body.dark .shared-date-display {
   .ft-note { font-size:.72rem; padding:8px 9px; }
   .ft-result { align-items:stretch; flex-direction:column; }
   .ft-result .btn { width:100%; justify-content:center; }
-  .price-promise { gap:10px; margin-bottom:12px; padding:10px 11px; border-radius:12px; }
-  .price-promise-mark { width:32px; height:32px; flex-basis:32px; border-radius:10px; }
-  .price-promise-mark svg { width:17px; height:17px; }
-  .price-promise-title { font-size:1.02rem; letter-spacing:.9px; }
-  .price-promise-kicker { font-size:.5rem; letter-spacing:1px; }
-  .price-promise-sub { font-size:.65rem; }
+  .price-promise { min-height:44px; margin-bottom:12px; padding:9px 11px; border-radius:12px; }
+  .price-promise-title { font-size:1.05rem; letter-spacing:1.4px; }
 }
 
 /* COURTS — LANDSCAPE LAYOUT */
@@ -3677,17 +3671,8 @@ try {
       <input class="shared-date-native" type="date" id="courtSharedDate" onchange="onSharedCourtDate(this.value)" aria-label="Booking date" />
     </div>
   </div>
-  <div class="price-promise" id="pricePromise" role="note" aria-label="Zero booking fees. The price shown is what you pay.">
-    <span class="price-promise-mark" aria-hidden="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M20 6 9 17l-5-5"></path>
-      </svg>
-    </span>
-    <span class="price-promise-copy">
-      <span class="price-promise-kicker">Paddle Rage Price Promise</span>
-      <strong class="price-promise-title">Zero Booking Fees</strong>
-      <span class="price-promise-sub" id="pricePromiseSub">The price shown is what you pay.</span>
-    </span>
+  <div class="price-promise" id="pricePromise" role="note" aria-label="No booking fees.">
+    <strong class="price-promise-title">NO BOOKING FEES</strong>
   </div>
   <div class="courts" id="courtsGrid">
     <div class="pb-loader">
@@ -4342,9 +4327,7 @@ function allInSlotAriaLabel(baseRate) {
 }
 function syncPricePromiseMessaging() {
   const promise = $('pricePromise');
-  const sub = $('pricePromiseSub');
-  if (sub) sub.textContent = 'The price shown is what you pay.';
-  if (promise) promise.setAttribute('aria-label', 'Zero booking fees. The price shown is what you pay.');
+  if (promise) promise.setAttribute('aria-label', 'No booking fees.');
 }
 function activeHostSession() {
   const sess = window.Auth?.getSession?.();
