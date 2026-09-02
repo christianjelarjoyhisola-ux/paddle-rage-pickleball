@@ -704,6 +704,83 @@ function _pbMinimumPublicBookingDate() {
   return today > PB_PUBLIC_COURT_OPENING_DATE ? today : PB_PUBLIC_COURT_OPENING_DATE;
 }
 
+function _pbNormalizeAvailabilityGraphicSnapshot(payload, requestedDate, requestedCourtIds = []) {
+  const value = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null;
+  const expectedDate = String(requestedDate || '');
+  if (!value || value.version !== 1 || value.date !== expectedDate || value.timezone !== 'Asia/Manila') {
+    throw new Error('The availability service returned an invalid snapshot. Refresh and try again.');
+  }
+
+  const openHour = Number(value.openHour);
+  const closeHour = Number(value.closeHour);
+  const asOf = String(value.asOf || '');
+  const courts = Array.isArray(value.courts) ? value.courts : null;
+  if (!Number.isInteger(openHour) || !Number.isInteger(closeHour) || openHour < 0 || closeHour > 24 || closeHour <= openHour
+      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?\+08:00$/.test(asOf)
+      || !courts || courts.length === 0) {
+    throw new Error('The availability service returned an incomplete snapshot. Refresh and try again.');
+  }
+
+  const seenCourts = new Set();
+  const expectedCourtIds = new Set((Array.isArray(requestedCourtIds) ? requestedCourtIds : []).map(String));
+  const expectedSlotCount = closeHour - openHour;
+  const normalizedCourts = courts.map(court => {
+    const id = String(court?.id || '').trim();
+    const name = String(court?.name || '').trim();
+    const slots = Array.isArray(court?.slots) ? court.slots : null;
+    if (!id || !name || seenCourts.has(id) || !slots || slots.length !== expectedSlotCount) {
+      throw new Error('The availability service returned incomplete court data. Refresh and try again.');
+    }
+    seenCourts.add(id);
+
+    const normalizedSlots = slots.map((slot, index) => {
+      const hour = Number(slot?.hour);
+      const startHour = Number(slot?.startHour);
+      const endHour = Number(slot?.endHour);
+      const startLabel = String(slot?.startLabel || '').trim();
+      const endLabel = String(slot?.endLabel || '').trim();
+      const label = String(slot?.label || '').trim();
+      const state = String(slot?.state || '');
+      const reason = slot?.reason == null ? null : String(slot.reason);
+      if (hour !== openHour + index || startHour !== hour || endHour !== hour + 1
+          || !startLabel || !endLabel || !label || !['free', 'unavailable'].includes(state)
+          || (state === 'free' && reason !== null) || (state === 'unavailable' && !reason)) {
+        throw new Error('The availability service returned an invalid slot state. Refresh and try again.');
+      }
+      return {
+        hour,
+        startHour,
+        endHour,
+        startLabel,
+        endLabel,
+        state,
+        reason,
+        label,
+      };
+    });
+    const availableCount = normalizedSlots.filter(slot => slot.state === 'free').length;
+    if (Number(court.availableCount) !== availableCount || Number(court.totalSlots) !== expectedSlotCount) {
+      throw new Error('The availability service returned inconsistent slot totals. Refresh and try again.');
+    }
+    return { id, name, availableCount, totalSlots: expectedSlotCount, slots: normalizedSlots };
+  });
+  if (expectedCourtIds.size > 0
+      && (seenCourts.size !== expectedCourtIds.size || [...expectedCourtIds].some(id => !seenCourts.has(id)))) {
+    throw new Error('The availability service did not return the selected courts. Refresh and try again.');
+  }
+
+  return {
+    version: 1,
+    date: expectedDate,
+    timezone: 'Asia/Manila',
+    asOf,
+    generatedAt: asOf,
+    openHour,
+    closeHour,
+    courts: normalizedCourts,
+  };
+}
+
 function _pbAssertPublicBookingDate(date) {
   const value = String(date || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < _pbMinimumPublicBookingDate()) {
@@ -1002,6 +1079,28 @@ window.DB = {
       if (error) { console.error('getCourts:', error); return []; }
       return data.map(rowToCourt);
     });
+  },
+
+  async getAvailabilityGraphic(date, courtIds = []) {
+    const requestedDate = String(date || '').trim();
+    const requestedCourtIds = [...new Set((Array.isArray(courtIds) ? courtIds : [])
+      .map(id => String(id || '').trim()).filter(Boolean))];
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate) || requestedCourtIds.length > 50) {
+      throw new Error('Choose a valid availability date and court selection.');
+    }
+    const { data, error } = await _sb.rpc('get_admin_availability_graphic', {
+      p_date: requestedDate,
+      p_court_ids: requestedCourtIds.length ? requestedCourtIds : null,
+    });
+    if (error) {
+      console.error('getAvailabilityGraphic:', error);
+      throw error;
+    }
+    return _pbNormalizeAvailabilityGraphicSnapshot(data, requestedDate, requestedCourtIds);
+  },
+
+  async getAvailabilityGraphicSnapshot(date, courtIds = []) {
+    return this.getAvailabilityGraphic(date, courtIds);
   },
 
   async saveCourt(court) {
@@ -2787,6 +2886,7 @@ window.DB = {
   const defaultSettings = () => ({
     open_hour: '6',
     close_hour: '24',
+    maintenance_config: JSON.stringify({ rules: [] }),
     open_play_config: JSON.stringify({
       enabled: true,
       start: 6,
@@ -3337,8 +3437,149 @@ window.DB = {
     };
   }
 
+  function buildLocalAvailabilityGraphic(date, courtIds = []) {
+    const role = window.Auth?.getSession?.()?.role || '';
+    if (!['owner', 'court_owner'].includes(role)) {
+      throw new Error('An active Paddle Rage owner account is required.');
+    }
+
+    const requestedDate = String(date || '').trim();
+    const requestedCourtIds = [...new Set((Array.isArray(courtIds) ? courtIds : [])
+      .map(id => String(id || '').trim()).filter(Boolean))];
+    const phParts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date()).filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+    const phToday = `${phParts.year}-${phParts.month}-${phParts.day}`;
+    const maxDateValue = new Date(`${phToday}T12:00:00Z`);
+    maxDateValue.setUTCDate(maxDateValue.getUTCDate() + 366);
+    const maxDate = maxDateValue.toISOString().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate) || requestedDate < phToday
+        || requestedDate > maxDate || requestedCourtIds.length > 50) {
+      throw new Error('Availability date must be within the next 366 Manila calendar days.');
+    }
+
+    const db = readDb();
+    const settings = db.settings || {};
+    const openHour = Number(settings.open_hour);
+    const closeHour = Number(settings.close_hour);
+    if (!Number.isInteger(openHour) || !Number.isInteger(closeHour)
+        || openHour < 0 || openHour > 23 || closeHour < 1 || closeHour > 24 || closeHour <= openHour) {
+      throw new Error('Court operating hours are not configured correctly.');
+    }
+    const maintenance = _safeJsonParse(String(settings.maintenance_config || ''));
+    if (!maintenance || typeof maintenance !== 'object' || Array.isArray(maintenance)
+        || (Object.prototype.hasOwnProperty.call(maintenance, 'rules') && !Array.isArray(maintenance.rules))) {
+      throw new Error('Maintenance schedule is not configured correctly.');
+    }
+    const maintenanceRules = Array.isArray(maintenance.rules)
+      ? maintenance.rules
+      : Object.keys(maintenance).length ? [maintenance] : [];
+    const enabled = value => value === true || ['true', '1'].includes(String(value || '').toLowerCase());
+    const inRange = (hour, start, end) => Number.isInteger(start) && Number.isInteger(end) && start !== end
+      && (start < end ? hour >= start && hour < end : hour >= start || hour < end);
+    const appliesToCourt = (rule, courtId) => {
+      const ids = Array.isArray(rule?.courtIds) ? rule.courtIds.map(String).filter(Boolean) : [];
+      return ids.length === 0 || ids.includes(String(courtId));
+    };
+    const dayOfWeek = value => new Date(`${value}T12:00:00Z`).getUTCDay();
+    const maintenanceMatch = (rule, hour, courtId) => {
+      if (!rule || typeof rule !== 'object' || Array.isArray(rule)) {
+        throw new Error('Maintenance schedule is not configured correctly.');
+      }
+      if (!['true', 'false', '1', '0'].includes(String(rule.enabled ?? false).toLowerCase())) {
+        throw new Error('Maintenance schedule is not configured correctly.');
+      }
+      if (!enabled(rule.enabled)) return false;
+      const start = Number(rule.start), end = Number(rule.end);
+      const mode = String(rule.mode || 'specific').toLowerCase();
+      if (!Number.isInteger(start) || start < 0 || start > 23 || !Number.isInteger(end)
+          || end < 0 || end > 24 || start === end || !['specific', 'weekly', 'monthly'].includes(mode)
+          || (Object.prototype.hasOwnProperty.call(rule, 'courtIds') && !Array.isArray(rule.courtIds))) {
+        throw new Error('Maintenance schedule is not configured correctly.');
+      }
+      if (!inRange(hour, start, end) || !appliesToCourt(rule, courtId)) return false;
+      if (mode === 'specific') {
+        if (!Array.isArray(rule.dates)) throw new Error('Maintenance schedule is not configured correctly.');
+        return rule.dates.map(String).includes(requestedDate);
+      }
+      if (mode === 'weekly') {
+        if (!Array.isArray(rule.recurring?.days)) throw new Error('Maintenance schedule is not configured correctly.');
+        const days = rule.recurring.days.map(Number);
+        if (days.some(day => !Number.isInteger(day) || day < 0 || day > 6)) {
+          throw new Error('Maintenance schedule is not configured correctly.');
+        }
+        return days.includes(dayOfWeek(requestedDate));
+      }
+      const monthlyDay = Number(rule.recurring?.day);
+      if (!Number.isInteger(monthlyDay) || monthlyDay < 1 || monthlyDay > 31) {
+        throw new Error('Maintenance schedule is not configured correctly.');
+      }
+      return monthlyDay === Number(requestedDate.slice(8, 10));
+    };
+    const bookingOccupiesSlot = booking => {
+      if (['cancelled', 'forfeited'].includes(String(booking?.status || '').toLowerCase())) return false;
+      const placeholder = String(booking?.email || '').trim().toLowerCase() === 'reserve@hold.internal'
+        && ['reserving...', 'reserving…'].includes(String(booking?.fullName ?? booking?.full_name ?? '').trim().toLowerCase());
+      const createdMs = new Date(booking?.createdAt ?? booking?.created_at ?? '').getTime();
+      return !(String(booking?.status || '').toLowerCase() === 'verifying' && placeholder
+        && Number.isFinite(createdMs) && Date.now() - createdMs >= PB_RESERVATION_HOLD_MINUTES * 60 * 1000);
+    };
+    const labels = {
+      closed: 'Closed', reserved: 'Reserved', blocked: 'Blocked', private: 'Private Event',
+      group: 'Group Session', openplay: 'Open Play', maintenance: 'Maintenance',
+    };
+    const hourLabel = value => {
+      const hour = ((Number(value) % 24) + 24) % 24;
+      return `${hour % 12 || 12}:00 ${hour < 12 ? 'AM' : 'PM'}`;
+    };
+    const selected = new Set(requestedCourtIds);
+    const courts = (db.courts || []).filter(court => !court.blocked && (!selected.size || selected.has(String(court.id))));
+    if (!courts.length || (selected.size && courts.length !== selected.size)) {
+      throw new Error('One or more selected courts are unavailable.');
+    }
+    const blockedDate = (db.blockedDates || []).map(String).includes(requestedDate);
+    const currentHour = Number(phParts.hour);
+    const snapshotCourts = courts.sort((a, b) => String(a.id).localeCompare(String(b.id))).map(court => {
+      const occupied = new Set((db.bookings || [])
+        .filter(booking => String(booking.courtId ?? booking.court_id) === String(court.id)
+          && String(booking.date) === requestedDate && bookingOccupiesSlot(booking))
+        .flatMap(booking => booking.slots || []).map(Number).filter(Number.isInteger));
+      const slots = [];
+      for (let hour = openHour; hour < closeHour; hour += 1) {
+        let reason = null;
+        let label = 'Available';
+        if (requestedDate < PB_PUBLIC_COURT_OPENING_DATE) { reason = 'pre_opening'; label = 'Not open yet'; }
+        else if (blockedDate) { reason = 'blocked_date'; label = 'Closed'; }
+        else if (requestedDate === phToday && hour < currentHour) { reason = 'past'; label = 'Past'; }
+        else if (requestedDate === phToday && hour === currentHour) { reason = 'current'; label = 'In progress'; }
+        else if (occupied.has(hour)) { reason = 'booked'; label = 'Booked'; }
+        else {
+          const rule = maintenanceRules.find(item => maintenanceMatch(item, hour, court.id));
+          if (rule) { reason = 'maintenance'; label = labels[String(rule.label || 'maintenance').toLowerCase()] || 'Maintenance'; }
+        }
+        slots.push({ hour, startHour: hour, endHour: hour + 1, startLabel: hourLabel(hour),
+          endLabel: hourLabel(hour + 1), state: reason ? 'unavailable' : 'free', reason, label });
+      }
+      const availableCount = slots.filter(slot => slot.state === 'free').length;
+      return { id: String(court.id), name: String(court.name), availableCount, totalSlots: slots.length, slots };
+    });
+    const asOf = `${phToday}T${phParts.hour}:${phParts.minute}:${phParts.second}.000+08:00`;
+    return _pbNormalizeAvailabilityGraphicSnapshot({
+      version: 1, date: requestedDate, timezone: 'Asia/Manila', asOf,
+      openHour, closeHour, courts: snapshotCourts,
+    }, requestedDate, requestedCourtIds);
+  }
+
   window.DB = {
     async getCourts() { return readDb().courts; },
+    async getAvailabilityGraphic(date, courtIds = []) {
+      return buildLocalAvailabilityGraphic(date, courtIds);
+    },
+    async getAvailabilityGraphicSnapshot(date, courtIds = []) {
+      return this.getAvailabilityGraphic(date, courtIds);
+    },
     async saveCourt(court) {
       const db = readDb();
       const row = { ...court, id: String(court.id || localRef('court')).toLowerCase() };

@@ -42,3 +42,9 @@
 
 /owner-insights.css
   Cache-Control: no-store, max-age=0
+
+/availability-graphic.js
+  Cache-Control: no-store, max-age=0
+
+/availability-graphic.css
+  Cache-Control: no-store, max-age=0
