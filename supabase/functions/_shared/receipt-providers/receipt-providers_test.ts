@@ -94,6 +94,51 @@ Transfer service
 InstaPay
 `;
 
+const BDOPAY_OCR = `
+Sent!
+PHP 1,600.00
+Sep 02, 2026 07:07 PM
+Amount
+PHP 1,600.00
+Service Fee
+PHP 0.00
+Send Money via InstaPay
+To
+PaddleRage
+G-XCHANGE, INC. / GCASH
+DWQM4TK3JDO9O0NS8
+From
+Meriam Plaza
+•••• •••• 5751
+Invoice number
+961119
+Reference no.
+BN-20260902-69811640
+`;
+
+Deno.test("dispatches clean dedicated BDO Pay evidence", () => {
+  const typedReference = "BN2026090269811640";
+  const parsed = parseProviderReceipt("bdopay", BDOPAY_OCR, { typedReference });
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 1600,
+    expectedRecipientName: "PaddleRage",
+    expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
+    bookingStartedAt: "2026-09-02T11:05:00.000Z",
+    bookingStartedDate: "2026-09-02",
+  });
+  assert(parsed.provider === "bdopay", "BDO Pay provider");
+  assertEquals(parsed.provider, "bdopay", "BDO Pay provider");
+  assertEquals(
+    parsed.parserVersion,
+    "bdopay_to_gcash_v1",
+    "BDO Pay parser version",
+  );
+  assertEquals(parsed.receipt.invoice.value, "961119", "BDO Pay invoice");
+  assertEquals(verified.flags, [], "clean BDO Pay flags");
+});
+
 Deno.test("dispatches clean GCash, GoTyme-to-GCash, and MariBank-to-GCash evidence", () => {
   const cases = [
     ["gcash", GCASH_OCR, "2043350406766", "gcash_v1"],

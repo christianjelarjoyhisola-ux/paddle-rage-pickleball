@@ -6052,6 +6052,22 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
           </div>
         </div>
 
+        <!-- BDO Pay receipt identity (BDO prints a QR alias, not the account owner name) -->
+        <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
+          <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#4a90d9;margin-bottom:7px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--bdopay" data-payment-method="bdopay" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/bdo-pay.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>BDO Pay Receipt Verification</span></div>
+          <div style="font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Use the exact values printed in the receipt's “To” block. This is separate from the customer-facing GCash account owner name.</div>
+          <div class="frow" style="gap:10px;margin-bottom:0;">
+            <div class="fg" style="margin:0;flex:1">
+              <label class="fl">Receipt Recipient Name</label>
+              <input type="text" class="fi" id="bdopayReceiptNameInput" placeholder="e.g. PaddleRage" />
+            </div>
+            <div class="fg" style="margin:0;flex:1">
+              <label class="fl">Destination Token (optional)</label>
+              <input type="text" class="fi" id="bdopayReceiptTokenInput" placeholder="Exact token below GCash destination" />
+            </div>
+          </div>
+        </div>
+
         <!-- Source apps routed to the authoritative GCash recipient -->
         <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
           <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:7px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gotyme" data-payment-method="gotyme" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gotyme.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>GoTyme → GCash</span></div>
@@ -7141,7 +7157,7 @@ function receiptTimeValue(extracted){
 }
 function receiptReceiverValue(extracted){
   if (!extracted) return '--';
-  const parts = [extracted.expectedReceiverName, extracted.expectedReceiverNumber].filter(Boolean);
+  const parts = [extracted.expectedReceiverName, extracted.expectedReceiverNumber, extracted.expectedReceiverAccount].filter(Boolean);
   return parts.length ? esc(parts.join(' / ')) : '--';
 }
 function gcashPhoneCheckLabel(value){
@@ -7171,6 +7187,7 @@ function receiptDetailsHtml(b){
   const recipientCheck = gcash?.recipientComparison || {};
   const parserLabel = ({
     gcash_v1: 'Dedicated GCash v1',
+    bdopay_to_gcash_v1: 'Dedicated BDO Pay to GCash v1',
     bpi_to_gcash_v1: 'Dedicated BPI to GCash v1',
     gotyme_to_gcash_v1: 'Dedicated GoTyme → GCash v1',
     maribank_to_gcash_v1: 'Dedicated MariBank → GCash v1',
@@ -7215,6 +7232,20 @@ function receiptDetailsHtml(b){
       ['Recipient Phone', receiptDetailValue(gcashPhoneCheckLabel(recipientCheck.phone)), true],
       ['Recipient Name', receiptDetailValue(gcashNameCheckLabel(recipientCheck.name, gcash.receiver?.name?.raw)), true],
       ['Receipt Type', receiptDetailValue(gcash.indicators?.classification === 'gcash' ? 'GCash Send Money receipt' : 'Needs review'), true],
+    ] : []),
+    ...(bankTransfer && String(ex.parserVersion || '').toLowerCase() === 'bdopay_to_gcash_v1' ? [
+      ['BDO Pay Reference', receiptDetailValue(bankTransfer.reference?.value), true],
+      ['BDO Pay Invoice', receiptDetailValue(bankTransfer.invoice?.value), true],
+      ['BDO Pay Recipient', receiptDetailValue(bankTransfer.recipient?.nameRaw), true],
+      ['BDO Destination Token', receiptDetailValue(bankTransfer.recipient?.accountRaw), true],
+      ['Recipient Check', receiptDetailValue(`Name: ${bankTransfer.recipientComparison?.name || 'review'} / Account: ${bankTransfer.recipientComparison?.account || 'review'}`), true],
+      ['Receipt Evidence', receiptDetailValue([
+        bankTransfer.indicators?.transferSuccess ? 'Sent' : 'Success unreadable',
+        bankTransfer.indicators?.providerBrand ? 'BDO Pay source' : 'BDO Pay source unreadable',
+        bankTransfer.indicators?.destinationGcash ? 'GCash destination' : 'GCash destination unreadable',
+        bankTransfer.indicators?.instaPay ? 'InstaPay' : 'InstaPay unreadable',
+        bankTransfer.indicators?.matchingAmountDisplays ? 'Amounts agree' : 'Amount confirmation unreadable',
+      ].join(' / ')), true],
     ] : []),
     ...(bankTransfer && String(ex.parserVersion || '').toLowerCase() === 'bpi_to_gcash_v1' ? [
       ['BPI Confirmation', receiptDetailValue(bankTransfer.reference?.value), true],
@@ -11889,6 +11920,8 @@ async function renderPaymentSettings() {
 
   if ($('gcashNumInput')) $('gcashNumInput').value = settings.gcash_merchant_number || '';
   if ($('gcashNameInput')) $('gcashNameInput').value = settings.gcash_merchant_name || '';
+  if ($('bdopayReceiptNameInput')) $('bdopayReceiptNameInput').value = settings.bdopay_receipt_recipient_name || 'PaddleRage';
+  if ($('bdopayReceiptTokenInput')) $('bdopayReceiptTokenInput').value = settings.bdopay_receipt_destination_token || '';
   if ($('pnbNumInput')) $('pnbNumInput').value = settings.pnb_merchant_number || '';
   if ($('pnbNameInput')) $('pnbNameInput').value = settings.pnb_merchant_name || '';
   if ($('platformGcashNumInput')) $('platformGcashNumInput').value = settings.platform_gcash_number || '';
@@ -13045,6 +13078,8 @@ async function savePaymentSettings() {
   const pnbOn = $('payMethodPnbOn').checked;
   const gcashNum = $('gcashNumInput')?.value.trim() || '';
   const gcashName = $('gcashNameInput')?.value.trim() || '';
+  const bdopayReceiptName = $('bdopayReceiptNameInput')?.value.trim() || '';
+  const bdopayReceiptToken = $('bdopayReceiptTokenInput')?.value.trim() || '';
   const pnbNum = $('pnbNumInput')?.value.trim() || '';
   const pnbName = $('pnbNameInput')?.value.trim() || '';
   const gcashQrSrc = $('gcashQrPreview')?.src || '';
@@ -13056,6 +13091,10 @@ async function savePaymentSettings() {
   }
   if ((gcashOn || bdopayOn || mayaOn || bpiOn || gotymeOn || maribankOn) && (!gcashName || (!gcashNum && !gcashQrSrc))) {
     toast('Add the shared GCash recipient name and number or QR before enabling a GCash-routed method.', 'err');
+    return;
+  }
+  if (bdopayOn && !bdopayReceiptName) {
+    toast('Add the exact BDO Pay receipt recipient name before enabling BDO Pay.', 'err');
     return;
   }
   if (pnbOn && (!pnbName || (!pnbNum && !pnbQrSrc))) {
@@ -13079,6 +13118,8 @@ async function savePaymentSettings() {
     await DB.saveSetting('gcash_merchant_number', gcashNum);
     await DB.saveSetting('gcash_merchant_name', gcashName);
     await DB.saveSetting('payment_merchant_name', gcashName);
+    await DB.saveSetting('bdopay_receipt_recipient_name', bdopayReceiptName);
+    await DB.saveSetting('bdopay_receipt_destination_token', bdopayReceiptToken);
     await DB.saveSetting('pnb_merchant_number', pnbNum);
     await DB.saveSetting('pnb_merchant_name', pnbName);
 

@@ -1,4 +1,10 @@
 import {
+  type BdoPayReceiptParse,
+  type BdoPayReceiptVerificationEvidence,
+  parseBdoPayToGcashReceipt,
+  verifyBdoPayToGcashReceipt,
+} from "./bdopay.ts";
+import {
   compareGcashRecipient,
   type GcashReceiptParse,
   type GcashRecipientComparison,
@@ -25,7 +31,12 @@ import {
   verifyMaribankToGcashReceipt,
 } from "./maribank.ts";
 
-export type DedicatedReceiptProvider = "gcash" | "bpi" | "gotyme" | "maribank";
+export type DedicatedReceiptProvider =
+  | "gcash"
+  | "bdopay"
+  | "bpi"
+  | "gotyme"
+  | "maribank";
 
 export type GcashProviderReceiptParse = {
   provider: "gcash";
@@ -48,8 +59,16 @@ export type BpiProviderReceiptParse = {
   receipt: BpiReceiptParse;
 };
 
+export type BdoPayProviderReceiptParse = {
+  provider: "bdopay";
+  destinationProvider: "gcash";
+  parserVersion: "bdopay_to_gcash_v1";
+  receipt: BdoPayReceiptParse;
+};
+
 export type ProviderReceiptParse =
   | GcashProviderReceiptParse
+  | BdoPayProviderReceiptParse
   | BpiProviderReceiptParse
   | BankProviderReceiptParse;
 
@@ -64,6 +83,7 @@ export type GcashReceiptVerificationEvidence = {
 
 export type ProviderReceiptVerificationEvidence =
   | GcashReceiptVerificationEvidence
+  | BdoPayReceiptVerificationEvidence
   | BpiReceiptVerificationEvidence
   | BankReceiptVerificationEvidence;
 
@@ -79,8 +99,8 @@ export class UnsupportedReceiptProviderError extends Error {
 export function isDedicatedReceiptProvider(
   provider: string,
 ): provider is DedicatedReceiptProvider {
-  return provider === "gcash" || provider === "gotyme" ||
-    provider === "maribank" || provider === "bpi";
+  return provider === "gcash" || provider === "bdopay" ||
+    provider === "gotyme" || provider === "maribank" || provider === "bpi";
 }
 
 export function parseProviderReceipt(
@@ -95,6 +115,13 @@ export function parseProviderReceipt(
         destinationProvider: "gcash",
         parserVersion: "gcash_v1",
         receipt: parseGcashReceipt(rawText, options),
+      };
+    case "bdopay":
+      return {
+        provider,
+        destinationProvider: "gcash",
+        parserVersion: "bdopay_to_gcash_v1",
+        receipt: parseBdoPayToGcashReceipt(rawText, options),
       };
     case "gotyme":
       return {
@@ -246,6 +273,8 @@ export function verifyProviderReceipt(
   switch (parsed.provider) {
     case "gcash":
       return verifyGcashReceipt(parsed, context);
+    case "bdopay":
+      return verifyBdoPayToGcashReceipt(parsed.receipt, context);
     case "gotyme":
       return verifyGotymeToGcashReceipt(
         parsed.receipt as BankToGcashReceiptParse & { provider: "gotyme" },

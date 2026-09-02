@@ -652,7 +652,8 @@ function expectedMerchantForProvider(
     return {
       number: settings.bdopay_merchant_number ||
         settings.gcash_merchant_number || "",
-      name: settings.bdopay_merchant_name || settings.payment_merchant_name ||
+      name: settings.bdopay_receipt_recipient_name ||
+        settings.bdopay_merchant_name || settings.payment_merchant_name ||
         settings.gcash_merchant_name || "",
     };
   }
@@ -2631,7 +2632,9 @@ Deno.serve(async (req) => {
     const extractedRef = providerParse
       ? providerParse.receipt.reference.value || null
       : extractReference(ocrText, provider, typedRef);
-    const extractedInvoice = provider === "bdopay"
+    const extractedInvoice = providerParse?.provider === "bdopay"
+      ? providerParse.receipt.invoice.value || null
+      : provider === "bdopay"
       ? extractBdoInvoiceNumber(ocrText)
       : null;
     const extractedInstapayRefNo = provider === "maya"
@@ -2688,6 +2691,9 @@ Deno.serve(async (req) => {
           amountTolerance: 0.01,
           expectedRecipientNumber: expectedNumber,
           expectedRecipientName: expectedName,
+          expectedRecipientAccount: provider === "bdopay"
+            ? settings.bdopay_receipt_destination_token || ""
+            : "",
           bookingStartedAt: bookingStartedInstant?.toISOString() || null,
           bookingStartedDate,
           paymentWindowMinutes: PAYMENT_WINDOW_MINUTES,
@@ -2739,37 +2745,6 @@ Deno.serve(async (req) => {
         ) {
           flags.push("BOOKING_GROUP_PAYMENT_MISMATCH");
         }
-      } else if (provider === "bdopay") {
-        // BDO Pay focused path: do not require GCash/GXI/Maya evidence here.
-        if (!extractedRef) flags.push("REF_UNREADABLE");
-        else if (typedRef && extractedRef !== typedRef) {
-          flags.push("REF_MISMATCH");
-        }
-
-        if (pricingError) flags.push("PRICING_UNAVAILABLE");
-        else if (extractedAmount == null) flags.push("AMOUNT_UNREADABLE");
-        else if (extractedAmount < expectedAmount - PESO_TOLERANCE) {
-          flags.push("AMOUNT_MISMATCH");
-        }
-
-        if (!receiptDate) flags.push("DATE_UNREADABLE");
-        else if (bookingStartedDate && receiptDate !== bookingStartedDate) {
-          flags.push("DATE_NOT_TODAY");
-        }
-        if (!receiptDateTime) flags.push("TIME_UNREADABLE");
-        else if (!bookingStartedAt) flags.push("TIME_UNREADABLE");
-        else if (
-          (receiptAgeMinutes as number) < -PAYMENT_EARLY_TOLERANCE_MINUTES
-        ) flags.push("TIME_FUTURE");
-        else if ((receiptAgeMinutes as number) > PAYMENT_WINDOW_MINUTES) {
-          flags.push("TIME_EXPIRED");
-        }
-
-        if (!hasBdoPayIndicator(ocrText)) flags.push("BDO_PAY_UNREADABLE");
-        if (!hasExpectedReceiverName(ocrText, expectedName)) {
-          flags.push("RECEIVER_NAME_UNREADABLE");
-        }
-        if (!extractedInvoice) flags.push("INVOICE_UNREADABLE");
       } else if (provider === "maya") {
         // Maya focused path: do not require GCash/GXI/BDO Pay evidence here.
         if (!extractedRef) flags.push("REF_UNREADABLE");
@@ -2905,7 +2880,7 @@ Deno.serve(async (req) => {
         duplicateFlag: "DUPLICATE_REF",
       });
     }
-    if (provider === "bdopay" && extractedInvoice) {
+    if (provider === "bdopay" && extractedInvoice && !providerVerification) {
       dedupeKeys.push({
         key: `bdopay_invoice:${extractedInvoice}`,
         providerKey: "bdopay_invoice",
@@ -2970,6 +2945,11 @@ Deno.serve(async (req) => {
     const recipientMatch = providerVerification?.provider === "gcash"
       ? providerVerification.recipientComparison.phone === "exact" &&
         providerVerification.recipientComparison.name !== "mismatch"
+      : providerVerification?.provider === "bdopay"
+      ? providerVerification.recipientComparison.name === "exact" &&
+        ["exact", "present"].includes(
+          providerVerification.recipientComparison.account,
+        )
       : providerVerification?.provider === "bpi"
       ? providerVerification.recipientComparison === "exact"
       : providerVerification
@@ -3004,7 +2984,8 @@ Deno.serve(async (req) => {
     let confidence = result === "auto_approved" ? ocrConfidence : 0.5;
     const route = provider === "gcash"
       ? "gcash"
-      : provider === "bpi" || provider === "gotyme" ||
+      : provider === "bdopay" || provider === "bpi" ||
+          provider === "gotyme" ||
           provider === "maribank"
       ? `${provider}_to_gcash`
       : provider;
@@ -3022,6 +3003,9 @@ Deno.serve(async (req) => {
     const extracted = {
       ref: extractedRef,
       invoice: extractedInvoice,
+      bdopayReferenceDate: providerParse?.provider === "bdopay"
+        ? providerParse.receipt.reference.receiptDate
+        : null,
       instapayRefNo: extractedInstapayRefNo,
       bpiConfirmationNo: provider === "bpi" ? extractedRef : null,
       bpiTransactionRefNo: extractedBpiTransactionRefNo,
@@ -3081,6 +3065,7 @@ Deno.serve(async (req) => {
       bankTransfer: bankParse
         ? {
           reference: bankParse.reference,
+          invoice: "invoice" in bankParse ? bankParse.invoice : null,
           railReference: "railReference" in bankParse
             ? bankParse.railReference
             : null,
@@ -3097,6 +3082,7 @@ Deno.serve(async (req) => {
           recipient: bankParse.recipient,
           indicators: bankParse.indicators,
           recipientComparison: providerVerification?.provider === "bpi" ||
+              providerVerification?.provider === "bdopay" ||
               providerVerification?.provider === "gotyme" ||
               providerVerification?.provider === "maribank"
             ? providerVerification.recipientComparison
@@ -3116,6 +3102,9 @@ Deno.serve(async (req) => {
           ? null
           : expectedNumber || null,
       expectedReceiverName: expectedName || null,
+      expectedReceiverAccount: provider === "bdopay"
+        ? settings.bdopay_receipt_destination_token || null
+        : null,
       verificationContext: hasPersistedBooking
         ? "court_booking"
         : inlinePricingKind === "host_session"

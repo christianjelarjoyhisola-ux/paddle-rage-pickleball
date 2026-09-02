@@ -8025,7 +8025,7 @@ function pickPay(m) {
   if (methodNote) {
     const notes = {
       gcash: 'Pay from GCash to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
-      bdopay: 'Pay from BDO Pay to the GCash recipient shown. Your receipt stays pending for court-owner review.',
+      bdopay: 'Pay from BDO Pay to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       maya: 'Pay from Maya to the GCash recipient shown. Your receipt stays pending for court-owner review.',
       bpi: [
         'BPI to GCash/G-Xchange only.',
@@ -8081,7 +8081,7 @@ function syncGcashSharedPanel(method) {
       header: 'BDO Pay → GCash',
       title: 'Send from BDO Pay to this GCash account',
       guide: ['Open the QR in BDO Pay.', 'Pay the exact amount.', 'Use Reference no., not invoice.', 'Upload the BDO Pay receipt.'],
-      help: 'BDO Pay → GCash. Your receipt stays pending for court-owner review.',
+      help: 'BDO Pay → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
     },
     maya: {
       header: 'Maya → GCash',
@@ -11318,7 +11318,7 @@ function opPickPay(method) {
     }[method];
     const receiver = meta.receiver;
     const methodWarning = method === 'bdopay'
-      ? 'Pay from BDO Pay to this GCash recipient. Anything unclear or mismatched stays pending for court-owner review.'
+      ? 'Pay from BDO Pay to this GCash recipient. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.'
       : method === 'maya'
         ? 'Pay from Maya to this GCash recipient. Anything unclear or mismatched stays pending for court-owner review.'
       : method === 'bpi'

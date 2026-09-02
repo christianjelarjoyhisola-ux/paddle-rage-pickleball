@@ -91,6 +91,7 @@ export type ReceiptVerificationContext = {
   amountTolerance: number;
   expectedRecipientNumber?: string;
   expectedRecipientName?: string;
+  expectedRecipientAccount?: string;
   bookingStartedAt?: string | null;
   bookingStartedDate?: string | null;
   paymentWindowMinutes: number;
