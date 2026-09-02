@@ -232,6 +232,19 @@ function _pbForgetBookingAccessToken(ref) {
   _pbSaveBookingAccessTokens(tokens);
 }
 
+function _pbForgetBookingAccessTokenFamily(token) {
+  const normalized = String(token || '');
+  if (!normalized) return;
+  const tokens = _pbLoadBookingAccessTokens();
+  let changed = false;
+  Object.keys(tokens).forEach(key => {
+    if (String(tokens[key]?.token || '') !== normalized) return;
+    delete tokens[key];
+    changed = true;
+  });
+  if (changed) _pbSaveBookingAccessTokens(tokens);
+}
+
 async function _pbSha256Hex(value) {
   if (!globalThis.crypto?.subtle || typeof TextEncoder !== 'function') {
     throw new Error('This browser cannot securely protect the booking access token.');
@@ -1143,16 +1156,16 @@ window.DB = {
     }
 
     if (authenticated) {
-      for (const booking of batch) {
-        const row = bookingToRow(booking);
-        let { error } = await _sb.from('bookings').insert(row);
-        if (error && isMissingOptionalBookingColumnError(error) && !booking.hostBooking) {
-          ({ error } = await _sb.from('bookings').insert(withoutOptionalBookingColumns(row)));
-        }
-        if (error) {
-          console.error('addBookings:', error);
-          throw error;
-        }
+      // One multi-row statement is atomic. A later court conflict can no longer
+      // strand earlier "Reserving..." siblings from the same selection.
+      const rows = batch.map(bookingToRow);
+      let { error } = await _sb.from('bookings').insert(rows);
+      if (error && isMissingOptionalBookingColumnError(error) && batch.every(booking => !booking.hostBooking)) {
+        ({ error } = await _sb.from('bookings').insert(rows.map(withoutOptionalBookingColumns)));
+      }
+      if (error) {
+        console.error('addBookings:', error);
+        throw error;
       }
       _pbClearFastCache(['bookings']);
       return batch.map(booking => booking.ref);
@@ -1183,6 +1196,25 @@ window.DB = {
 
   async addBooking(booking) {
     return this.addBookings([booking]);
+  },
+
+  async releaseBookingHold(ref) {
+    const accessToken = _pbBookingAccessToken(ref, false);
+    const authenticated = await _pbHasActiveAccount();
+    if (!accessToken && !authenticated) {
+      const denied = new Error(`Booking ${ref} cannot be released because its secure access token is missing.`);
+      denied.code = 'BOOKING_ACCESS_TOKEN_MISSING';
+      throw denied;
+    }
+    const { data, error } = await _sb.rpc('release_public_booking_hold', {
+      p_ref: String(ref),
+      p_access_token: accessToken || null,
+    });
+    if (error) { console.error('releaseBookingHold:', error); throw error; }
+    if (accessToken) _pbForgetBookingAccessTokenFamily(accessToken);
+    else _pbForgetBookingAccessToken(ref);
+    _pbClearFastCache(['bookings']);
+    return data || ref;
   },
 
   async getBookingByRef(ref) {
@@ -3426,6 +3458,42 @@ window.DB = {
     },
     async addBooking(booking) {
       return this.addBookings([booking]);
+    },
+
+    async releaseBookingHold(ref) {
+      const db = readDb();
+      const target = db.bookings.find(booking => String(booking.ref) === String(ref));
+      if (!target) return ref;
+      const groupKey = String(target.groupRef || target.booking_group_ref || target.ref);
+      const group = db.bookings.filter(booking =>
+        String(booking.groupRef || booking.booking_group_ref || booking.ref) === groupKey
+      );
+      const safe = group.length > 0 && group.every(booking => {
+        const placeholder = String(booking.email || '').trim().toLowerCase() === 'reserve@hold.internal' &&
+          /^reserving(?:\.{3}|…)$/i.test(String(booking.fullName || booking.full_name || '').trim()) &&
+          String(booking.contactNumber || booking.contact_number || '').trim() === '00000000000';
+        const hasEvidence = !!(
+          booking.paymentProvider || booking.payment_provider ||
+          booking.paymentSessionId || booking.payment_session_id ||
+          booking.paymentCheckoutUrl || booking.payment_checkout_url ||
+          booking.paymentFlow || booking.payment_flow ||
+          booking.gcashRef || booking.gcash_ref ||
+          booking.downpayment || booking.paidAt || booking.paid_at ||
+          booking.receiptImageUrl || booking.receipt_image_url ||
+          booking.receiptImageHash || booking.receipt_image_hash ||
+          booking.receiptPhash || booking.receipt_phash ||
+          booking.receiptExtracted || booking.receipt_extracted ||
+          booking.receiptVerifiedAt || booking.receipt_verified_at ||
+          booking.bookingFeeEarnedAt || booking.booking_fee_earned_at ||
+          booking.billedAt || booking.billed_at
+        );
+        return placeholder && !hasEvidence;
+      });
+      if (!safe) throw new Error('Only an evidence-free temporary hold can be released.');
+      const refs = new Set(group.map(booking => String(booking.ref)));
+      db.bookings = db.bookings.filter(booking => !refs.has(String(booking.ref)));
+      writeDb(db);
+      return ref;
     },
     async getBookingByRef(ref) { return readDb().bookings.find(b => String(b.ref) === String(ref)) || null; },
     async updateBooking(ref, updates) {

@@ -14,7 +14,6 @@ function bookingQuickFilterHelpers() {
   assert.ok(start >= 0 && end > start, 'booking quick-filter helpers must exist');
   return new Function(`${adminSource.slice(placeholderStart, placeholderEnd)}; ${adminSource.slice(start, end)}; return {
     isPlaceholderHold,
-    isFreshPlaceholderHold,
     bookingQuickGroupItems,
     bookingGroupIsHost,
     bookingQuickStatusKey,
@@ -128,24 +127,27 @@ test('filtering happens after grouping and before pagination', () => {
   assert.doesNotMatch(source, /bks\s*=\s*bks\.filter\(b\s*=>\s*b\.status/, 'status filtering must never split a group');
 });
 
-test('only abnormal active placeholders appear in the operational booking list', () => {
-  const now = Date.parse('2026-09-02T02:10:00Z');
-  const fresh = { email: 'reserve@hold.internal', status: 'verifying', createdAt: '2026-09-02T02:00:00Z' };
+test('temporary placeholder holds never appear in the operational booking list', () => {
+  const fresh = { email: 'reserve@hold.internal', fullName: 'Reserving...', status: 'verifying', createdAt: '2026-09-02T02:00:00Z' };
   const expired = { ...fresh, createdAt: '2026-09-02T01:40:00Z' };
   const orphanedPending = { ...fresh, status: 'pending' };
   const released = { ...fresh, status: 'cancelled', createdAt: '2026-09-02T01:40:00Z' };
   const real = { email: 'player@example.com', status: 'pending', createdAt: fresh.createdAt };
 
-  assert.equal(helpers.isFreshPlaceholderHold(fresh, now), true);
-  assert.equal(helpers.isFreshPlaceholderHold(expired, now), false);
-  assert.equal(helpers.isFreshPlaceholderHold(orphanedPending, now), false);
-  assert.equal(helpers.isFreshPlaceholderHold(released, now), false);
-  assert.equal(helpers.isFreshPlaceholderHold(real, now), false);
+  for (const hold of [fresh, expired, orphanedPending, released]) {
+    assert.equal(helpers.isPlaceholderHold(hold), true);
+  }
+  assert.equal(helpers.isPlaceholderHold({ fullName: 'Reserving...', email: '' }), false);
+  assert.equal(helpers.isPlaceholderHold({ full_name: 'Reserving…', email: '' }), false);
+  assert.equal(helpers.isPlaceholderHold({ full_name: 'Reserving…', email: 'reserve@hold.internal' }), true);
+  assert.equal(helpers.isPlaceholderHold({ fullName: 'Reserving Pickleball Club', email: 'player@example.com' }), false);
+  assert.equal(helpers.isPlaceholderHold(real), false);
 
   const renderStart = adminSource.indexOf('async function renderBookings()');
   const renderEnd = adminSource.indexOf('function clearFilters()', renderStart);
   const renderSource = adminSource.slice(renderStart, renderEnd);
-  assert.match(renderSource, /!isPlaceholderHold\(b\)[\s\S]*?!isFreshPlaceholderHold\(b\)[\s\S]*?!isCancelledBooking\(b\)/);
+  assert.match(renderSource, /bks\s*=\s*bks\.filter\(b\s*=>\s*!isPlaceholderHold\(b\)\s*\)/);
+  assert.doesNotMatch(renderSource, /isFreshPlaceholderHold/);
   assert.doesNotMatch(renderSource, /b\.email\s*!==?\s*['"]reserve@hold\.internal['"]/);
   assert.match(adminSource, /Incomplete hold · no customer details/);
   assert.match(adminSource, />Release Hold</);

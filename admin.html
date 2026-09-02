@@ -6559,12 +6559,9 @@ function isManualImportBooking(b) {
   return ref.startsWith('MANUAL-') || method === 'manual';
 }
 function isPlaceholderHold(b) {
-  return String(b?.email || '').trim().toLowerCase() === 'reserve@hold.internal';
-}
-function isFreshPlaceholderHold(b, now = Date.now()) {
-  if (!isPlaceholderHold(b) || String(b?.status || '').toLowerCase() !== 'verifying') return false;
-  const created = new Date(b?.createdAt || b?.created_at || '').getTime();
-  return Number.isFinite(created) && (now - created) < 15 * 60 * 1000;
+  const email = String(b?.email || '').trim().toLowerCase();
+  const name = String(b?.fullName || b?.full_name || '').trim();
+  return email === 'reserve@hold.internal' && /^reserving(?:\.{3}|…)$/i.test(name);
 }
 function isCancelledBooking(b) {
   return ['cancelled','forfeited'].includes(String(b?.status || '').toLowerCase());
@@ -6585,6 +6582,7 @@ function isDashboardActiveBooking(b) {
 function bookingHoldsAdminSlot(b) {
   if (!b || isCancelledBooking(b)) return false;
   if (String(b.status || '').toLowerCase() !== 'verifying') return true;
+  if (!isPlaceholderHold(b)) return true;
   const created = b.createdAt || b.created_at;
   if (!created) return true;
   const createdMs = new Date(created).getTime();
@@ -8816,14 +8814,10 @@ async function renderBookings(){
       if (changed > 0 && _curSection === 'bookings' && seq === _bookingRenderSeq) renderBookings();
     })
     .catch(e => console.warn('autoCompleteBookings skipped:', e));
-  // Hide placeholder slot-holds ("Reserving…"): these are temporary locks created
-  // when a customer clicks Book Now but hasn't submitted yet. A completed booking
-  // carries the real customer email, so any row still on reserve@hold.internal is
-  // just an in-progress or abandoned hold and adds no value to the admin list.
-  bks=bks.filter(b =>
-    !isPlaceholderHold(b) ||
-    (!isFreshPlaceholderHold(b) && !isCancelledBooking(b))
-  );
+  // Placeholder slot-holds ("Reserving…") are temporary checkout locks, not
+  // operational bookings. Completed submissions carry the customer's real email,
+  // so placeholders stay out of this list regardless of their age or status.
+  bks=bks.filter(b => !isPlaceholderHold(b));
   const allGroups = groupBookings(bks, bks);
   const filters = bookingFilters();
   const { q, fd, fp } = filters;
@@ -15624,30 +15618,11 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   if (!gated) await goto(initialSection,{historyMode:'replace',announceDenied:false});
   startAdminRealtime();
   finishAdminBoot();
-  // Housekeeping: purge old abandoned slot-holds so the table stays tidy.
-  // Runs in the background (admin is authenticated, so DELETE is permitted by RLS).
-  cleanupAbandonedHolds();
   } catch (error) {
     console.error('[admin boot]', error);
     showAdminBootError('The admin workspace could not be restored. Please reload and try again.');
   }
 });
-
-/* Delete leftover "Reserving…" holds that were abandoned (cancelled) more than
-   1 day ago. Active/recent holds are left untouched. Best-effort, non-blocking. */
-async function cleanupAbandonedHolds() {
-  try {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    const all = await DB.getBookings();
-    const stale = all.filter(b =>
-      b.email === 'reserve@hold.internal' &&
-      b.status === 'cancelled' &&
-      b.createdAt && new Date(b.createdAt).getTime() < cutoff
-    );
-    if (stale.length === 0) return;
-    await Promise.all(stale.map(b => DB.deleteBooking(b.ref).catch(() => {})));
-  } catch (e) { /* non-critical */ }
-}
 
 /* ==============================================
    ROLE-BASED VISIBILITY

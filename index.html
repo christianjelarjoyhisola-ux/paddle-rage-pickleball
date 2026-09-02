@@ -6528,9 +6528,10 @@ async function maybeResumeGuestBooking() {
 
   if (reservationSecondsLeft(resume.startedAt) <= 0) {
     await Promise.allSettled(resume.refs.map(ref =>
-      DB.updateBooking(ref, { status: 'cancelled', paymentStatus: 'rejected' }).catch(() => {})
+      releaseBookingHoldRef(ref).catch(() => {})
     ));
     clearGuestBookingResume();
+    toast('Your saved reservation expired after 15 minutes, so the slots were released. Please select a time again.', 'inf');
     return;
   }
 
@@ -6545,7 +6546,7 @@ async function maybeResumeGuestBooking() {
 
   if (rows.some(booking => !isPublicBookingDateAllowed(booking.date))) {
     await Promise.allSettled(rows.map(booking =>
-      DB.updateBooking(booking.ref, { status: 'cancelled', paymentStatus: 'rejected' }).catch(() => {})
+      releaseBookingHoldRef(booking.ref).catch(() => {})
     ));
     clearGuestBookingResume();
     toast('That saved reservation was before Paddle Rage opens. Please book from September 19.', 'inf');
@@ -6585,12 +6586,18 @@ async function maybeResumeGuestBooking() {
   toast('Your reserved booking was restored. Continue before the timer ends.', 'ok');
 }
 
+function releaseBookingHoldRef(ref) {
+  return DB.releaseBookingHold
+    ? DB.releaseBookingHold(ref)
+    : DB.updateBooking(ref, { status: 'cancelled', paymentStatus: 'rejected' });
+}
+
 function cancelReservedBookings(refs = reservedRefs()) {
   const uniqueRefs = [...new Set((refs || []).filter(Boolean))];
   invalidateBookingReceiptUpload({ discard: true });
   clearReservationState();
   return Promise.allSettled(uniqueRefs.map(ref =>
-    DB.updateBooking(ref, { status: 'cancelled', paymentStatus: 'rejected' }).catch(() => {})
+    releaseBookingHoldRef(ref).catch(() => {})
   ));
 }
 
@@ -6620,19 +6627,25 @@ async function releaseReservedBookingViews(items = activeBookingItems()) {
   else await renderCourts();
 }
 
-// A `verifying` booking only HOLDS its slot for RESERVATION_MINUTES. After that
-// the reservation is considered expired and the slot is treated as free at
-// RENDER time — even if no cleanup write ever succeeded (browser closed, network
-// drop, edge-fn failure). This makes the grid self-healing: stale "Processing…"
-// slots free themselves automatically instead of getting stuck forever.
+// Temporary checkout placeholders hold a slot for RESERVATION_MINUTES. Genuine
+// customer rows keep their slot while receipt verification is still resolving.
+function isPlaceholderBookingHold(b) {
+  const email = String(b?.email || '').trim().toLowerCase();
+  const name = String(b?.fullName || b?.full_name || '').trim();
+  return email === 'reserve@hold.internal' && /^reserving(?:\.{3}|…)$/i.test(name);
+}
+
 function isHeldVerifying(b) {
   if (b.status !== 'verifying') return false;
+  // Genuine customer rows may stay verifying while receipt processing finishes.
+  // Only the temporary checkout identity is allowed to age out after 15 minutes.
+  if (!isPlaceholderBookingHold(b)) return true;
   if (!b.createdAt) return true; // no timestamp → treat as fresh hold
   return (Date.now() - new Date(b.createdAt).getTime()) < RESERVATION_MINUTES * 60 * 1000;
 }
 
-// True if this booking currently occupies its slot (confirmed/pending always do;
-// verifying only while still within its reservation window).
+// True if this booking currently occupies its slot. Only an identifiable
+// temporary placeholder is allowed to expire at render time.
 function bookingHoldsSlot(b) {
   if (!window.BookingBalance?.holdsSlot?.(b)) return false;
   if (b.status === 'verifying') return isHeldVerifying(b);
@@ -6788,7 +6801,7 @@ async function proceedToBookLegacy(courtId) {
   hideHostInvite({ restoreScroll: false });
   const _mb1 = $('mobileBookBar'); if (_mb1) _mb1.style.display = 'none';
   wizGoTo(3);
-  startSlotCountdown();
+  startSlotCountdown(reservationSecondsLeft(reserveStartedAt));
 }
 
 async function proceedToBook(courtId = null) {
@@ -6903,7 +6916,7 @@ async function proceedToBook(courtId = null) {
   const mobileBar = $('mobileBookBar');
   if (mobileBar) mobileBar.style.display = 'none';
   wizGoTo(3);
-  startSlotCountdown();
+  startSlotCountdown(reservationSecondsLeft(reserveStartedAt));
 }
 
 function closeBookModal(options = {}) {
@@ -10740,27 +10753,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   initScrollReveal();
 });
 
-// Release abandoned placeholder holds, but preserve completed customer
-// submissions for manual review. A WebView can disconnect while the receipt
-// Edge Function continues processing, so stale verifying must not discard a
-// booking that already contains payment details.
+// Release abandoned placeholder holds, but never mutate genuine customer rows.
+// A WebView can disconnect while the receipt Edge Function continues processing.
 async function expireStaleVerifyingBookings() {
   try {
     const all = await DB.getBookings();
     const cutoff = Date.now() - RESERVATION_MINUTES * 60 * 1000; // align with render-time hold
-    const stale = all.filter(b =>
+    const abandoned = all.filter(b =>
       b.status === 'verifying' &&
-      b.createdAt && new Date(b.createdAt).getTime() < cutoff
+      b.createdAt && new Date(b.createdAt).getTime() < cutoff &&
+      isPlaceholderBookingHold(b)
     );
-    const abandoned = stale.filter(b =>
-      !b.gcashRef || b.email === 'reserve@hold.internal' || /^Reserving/i.test(String(b.fullName || ''))
-    );
-    const submitted = stale.filter(b => !abandoned.includes(b));
     await Promise.all(abandoned.map(b =>
-      DB.updateBooking(b.ref, { status: 'cancelled', paymentStatus: 'rejected' }).catch(() => {})
-    ));
-    await Promise.all(submitted.map(b =>
-      DB.updateBooking(b.ref, { status: 'pending', paymentStatus: 'for_verification' }).catch(() => {})
+      releaseBookingHoldRef(b.ref).catch(() => {})
     ));
   } catch(_) {}
 }
