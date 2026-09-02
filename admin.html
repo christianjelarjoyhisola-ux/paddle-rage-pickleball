@@ -8800,7 +8800,10 @@ async function renderBookings(){
   // when a customer clicks Book Now but hasn't submitted yet. A completed booking
   // carries the real customer email, so any row still on reserve@hold.internal is
   // just an in-progress or abandoned hold and adds no value to the admin list.
-  bks=bks.filter(b=>!isFreshPlaceholderHold(b));
+  bks=bks.filter(b =>
+    !isPlaceholderHold(b) ||
+    (!isFreshPlaceholderHold(b) && !isCancelledBooking(b))
+  );
   const allGroups = groupBookings(bks, bks);
   const filters = bookingFilters();
   const { q, fd, fp } = filters;

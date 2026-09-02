@@ -128,22 +128,24 @@ test('filtering happens after grouping and before pagination', () => {
   assert.doesNotMatch(source, /bks\s*=\s*bks\.filter\(b\s*=>\s*b\.status/, 'status filtering must never split a group');
 });
 
-test('only fresh verifying placeholders stay hidden from the operational booking list', () => {
+test('only abnormal active placeholders appear in the operational booking list', () => {
   const now = Date.parse('2026-09-02T02:10:00Z');
   const fresh = { email: 'reserve@hold.internal', status: 'verifying', createdAt: '2026-09-02T02:00:00Z' };
   const expired = { ...fresh, createdAt: '2026-09-02T01:40:00Z' };
   const orphanedPending = { ...fresh, status: 'pending' };
+  const released = { ...fresh, status: 'cancelled', createdAt: '2026-09-02T01:40:00Z' };
   const real = { email: 'player@example.com', status: 'pending', createdAt: fresh.createdAt };
 
   assert.equal(helpers.isFreshPlaceholderHold(fresh, now), true);
   assert.equal(helpers.isFreshPlaceholderHold(expired, now), false);
   assert.equal(helpers.isFreshPlaceholderHold(orphanedPending, now), false);
+  assert.equal(helpers.isFreshPlaceholderHold(released, now), false);
   assert.equal(helpers.isFreshPlaceholderHold(real, now), false);
 
   const renderStart = adminSource.indexOf('async function renderBookings()');
   const renderEnd = adminSource.indexOf('function clearFilters()', renderStart);
   const renderSource = adminSource.slice(renderStart, renderEnd);
-  assert.match(renderSource, /bks\s*=\s*bks\.filter\(b\s*=>\s*!isFreshPlaceholderHold\(b\)\)/);
+  assert.match(renderSource, /!isPlaceholderHold\(b\)[\s\S]*?!isFreshPlaceholderHold\(b\)[\s\S]*?!isCancelledBooking\(b\)/);
   assert.doesNotMatch(renderSource, /b\.email\s*!==?\s*['"]reserve@hold\.internal['"]/);
   assert.match(adminSource, /Incomplete hold · no customer details/);
   assert.match(adminSource, />Release Hold</);
