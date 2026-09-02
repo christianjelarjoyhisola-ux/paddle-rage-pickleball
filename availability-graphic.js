@@ -8,7 +8,6 @@
   const MANILA_TIME_ZONE = 'Asia/Manila';
   const OPENING_DATE = '2026-09-19';
   const FRESHNESS_LIMIT_MS = 3 * 60 * 1000;
-  const RANGES_PER_COURT_CARD = 2;
   const DEFAULT_BOOKING_URL = 'https://paddleragecdo.ph/';
   const COURT_COLLATOR = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
   const FORMATS = Object.freeze({
@@ -260,7 +259,11 @@
     const endLabel = formatHour(end);
     const startPeriod = startLabel.slice(-2);
     const endPeriod = endLabel.slice(-2);
-    if (startPeriod === endPeriod) return `${startLabel.slice(0, -3)}–${endLabel}`;
+    const startHalfDay = Math.floor((((number(start) % 24) + 24) % 24) / 12);
+    const endHalfDay = Math.floor(((((number(end) - .001) % 24) + 24) % 24) / 12);
+    if (startPeriod === endPeriod && startHalfDay === endHalfDay) {
+      return `${startLabel.slice(0, -3)}–${endLabel}`;
+    }
     return `${startLabel}–${endLabel}`;
   }
 
@@ -297,35 +300,68 @@
     const format = FORMATS[formatName] ? formatName : 'feed';
     const capacity = POSTER_LAYOUTS[format].capacity;
     const normalized = normalizeSnapshot(snapshot, snapshot?.date);
-    const courts = (normalized.courts || []).flatMap(court => {
-      const ranges = mergeAvailableRanges(court.slots);
-      if (ranges.length <= RANGES_PER_COURT_CARD) return [{ ...court, graphicPart: { index: 1, total: 1 } }];
-      const pieces = [];
-      for (let index = 0; index < ranges.length; index += RANGES_PER_COURT_CARD) {
-        const chunk = ranges.slice(index, index + RANGES_PER_COURT_CARD);
-        pieces.push({
-          ...court,
-          slots: chunk.map(range => ({
-            hour: range.start,
-            start: range.start,
-            end: range.end,
-            label: range.label,
-            status: 'available',
-          })),
-          graphicPart: {
-            index: Math.floor(index / RANGES_PER_COURT_CARD) + 1,
-            total: Math.ceil(ranges.length / RANGES_PER_COURT_CARD),
-          },
-        });
-      }
-      return pieces;
-    });
+    // A court is the atomic carousel item. Its openings can wrap inside the
+    // card, but the court itself must never be repeated as a continuation card.
+    const courts = normalized.courts || [];
     if (!courts.length) return [{ ...normalized, courts: [] }];
     const pages = [];
-    for (let index = 0; index < courts.length; index += capacity) {
-      pages.push({ ...normalized, courts: courts.slice(index, index + capacity) });
-    }
+    let pageCourts = [];
+    let pageUnits = 0;
+    courts.forEach(court => {
+      const rangeCount = mergeAvailableRanges(court.slots).length;
+      // Dense cards get more of the fixed poster height. Nine windows share a
+      // page with at most two ordinary courts; 10–12 share with at most one.
+      const units = rangeCount >= 13 ? capacity : rangeCount >= 10 ? 3 : rangeCount >= 9 ? 2 : 1;
+      if (pageCourts.length && (pageUnits + units > capacity || pageCourts.length >= capacity)) {
+        pages.push({ ...normalized, courts: pageCourts });
+        pageCourts = [];
+        pageUnits = 0;
+      }
+      pageCourts.push(court);
+      pageUnits += units;
+    });
+    if (pageCourts.length) pages.push({ ...normalized, courts: pageCourts });
     return pages;
+  }
+
+  function rangeGridLayout(rangeCount, bounds = {}, story = false) {
+    const count = Math.max(0, Math.floor(number(rangeCount)));
+    const x = number(bounds.x);
+    const y = number(bounds.y);
+    const width = Math.max(0, number(bounds.width));
+    const height = Math.max(0, number(bounds.height));
+    if (!count || !width || !height) {
+      return { columns: 0, rows: 0, fontSize: 0, cells: [] };
+    }
+
+    // One column keeps the common one-to-three-window case effortless to scan.
+    // Denser schedules expand across the card. The authoritative whole-hour
+    // schedule can produce at most 12 alternating windows, rendered as 3 × 4.
+    const columns = count <= 3 ? 1 : count <= 6 ? 2 : 3;
+    const rows = Math.ceil(count / columns);
+    const columnGap = columns > 1 ? (story ? 12 : 10) : 0;
+    const rowGap = rows > 1 ? (story ? 8 : 6) : 0;
+    const cellWidth = Math.max(0, (width - columnGap * (columns - 1)) / columns);
+    const cellHeight = Math.max(0, (height - rowGap * (rows - 1)) / rows);
+    const heightScale = columns === 1 ? .82 : .7;
+    const fontSize = Math.floor(clamp(
+      cellHeight * heightScale,
+      story ? 18 : 16,
+      story ? 34 : 32,
+    ));
+    const cells = Array.from({ length: count }, (_, index) => {
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      return {
+        x: x + column * (cellWidth + columnGap),
+        y: y + row * (cellHeight + rowGap),
+        width: cellWidth,
+        height: cellHeight,
+        column,
+        row,
+      };
+    });
+    return { columns, rows, fontSize, cells };
   }
 
   function outputFileName(date, formatName, pageIndex = 0, totalPages = 1) {
@@ -763,12 +799,14 @@
   }
 
   function fitFont(context, value, maximumWidth, startSize, minimumSize, family, weight = 800) {
-    let size = startSize;
-    do {
+    let size = Math.max(minimumSize, startSize);
+    while (size > minimumSize) {
       context.font = `${weight} ${size}px ${family}`;
-      if (context.measureText(value).width <= maximumWidth) break;
+      if (context.measureText(value).width <= maximumWidth) return size;
       size -= 2;
-    } while (size > minimumSize);
+    }
+    size = minimumSize;
+    context.font = `${weight} ${size}px ${family}`;
     return size;
   }
 
@@ -922,7 +960,17 @@
     const startY = layout.cardsStart;
     const endY = layout.cardsEnd;
     const gap = story ? 18 : 16;
-    const cardHeight = clamp((endY - startY - gap * Math.max(0, courts.length - 1)) / Math.max(1, courts.length), 84, story ? 176 : 148);
+    const densestRangeCount = courts.reduce((maximum, court) => (
+      Math.max(maximum, mergeAvailableRanges(court.slots).length)
+    ), 0);
+    const maximumCardHeight = densestRangeCount >= 10
+      ? (story ? 230 : 204)
+      : (story ? 204 : 176);
+    const cardHeight = clamp(
+      (endY - startY - gap * Math.max(0, courts.length - 1)) / Math.max(1, courts.length),
+      84,
+      maximumCardHeight,
+    );
     const cardWidth = width - 144;
 
     if (!courts.length) {
@@ -954,10 +1002,7 @@
       const midpoint = story ? 425 : 396;
       context.fillStyle = available ? '#b6f000' : '#7d867b';
       context.font = `900 ${story ? 14 : 12}px "DM Sans", Arial, sans-serif`;
-      const part = court.graphicPart;
-      const statusLabel = available
-        ? (part?.total > 1 ? `AVAILABLE · ${part.index}/${part.total}` : 'AVAILABLE')
-        : 'NO OPEN SLOTS';
+      const statusLabel = available ? 'AVAILABLE' : 'NO OPEN SLOTS';
       trackedText(context, statusLabel, left, y + cardHeight * .3, 2.2);
       context.fillStyle = '#f8faf4';
       const courtName = text(court.name).toUpperCase();
@@ -965,13 +1010,37 @@
       context.fillText(courtName, left, y + cardHeight * .7);
 
       if (available) {
-        const fontSize = story ? 34 : 32;
-        context.font = `800 ${fontSize}px "DM Sans", Arial, sans-serif`;
+        const rangeBounds = {
+          x: midpoint,
+          y: y + (story ? 16 : 14),
+          width: width - midpoint - 108,
+          height: cardHeight - (story ? 32 : 28),
+        };
+        const grid = rangeGridLayout(ranges.length, rangeBounds, story);
         context.fillStyle = '#f3f7ef';
-        ranges.forEach((range, lineIndex) => {
-          fitFont(context, range.label, width - midpoint - 112, fontSize, 32, '"DM Sans", Arial, sans-serif', 800);
-          const baseline = y + (cardHeight / 2) + ((lineIndex - (ranges.length - 1) / 2) * (fontSize + 13)) + fontSize * .35;
-          context.fillText(range.label, midpoint, baseline);
+        ranges.forEach((range, rangeIndex) => {
+          const cell = grid.cells[rangeIndex];
+          if (!cell) return;
+          if (grid.columns > 1) {
+            fillRoundRect(context, cell.x, cell.y, cell.width, cell.height, 10, 'rgba(255,255,255,.045)');
+            strokeRoundRect(context, cell.x, cell.y, cell.width, cell.height, 10, 'rgba(182,240,0,.1)', 1);
+          }
+          const horizontalPadding = grid.columns > 1 ? (story ? 11 : 9) : 0;
+          const fontSize = fitFont(
+            context,
+            range.label,
+            Math.max(1, cell.width - horizontalPadding * 2),
+            grid.fontSize,
+            story ? 18 : 16,
+            '"DM Sans", Arial, sans-serif',
+            800,
+          );
+          context.fillStyle = '#f3f7ef';
+          context.fillText(
+            range.label,
+            cell.x + horizontalPadding,
+            cell.y + cell.height / 2 + fontSize * .35,
+          );
         });
       } else {
         context.fillStyle = '#8e978b';
@@ -1386,7 +1455,8 @@
     formats: FORMATS,
     posterLayouts: POSTER_LAYOUTS,
     paginateSnapshot,
+    rangeGridLayout,
     outputFileName,
-    constants: Object.freeze({ MANILA_TIME_ZONE, OPENING_DATE, FRESHNESS_LIMIT_MS, RANGES_PER_COURT_CARD, DEFAULT_BOOKING_URL }),
+    constants: Object.freeze({ MANILA_TIME_ZONE, OPENING_DATE, FRESHNESS_LIMIT_MS, DEFAULT_BOOKING_URL }),
   });
 });

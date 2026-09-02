@@ -101,6 +101,9 @@ test('end-of-day ranges use the requested 12 AM label', () => {
   assert.deepEqual(graphic.mergeAvailableRanges([
     { start: 18, end: 24, status: 'available' },
   ]), [{ start: 18, end: 24, label: '6 PM–12 AM' }]);
+  assert.deepEqual(graphic.mergeAvailableRanges([
+    { start: 6, end: 24, status: 'available' },
+  ]), [{ start: 6, end: 24, label: '6 AM–12 AM' }]);
 });
 
 test('caption contains only court availability, booking CTA, and freshness disclaimer', () => {
@@ -174,7 +177,7 @@ test('court controls, captions, and carousel pages use stable natural court orde
   });
 });
 
-test('court continuation cards retain every disjoint available range without ellipsis', () => {
+test('a court remains one carousel item with every disjoint range in its card', () => {
   const slots = Array.from({ length: 9 }, (_, index) => ({
     hour: index * 2,
     end: index * 2 + 1,
@@ -186,10 +189,83 @@ test('court continuation cards retain every disjoint available range without ell
   });
   const expected = graphic.mergeAvailableRanges(snapshot.courts[0].slots).map(range => range.label);
   const pages = graphic.paginateSnapshot(snapshot, 'feed');
-  const actual = pages.flatMap(page => page.courts).flatMap(court => graphic.mergeAvailableRanges(court.slots).map(range => range.label));
+  const renderedCourts = pages.flatMap(page => page.courts);
+  const actual = renderedCourts.flatMap(court => graphic.mergeAvailableRanges(court.slots).map(range => range.label));
   assert.deepEqual(actual, expected);
-  assert.equal(pages.length, 2);
-  assert.ok(pages.flatMap(page => page.courts).every(court => graphic.mergeAvailableRanges(court.slots).length <= 2));
+  assert.equal(pages.length, 1);
+  assert.equal(renderedCourts.length, 1);
+  assert.equal(renderedCourts[0].id, 'show-court');
+  assert.equal('graphicPart' in renderedCourts[0], false);
+});
+
+test('adaptive range grid keeps common and dense schedules readable inside one card', () => {
+  const common = graphic.rangeGridLayout(3, { x: 396, y: 517, width: 576, height: 136 }, false);
+  assert.equal(common.columns, 1);
+  assert.equal(common.rows, 3);
+  assert.ok(common.fontSize >= 24);
+
+  const dense = graphic.rangeGridLayout(9, { x: 396, y: 517, width: 576, height: 136 }, false);
+  assert.equal(dense.columns, 3);
+  assert.equal(dense.rows, 3);
+  assert.equal(dense.cells.length, 9);
+  assert.ok(dense.fontSize >= 20);
+  dense.cells.forEach(cell => {
+    assert.ok(cell.x >= 396 && cell.y >= 517);
+    assert.ok(cell.x + cell.width <= 972.001);
+    assert.ok(cell.y + cell.height <= 653.001);
+  });
+});
+
+test('dense courts receive a taller page without ever duplicating a court', () => {
+  const denseSlots = Array.from({ length: 9 }, (_, index) => ({
+    hour: index * 2,
+    end: index * 2 + 1,
+    state: 'free',
+  }));
+  const snapshot = graphic.normalizeSnapshot({
+    date: '2026-09-20',
+    courts: [
+      { id: '1', name: 'Court 1', slots: denseSlots },
+      { id: '2', name: 'Court 2', slots: [{ hour: 8, end: 9, state: 'free' }] },
+      { id: '3', name: 'Court 3', slots: [{ hour: 8, end: 9, state: 'free' }] },
+      { id: '4', name: 'Court 4', slots: [{ hour: 8, end: 9, state: 'free' }] },
+    ],
+  });
+  for (const format of ['feed', 'story']) {
+    const pages = graphic.paginateSnapshot(snapshot, format);
+    assert.deepEqual(pages.map(page => page.courts.length), [3, 1]);
+    const ids = pages.flatMap(page => page.courts.map(court => court.id));
+    assert.deepEqual(ids, ['1', '2', '3', '4']);
+    assert.equal(new Set(ids).size, ids.length);
+  }
+});
+
+test('feed and story draw one Court 3 card containing all three broken-time ranges', async () => {
+  const snapshot = graphic.normalizeSnapshot({
+    date: '2026-09-20',
+    courts: [
+      { id: '1', name: 'Court 1', slots: [{ hour: 8, end: 19, state: 'free' }, { hour: 23, end: 24, state: 'free' }] },
+      { id: '2', name: 'Court 2', slots: [{ hour: 8, end: 19, state: 'free' }, { hour: 23, end: 24, state: 'free' }] },
+      { id: '3', name: 'Court 3', slots: [
+        { hour: 8, end: 15, state: 'free' },
+        { hour: 18, end: 19, state: 'free' },
+        { hour: 23, end: 24, state: 'free' },
+      ] },
+    ],
+  });
+  const pages = graphic.paginateSnapshot(snapshot, 'feed');
+  assert.equal(pages.length, 1);
+  assert.deepEqual(pages[0].courts.map(court => court.name), ['Court 1', 'Court 2', 'Court 3']);
+
+  for (const format of ['feed', 'story']) {
+    const canvas = fakeCanvas();
+    await graphic.drawPoster(canvas, pages[0], format, { logo: false, qr: false });
+    assert.equal(canvas.calls.filter(call => call.value === 'COURT 3').length, 1);
+    ['8 AM–3 PM', '6–7 PM', '11 PM–12 AM'].forEach(label => {
+      assert.ok(canvas.calls.some(call => call.value === label), `${format} must draw ${label}`);
+    });
+    assert.equal(canvas.calls.some(call => /(?:1\/2|2\/2)/.test(call.value)), false);
+  }
 });
 
 test('carousel filenames are numbered and every rendered page carries its marker', async () => {
