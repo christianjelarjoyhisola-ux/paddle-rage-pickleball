@@ -61,7 +61,6 @@ export type BdoPayRecipientComparison = {
   name: "exact" | "mismatch" | "missing" | "not_configured";
   account:
     | "exact"
-    | "present"
     | "mismatch"
     | "missing"
     | "not_configured";
@@ -389,10 +388,10 @@ function compareRecipient(
       : parsed.nameNormalized === expectedName
       ? "exact"
       : "mismatch",
-    account: !parsed.accountNormalized
+    account: !expectedAccount
+      ? "not_configured"
+      : !parsed.accountNormalized
       ? "missing"
-      : !expectedAccount
-      ? "present"
       : parsed.accountNormalized === expectedAccount
       ? "exact"
       : "mismatch",
@@ -561,7 +560,9 @@ export function verifyBdoPayToGcashReceipt(
   } else if (recipientComparison.name === "mismatch") {
     addUnique(flags, "RECEIVER_NAME_MISMATCH");
   }
-  if (recipientComparison.account === "missing") {
+  if (recipientComparison.account === "not_configured") {
+    addUnique(flags, "MERCHANT_CONFIG_MISSING");
+  } else if (recipientComparison.account === "missing") {
     addUnique(flags, "RECEIVER_ACCOUNT_UNREADABLE");
   } else if (recipientComparison.account === "mismatch") {
     addUnique(flags, "RECEIVER_ACCOUNT_MISMATCH");

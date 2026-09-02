@@ -234,6 +234,7 @@ Deno.test("parses and verifies the live BPI-to-GCash receipt layout", () => {
     typedReference,
     expectedAmount: 3600,
     expectedRecipientName: "PaddleRage",
+    expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
     bookingStartedAt: "2026-09-01T23:06:00.000Z",
     bookingStartedDate: "2026-09-02",
   });
@@ -276,6 +277,7 @@ Deno.test("BPI typed confirmation is comparison-only and mismatches fail closed"
     typedReference: "1624507073999",
     expectedAmount: 3600,
     expectedRecipientName: "PaddleRage",
+    expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
     bookingStartedAt: "2026-09-01T23:06:00.000Z",
     bookingStartedDate: "2026-09-02",
   });
@@ -302,6 +304,7 @@ Deno.test("BPI missing transaction or wrong recipient stays in review", () => {
     typedReference,
     expectedAmount: 3600,
     expectedRecipientName: "PaddleRage",
+    expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
     bookingStartedAt: "2026-09-01T23:06:00.000Z",
     bookingStartedDate: "2026-09-02",
   });

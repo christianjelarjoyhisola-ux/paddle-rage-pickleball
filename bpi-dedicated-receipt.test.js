@@ -15,12 +15,23 @@ const migration = fs.readFileSync(
   ),
   'utf8',
 );
+const sharedIdentityMigration = fs.readFileSync(
+  path.join(
+    root,
+    'supabase/migrations/20260902213000_shared_gcash_qr_receipt_identity.sql',
+  ),
+  'utf8',
+);
 const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
 
 test('BPI uses its configured receipt identity and dedicated GCash route', () => {
   assert.match(
     edge,
-    /name:\s*settings\.bpi_receipt_recipient_name\s*\|\|[\s\S]*?settings\.bpi_merchant_name/,
+    /name:\s*settings\.gcash_qr_receipt_recipient_name\s*\|\|[\s\S]*?settings\.bpi_receipt_recipient_name/,
+  );
+  assert.match(
+    edge,
+    /provider === "bdopay" \|\| provider === "bpi"[\s\S]*?settings\.gcash_qr_receipt_destination_token/,
   );
   assert.match(
     edge,
@@ -50,6 +61,9 @@ test('database settlement contracts explicitly allow the dedicated BPI parser', 
     migration,
     /values \('bpi_receipt_recipient_name', 'PaddleRage'\)[\s\S]*?on conflict \(key\) do nothing/,
   );
+  assert.match(sharedIdentityMigration, /'gcash_qr_receipt_recipient_name'/);
+  assert.match(sharedIdentityMigration, /'gcash_qr_receipt_destination_token'/);
+  assert.match(sharedIdentityMigration, /'DWQM4TK3JDO9O0NS8'/);
 });
 
 test('staff audit modal identifies and explains dedicated BPI verification', () => {
@@ -57,6 +71,8 @@ test('staff audit modal identifies and explains dedicated BPI verification', () 
   assert.match(admin, /\['BPI Confirmation'/);
   assert.match(admin, /\['BPI Transaction Ref'/);
   assert.match(admin, /\['BPI QR Recipient'/);
+  assert.match(admin, /\['BPI Destination Suffix'/);
+  assert.match(admin, /bankTransfer\.recipientAccountComparison/);
   assert.match(admin, /bankTransfer\.recipientComparison/);
   assert.match(admin, /bankTransfer\.indicators\?\.qrCodeRecipient/);
 });

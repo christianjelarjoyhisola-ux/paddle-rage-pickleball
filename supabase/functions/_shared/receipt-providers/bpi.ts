@@ -59,12 +59,19 @@ export type BpiRecipientComparison =
   | "missing"
   | "not_configured";
 
+export type BpiRecipientAccountComparison =
+  | "exact"
+  | "mismatch"
+  | "missing"
+  | "not_configured";
+
 export type BpiReceiptVerificationEvidence = {
   provider: "bpi";
   destinationProvider: "gcash";
   parserVersion: "bpi_to_gcash_v1";
   flags: string[];
   recipientComparison: BpiRecipientComparison;
+  recipientAccountComparison: BpiRecipientAccountComparison;
   dedupeKeys: ReceiptDedupeKey[];
 };
 
@@ -282,6 +289,28 @@ function compareRecipientLabel(
   return observed === expected ? "exact" : "mismatch";
 }
 
+function normalizeDestinationToken(value: string): string {
+  return String(value || "").normalize("NFKC").toUpperCase().replace(
+    /[^A-Z0-9]/g,
+    "",
+  );
+}
+
+function compareRecipientAccount(
+  observedSuffixRaw: string | null,
+  expectedTokenRaw: string,
+): BpiRecipientAccountComparison {
+  const expectedToken = normalizeDestinationToken(expectedTokenRaw);
+  const observedSuffix = normalizeDestinationToken(observedSuffixRaw || "");
+  if (!expectedToken) return "not_configured";
+  if (!observedSuffix) return "missing";
+  if (observedSuffix.length < 3) return "mismatch";
+  return expectedToken === observedSuffix ||
+      expectedToken.endsWith(observedSuffix)
+    ? "exact"
+    : "mismatch";
+}
+
 function addUnique(flags: string[], flag: string): void {
   if (!flags.includes(flag)) flags.push(flag);
 }
@@ -385,6 +414,10 @@ export function verifyBpiToGcashReceipt(
     parsed.recipient.labelNormalized,
     context.expectedRecipientLabel || context.expectedRecipientName || "",
   );
+  const recipientAccountComparison = compareRecipientAccount(
+    parsed.recipient.accountSuffix,
+    context.expectedRecipientAccount || "",
+  );
   if (!parsed.indicators.providerBrand) addUnique(flags, "BPI_UNREADABLE");
   if (parsed.indicators.competingProviderBrand) {
     addUnique(flags, "METHOD_MISMATCH");
@@ -459,6 +492,13 @@ export function verifyBpiToGcashReceipt(
   } else if (recipientComparison === "mismatch") {
     addUnique(flags, "RECEIVER_NAME_MISMATCH");
   }
+  if (recipientAccountComparison === "not_configured") {
+    addUnique(flags, "MERCHANT_CONFIG_MISSING");
+  } else if (recipientAccountComparison === "missing") {
+    addUnique(flags, "RECEIVER_ACCOUNT_UNREADABLE");
+  } else if (recipientAccountComparison === "mismatch") {
+    addUnique(flags, "RECEIVER_ACCOUNT_MISMATCH");
+  }
 
   const dedupeKeys: ReceiptDedupeKey[] = [];
   if (parsed.reference.value) {
@@ -481,6 +521,7 @@ export function verifyBpiToGcashReceipt(
     parserVersion: parsed.parserVersion,
     flags,
     recipientComparison,
+    recipientAccountComparison,
     dedupeKeys,
   };
 }

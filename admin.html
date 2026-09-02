@@ -6052,18 +6052,18 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
           </div>
         </div>
 
-        <!-- BDO Pay receipt identity (BDO prints a QR alias, not the account owner name) -->
+        <!-- Shared receipt identity printed by GCash QR transfers -->
         <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
-          <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#4a90d9;margin-bottom:7px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--bdopay" data-payment-method="bdopay" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/bdo-pay.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>BDO Pay Receipt Verification</span></div>
-          <div style="font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Use the exact values printed in the receipt's “To” block. This is separate from the customer-facing GCash account owner name.</div>
+          <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#4a90d9;margin-bottom:7px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--gcash" data-payment-method="gcash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gcash.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>Advanced GCash QR Receipt Verification</span></div>
+          <div style="font-size:.74rem;color:var(--muted);margin-bottom:10px;line-height:1.5">Shared by the independent BDO Pay and BPI receipt verifiers. BDO Pay checks the complete destination token; BPI checks the visible masked-account suffix.</div>
           <div class="frow" style="gap:10px;margin-bottom:0;">
             <div class="fg" style="margin:0;flex:1">
-              <label class="fl">Receipt Recipient Name</label>
-              <input type="text" class="fi" id="bdopayReceiptNameInput" placeholder="e.g. PaddleRage" />
+              <label class="fl">GCash QR Receipt Alias</label>
+              <input type="text" class="fi" id="gcashQrReceiptNameInput" placeholder="e.g. PaddleRage" />
             </div>
             <div class="fg" style="margin:0;flex:1">
-              <label class="fl">Destination Token (optional)</label>
-              <input type="text" class="fi" id="bdopayReceiptTokenInput" placeholder="Exact token below GCash destination" />
+              <label class="fl">GCash QR Destination Token</label>
+              <input type="text" class="fi" id="gcashQrReceiptTokenInput" placeholder="Exact token printed below the GCash destination" />
             </div>
           </div>
         </div>
@@ -7251,12 +7251,19 @@ function receiptDetailsHtml(b){
       ['BPI Confirmation', receiptDetailValue(bankTransfer.reference?.value), true],
       ['BPI Transaction Ref', receiptDetailValue(bankTransfer.transactionReference?.value), true],
       ['BPI QR Recipient', receiptDetailValue(bankTransfer.recipient?.labelRaw), true],
-      ['Recipient Check', receiptDetailValue(({
+      ['BPI Destination Suffix', receiptDetailValue(bankTransfer.recipient?.accountSuffix), true],
+      ['Recipient Alias Check', receiptDetailValue(({
         exact:'Exact configured QR recipient matched',
         mismatch:'Recipient mismatch',
         missing:'Recipient not read',
         not_configured:'BPI QR recipient not configured',
       })[bankTransfer.recipientComparison] || 'Needs review'), true],
+      ['Destination Check', receiptDetailValue(({
+        exact:'Visible suffix matches configured GCash QR destination',
+        mismatch:'Destination suffix mismatch',
+        missing:'Destination suffix not read',
+        not_configured:'GCash QR destination token not configured',
+      })[bankTransfer.recipientAccountComparison] || 'Needs review'), true],
       ['Receipt Evidence', receiptDetailValue([
         bankTransfer.indicators?.transferSuccess ? 'Transfer successful' : 'Success unreadable',
         bankTransfer.indicators?.providerBrand ? 'BPI source' : 'BPI source unreadable',
@@ -11920,8 +11927,8 @@ async function renderPaymentSettings() {
 
   if ($('gcashNumInput')) $('gcashNumInput').value = settings.gcash_merchant_number || '';
   if ($('gcashNameInput')) $('gcashNameInput').value = settings.gcash_merchant_name || '';
-  if ($('bdopayReceiptNameInput')) $('bdopayReceiptNameInput').value = settings.bdopay_receipt_recipient_name || 'PaddleRage';
-  if ($('bdopayReceiptTokenInput')) $('bdopayReceiptTokenInput').value = settings.bdopay_receipt_destination_token || '';
+  if ($('gcashQrReceiptNameInput')) $('gcashQrReceiptNameInput').value = settings.gcash_qr_receipt_recipient_name || settings.bdopay_receipt_recipient_name || settings.bpi_receipt_recipient_name || 'PaddleRage';
+  if ($('gcashQrReceiptTokenInput')) $('gcashQrReceiptTokenInput').value = settings.gcash_qr_receipt_destination_token || settings.bdopay_receipt_destination_token || '';
   if ($('pnbNumInput')) $('pnbNumInput').value = settings.pnb_merchant_number || '';
   if ($('pnbNameInput')) $('pnbNameInput').value = settings.pnb_merchant_name || '';
   if ($('platformGcashNumInput')) $('platformGcashNumInput').value = settings.platform_gcash_number || '';
@@ -13078,8 +13085,8 @@ async function savePaymentSettings() {
   const pnbOn = $('payMethodPnbOn').checked;
   const gcashNum = $('gcashNumInput')?.value.trim() || '';
   const gcashName = $('gcashNameInput')?.value.trim() || '';
-  const bdopayReceiptName = $('bdopayReceiptNameInput')?.value.trim() || '';
-  const bdopayReceiptToken = $('bdopayReceiptTokenInput')?.value.trim() || '';
+  const gcashQrReceiptName = $('gcashQrReceiptNameInput')?.value.trim() || '';
+  const gcashQrReceiptToken = $('gcashQrReceiptTokenInput')?.value.trim() || '';
   const pnbNum = $('pnbNumInput')?.value.trim() || '';
   const pnbName = $('pnbNameInput')?.value.trim() || '';
   const gcashQrSrc = $('gcashQrPreview')?.src || '';
@@ -13093,8 +13100,8 @@ async function savePaymentSettings() {
     toast('Add the shared GCash recipient name and number or QR before enabling a GCash-routed method.', 'err');
     return;
   }
-  if (bdopayOn && !bdopayReceiptName) {
-    toast('Add the exact BDO Pay receipt recipient name before enabling BDO Pay.', 'err');
+  if ((bdopayOn || bpiOn) && (!gcashQrReceiptName || !gcashQrReceiptToken)) {
+    toast('Add the GCash QR receipt alias and destination token before enabling BDO Pay or BPI.', 'err');
     return;
   }
   if (pnbOn && (!pnbName || (!pnbNum && !pnbQrSrc))) {
@@ -13118,8 +13125,12 @@ async function savePaymentSettings() {
     await DB.saveSetting('gcash_merchant_number', gcashNum);
     await DB.saveSetting('gcash_merchant_name', gcashName);
     await DB.saveSetting('payment_merchant_name', gcashName);
-    await DB.saveSetting('bdopay_receipt_recipient_name', bdopayReceiptName);
-    await DB.saveSetting('bdopay_receipt_destination_token', bdopayReceiptToken);
+    await DB.saveSetting('gcash_qr_receipt_recipient_name', gcashQrReceiptName);
+    await DB.saveSetting('gcash_qr_receipt_destination_token', gcashQrReceiptToken);
+    // Keep legacy provider keys synchronized during rolling deployments.
+    await DB.saveSetting('bdopay_receipt_recipient_name', gcashQrReceiptName);
+    await DB.saveSetting('bdopay_receipt_destination_token', gcashQrReceiptToken);
+    await DB.saveSetting('bpi_receipt_recipient_name', gcashQrReceiptName);
     await DB.saveSetting('pnb_merchant_number', pnbNum);
     await DB.saveSetting('pnb_merchant_name', pnbName);
 

@@ -31,6 +31,7 @@ const CONTEXT = {
   pricingAvailable: true,
   amountTolerance: 0.01,
   expectedRecipientName: "PaddleRage",
+  expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
   bookingStartedAt: "2026-09-01T23:06:00.000Z",
   bookingStartedDate: "2026-09-02",
   paymentWindowMinutes: 15,
@@ -67,6 +68,11 @@ Deno.test("BPI parser preserves the visible QR account suffix for audit", () => 
     parsed.recipient.accountSuffix === "NS8",
     `expected NS8 account suffix, got ${parsed.recipient.accountSuffix}`,
   );
+  const evidence = verifyBpiToGcashReceipt(parsed, CONTEXT);
+  assert(
+    evidence.recipientAccountComparison === "exact",
+    `expected exact destination, got ${evidence.recipientAccountComparison}`,
+  );
 });
 
 Deno.test("BPI verifier fails closed for the wrong recipient or destination", () => {
@@ -80,6 +86,13 @@ Deno.test("BPI verifier fails closed for the wrong recipient or destination", ()
   );
   assertFlag(RECEIPT, "MERCHANT_CONFIG_MISSING", {
     expectedRecipientName: "",
+  });
+  assertFlag(
+    RECEIPT.replace("XXXXXXXXXXXXNS8", "XXXXXXXXXXXXBAD"),
+    "RECEIVER_ACCOUNT_MISMATCH",
+  );
+  assertFlag(RECEIPT, "MERCHANT_CONFIG_MISSING", {
+    expectedRecipientAccount: "",
   });
 });
 

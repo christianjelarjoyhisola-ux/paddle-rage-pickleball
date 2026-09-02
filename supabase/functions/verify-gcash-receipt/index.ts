@@ -652,7 +652,8 @@ function expectedMerchantForProvider(
     return {
       number: settings.bdopay_merchant_number ||
         settings.gcash_merchant_number || "",
-      name: settings.bdopay_receipt_recipient_name ||
+      name: settings.gcash_qr_receipt_recipient_name ||
+        settings.bdopay_receipt_recipient_name ||
         settings.bdopay_merchant_name || settings.payment_merchant_name ||
         settings.gcash_merchant_name || "",
     };
@@ -674,7 +675,8 @@ function expectedMerchantForProvider(
       // displayed beside the QR on the checkout page. Keep that receipt-only
       // identity explicit so the BPI verifier never accepts an arbitrary
       // GCash/G-Xchange destination.
-      name: settings.bpi_receipt_recipient_name ||
+      name: settings.gcash_qr_receipt_recipient_name ||
+        settings.bpi_receipt_recipient_name ||
         settings.bpi_merchant_name || settings.payment_merchant_name ||
         settings.gcash_merchant_name || "",
     };
@@ -2691,8 +2693,9 @@ Deno.serve(async (req) => {
           amountTolerance: 0.01,
           expectedRecipientNumber: expectedNumber,
           expectedRecipientName: expectedName,
-          expectedRecipientAccount: provider === "bdopay"
-            ? settings.bdopay_receipt_destination_token || ""
+          expectedRecipientAccount: provider === "bdopay" || provider === "bpi"
+            ? settings.gcash_qr_receipt_destination_token ||
+              settings.bdopay_receipt_destination_token || ""
             : "",
           bookingStartedAt: bookingStartedInstant?.toISOString() || null,
           bookingStartedDate,
@@ -2947,11 +2950,10 @@ Deno.serve(async (req) => {
         providerVerification.recipientComparison.name !== "mismatch"
       : providerVerification?.provider === "bdopay"
       ? providerVerification.recipientComparison.name === "exact" &&
-        ["exact", "present"].includes(
-          providerVerification.recipientComparison.account,
-        )
+        providerVerification.recipientComparison.account === "exact"
       : providerVerification?.provider === "bpi"
-      ? providerVerification.recipientComparison === "exact"
+      ? providerVerification.recipientComparison === "exact" &&
+        providerVerification.recipientAccountComparison === "exact"
       : providerVerification
       ? ["exact", "last4_only"].includes(
         providerVerification.recipientComparison.phone,
@@ -3087,6 +3089,9 @@ Deno.serve(async (req) => {
               providerVerification?.provider === "maribank"
             ? providerVerification.recipientComparison
             : null,
+          recipientAccountComparison: providerVerification?.provider === "bpi"
+            ? providerVerification.recipientAccountComparison
+            : null,
           issues: bankParse.issues,
         }
         : null,
@@ -3102,8 +3107,9 @@ Deno.serve(async (req) => {
           ? null
           : expectedNumber || null,
       expectedReceiverName: expectedName || null,
-      expectedReceiverAccount: provider === "bdopay"
-        ? settings.bdopay_receipt_destination_token || null
+      expectedReceiverAccount: provider === "bdopay" || provider === "bpi"
+        ? settings.gcash_qr_receipt_destination_token ||
+          settings.bdopay_receipt_destination_token || null
         : null,
       verificationContext: hasPersistedBooking
         ? "court_booking"

@@ -23,6 +23,13 @@ const migration = fs.readFileSync(
   ),
   'utf8',
 );
+const sharedIdentityMigration = fs.readFileSync(
+  path.join(
+    root,
+    'supabase/migrations/20260902213000_shared_gcash_qr_receipt_identity.sql',
+  ),
+  'utf8',
+);
 const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
 const booking = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
@@ -34,8 +41,9 @@ test('BDO Pay has its own parser/verifier and dedicated route', () => {
   assert.match(edge, /provider === "bdopay"[\s\S]*?`\$\{provider\}_to_gcash`/);
   assert.match(
     edge,
-    /name:\s*settings\.bdopay_receipt_recipient_name\s*\|\|/,
+    /name:\s*settings\.gcash_qr_receipt_recipient_name\s*\|\|[\s\S]*?settings\.bdopay_receipt_recipient_name/,
   );
+  assert.match(edge, /settings\.gcash_qr_receipt_destination_token/);
 });
 
 test('BDO Pay evidence fails closed and claims both replay identifiers', () => {
@@ -74,12 +82,16 @@ test('database settlement contracts explicitly allow dedicated BDO Pay', () => {
     migration,
     /values \('bdopay_receipt_recipient_name', 'PaddleRage'\)/,
   );
+  assert.match(sharedIdentityMigration, /'gcash_qr_receipt_recipient_name'/);
+  assert.match(sharedIdentityMigration, /'gcash_qr_receipt_destination_token'/);
 });
 
 test('staff and customer UI describe the dedicated BDO Pay verifier', () => {
   assert.match(admin, /bdopay_to_gcash_v1:\s*'Dedicated BDO Pay/);
-  assert.match(admin, /id="bdopayReceiptNameInput"/);
-  assert.match(admin, /id="bdopayReceiptTokenInput"/);
+  assert.match(admin, /Advanced GCash QR Receipt Verification/);
+  assert.match(admin, /id="gcashQrReceiptNameInput"/);
+  assert.match(admin, /id="gcashQrReceiptTokenInput"/);
+  assert.doesNotMatch(admin, /BDO Pay Receipt Verification/);
   assert.match(admin, /\['BDO Pay Reference'/);
   assert.match(booking, /BDO Pay → GCash\. Clean receipts can confirm automatically/);
 });

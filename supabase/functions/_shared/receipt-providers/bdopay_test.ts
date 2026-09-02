@@ -160,6 +160,9 @@ Deno.test("BDO Pay requires the exact receipt identity and GCash destination", (
   assertFlag(RECEIPT, "MERCHANT_CONFIG_MISSING", {
     expectedRecipientName: "",
   });
+  assertFlag(RECEIPT, "MERCHANT_CONFIG_MISSING", {
+    expectedRecipientAccount: "",
+  });
 });
 
 Deno.test("BDO Pay requires success, Send Money, InstaPay, and invoice evidence", () => {
