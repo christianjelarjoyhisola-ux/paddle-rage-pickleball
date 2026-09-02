@@ -4569,6 +4569,79 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
 @media print {
   body[data-theme="light"] { background: #fff !important; }
 }
+
+/* iOS WebKit can terminate a page when several viewport-sized filtered layers
+   are repainted during a long dashboard scroll. Keep this fallback narrow so
+   other browsers retain the richer glass treatment. */
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 900px) {
+    body::before {
+      display: none !important;
+      position: absolute !important;
+    }
+
+    .topnav,
+    .overlay,
+    .sidebar-overlay,
+    .modal-bg,
+    #agreementOverlay,
+    .gm-app-header,
+    .gm-mobile-start,
+    .gm-live-mobile-dock {
+      -webkit-backdrop-filter: none !important;
+      backdrop-filter: none !important;
+    }
+
+    .topnav,
+    .gm-app-header,
+    .gm-mobile-start,
+    .gm-live-mobile-dock {
+      background: #050806 !important;
+    }
+
+    .overlay,
+    .sidebar-overlay,
+    .modal-bg,
+    #agreementOverlay {
+      background: #050706 !important;
+    }
+
+    body[data-theme="light"] .topnav,
+    body[data-theme="light"] .gm-app-header,
+    body[data-theme="light"] .gm-mobile-start,
+    body[data-theme="light"] .gm-live-mobile-dock {
+      background: #f7faf4 !important;
+    }
+
+    body[data-theme="light"] :is(.overlay, .sidebar-overlay, .modal-bg, #agreementOverlay) {
+      background: #eef3e9 !important;
+    }
+
+    .admin-layout,
+    .main {
+      min-height: calc(100vh - var(--admin-topbar-h));
+      min-height: calc(100svh - var(--admin-topbar-h));
+    }
+
+    /* A translated, hidden sidebar still consumes a full-height composited
+       layer in Mobile Safari. Remove it from layout until it is opened. */
+    .sidebar:not(.open) {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      transition: none !important;
+    }
+
+    .sidebar.open {
+      display: flex !important;
+      height: calc(100vh - var(--admin-topbar-h));
+      height: calc(100svh - var(--admin-topbar-h));
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(0);
+    }
+  }
+}
 </style>
 </head>
 <body class="admin-booting" data-theme="dark">
@@ -7578,7 +7651,37 @@ async function resendHostBalanceNotice(ref) {
   }
 }
 function toast(msg,type='ok'){const icons={ok:'✅',err:'❌',inf:'ℹ️'};const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span>${icons[type]||''}</span><span></span>`;el.lastElementChild.textContent=String(msg ?? '');$('toasts').appendChild(el);setTimeout(()=>el.remove(),3800);}
-function closeModal(id){$(id).classList.remove('show');}
+let _vmReceiptLoadToken = 0;
+let _ovReceiptLoadToken = 0;
+let _vmOpenToken = 0;
+let _ovOpenToken = 0;
+
+function clearAdminReceiptPreview(prefix) {
+  if (prefix === 'vm') _vmReceiptLoadToken++;
+  if (prefix === 'ov') _ovReceiptLoadToken++;
+  const wrap = $(`${prefix}ReceiptWrap`);
+  const image = $(`${prefix}ReceiptImg`);
+  const link = $(`${prefix}ReceiptLink`);
+  const flags = $(`${prefix}ReceiptFlags`);
+  const details = $(`${prefix}ReceiptDetails`);
+  const noImage = $(`${prefix}ReceiptNoImg`);
+  image?.removeAttribute('src');
+  if (link) { link.removeAttribute('href'); link.style.display = 'none'; }
+  if (flags) flags.innerHTML = '';
+  if (details) { details.innerHTML = ''; details.style.display = 'none'; }
+  if (noImage) noImage.style.display = 'none';
+  if (wrap) wrap.style.display = 'none';
+}
+
+function closeModal(id){
+  const modal = $(id);
+  if (!modal) return;
+  modal.classList.remove('show');
+  if (id === 'opVerifyModal') {
+    _ovOpenToken++;
+    clearAdminReceiptPreview('ov');
+  }
+}
 
 let sess;
 
@@ -7689,26 +7792,46 @@ function startAdminSessionGuard(){
    REALTIME — keep the admin dashboard live (no manual refresh)
    ============================================== */
 let _admRtDebounce=null;
-function startAdminRealtime(){
-  if (window.PB_USE_LOCAL_DATA) return;
-  const rerender=()=>{
-    clearTimeout(_admRtDebounce);
-    _admRtDebounce=setTimeout(async ()=>{
-      // Never clobber a form the admin is actively editing (e.g. payment settings).
-      const ae=document.activeElement;
-      if(ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
-      // Don't yank content out from under an open modal dialog.
-      if(document.querySelector('.overlay.show')) return;
+let _admRtRefreshInFlight=false;
+let _admRtRefreshQueued=false;
+let _admRtChannel=null;
+
+function scheduleAdminRealtimeRefresh(delay=850){
+  _admRtRefreshQueued=true;
+  clearTimeout(_admRtDebounce);
+  _admRtDebounce=setTimeout(flushAdminRealtimeRefresh,delay);
+}
+
+async function flushAdminRealtimeRefresh(){
+  _admRtDebounce=null;
+  if(document.hidden || _admRtRefreshInFlight || !_admRtRefreshQueued) return;
+  const ae=document.activeElement;
+  if((ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) || document.querySelector('.overlay.show')){
+    _admRtRefreshQueued=false;
+    return;
+  }
+  _admRtRefreshInFlight=true;
+  try{
+    while(_admRtRefreshQueued && !document.hidden){
+      _admRtRefreshQueued=false;
       try{
         if(_curSection && SECTION_LOADERS[_curSection]) await SECTION_LOADERS[_curSection]();
       }catch(_){}
-    },300);
-  };
+    }
+  }finally{
+    _admRtRefreshInFlight=false;
+    if(_admRtRefreshQueued && !document.hidden) scheduleAdminRealtimeRefresh();
+  }
+}
+
+function startAdminRealtime(){
+  if (window.PB_USE_LOCAL_DATA || _admRtChannel) return;
+  const rerender=()=>scheduleAdminRealtimeRefresh();
   const rerenderHostBalances=()=>{
     window.HostBalanceAdmin?.invalidate?.();
     rerender();
   };
-  _supabase.channel('admin-rt')
+  _admRtChannel=_supabase.channel('admin-rt')
     .on('postgres_changes',{event:'*',schema:'public',table:'bookings'},rerender)
     .on('postgres_changes',{event:'*',schema:'public',table:'deleted_booking_archive'},rerender)
     .on('postgres_changes',{event:'*',schema:'public',table:'courts'},rerender)
@@ -7725,6 +7848,26 @@ function startAdminRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'host_booking_balance_payments'},rerenderHostBalances)
     .subscribe();
 }
+
+function stopAdminRealtime(){
+  clearTimeout(_admRtDebounce);
+  _admRtDebounce=null;
+  _admRtRefreshQueued=false;
+  if(_admRtChannel){
+    try{ _supabase.removeChannel(_admRtChannel); }catch(_){}
+    _admRtChannel=null;
+  }
+}
+
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden && _admRtRefreshQueued) scheduleAdminRealtimeRefresh(0);
+});
+window.addEventListener('pagehide',event=>{ if(!event.persisted) stopAdminRealtime(); });
+window.addEventListener('pageshow',event=>{
+  if(!event.persisted) return;
+  if(!_admRtChannel) startAdminRealtime();
+  scheduleAdminRealtimeRefresh(0);
+});
 
 /* ==============================================
    PADDLE RAGE INSIGHTS
@@ -8516,8 +8659,12 @@ function renderDashCharts(bookings, feeCfg = { amount: 0, type: 'per_hour' }) {
   const green = isDark ? '#3ab871' : '#52721b';
   const yellow = isDark ? '#f0a820' : '#b87e00';
 
+  const mobileChart = window.matchMedia?.('(max-width: 900px)')?.matches;
   const baseOpts = {
     responsive: true, maintainAspectRatio: false,
+    animation: mobileChart ? false : { duration: 240 },
+    resizeDelay: 160,
+    devicePixelRatio: Math.min(Number(window.devicePixelRatio) || 1, mobileChart ? 1.5 : 2),
     plugins: { legend: { display: false } },
     scales: {
       x: { ticks: { color: textColor, font: { family: 'DM Sans', size: 11 } }, grid: { display: false }, border: { display: false } },
@@ -8525,12 +8672,9 @@ function renderDashCharts(bookings, feeCfg = { amount: 0, type: 'per_hour' }) {
     }
   };
 
-  if (_chartBookings) _chartBookings.destroy();
-  if (_chartRevenue) _chartRevenue.destroy();
-
   const maxRev = Math.max(...months.map(m => revByMonth[m.key]), 100);
 
-  _chartBookings = new Chart($('chartBookings'), {
+  const bookingConfig = {
     type: 'bar',
     data: {
       labels: months.map(m => m.label),
@@ -8542,9 +8686,9 @@ function renderDashCharts(bookings, feeCfg = { amount: 0, type: 'per_hour' }) {
       }]
     },
     options: { ...baseOpts, scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, min: 0, ticks: { ...baseOpts.scales.y.ticks, stepSize: 1, precision: 0 } } } }
-  });
+  };
 
-  _chartRevenue = new Chart($('chartRevenue'), {
+  const revenueConfig = {
     type: 'line',
     data: {
       labels: months.map(m => m.label),
@@ -8556,7 +8700,20 @@ function renderDashCharts(bookings, feeCfg = { amount: 0, type: 'per_hour' }) {
       }]
     },
     options: { ...baseOpts, scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, min: 0, suggestedMax: maxRev, ticks: { ...baseOpts.scales.y.ticks, callback: v => '₱' + v.toLocaleString() } } } }
-  });
+  };
+
+  const syncChart = (existing, canvas, config) => {
+    if (existing && existing.canvas === canvas) {
+      existing.data = config.data;
+      existing.options = config.options;
+      existing.update('none');
+      return existing;
+    }
+    existing?.destroy();
+    return new Chart(canvas, config);
+  };
+  _chartBookings = syncChart(_chartBookings, $('chartBookings'), bookingConfig);
+  _chartRevenue = syncChart(_chartRevenue, $('chartRevenue'), revenueConfig);
 }
 
 /* ==============================================
@@ -9878,8 +10035,10 @@ function canManuallyResolvePayment() {
 }
 
 async function openVerifyModal(ref, { returnFocus = null } = {}) {
+  const openToken = ++_vmOpenToken;
   _verifyModalLastFocus = returnFocus || document.activeElement;
   const b = await getBookingGroupByRef(ref);
+  if (openToken !== _vmOpenToken) return;
   if (!b) { toast('Booking not found.', 'err'); return; }
   renderPaymentMethodBrandLabel($('vmMethod'), b.paymentMethod);
   $('vmGcashRef').textContent = b.gcashRef || '—';
@@ -9896,6 +10055,7 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
     breakdown.innerHTML = b.isGroup ? bookingGroupBreakdownHtml(b.items) : '';
   }
   await vmPopulateReceipt(b);
+  if (openToken !== _vmOpenToken) return;
   const readOnly = bookingPaymentIsResolved(b);
   const canReview = canManuallyResolvePayment();
   if ($('vmRejectBtn')) $('vmRejectBtn').style.display = !readOnly && canReview ? '' : 'none';
@@ -9926,6 +10086,8 @@ function closeVerifyModal({ restoreFocus = true } = {}) {
   overlay.setAttribute('aria-hidden', 'true');
   overlay.inert = true;
   overlay.hidden = true;
+  _vmOpenToken++;
+  clearAdminReceiptPreview('vm');
   if (!restoreFocus) return;
   const previous = _verifyModalLastFocus;
   requestAnimationFrame(() => {
@@ -9957,6 +10119,8 @@ function verifyPaymentModalKeydown(event) {
 }
 
 async function vmPopulateReceipt(b){
+  clearAdminReceiptPreview('vm');
+  const loadToken = _vmReceiptLoadToken;
   const wrap = $('vmReceiptWrap');
   const s = b.receiptStatus || 'none';
   const paymentState = String(b.paymentStatus || '').toLowerCase();
@@ -9998,9 +10162,11 @@ async function vmPopulateReceipt(b){
   if (b.receiptImageUrl) {
     try {
       const url = await DB.getReceiptSignedUrl(b.receiptRef || b.ref);
+      if (loadToken !== _vmReceiptLoadToken) return;
       if (img) img.src = url;
       if (link) { link.href = url; link.style.display = ''; }
     } catch(e) {
+      if (loadToken !== _vmReceiptLoadToken) return;
       if (noImg) { noImg.style.display = ''; noImg.textContent = 'Could not load receipt image.'; }
     }
   } else if (noImg) {
@@ -12393,6 +12559,17 @@ function closeRemittanceModal(id, { restoreFocus = true } = {}) {
   if (!overlay) return;
   overlay.classList.remove('show');
   overlay.setAttribute('aria-hidden', 'true');
+  overlay.inert = true;
+  if (id === 'rmReviewModal') {
+    const receipt = $('rmReviewReceiptWrap');
+    receipt?.querySelectorAll('img').forEach(image => image.removeAttribute('src'));
+    if (receipt) receipt.innerHTML = '<span style="color:var(--text3);font-size:.8rem">No proof image available</span>';
+  }
+  if (id === 'rmDetailModal') {
+    const body = $('rmDetailBody');
+    body?.querySelectorAll('img').forEach(image => image.removeAttribute('src'));
+    if (body) body.innerHTML = '';
+  }
   const previous = _rmState.modalFocus[id];
   if (restoreFocus && previous && typeof previous.focus === 'function' && document.contains(previous)) requestAnimationFrame(() => previous.focus());
 }
@@ -14093,7 +14270,9 @@ async function deleteOpReg(id) {
 }
 
 async function openOpVerifyModal(id) {
+  const openToken = ++_ovOpenToken;
   const regs = await DB.getOpenPlayRegistrations();
+  if (openToken !== _ovOpenToken) return;
   const r = regs.find(x => String(x.id) === String(id));
   if (!r) { toast('Registration not found.', 'err'); return; }
   renderPaymentMethodBrandLabel($('ovMethod'), r.payment_method);
@@ -14104,6 +14283,7 @@ async function openOpVerifyModal(id) {
   $('ovPayType').textContent = r.payment_type || '—';
   $('ovAmount').textContent  = '₱' + Number(r.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 });
   await ovPopulateReceipt(r, 'open_play');
+  if (openToken !== _ovOpenToken) return;
   $('opVerifyModal').dataset.regId = id;
   $('opVerifyModal').dataset.regType = 'open_play';
   syncOpenPlayReviewActions(r.payment_status);
@@ -14111,10 +14291,12 @@ async function openOpVerifyModal(id) {
 }
 
 async function openHostSessionVerifyModal(id) {
+  const openToken = ++_ovOpenToken;
   const [registrations, sessions] = await Promise.all([
     DB.getOpenPlayHostSessionRegistrations(),
     DB.getOpenPlayHostSessions(),
   ]);
+  if (openToken !== _ovOpenToken) return;
   const registration = registrations.find(item => String(item.id) === String(id));
   if (!registration) { toast('Hosted Open Play registration not found.', 'err'); return; }
   const session = sessions.find(item => String(item.id) === String(registration.sessionId)) || {};
@@ -14144,6 +14326,7 @@ async function openHostSessionVerifyModal(id) {
   $('ovPayType').textContent = '100%';
   $('ovAmount').textContent = fmt(registration.amount || 0);
   await ovPopulateReceipt(receipt, 'host_session');
+  if (openToken !== _ovOpenToken) return;
   $('opVerifyModal').dataset.regId = id;
   $('opVerifyModal').dataset.regType = 'host_session';
   syncOpenPlayReviewActions(registration.paymentStatus);
@@ -14159,6 +14342,8 @@ function syncOpenPlayReviewActions(paymentStatus) {
 }
 
 async function ovPopulateReceipt(r, receiptType = 'open_play') {
+  clearAdminReceiptPreview('ov');
+  const loadToken = _ovReceiptLoadToken;
   const wrap = $('ovReceiptWrap');
   const s = r.receipt_status || 'none';
   const paymentState = String(r.payment_status || r.paymentStatus || '').toLowerCase();
@@ -14201,9 +14386,11 @@ async function ovPopulateReceipt(r, receiptType = 'open_play') {
       const url = receiptType === 'host_session'
         ? await DB.getHostSessionReceiptSignedUrl(r.id)
         : await DB.getOpenPlayReceiptSignedUrl(r.id);
+      if (loadToken !== _ovReceiptLoadToken) return;
       if (img) img.src = url;
       if (link) { link.href = url; link.style.display = ''; }
     } catch(e) {
+      if (loadToken !== _ovReceiptLoadToken) return;
       if (noImg) { noImg.style.display = ''; noImg.textContent = 'Could not load receipt image.'; }
     }
   } else if (noImg) {
@@ -15602,6 +15789,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     if(ov.id==='hostAccountModal') closeHostAccountDetails();
     else if(ov.id==='bookingDetailsModal') closeBookingDetails();
     else if(ov.id==='verifyModal') closeVerifyModal();
+    else if(ov.id==='opVerifyModal') closeModal('opVerifyModal');
     else if(['rmPrepareModal','rmPayModal','rmReviewModal','rmDetailModal','rmCancelModal'].includes(ov.id)) closeRemittanceModal(ov.id);
     else ov.classList.remove('show');
   }));

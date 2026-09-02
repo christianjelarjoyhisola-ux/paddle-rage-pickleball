@@ -4,6 +4,35 @@ const test = require('node:test');
 
 const read = path => fs.readFileSync(path, 'utf8');
 
+test('admin releases decoded receipt images when review modals close', () => {
+  const admin = read('admin.html');
+  const previewCleanup = admin.slice(
+    admin.indexOf('function clearAdminReceiptPreview'),
+    admin.indexOf('let sess;'),
+  );
+  const bookingClose = admin.slice(
+    admin.indexOf('function closeVerifyModal'),
+    admin.indexOf('function verifyPaymentModalKeydown'),
+  );
+  const remittanceClose = admin.slice(
+    admin.indexOf('function closeRemittanceModal'),
+    admin.indexOf('function remittanceModalKeydown'),
+  );
+
+  assert.match(previewCleanup, /removeAttribute\('src'\)/);
+  assert.match(previewCleanup, /removeAttribute\('href'\)/);
+  assert.match(previewCleanup, /id === 'opVerifyModal'[\s\S]*?clearAdminReceiptPreview\('ov'\)/);
+  assert.match(bookingClose, /clearAdminReceiptPreview\('vm'\)/);
+  assert.match(admin, /async function openVerifyModal[\s\S]*?\+\+_vmOpenToken[\s\S]*?await getBookingGroupByRef[\s\S]*?openToken !== _vmOpenToken/);
+  assert.match(admin, /async function openOpVerifyModal[\s\S]*?\+\+_ovOpenToken[\s\S]*?await DB\.getOpenPlayRegistrations[\s\S]*?openToken !== _ovOpenToken/);
+  assert.match(admin, /async function openHostSessionVerifyModal[\s\S]*?\+\+_ovOpenToken[\s\S]*?await Promise\.all[\s\S]*?openToken !== _ovOpenToken/);
+  assert.match(admin, /const loadToken = _vmReceiptLoadToken[\s\S]*?loadToken !== _vmReceiptLoadToken/);
+  assert.match(admin, /const loadToken = _ovReceiptLoadToken[\s\S]*?loadToken !== _ovReceiptLoadToken/);
+  assert.match(admin, /ov\.id==='opVerifyModal'\) closeModal\('opVerifyModal'\)/);
+  assert.match(remittanceClose, /rmReviewReceiptWrap[\s\S]*?removeAttribute\('src'\)/);
+  assert.match(remittanceClose, /rmDetailBody[\s\S]*?removeAttribute\('src'\)/);
+});
+
 test('application no longer loads or requires Cloudflare Turnstile', () => {
   const productionFiles = [
     '.env.example',

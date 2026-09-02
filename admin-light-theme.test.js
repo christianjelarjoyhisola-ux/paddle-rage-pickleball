@@ -106,6 +106,36 @@ test('dashboard charts use concrete valid colors in both themes', () => {
   assert.match(chartSource, /backgroundColor:\s*yellow\s*\+\s*'1a'/);
 });
 
+test('mobile WebKit uses a low-compositing admin shell while scrolling', () => {
+  assert.match(
+    adminSource,
+    /@supports\s*\(-webkit-touch-callout:\s*none\)\s*\{[\s\S]*?@media\s*\(max-width:\s*900px\)[\s\S]*?body::before\s*\{[\s\S]*?display:\s*none\s*!important/i,
+  );
+  assert.match(
+    adminSource,
+    /@supports\s*\(-webkit-touch-callout:\s*none\)[\s\S]*?\.topnav,[\s\S]*?-webkit-backdrop-filter:\s*none\s*!important;[\s\S]*?backdrop-filter:\s*none\s*!important/i,
+  );
+  assert.match(adminSource, /\.sidebar:not\(\.open\)\s*\{[\s\S]*?display:\s*none\s*!important/i);
+  assert.match(adminSource, /\.sidebar\.open\s*\{[\s\S]*?100svh/i);
+});
+
+test('live dashboard refreshes are serialized and mobile charts reuse capped canvases', () => {
+  const realtime = sourceBetween('let _admRtDebounce=null;', '   PADDLE RAGE INSIGHTS');
+  const charts = sourceBetween('function renderDashCharts(', '   BOOKINGS');
+
+  assert.match(realtime, /_admRtRefreshInFlight/);
+  assert.match(realtime, /if\(document\.hidden \|\| _admRtRefreshInFlight \|\| !_admRtRefreshQueued\) return/);
+  assert.match(realtime, /while\(_admRtRefreshQueued && !document\.hidden\)/);
+  assert.match(realtime, /_admRtChannel=_supabase\.channel\('admin-rt'\)/);
+  assert.match(realtime, /removeChannel\(_admRtChannel\)/);
+  assert.match(realtime, /pagehide',event=>\{ if\(!event\.persisted\) stopAdminRealtime\(\)/);
+  assert.match(realtime, /pageshow',event=>\{[\s\S]*?if\(!_admRtChannel\) startAdminRealtime\(\)/);
+  assert.match(charts, /animation:\s*mobileChart \? false/);
+  assert.match(charts, /devicePixelRatio:[\s\S]*?mobileChart \? 1\.5 : 2/);
+  assert.match(charts, /existing\.update\('none'\)/);
+  assert.doesNotMatch(charts, /if \(_chartBookings\) _chartBookings\.destroy\(\)/);
+});
+
 test('the theme control exposes its action and current state to assistive technology', () => {
   const button = adminSource.match(/<button\b(?=[^>]*\bid="themeBtn")[^>]*>/i)?.[0] || '';
   const themeFunctions = sourceBetween('function toggleTheme()', 'function showAdminBoot(');
