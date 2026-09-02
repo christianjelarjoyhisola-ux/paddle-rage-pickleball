@@ -123,21 +123,24 @@ test('hold release atomically authorizes bearer, host, or dashboard-owned placeh
   assert.match(publicPage, /saved reservation expired after 15 minutes[\s\S]*?slots were released/i);
 });
 
-test('Book Now shows a three-second non-confirmation countdown before revealing details', () => {
+test('Book Now shows a five-second timer guide before revealing details', () => {
   const introStart = publicPage.indexOf('<div class="booking-intro" id="bookingIntro"');
   const introEnd = publicPage.indexOf('<div class="booking-countdown-announcer"', introStart);
   assert.ok(introStart >= 0 && introEnd > introStart, 'booking intro markup must exist');
   const introMarkup = publicPage.slice(introStart, introEnd);
-  assert.match(introMarkup, /Complete your booking/i);
-  assert.match(introMarkup, /booking is not confirmed/i);
+  assert.match(introMarkup, /Complete your booking within 15 minutes/i);
+  assert.match(introMarkup, /Keep an eye on the timer at the top of the booking form/i);
   assert.doesNotMatch(introMarkup, /\bheld\b|\breserved\b|Continue/i);
 
-  assert.match(publicPage, /const RESERVATION_INTRO_MS = 3000;/);
-  assert.match(publicPage, /const RESERVATION_INTRO_EXIT_MS = 540;/);
+  assert.match(publicPage, /const RESERVATION_INTRO_MS = 5000;/);
+  assert.match(publicPage, /const RESERVATION_INTRO_EXIT_MS = 1000;/);
   const introLogic = publicPage.match(/function hideBookingIntro[\s\S]*?function cancelReservedBookings/)?.[0] || '';
   assert.match(introLogic, /RESERVATION_INTRO_MS - RESERVATION_INTRO_EXIT_MS[\s\S]*?setTimeout\(\(\) => finishBookingIntro\(token\), introPauseMs\)/);
   assert.match(introLogic, /reducedMotion \? 0 : RESERVATION_INTRO_EXIT_MS/);
   assert.match(introLogic, /booking-intro-exiting[\s\S]*?getBoundingClientRect[\s\S]*?timer\.animate/i);
+  assert.match(introLogic, /duration:940[\s\S]*?cubic-bezier\(\.22,\.75,\.2,1\)/);
+  assert.match(introLogic, /booking-intro-kicker, \.booking-intro-title, \.booking-intro-copy[\s\S]*?element\.animate/);
+  assert.doesNotMatch(introLogic, /card\.animate\(\[\s*\{[^}]*transform:/);
   assert.match(introLogic, /setBookingIntroContentInert\(true\)/);
   assert.match(introLogic, /prefers-reduced-motion:\s*reduce/i);
 

@@ -3792,16 +3792,16 @@ try {
 
     <!-- Slot reservation countdown -->
     <div id="slotCountdown">
-      <span class="scd-text">Complete your booking before time runs out <span id="scdTime" class="scd-inline-time">15:00</span></span>
+      <span class="scd-text">Complete your booking within <span id="scdTime" class="scd-inline-time">15:00</span></span>
       <span class="scd-timer" id="scdTimerBig">15:00</span>
     </div>
 
     <div class="booking-intro" id="bookingIntro" aria-hidden="true">
       <div class="booking-intro-card" id="bookingIntroCard" tabindex="-1" role="group" aria-labelledby="bookingIntroTitle" aria-describedby="bookingIntroCopy">
         <div class="booking-intro-kicker">15-minute checkout</div>
-        <div class="booking-intro-title" id="bookingIntroTitle">Complete your booking</div>
+        <div class="booking-intro-title" id="bookingIntroTitle">Complete your booking within 15 minutes</div>
         <div class="booking-intro-timer" id="bookingIntroTimer">15:00</div>
-        <p class="booking-intro-copy" id="bookingIntroCopy">Your booking is not confirmed. Finish your details and payment before time runs out.</p>
+        <p class="booking-intro-copy" id="bookingIntroCopy">Keep an eye on the timer at the top of the booking form.</p>
       </div>
     </div>
     <div class="booking-countdown-announcer" id="bookingCountdownAnnouncement" aria-live="polite" aria-atomic="true"></div>
@@ -6464,8 +6464,8 @@ let _reservationIntroFinishTimeout = null;
 let _reservationIntroToken = 0;
 let _bookingLaunchInFlight = false;
 const RESERVATION_MINUTES = 15;
-const RESERVATION_INTRO_MS = 3000;
-const RESERVATION_INTRO_EXIT_MS = 540;
+const RESERVATION_INTRO_MS = 5000;
+const RESERVATION_INTRO_EXIT_MS = 1000;
 const GUEST_RESUME_KEY = 'pb_guest_booking_resume_v1';
 
 function reservedRefs() {
@@ -6700,6 +6700,9 @@ function hideBookingIntro({ focusDetails = false } = {}) {
   const card = $('bookingIntroCard');
   const timer = $('bookingIntroTimer');
   card?.getAnimations?.().forEach(animation => animation.cancel());
+  card?.querySelectorAll('*').forEach(element => {
+    element.getAnimations?.().forEach(animation => animation.cancel());
+  });
   timer?.getAnimations?.().forEach(animation => animation.cancel());
   modal?.classList.remove('booking-intro-active', 'booking-intro-exiting');
   intro?.classList.remove('is-ending');
@@ -6733,12 +6736,27 @@ function finishBookingIntro(token) {
     const scale = Math.max(.2, Math.min(1, to.height / Math.max(1, from.height)));
     timer.animate([
       { transform:'translate(0,0) scale(1)', opacity:1 },
-      { transform:`translate(${moveX}px,${moveY}px) scale(${scale})`, opacity:.12 },
-    ], { duration:520, easing:'cubic-bezier(.22,.8,.24,1)', fill:'forwards' });
+      { transform:`translate(${moveX}px,${moveY}px) scale(${scale})`, opacity:.9 },
+    ], { duration:940, easing:'cubic-bezier(.22,.75,.2,1)', fill:'forwards' });
+    card.querySelectorAll('.booking-intro-kicker, .booking-intro-title, .booking-intro-copy').forEach(element => {
+      element.animate([
+        { opacity:1 },
+        { opacity:0 },
+      ], { duration:700, easing:'ease', fill:'forwards' });
+    });
+    const cardStyle = getComputedStyle(card);
     card.animate([
-      { transform:'scale(1)', opacity:1 },
-      { transform:'scale(.94)', opacity:0 },
-    ], { duration:480, easing:'ease', fill:'forwards' });
+      {
+        backgroundColor:cardStyle.backgroundColor,
+        borderColor:cardStyle.borderColor,
+        boxShadow:cardStyle.boxShadow,
+      },
+      {
+        backgroundColor:'rgba(0,0,0,0)',
+        borderColor:'rgba(0,0,0,0)',
+        boxShadow:'none',
+      },
+    ], { duration:760, easing:'ease', fill:'forwards' });
   }
 
   _reservationIntroFinishTimeout = setTimeout(
@@ -6758,7 +6776,7 @@ function showBookingIntro() {
   setBookingIntroContentInert(true);
   intro.setAttribute('aria-hidden', 'false');
   const announcement = $('bookingCountdownAnnouncement');
-  if (announcement) announcement.textContent = 'Complete your booking within 15 minutes. Your booking is not confirmed.';
+  if (announcement) announcement.textContent = 'Complete your booking within 15 minutes. Keep an eye on the timer at the top of the booking form.';
   requestAnimationFrame(() => card.focus({ preventScroll: true }));
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   const introPauseMs = reducedMotion
