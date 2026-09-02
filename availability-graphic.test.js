@@ -82,7 +82,7 @@ test('tolerates snake_case court maps and available-slot arrays', () => {
   ]);
 });
 
-test('merges consecutive slots, preserves gaps, and formats noon and midnight', () => {
+test('merges consecutive slots, preserves gaps, and formats noon and 12 AM', () => {
   const ranges = graphic.mergeAvailableRanges([
     { start: 10, end: 11, status: 'available' },
     { start: 11, end: 13, status: 'available' },
@@ -93,14 +93,14 @@ test('merges consecutive slots, preserves gaps, and formats noon and midnight', 
   assert.deepEqual(ranges, [
     { start: 10, end: 13, label: '10 AM–1 PM' },
     { start: 15, end: 16, label: '3–4 PM' },
-    { start: 23, end: 24, label: '11 PM–MIDNIGHT' },
+    { start: 23, end: 24, label: '11 PM–12 AM' },
   ]);
 });
 
-test('end-of-day ranges label midnight without an ambiguous 12 AM collapse', () => {
+test('end-of-day ranges use the requested 12 AM label', () => {
   assert.deepEqual(graphic.mergeAvailableRanges([
     { start: 18, end: 24, status: 'available' },
-  ]), [{ start: 18, end: 24, label: '6 PM–MIDNIGHT' }]);
+  ]), [{ start: 18, end: 24, label: '6 PM–12 AM' }]);
 });
 
 test('caption contains only court availability, booking CTA, and freshness disclaimer', () => {

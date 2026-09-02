@@ -257,8 +257,7 @@
 
   function formatRange(start, end) {
     const startLabel = formatHour(start);
-    const endLabel = number(end) === 24 ? 'MIDNIGHT' : formatHour(end);
-    if (endLabel === 'MIDNIGHT') return `${startLabel}–MIDNIGHT`;
+    const endLabel = formatHour(end);
     const startPeriod = startLabel.slice(-2);
     const endPeriod = endLabel.slice(-2);
     if (startPeriod === endPeriod) return `${startLabel.slice(0, -3)}–${endLabel}`;
