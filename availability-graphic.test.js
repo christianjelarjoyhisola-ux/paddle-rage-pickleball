@@ -305,6 +305,34 @@ test('poster layouts keep branded content inside feed and story safe areas', () 
   assert.ok(story.cardsEnd < story.footerY);
 });
 
+test('footer keeps a large crisp QR and readable booking copy inside safe bounds', () => {
+  assert.deepEqual(graphic.qrRenderConfig, {
+    size: 231,
+    margin: 4,
+    errorCorrectionLevel: 'M',
+    dark: '#050706',
+    light: '#ffffff',
+  });
+  for (const format of ['feed', 'story']) {
+    const poster = graphic.posterLayouts[format];
+    const footer = graphic.footerLayouts[format];
+    const cardRight = footer.qrCardX + footer.qrSize + footer.qrCardPadding * 2;
+    const cardBottom = footer.qrCardY + footer.qrSize + footer.qrCardPadding * 2;
+    assert.equal(footer.qrSize, 231);
+    assert.ok(footer.qrCardX >= 72 && cardRight <= graphic.formats[format].width - 72);
+    assert.ok(footer.qrCardY >= poster.footerY && cardBottom < footer.qrLabelY);
+    assert.ok(footer.qrLabelY <= poster.footerContentBottom);
+    assert.ok(footer.urlFontSize >= 48);
+    assert.ok(footer.updatedFontSize >= 30);
+    assert.ok(footer.qrLabelFontSize >= 20);
+  }
+  assert.ok(graphic.footerLayouts.story.qrLabelY <= graphic.posterLayouts.story.safeBottom);
+  const source = fs.readFileSync(require.resolve('./availability-graphic.js'), 'utf8');
+  assert.match(source, /qrCanvas\(bookingUrl, footer\.qrSize\)/);
+  assert.match(source, /context\.imageSmoothingEnabled\s*=\s*false/);
+  assert.match(source, /Updated \$\{formatGeneratedAt\(snapshot\.generatedAt\)/);
+});
+
 test('opening date and Web Share fallback are explicit', () => {
   assert.equal(graphic.constants.OPENING_DATE, '2026-09-19');
   assert.match(graphic.shareErrorMessage({ name: 'NotAllowedError' }), /Download PNG/);

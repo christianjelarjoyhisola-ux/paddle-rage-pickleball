@@ -19,23 +19,64 @@
       brandY: 54,
       heroTop: 205,
       cardsStart: 503,
-      cardsEnd: 1080,
-      footerY: 1124,
+      cardsEnd: 1004,
+      footerY: 1040,
       safeTop: 0,
       safeBottom: 1350,
-      footerContentBottom: 1322,
+      footerContentBottom: 1342,
       capacity: 4,
     }),
     story: Object.freeze({
       brandY: 265,
       heroTop: 430,
       cardsStart: 790,
-      cardsEnd: 1460,
-      footerY: 1500,
+      cardsEnd: 1316,
+      footerY: 1352,
       safeTop: 250,
       safeBottom: 1670,
-      footerContentBottom: 1666,
+      footerContentBottom: 1665,
       capacity: 4,
+    }),
+  });
+  const QR_RENDER_CONFIG = Object.freeze({
+    size: 231,
+    margin: 4,
+    errorCorrectionLevel: 'M',
+    dark: '#050706',
+    light: '#ffffff',
+  });
+  const FOOTER_LAYOUTS = Object.freeze({
+    feed: Object.freeze({
+      qrSize: QR_RENDER_CONFIG.size,
+      qrCardX: 753,
+      qrCardY: 1052,
+      qrCardPadding: 12,
+      qrLabelY: 1337,
+      readyY: 1083,
+      ctaY: 1150,
+      urlY: 1212,
+      updatedY: 1305,
+      readyFontSize: 20,
+      ctaFontSize: 58,
+      urlFontSize: 48,
+      updatedFontSize: 30,
+      qrLabelFontSize: 20,
+    }),
+    story: Object.freeze({
+      qrSize: QR_RENDER_CONFIG.size,
+      qrCardX: 753,
+      qrCardY: 1368,
+      qrCardPadding: 12,
+      qrLabelY: 1658,
+      readyY: 1403,
+      ctaY: 1473,
+      urlY: 1533,
+      updatedY: 1618,
+      readyFontSize: 20,
+      ctaFontSize: 60,
+      urlFontSize: 48,
+      updatedFontSize: 30,
+      qrLabelFontSize: 20,
     }),
   });
 
@@ -861,9 +902,9 @@
     try {
       await root.PaddleRageQRCode.toCanvas(canvas, url, {
         width: size,
-        margin: 1,
-        color: { dark: '#050706', light: '#ffffff' },
-        errorCorrectionLevel: 'M',
+        margin: QR_RENDER_CONFIG.margin,
+        color: { dark: QR_RENDER_CONFIG.dark, light: QR_RENDER_CONFIG.light },
+        errorCorrectionLevel: QR_RENDER_CONFIG.errorCorrectionLevel,
       });
       return canvas;
     } catch (_) {
@@ -1069,6 +1110,7 @@
 
   function drawFooter(context, snapshot, qr, layout, bookingUrl) {
     const { width, height, story } = layout;
+    const footer = FOOTER_LAYOUTS[story ? 'story' : 'feed'];
     const footerY = layout.footerY;
     const footerHeight = height - footerY;
     const gradient = context.createLinearGradient(0, footerY, width, height);
@@ -1085,27 +1127,40 @@
 
     const x = 72;
     context.fillStyle = '#050706';
-    context.font = `900 ${story ? 18 : 17}px "DM Sans", Arial, sans-serif`;
-    trackedText(context, 'READY TO PLAY?', x, footerY + (story ? 38 : 38), 3.1);
-    context.font = `900 ${story ? 55 : 48}px "Bebas Neue", "Arial Narrow", sans-serif`;
-    context.fillText('BOOK YOUR COURT', x, footerY + (story ? 98 : 86));
-    context.font = `800 32px "DM Sans", Arial, sans-serif`;
-    context.fillText(text(bookingUrl).replace(/^https?:\/\//, '').replace(/\/$/, ''), x, footerY + (story ? 128 : 121));
+    context.font = `900 ${footer.readyFontSize}px "DM Sans", Arial, sans-serif`;
+    trackedText(context, 'READY TO PLAY?', x, footer.readyY, 3.1);
+    context.font = `900 ${footer.ctaFontSize}px "Bebas Neue", "Arial Narrow", sans-serif`;
+    context.fillText('BOOK YOUR COURT', x, footer.ctaY);
+    context.font = `800 ${footer.urlFontSize}px "DM Sans", Arial, sans-serif`;
+    context.fillText(text(bookingUrl).replace(/^https?:\/\//, '').replace(/\/$/, ''), x, footer.urlY);
 
-    context.fillStyle = 'rgba(5,7,6,.66)';
-    context.font = `700 ${story ? 13 : 12}px "DM Sans", Arial, sans-serif`;
-    context.fillText(`AVAILABILITY AS OF ${formatGeneratedAt(snapshot.generatedAt).toUpperCase()} PHT · SLOTS MAY CHANGE`, x, story ? 1665 : 1315);
+    const updateText = `Updated ${formatGeneratedAt(snapshot.generatedAt)} PHT · Slots may change`;
+    context.fillStyle = 'rgba(5,7,6,.82)';
+    fitFont(
+      context,
+      updateText,
+      footer.qrCardX - x - 42,
+      footer.updatedFontSize,
+      24,
+      '"DM Sans", Arial, sans-serif',
+      700,
+    );
+    context.fillText(updateText, x, footer.updatedY);
 
     if (qr) {
-      const size = story ? 128 : 136;
-      const qrX = width - size - 72;
-      const qrY = story ? 1518 : 1147;
-      fillRoundRect(context, qrX - 12, qrY - 12, size + 24, size + 24, 21, '#ffffff');
+      const size = footer.qrSize;
+      const qrX = footer.qrCardX + footer.qrCardPadding;
+      const qrY = footer.qrCardY + footer.qrCardPadding;
+      const cardSize = size + footer.qrCardPadding * 2;
+      fillRoundRect(context, footer.qrCardX, footer.qrCardY, cardSize, cardSize, 22, '#ffffff');
+      context.save();
+      context.imageSmoothingEnabled = false;
       context.drawImage(qr, qrX, qrY, size, size);
+      context.restore();
       context.fillStyle = '#050706';
-      context.font = `900 ${story ? 11 : 10}px "DM Sans", Arial, sans-serif`;
+      context.font = `900 ${footer.qrLabelFontSize}px "DM Sans", Arial, sans-serif`;
       context.textAlign = 'center';
-      trackedText(context, 'SCAN TO BOOK', qrX + (story ? 8 : 12), story ? 1666 : 1312, 1.25);
+      context.fillText('SCAN TO BOOK', footer.qrCardX + cardSize / 2, footer.qrLabelY);
       context.textAlign = 'left';
     }
   }
@@ -1119,10 +1174,11 @@
     if (!context) throw new Error('Canvas rendering is unavailable in this browser.');
     const story = resolvedFormat === 'story';
     const layout = { ...format, ...POSTER_LAYOUTS[resolvedFormat], story };
+    const footer = FOOTER_LAYOUTS[resolvedFormat];
     const bookingUrl = text(options.bookingUrl) || DEFAULT_BOOKING_URL;
     const [logo, qr] = await Promise.all([
       options.logo === false ? null : logoImage(),
-      options.qr === false ? null : qrCanvas(bookingUrl, story ? 230 : 180),
+      options.qr === false ? null : qrCanvas(bookingUrl, footer.qrSize),
     ]);
 
     context.clearRect(0, 0, format.width, format.height);
@@ -1454,6 +1510,8 @@
     snapshotAge,
     formats: FORMATS,
     posterLayouts: POSTER_LAYOUTS,
+    footerLayouts: FOOTER_LAYOUTS,
+    qrRenderConfig: QR_RENDER_CONFIG,
     paginateSnapshot,
     rangeGridLayout,
     outputFileName,
