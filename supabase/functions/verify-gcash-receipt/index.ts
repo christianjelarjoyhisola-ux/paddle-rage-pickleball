@@ -668,7 +668,13 @@ function expectedMerchantForProvider(
     return {
       number: settings.bpi_merchant_number || settings.gcash_merchant_number ||
         "",
-      name: settings.bpi_merchant_name || settings.payment_merchant_name ||
+      // BPI QR receipts show the configured QR recipient label (for example
+      // "PaddleRage (QR Code)"), not necessarily the personal account name
+      // displayed beside the QR on the checkout page. Keep that receipt-only
+      // identity explicit so the BPI verifier never accepts an arbitrary
+      // GCash/G-Xchange destination.
+      name: settings.bpi_receipt_recipient_name ||
+        settings.bpi_merchant_name || settings.payment_merchant_name ||
         settings.gcash_merchant_name || "",
     };
   }
@@ -2631,7 +2637,9 @@ Deno.serve(async (req) => {
     const extractedInstapayRefNo = provider === "maya"
       ? extractMayaInstapayRefNo(ocrText)
       : null;
-    const extractedBpiTransactionRefNo = provider === "bpi"
+    const extractedBpiTransactionRefNo = providerParse?.provider === "bpi"
+      ? providerParse.receipt.transactionReference.value || null
+      : provider === "bpi"
       ? extractBpiTransactionRefNo(ocrText)
       : null;
     const amountExtraction = providerParse
@@ -2911,7 +2919,10 @@ Deno.serve(async (req) => {
         duplicateFlag: "DUPLICATE_INSTAPAY_REF",
       });
     }
-    if (provider === "bpi" && extractedBpiTransactionRefNo) {
+    if (
+      provider === "bpi" && extractedBpiTransactionRefNo &&
+      !providerVerification
+    ) {
       dedupeKeys.push({
         key: `bpi_transaction:${extractedBpiTransactionRefNo}`,
         providerKey: "bpi_transaction",
@@ -2959,6 +2970,8 @@ Deno.serve(async (req) => {
     const recipientMatch = providerVerification?.provider === "gcash"
       ? providerVerification.recipientComparison.phone === "exact" &&
         providerVerification.recipientComparison.name !== "mismatch"
+      : providerVerification?.provider === "bpi"
+      ? providerVerification.recipientComparison === "exact"
       : providerVerification
       ? ["exact", "last4_only"].includes(
         providerVerification.recipientComparison.phone,
@@ -2991,7 +3004,8 @@ Deno.serve(async (req) => {
     let confidence = result === "auto_approved" ? ocrConfidence : 0.5;
     const route = provider === "gcash"
       ? "gcash"
-      : provider === "gotyme" || provider === "maribank"
+      : provider === "bpi" || provider === "gotyme" ||
+          provider === "maribank"
       ? `${provider}_to_gcash`
       : provider;
     const verification = {
@@ -3067,7 +3081,12 @@ Deno.serve(async (req) => {
       bankTransfer: bankParse
         ? {
           reference: bankParse.reference,
-          railReference: bankParse.railReference,
+          railReference: "railReference" in bankParse
+            ? bankParse.railReference
+            : null,
+          transactionReference: "transactionReference" in bankParse
+            ? bankParse.transactionReference
+            : null,
           amount: {
             value: bankParse.amount.amount,
             reliable: bankParse.amount.reliable,
@@ -3076,11 +3095,12 @@ Deno.serve(async (req) => {
           },
           timestamp: bankParse.timestamp,
           recipient: bankParse.recipient,
-          recipientComparison: providerVerification?.provider === "gotyme" ||
+          indicators: bankParse.indicators,
+          recipientComparison: providerVerification?.provider === "bpi" ||
+              providerVerification?.provider === "gotyme" ||
               providerVerification?.provider === "maribank"
             ? providerVerification.recipientComparison
             : null,
-          indicators: bankParse.indicators,
           issues: bankParse.issues,
         }
         : null,

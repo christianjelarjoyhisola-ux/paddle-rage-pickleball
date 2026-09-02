@@ -11,6 +11,12 @@ import type {
   ReceiptVerificationContext,
 } from "./bank-to-gcash.ts";
 import {
+  type BpiReceiptParse,
+  type BpiReceiptVerificationEvidence,
+  parseBpiToGcashReceipt,
+  verifyBpiToGcashReceipt,
+} from "./bpi.ts";
+import {
   parseGotymeToGcashReceipt,
   verifyGotymeToGcashReceipt,
 } from "./gotyme.ts";
@@ -19,7 +25,7 @@ import {
   verifyMaribankToGcashReceipt,
 } from "./maribank.ts";
 
-export type DedicatedReceiptProvider = "gcash" | "gotyme" | "maribank";
+export type DedicatedReceiptProvider = "gcash" | "bpi" | "gotyme" | "maribank";
 
 export type GcashProviderReceiptParse = {
   provider: "gcash";
@@ -35,8 +41,16 @@ export type BankProviderReceiptParse = {
   receipt: BankToGcashReceiptParse;
 };
 
+export type BpiProviderReceiptParse = {
+  provider: "bpi";
+  destinationProvider: "gcash";
+  parserVersion: "bpi_to_gcash_v1";
+  receipt: BpiReceiptParse;
+};
+
 export type ProviderReceiptParse =
   | GcashProviderReceiptParse
+  | BpiProviderReceiptParse
   | BankProviderReceiptParse;
 
 export type GcashReceiptVerificationEvidence = {
@@ -50,6 +64,7 @@ export type GcashReceiptVerificationEvidence = {
 
 export type ProviderReceiptVerificationEvidence =
   | GcashReceiptVerificationEvidence
+  | BpiReceiptVerificationEvidence
   | BankReceiptVerificationEvidence;
 
 export type { ReceiptVerificationContext } from "./bank-to-gcash.ts";
@@ -65,7 +80,7 @@ export function isDedicatedReceiptProvider(
   provider: string,
 ): provider is DedicatedReceiptProvider {
   return provider === "gcash" || provider === "gotyme" ||
-    provider === "maribank";
+    provider === "maribank" || provider === "bpi";
 }
 
 export function parseProviderReceipt(
@@ -87,6 +102,13 @@ export function parseProviderReceipt(
         destinationProvider: "gcash",
         parserVersion: "gotyme_to_gcash_v1",
         receipt: parseGotymeToGcashReceipt(rawText, options),
+      };
+    case "bpi":
+      return {
+        provider,
+        destinationProvider: "gcash",
+        parserVersion: "bpi_to_gcash_v1",
+        receipt: parseBpiToGcashReceipt(rawText, options),
       };
     case "maribank":
       return {
@@ -229,6 +251,8 @@ export function verifyProviderReceipt(
         parsed.receipt as BankToGcashReceiptParse & { provider: "gotyme" },
         context,
       );
+    case "bpi":
+      return verifyBpiToGcashReceipt(parsed.receipt, context);
     case "maribank":
       return verifyMaribankToGcashReceipt(
         parsed.receipt as BankToGcashReceiptParse & { provider: "maribank" },

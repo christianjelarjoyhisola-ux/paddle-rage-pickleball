@@ -7096,9 +7096,11 @@ function gcashNameCheckLabel(value, raw){
 function receiptDetailsHtml(b){
   const ex = b.receiptExtracted || {};
   const gcash = ex.gcash || null;
+  const bankTransfer = ex.bankTransfer || null;
   const recipientCheck = gcash?.recipientComparison || {};
   const parserLabel = ({
     gcash_v1: 'Dedicated GCash v1',
+    bpi_to_gcash_v1: 'Dedicated BPI to GCash v1',
     gotyme_to_gcash_v1: 'Dedicated GoTyme → GCash v1',
     maribank_to_gcash_v1: 'Dedicated MariBank → GCash v1',
   })[String(ex.parserVersion || '').toLowerCase()] || '';
@@ -7142,6 +7144,24 @@ function receiptDetailsHtml(b){
       ['Recipient Phone', receiptDetailValue(gcashPhoneCheckLabel(recipientCheck.phone)), true],
       ['Recipient Name', receiptDetailValue(gcashNameCheckLabel(recipientCheck.name, gcash.receiver?.name?.raw)), true],
       ['Receipt Type', receiptDetailValue(gcash.indicators?.classification === 'gcash' ? 'GCash Send Money receipt' : 'Needs review'), true],
+    ] : []),
+    ...(bankTransfer && String(ex.parserVersion || '').toLowerCase() === 'bpi_to_gcash_v1' ? [
+      ['BPI Confirmation', receiptDetailValue(bankTransfer.reference?.value), true],
+      ['BPI Transaction Ref', receiptDetailValue(bankTransfer.transactionReference?.value), true],
+      ['BPI QR Recipient', receiptDetailValue(bankTransfer.recipient?.labelRaw), true],
+      ['Recipient Check', receiptDetailValue(({
+        exact:'Exact configured QR recipient matched',
+        mismatch:'Recipient mismatch',
+        missing:'Recipient not read',
+        not_configured:'BPI QR recipient not configured',
+      })[bankTransfer.recipientComparison] || 'Needs review'), true],
+      ['Receipt Evidence', receiptDetailValue([
+        bankTransfer.indicators?.transferSuccess ? 'Transfer successful' : 'Success unreadable',
+        bankTransfer.indicators?.providerBrand ? 'BPI source' : 'BPI source unreadable',
+        bankTransfer.indicators?.destinationGcash ? 'GCash destination' : 'GCash destination unreadable',
+        bankTransfer.indicators?.instaPay ? 'InstaPay' : 'InstaPay unreadable',
+        bankTransfer.indicators?.qrCodeRecipient ? 'QR recipient' : 'QR recipient unreadable',
+      ].join(' / ')), true],
     ] : []),
     ['Configured Recipient', receiptReceiverValue(ex), true],
     ...(ex.ocrFallbackReason ? [['OCR Fallback', receiptDetailValue(ex.ocrFallbackReason), true]] : []),

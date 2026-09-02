@@ -73,6 +73,27 @@ Total Amount Sent
 Ref No. 2043350406766 Aug 31, 2026 10:41 AM
 `;
 
+const BPI_OCR = `
+Transfer successful!
+Wednesday, Sep 02, 2026, 07:08:34 AM (GMT +8)
+Confirmation No. 1624507073805
+Transaction Ref. No. 099408
+Sent via BPI
+Transfer to
+GCash/G-Xchange
+PaddleRage (QR Code)
+XXXXXXXXXXXXNS8
+Transfer amount
+PHP 3,600.00
+Fee
+PHP 0.00
+Transfer from
+SAVINGS ACCOUNT
+XXXXXX6089
+Transfer service
+InstaPay
+`;
+
 Deno.test("dispatches clean GCash, GoTyme-to-GCash, and MariBank-to-GCash evidence", () => {
   const cases = [
     ["gcash", GCASH_OCR, "2043350406766", "gcash_v1"],
@@ -157,6 +178,95 @@ Deno.test("typed bank reference is comparison-only and cannot synthesize OCR evi
     withoutReference.receipt.reference.typedMatch,
     "ocr_missing",
     "missing OCR evidence is explicit",
+  );
+});
+
+Deno.test("parses and verifies the live BPI-to-GCash receipt layout", () => {
+  const typedReference = "1624507073805";
+  const parsed = parseProviderReceipt("bpi", BPI_OCR, { typedReference });
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 3600,
+    expectedRecipientName: "PaddleRage",
+    bookingStartedAt: "2026-09-01T23:06:00.000Z",
+    bookingStartedDate: "2026-09-02",
+  });
+  assert(parsed.provider === "bpi", "BPI provider");
+  assertEquals(parsed.parserVersion, "bpi_to_gcash_v1", "BPI parser version");
+  assertEquals(
+    parsed.receipt.reference.value,
+    typedReference,
+    "BPI confirmation",
+  );
+  assertEquals(
+    parsed.receipt.transactionReference.value,
+    "099408",
+    "BPI transaction reference",
+  );
+  assertEquals(parsed.receipt.amount.amount, 3600, "BPI transfer amount");
+  assertEquals(
+    parsed.receipt.timestamp.instant,
+    "2026-09-01T23:08:34.000Z",
+    "BPI GMT+8 timestamp",
+  );
+  assertEquals(verified.flags, [], "clean BPI flags");
+  assert(
+    verified.dedupeKeys.some((item) => item.key === "bpi:1624507073805"),
+    "BPI confirmation is replay-protected",
+  );
+  assert(
+    verified.dedupeKeys.some((item) => item.key === "bpi_transaction:099408"),
+    "BPI transaction reference is replay-protected",
+  );
+});
+
+Deno.test("BPI typed confirmation is comparison-only and mismatches fail closed", () => {
+  const parsed = parseProviderReceipt("bpi", BPI_OCR, {
+    typedReference: "1624507073999",
+  });
+  assert(parsed.provider === "bpi", "BPI provider");
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference: "1624507073999",
+    expectedAmount: 3600,
+    expectedRecipientName: "PaddleRage",
+    bookingStartedAt: "2026-09-01T23:06:00.000Z",
+    bookingStartedDate: "2026-09-02",
+  });
+  assertEquals(
+    parsed.receipt.reference.value,
+    "1624507073805",
+    "OCR evidence remains independent of typed confirmation",
+  );
+  assert(verified.flags.includes("REF_MISMATCH"), "BPI mismatch is flagged");
+});
+
+Deno.test("BPI missing transaction or wrong recipient stays in review", () => {
+  const typedReference = "1624507073805";
+  const parsed = parseProviderReceipt(
+    "bpi",
+    BPI_OCR
+      .replace("Transaction Ref. No. 099408", "")
+      .replace("PaddleRage (QR Code)", "Another Merchant (QR Code)"),
+    { typedReference },
+  );
+  assert(parsed.provider === "bpi", "BPI provider");
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 3600,
+    expectedRecipientName: "PaddleRage",
+    bookingStartedAt: "2026-09-01T23:06:00.000Z",
+    bookingStartedDate: "2026-09-02",
+  });
+  assert(
+    verified.flags.includes("BPI_TRANSACTION_UNREADABLE"),
+    "missing independent replay reference is flagged",
+  );
+  assert(
+    verified.flags.includes("RECEIVER_NAME_MISMATCH"),
+    "wrong BPI QR recipient is flagged",
   );
 });
 
