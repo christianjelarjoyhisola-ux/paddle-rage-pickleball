@@ -6,10 +6,15 @@ const path = require('node:path');
 const adminSource = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
 
 function bookingQuickFilterHelpers() {
+  const placeholderStart = adminSource.indexOf('function isPlaceholderHold');
+  const placeholderEnd = adminSource.indexOf('function isCancelledBooking', placeholderStart);
   const start = adminSource.indexOf("const BOOKING_TYPE_VIEWS =");
   const end = adminSource.indexOf('function setBookingQuickCount', start);
+  assert.ok(placeholderStart >= 0 && placeholderEnd > placeholderStart, 'placeholder helpers must exist');
   assert.ok(start >= 0 && end > start, 'booking quick-filter helpers must exist');
-  return new Function(`${adminSource.slice(start, end)}; return {
+  return new Function(`${adminSource.slice(placeholderStart, placeholderEnd)}; ${adminSource.slice(start, end)}; return {
+    isPlaceholderHold,
+    isFreshPlaceholderHold,
     bookingQuickGroupItems,
     bookingGroupIsHost,
     bookingQuickStatusKey,
@@ -121,6 +126,27 @@ test('filtering happens after grouping and before pagination', () => {
   assert.ok(groupedAt >= 0 && groupedAt < formFilterAt, 'raw rows must be grouped first');
   assert.ok(formFilterAt < statusFilterAt && statusFilterAt < paginationAt, 'facets must filter complete groups before pagination');
   assert.doesNotMatch(source, /bks\s*=\s*bks\.filter\(b\s*=>\s*b\.status/, 'status filtering must never split a group');
+});
+
+test('only fresh verifying placeholders stay hidden from the operational booking list', () => {
+  const now = Date.parse('2026-09-02T02:10:00Z');
+  const fresh = { email: 'reserve@hold.internal', status: 'verifying', createdAt: '2026-09-02T02:00:00Z' };
+  const expired = { ...fresh, createdAt: '2026-09-02T01:40:00Z' };
+  const orphanedPending = { ...fresh, status: 'pending' };
+  const real = { email: 'player@example.com', status: 'pending', createdAt: fresh.createdAt };
+
+  assert.equal(helpers.isFreshPlaceholderHold(fresh, now), true);
+  assert.equal(helpers.isFreshPlaceholderHold(expired, now), false);
+  assert.equal(helpers.isFreshPlaceholderHold(orphanedPending, now), false);
+  assert.equal(helpers.isFreshPlaceholderHold(real, now), false);
+
+  const renderStart = adminSource.indexOf('async function renderBookings()');
+  const renderEnd = adminSource.indexOf('function clearFilters()', renderStart);
+  const renderSource = adminSource.slice(renderStart, renderEnd);
+  assert.match(renderSource, /bks\s*=\s*bks\.filter\(b\s*=>\s*!isFreshPlaceholderHold\(b\)\)/);
+  assert.doesNotMatch(renderSource, /b\.email\s*!==?\s*['"]reserve@hold\.internal['"]/);
+  assert.match(adminSource, /Incomplete hold · no customer details/);
+  assert.match(adminSource, />Release Hold</);
 });
 
 test('mobile status filters are touch-sized and horizontally swipeable', () => {

@@ -6559,7 +6559,12 @@ function isManualImportBooking(b) {
   return ref.startsWith('MANUAL-') || method === 'manual';
 }
 function isPlaceholderHold(b) {
-  return b?.email === 'reserve@hold.internal';
+  return String(b?.email || '').trim().toLowerCase() === 'reserve@hold.internal';
+}
+function isFreshPlaceholderHold(b, now = Date.now()) {
+  if (!isPlaceholderHold(b) || String(b?.status || '').toLowerCase() !== 'verifying') return false;
+  const created = new Date(b?.createdAt || b?.created_at || '').getTime();
+  return Number.isFinite(created) && (now - created) < 15 * 60 * 1000;
 }
 function isCancelledBooking(b) {
   return ['cancelled','forfeited'].includes(String(b?.status || '').toLowerCase());
@@ -7150,6 +7155,7 @@ function receiptDetailsHtml(b){
   </div>`).join('');
 }
 function bookingSourceLabel(b){
+  if (isPlaceholderHold(b)) return 'Incomplete Hold';
   const via = String(b?.createdVia || '').toLowerCase();
   const role = String(b?.createdByRole || '').toLowerCase();
   if (via === 'admin') {
@@ -7169,6 +7175,9 @@ function bookingSourceMeta(b){
   return actor && label !== 'Customer Website' ? `${label}: ${actor}` : label;
 }
 function bookingSourceBadge(b){
+  if (isPlaceholderHold(b)) {
+    return '<span class="receipt-chip" style="color:var(--red);background:var(--red-bg);border-color:rgba(200,61,38,.32)">Incomplete hold · no customer details</span>';
+  }
   const via = String(b?.createdVia || '').toLowerCase();
   const isAdmin = via === 'admin';
   const isHost = via === 'host' || b?.hostBooking;
@@ -7270,6 +7279,11 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true){
   const balanceReviewLocked = hasBalance && balanceReviewState !== 'clear';
   const canRecordManualPayment = hasBalance && !balanceReviewLocked && ['owner','court_owner'].includes(String(sess?.role || ''));
   const canCorrectForfeiture = forfeited && b.hostBooking && ['owner','court_owner'].includes(String(sess?.role || ''));
+  if (isPlaceholderHold(b)) {
+    return `${includePrimaryActions ? bookingDetailsButton(b) : ''}
+      ${!['cancelled','forfeited'].includes(String(b.status || '').toLowerCase()) ? `<button class="btn btn-d btn-sm" onclick="updateStatus('${jsArg(actionRef)}','cancelled')">Release Hold</button>` : ''}
+      ${canDelete ? `<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>` : ''}`;
+  }
   return `${includePrimaryActions ? `${bookingDetailsButton(b)} ${hostBalanceReviewButton(b)} ${hostPaymentHistoryButton(b)}` : ''}
     ${!balanceReviewLocked && !grouped && !['cancelled','forfeited'].includes(b.status)?`<button class="btn btn-sm" style="background:rgba(74,154,220,.12);color:#5a9ad4;border:1px solid rgba(74,154,220,.3)" onclick="openRescheduleModal('${jsArg(actionRef)}')">Reschedule</button>`:''}
     ${b.email && (forfeited || (hasBalance && balanceReviewState === 'clear'))?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Notice':'Balance Reminder'}</button>`:''}
@@ -7288,6 +7302,7 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true){
     ${canDelete && !forfeited && !balanceReviewLocked?`<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>`:''}`;
 }
 function bookingPayStateSelect(b){
+  if (isPlaceholderHold(b)) return '<span class="bdg bdg-x">NO PAYMENT EVIDENCE</span>';
   const actionRef = b.primaryRef || b.ref;
   if (b.status === 'forfeited' || b.paymentStatus === 'deposit_retained') return payStatusBdg('deposit_retained');
   if (hostBalancePendingPayment(b)) {
@@ -7307,6 +7322,7 @@ function bookingPayStateSelect(b){
   </select>`;
 }
 function bookingQuickConfirmIssue(b) {
+  if (isPlaceholderHold(b)) return 'This incomplete hold has no customer or payment evidence. Release it instead.';
   const bookingState = String(b?.status || '').toLowerCase();
   const paymentState = String(b?.paymentStatus || '').toLowerCase();
   const receiptState = String(b?.receiptStatus || 'none').toLowerCase();
@@ -8784,7 +8800,7 @@ async function renderBookings(){
   // when a customer clicks Book Now but hasn't submitted yet. A completed booking
   // carries the real customer email, so any row still on reserve@hold.internal is
   // just an in-progress or abandoned hold and adds no value to the admin list.
-  bks=bks.filter(b=>b.email!=='reserve@hold.internal');
+  bks=bks.filter(b=>!isFreshPlaceholderHold(b));
   const allGroups = groupBookings(bks, bks);
   const filters = bookingFilters();
   const { q, fd, fp } = filters;
