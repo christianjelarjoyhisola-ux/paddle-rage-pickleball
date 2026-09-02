@@ -827,7 +827,7 @@ body.dark .shared-date-display {
   display:flex; flex-direction:column;
   box-shadow:0 28px 70px rgba(0,0,0,.65);
   animation:modalIn .22s cubic-bezier(.34,1.56,.64,1);
-  overflow:hidden;
+  overflow:hidden; position:relative;
 }
 @keyframes modalIn {
   from { opacity:0; transform:scale(.93) translateY(16px); }
@@ -867,6 +867,56 @@ body.dark .shared-date-display {
 #slotCountdown .scd-timer { font-size:.94rem; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:.3px; flex-shrink:0; }
 #slotCountdown.urgent { background:rgba(220,38,38,.13); border-color:rgba(220,38,38,.3); color:#f87171; }
 #slotCountdown.urgent .scd-timer { animation: pulse-yellow .7s ease-in-out infinite; }
+.booking-intro {
+  position:absolute; inset:0; z-index:20;
+  display:grid; place-items:center; padding:24px;
+  background:rgba(8,16,13,.74); backdrop-filter:blur(7px);
+  -webkit-backdrop-filter:blur(7px);
+  opacity:0; visibility:hidden; pointer-events:none;
+  transition:background .42s ease,backdrop-filter .42s ease,opacity .18s ease;
+}
+.booking-intro[aria-hidden="false"] { opacity:1; visibility:visible; pointer-events:auto; }
+.booking-intro.is-ending { background:transparent; backdrop-filter:blur(0); -webkit-backdrop-filter:blur(0); pointer-events:none; }
+.booking-intro-card {
+  width:min(100%,390px); padding:26px 22px 24px; text-align:center;
+  background:var(--card);
+  border:1px solid rgba(var(--lime-rgb),.42); border-radius:18px;
+  box-shadow:0 24px 70px rgba(0,0,0,.5),0 0 36px rgba(var(--lime-rgb),.09);
+  transform-origin:center center; will-change:transform,opacity;
+}
+.booking-intro-kicker {
+  margin-bottom:7px; color:var(--lime-ink); font-size:.72rem; font-weight:800;
+  letter-spacing:1.1px; text-transform:uppercase;
+}
+.booking-intro-title { font-size:1.45rem; font-weight:900; line-height:1.15; color:var(--text); }
+.booking-intro-timer {
+  margin:12px 0 10px; color:#fbbf24; font-size:clamp(2.65rem,12vw,4rem);
+  font-weight:900; font-variant-numeric:tabular-nums; letter-spacing:1px; line-height:1;
+}
+.booking-intro-copy { margin:0 auto; max-width:330px; color:var(--muted); font-size:.84rem; line-height:1.55; }
+#bookModal.booking-intro-active .wiz-steps,
+#bookModal.booking-intro-active .bk-modal-body,
+#bookModal.booking-intro-active .bk-modal-ft {
+  filter:blur(5px); opacity:.42; pointer-events:none; user-select:none;
+  transition:filter .28s ease,opacity .28s ease;
+}
+#bookModal.booking-intro-exiting .wiz-steps,
+#bookModal.booking-intro-exiting .bk-modal-body,
+#bookModal.booking-intro-exiting .bk-modal-ft { filter:none; opacity:1; }
+#bookModal.booking-intro-active:not(.booking-intro-exiting) #slotCountdown { visibility:hidden; }
+#bookModal.booking-intro-exiting #slotCountdown { visibility:visible; }
+#bookModal.booking-intro-exiting #slotCountdown .scd-timer { opacity:0; }
+.booking-countdown-announcer {
+  position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+}
+@media (prefers-reduced-motion:reduce) {
+  .booking-intro,
+  #bookModal.booking-intro-active .wiz-steps,
+  #bookModal.booking-intro-active .bk-modal-body,
+  #bookModal.booking-intro-active .bk-modal-ft { transition:none; }
+  .booking-intro-card { will-change:auto; }
+}
 .bk-modal-ft {
   padding:14px 22px; border-top:1px solid var(--border); flex-shrink:0;
   display:flex; gap:10px; background:var(--card); border-radius:0 0 18px 18px;
@@ -3738,13 +3788,23 @@ try {
 
 <!-- BOOKING MODAL — 5-step wizard -->
 <div class="bk-modal-overlay" id="bookModal">
-  <div class="bk-modal">
+  <div class="bk-modal" role="dialog" aria-modal="true" aria-label="Complete your booking">
 
     <!-- Slot reservation countdown -->
     <div id="slotCountdown">
-      <span class="scd-text">⏳ Slot reserved — complete booking within <span id="scdTime" class="scd-inline-time">15:00</span></span>
+      <span class="scd-text">Complete your booking before time runs out <span id="scdTime" class="scd-inline-time">15:00</span></span>
       <span class="scd-timer" id="scdTimerBig">15:00</span>
     </div>
+
+    <div class="booking-intro" id="bookingIntro" aria-hidden="true">
+      <div class="booking-intro-card" id="bookingIntroCard" tabindex="-1" role="group" aria-labelledby="bookingIntroTitle" aria-describedby="bookingIntroCopy">
+        <div class="booking-intro-kicker">15-minute checkout</div>
+        <div class="booking-intro-title" id="bookingIntroTitle">Complete your booking</div>
+        <div class="booking-intro-timer" id="bookingIntroTimer">15:00</div>
+        <p class="booking-intro-copy" id="bookingIntroCopy">Your booking is not confirmed. Finish your details and payment before time runs out.</p>
+      </div>
+    </div>
+    <div class="booking-countdown-announcer" id="bookingCountdownAnnouncement" aria-live="polite" aria-atomic="true"></div>
 
     <!-- Step indicator -->
     <div class="wiz-steps">
@@ -6397,7 +6457,15 @@ let _reservedRef = null;
 let _reservedRefs = [];
 let _reservationStartedAt = null;
 let _countdownInterval = null;
+let _countdownTick = null;
+let _countdownAnnounced = new Set();
+let _reservationIntroTimeout = null;
+let _reservationIntroFinishTimeout = null;
+let _reservationIntroToken = 0;
+let _bookingLaunchInFlight = false;
 const RESERVATION_MINUTES = 15;
+const RESERVATION_INTRO_MS = 3000;
+const RESERVATION_INTRO_EXIT_MS = 540;
 const GUEST_RESUME_KEY = 'pb_guest_booking_resume_v1';
 
 function reservedRefs() {
@@ -6583,13 +6651,120 @@ async function maybeResumeGuestBooking() {
   const resumeStep = Math.min(5, Math.max(3, Number(resume.form?.step || 3)));
   wizGoTo(resumeStep);
   startSlotCountdown(reservationSecondsLeft(resume.startedAt));
-  toast('Your reserved booking was restored. Continue before the timer ends.', 'ok');
+  toast('Your unfinished booking was restored. Complete it before the timer ends.', 'ok');
 }
 
 function releaseBookingHoldRef(ref) {
   return DB.releaseBookingHold
     ? DB.releaseBookingHold(ref)
     : DB.updateBooking(ref, { status: 'cancelled', paymentStatus: 'rejected' });
+}
+
+function setBookingLaunchInFlight(active) {
+  _bookingLaunchInFlight = !!active;
+  document.querySelectorAll('button[onclick*="proceedToBook"]').forEach(button => {
+    if (_bookingLaunchInFlight) {
+      if (!button.dataset.bookingLaunchLabel) button.dataset.bookingLaunchLabel = button.innerHTML;
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      button.textContent = 'Securing your time…';
+      return;
+    }
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    if (button.dataset.bookingLaunchLabel) {
+      button.innerHTML = button.dataset.bookingLaunchLabel;
+      delete button.dataset.bookingLaunchLabel;
+    }
+  });
+}
+
+function setBookingIntroContentInert(inert) {
+  const modal = $('bookModal');
+  if (!modal) return;
+  modal.querySelectorAll('.wiz-steps, .bk-modal-body, .bk-modal-ft').forEach(section => {
+    section.inert = !!inert;
+    if (inert) section.setAttribute('aria-hidden', 'true');
+    else section.removeAttribute('aria-hidden');
+  });
+}
+
+function hideBookingIntro({ focusDetails = false } = {}) {
+  _reservationIntroToken++;
+  if (_reservationIntroTimeout) clearTimeout(_reservationIntroTimeout);
+  if (_reservationIntroFinishTimeout) clearTimeout(_reservationIntroFinishTimeout);
+  _reservationIntroTimeout = null;
+  _reservationIntroFinishTimeout = null;
+  const modal = $('bookModal');
+  const intro = $('bookingIntro');
+  const card = $('bookingIntroCard');
+  const timer = $('bookingIntroTimer');
+  card?.getAnimations?.().forEach(animation => animation.cancel());
+  timer?.getAnimations?.().forEach(animation => animation.cancel());
+  modal?.classList.remove('booking-intro-active', 'booking-intro-exiting');
+  intro?.classList.remove('is-ending');
+  intro?.setAttribute('aria-hidden', 'true');
+  setBookingIntroContentInert(false);
+  if (focusDetails && $('bookModal')?.classList.contains('active')) {
+    requestAnimationFrame(() => $('bName')?.focus({ preventScroll: true }));
+  }
+}
+
+function finishBookingIntro(token) {
+  if (token !== _reservationIntroToken) return;
+  const modal = $('bookModal');
+  const intro = $('bookingIntro');
+  const card = $('bookingIntroCard');
+  const timer = $('bookingIntroTimer');
+  const target = $('scdTimerBig');
+  if (!modal || !intro || !card || !timer || !target) {
+    hideBookingIntro({ focusDetails: true });
+    return;
+  }
+
+  modal.classList.add('booking-intro-exiting');
+  intro.classList.add('is-ending');
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  if (!reducedMotion && typeof timer.animate === 'function') {
+    const from = timer.getBoundingClientRect();
+    const to = target.getBoundingClientRect();
+    const moveX = (to.left + to.width / 2) - (from.left + from.width / 2);
+    const moveY = (to.top + to.height / 2) - (from.top + from.height / 2);
+    const scale = Math.max(.2, Math.min(1, to.height / Math.max(1, from.height)));
+    timer.animate([
+      { transform:'translate(0,0) scale(1)', opacity:1 },
+      { transform:`translate(${moveX}px,${moveY}px) scale(${scale})`, opacity:.12 },
+    ], { duration:520, easing:'cubic-bezier(.22,.8,.24,1)', fill:'forwards' });
+    card.animate([
+      { transform:'scale(1)', opacity:1 },
+      { transform:'scale(.94)', opacity:0 },
+    ], { duration:480, easing:'ease', fill:'forwards' });
+  }
+
+  _reservationIntroFinishTimeout = setTimeout(
+    () => hideBookingIntro({ focusDetails: true }),
+    reducedMotion ? 0 : RESERVATION_INTRO_EXIT_MS,
+  );
+}
+
+function showBookingIntro() {
+  hideBookingIntro();
+  const modal = $('bookModal');
+  const intro = $('bookingIntro');
+  const card = $('bookingIntroCard');
+  if (!modal || !intro || !card) return;
+  const token = _reservationIntroToken;
+  modal.classList.add('booking-intro-active');
+  setBookingIntroContentInert(true);
+  intro.setAttribute('aria-hidden', 'false');
+  const announcement = $('bookingCountdownAnnouncement');
+  if (announcement) announcement.textContent = 'Complete your booking within 15 minutes. Your booking is not confirmed.';
+  requestAnimationFrame(() => card.focus({ preventScroll: true }));
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const introPauseMs = reducedMotion
+    ? RESERVATION_INTRO_MS
+    : RESERVATION_INTRO_MS - RESERVATION_INTRO_EXIT_MS;
+  _reservationIntroTimeout = setTimeout(() => finishBookingIntro(token), introPauseMs);
 }
 
 function cancelReservedBookings(refs = reservedRefs()) {
@@ -6730,6 +6905,9 @@ function showLateNightExtensionPrompt(candidate) {
 }
 
 async function proceedToBookLegacy(courtId) {
+  if (_bookingLaunchInFlight) return;
+  setBookingLaunchInFlight(true);
+  try {
   await ensureCourt(courtId);
   const visibleDate = $('cDate_' + courtId)?.value || cardSel.date;
   if (!cardSel.courtId || cardSel.courtId !== courtId || cardSel.date !== visibleDate || cardSel.slots.length === 0) {
@@ -6802,9 +6980,16 @@ async function proceedToBookLegacy(courtId) {
   const _mb1 = $('mobileBookBar'); if (_mb1) _mb1.style.display = 'none';
   wizGoTo(3);
   startSlotCountdown(reservationSecondsLeft(reserveStartedAt));
+  showBookingIntro();
+  } finally {
+    setBookingLaunchInFlight(false);
+  }
 }
 
 async function proceedToBook(courtId = null) {
+  if (_bookingLaunchInFlight) return;
+  setBookingLaunchInFlight(true);
+  try {
   const selections = cardSelectionList();
   if (selections.length === 0) {
     toast('Please select at least one time slot.', 'inf');
@@ -6917,6 +7102,10 @@ async function proceedToBook(courtId = null) {
   if (mobileBar) mobileBar.style.display = 'none';
   wizGoTo(3);
   startSlotCountdown(reservationSecondsLeft(reserveStartedAt));
+  showBookingIntro();
+  } finally {
+    setBookingLaunchInFlight(false);
+  }
 }
 
 function closeBookModal(options = {}) {
@@ -6928,6 +7117,7 @@ function closeBookModal(options = {}) {
   if (!options.skipReceiptClear) clearReceipt({ force: true, discard: true });
   const receiptCleanup = _receiptDiscardPromise.catch(() => null);
   const hasReservedBookings = reservedRefs().length > 0;
+  hideBookingIntro();
   $('bookModal').classList.remove('active');
   document.body.style.overflow = '';
   stopSlotCountdown();
@@ -6949,41 +7139,63 @@ function startSlotCountdown(initialSeconds = null) {
   const banner = $('slotCountdown');
   const timeEl = $('scdTime');
   const bigEl  = $('scdTimerBig');
+  const introEl = $('bookingIntroTimer');
+  const announcement = $('bookingCountdownAnnouncement');
   if (!banner) return;
   banner.style.display = 'flex';
   banner.classList.remove('urgent');
   const hasResumeSeconds = initialSeconds !== null && initialSeconds !== undefined && Number.isFinite(Number(initialSeconds));
-  let secsLeft = hasResumeSeconds
+  const fallbackSeconds = hasResumeSeconds
     ? Math.max(0, Math.floor(Number(initialSeconds)))
     : RESERVATION_MINUTES * 60;
+  const startedMs = new Date(_reservationStartedAt || '').getTime();
+  const deadlineMs = Number.isFinite(startedMs)
+    ? startedMs + RESERVATION_MINUTES * 60 * 1000
+    : Date.now() + fallbackSeconds * 1000;
+  _countdownAnnounced = new Set();
   function fmt(s) {
     const m = Math.floor(s / 60), sec = s % 60;
     return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
   }
-  function tick() {
+  _countdownTick = function tick() {
+    const secsLeft = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000));
     const t = fmt(secsLeft);
     if (timeEl) timeEl.textContent = t;
     if (bigEl)  bigEl.textContent  = t;
+    if (introEl) introEl.textContent = t;
     if (secsLeft <= 60) banner.classList.add('urgent');
+    if (secsLeft <= 120 && secsLeft > 60 && !_countdownAnnounced.has('two-minutes')) {
+      _countdownAnnounced.add('two-minutes');
+      if (announcement) announcement.textContent = 'Two minutes remain. Your booking is not confirmed.';
+    }
+    if (secsLeft <= 60 && secsLeft > 0 && !_countdownAnnounced.has('one-minute')) {
+      _countdownAnnounced.add('one-minute');
+      if (announcement) announcement.textContent = 'One minute remains. Complete your booking now.';
+    }
     if (secsLeft <= 0) {
       stopSlotCountdown();
       banner.style.display = 'none';
-      // Time expired — cancel reservation and close modal.
-      toast('⏰ Time expired! Your slot reservation was released.', 'err');
+      if (announcement) announcement.textContent = 'Time expired. Your booking was not completed.';
+      toast('⏰ Time expired — your booking was not completed. Please choose another time.', 'err');
       closeBookModal();
       return;
     }
-    secsLeft--;
-  }
-  tick();
-  _countdownInterval = setInterval(tick, 1000);
+  };
+  _countdownTick();
+  if (_countdownTick) _countdownInterval = setInterval(() => _countdownTick?.(), 1000);
 }
 
 function stopSlotCountdown() {
   if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null; }
+  _countdownTick = null;
   const banner = $('slotCountdown');
   if (banner) banner.style.display = 'none';
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) _countdownTick?.();
+});
+window.addEventListener('pageshow', () => _countdownTick?.());
 
 /* ── BOOKING WIZARD ── */
 function clearBookingInvalid(target) {

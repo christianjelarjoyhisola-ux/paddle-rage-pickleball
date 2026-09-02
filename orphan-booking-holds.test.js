@@ -123,6 +123,44 @@ test('hold release atomically authorizes bearer, host, or dashboard-owned placeh
   assert.match(publicPage, /saved reservation expired after 15 minutes[\s\S]*?slots were released/i);
 });
 
+test('Book Now shows a three-second non-confirmation countdown before revealing details', () => {
+  const introStart = publicPage.indexOf('<div class="booking-intro" id="bookingIntro"');
+  const introEnd = publicPage.indexOf('<div class="booking-countdown-announcer"', introStart);
+  assert.ok(introStart >= 0 && introEnd > introStart, 'booking intro markup must exist');
+  const introMarkup = publicPage.slice(introStart, introEnd);
+  assert.match(introMarkup, /Complete your booking/i);
+  assert.match(introMarkup, /booking is not confirmed/i);
+  assert.doesNotMatch(introMarkup, /\bheld\b|\breserved\b|Continue/i);
+
+  assert.match(publicPage, /const RESERVATION_INTRO_MS = 3000;/);
+  assert.match(publicPage, /const RESERVATION_INTRO_EXIT_MS = 540;/);
+  const introLogic = publicPage.match(/function hideBookingIntro[\s\S]*?function cancelReservedBookings/)?.[0] || '';
+  assert.match(introLogic, /RESERVATION_INTRO_MS - RESERVATION_INTRO_EXIT_MS[\s\S]*?setTimeout\(\(\) => finishBookingIntro\(token\), introPauseMs\)/);
+  assert.match(introLogic, /reducedMotion \? 0 : RESERVATION_INTRO_EXIT_MS/);
+  assert.match(introLogic, /booking-intro-exiting[\s\S]*?getBoundingClientRect[\s\S]*?timer\.animate/i);
+  assert.match(introLogic, /setBookingIntroContentInert\(true\)/);
+  assert.match(introLogic, /prefers-reduced-motion:\s*reduce/i);
+
+  const launchStart = publicPage.indexOf('async function proceedToBook(courtId = null)');
+  const launchEnd = publicPage.indexOf('function closeBookModal', launchStart);
+  const launch = launchStart >= 0 && launchEnd > launchStart
+    ? publicPage.slice(launchStart, launchEnd)
+    : '';
+  assert.match(launch, /if \(_bookingLaunchInFlight\) return;/);
+  assert.match(launch, /setBookingLaunchInFlight\(true\)/);
+  assert.match(launch, /await DB\.addBookings\(reserveRows\)[\s\S]*?startSlotCountdown[\s\S]*?showBookingIntro\(\)/);
+  assert.match(launch, /finally[\s\S]*?setBookingLaunchInFlight\(false\)/);
+
+  const countdownStart = publicPage.indexOf('function startSlotCountdown');
+  const countdownEnd = publicPage.indexOf('function stopSlotCountdown', countdownStart);
+  const countdown = countdownStart >= 0 && countdownEnd > countdownStart
+    ? publicPage.slice(countdownStart, countdownEnd)
+    : '';
+  assert.match(countdown, /deadlineMs[\s\S]*?Date\.now\(\)/);
+  assert.match(countdown, /bookingIntroTimer/);
+  assert.doesNotMatch(countdown, /secsLeft--/);
+});
+
 test('expired placeholder cleanup is recurring and fails closed around evidence', () => {
   const rowGuard = cleanupMigration.match(
     /create or replace function public\.is_evidence_free_booking_hold[\s\S]*?\n\$\$;/i
