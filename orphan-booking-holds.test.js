@@ -143,6 +143,11 @@ test('Book Now shows a five-second timer guide before revealing details', () => 
   assert.doesNotMatch(introLogic, /card\.animate\(\[\s*\{[^}]*transform:/);
   assert.match(introLogic, /setBookingIntroContentInert\(true\)/);
   assert.match(introLogic, /prefers-reduced-motion:\s*reduce/i);
+  assert.match(publicPage, /@keyframes bookingTimerAttention[\s\S]*?transform:scale\(1\.06\)[\s\S]*?box-shadow/);
+  assert.match(publicPage, /#slotCountdown\.timer-landed:not\(\.urgent\) \.scd-timer\s*\{\s*animation:bookingTimerAttention \.8s ease-in-out 3;/);
+  assert.match(publicPage, /#slotCountdown\.urgent \.scd-timer[\s\S]*?animation:bookingTimerUrgent 1\.4s ease-in-out infinite;/);
+  assert.match(publicPage, /prefers-reduced-motion:reduce[\s\S]*?#slotCountdown\.timer-landed \.scd-timer,[\s\S]*?animation:none/);
+  assert.match(introLogic, /if \(focusDetails[\s\S]*?classList\.add\('timer-landed'\)/);
 
   const launchStart = publicPage.indexOf('async function proceedToBook(courtId = null)');
   const launchEnd = publicPage.indexOf('function closeBookModal', launchStart);
@@ -162,6 +167,7 @@ test('Book Now shows a five-second timer guide before revealing details', () => 
   assert.match(countdown, /deadlineMs[\s\S]*?Date\.now\(\)/);
   assert.match(countdown, /bookingIntroTimer/);
   assert.doesNotMatch(countdown, /secsLeft--/);
+  assert.match(publicPage, /function stopSlotCountdown\(\)[\s\S]*?classList\.remove\('timer-landed'\)/);
 });
 
 test('expired placeholder cleanup is recurring and fails closed around evidence', () => {
