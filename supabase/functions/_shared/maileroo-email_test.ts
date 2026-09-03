@@ -3,6 +3,7 @@ import { confirmedBookingPaidAmount } from "./booking-email-payment.ts";
 import {
   renderBalanceNoticeEmail,
   renderBookingCancellationEmail,
+  renderBookingPaymentTransferEmail,
   renderConfirmationEmail,
   renderHostDecisionEmail,
   renderHostVerificationEmail,
@@ -285,6 +286,53 @@ Deno.test("cancellation email explains the released slot and payment state", () 
   assert(
     email.plain.includes("No settled payment is recorded"),
     "plain payment state missing",
+  );
+});
+
+Deno.test("payment-transfer email is explicit, complete, and escapes every operator-controlled value", () => {
+  const email = renderBookingPaymentTransferEmail({
+    sourceBookingRef: "OLD-<script>alert(1)</script>",
+    targetBookingRef: "NEW-&-002",
+    fullName: "Jamie <img src=x onerror=alert(2)>",
+    courtName: "Court <Three>",
+    date: "2026-10-06",
+    startTime: "7:00 PM",
+    endTime: "11:00 PM",
+    amount: 1290,
+    reason: "Player corrected the reservation <script>alert(3)</script>",
+  });
+
+  assert(
+    email.html.includes("PAYMENT MOVED · BOOKING CONFIRMED") &&
+      email.html.includes("Cancelled booking") &&
+      email.html.includes("Confirmed booking"),
+    "transfer lifecycle and both booking sides must be unmistakable",
+  );
+  assert(
+    email.html.includes("PHP") === false && email.plain.includes("PHP 1,290.00"),
+    "HTML must use the shared peso formatting while plain text keeps an accessible currency label",
+  );
+  assert(
+    email.plain.includes("OLD-<script>alert(1)</script>") &&
+      email.plain.includes("NEW-&-002") &&
+      email.plain.includes("No new charge was made"),
+    "plain text must include both references and the no-new-charge explanation",
+  );
+  for (const rawHtml of [
+    "<script>alert(1)</script>",
+    "<img src=x onerror=alert(2)>",
+    "<script>alert(3)</script>",
+    "Court <Three>",
+  ]) {
+    assert(!email.html.includes(rawHtml), `unsafe HTML was not escaped: ${rawHtml}`);
+  }
+  assert(
+    email.html.includes("OLD-&lt;script&gt;alert(1)&lt;/script&gt;") &&
+      email.html.includes("NEW-&amp;-002") &&
+      email.html.includes("Jamie &lt;img src=x onerror=alert(2)&gt;") &&
+      email.html.includes("Court &lt;Three&gt;") &&
+      email.html.includes("Player corrected the reservation &lt;script&gt;alert(3)&lt;/script&gt;"),
+    "escaped transfer content is missing",
   );
 });
 

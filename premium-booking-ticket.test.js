@@ -89,7 +89,7 @@ test('ticket keeps actions visible and uses a readable single-column mobile flow
     'player details should become readable label/value rows at mobile widths',
   );
 
-  const ticketMarkup = sourceBetween('<div class="inv-ticket-summary">', '</div>\n    </div>\n\n    <footer class="inv-actions">');
+  const ticketMarkup = sourceBetween('<div class="inv-ticket-summary">', '<footer class="inv-actions">');
   const flow = ['inv-status-strip', 'inv-session-card', 'inv-payment-card', 'inv-customer-grid'];
   for (let index = 1; index < flow.length; index += 1) {
     assert.ok(

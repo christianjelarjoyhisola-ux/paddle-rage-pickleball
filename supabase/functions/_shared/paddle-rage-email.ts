@@ -70,6 +70,18 @@ export type BookingCancellationPayload = {
   paymentRejected?: boolean;
 };
 
+export type BookingPaymentTransferPayload = {
+  sourceBookingRef: string;
+  targetBookingRef: string;
+  fullName: string;
+  courtName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  amount: number;
+  reason: string;
+};
+
 export type BalanceNoticePayload = {
   eventType:
     | "reminder_3d"
@@ -656,6 +668,63 @@ export function renderBookingCancellationEmail(
           ? "Contact the Paddle Rage team with your booking reference if you need the payment reviewed."
           : "No settled payment is recorded for this booking."
       }\nThe court slot has been released. Create a new booking if you still want to play.\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
+  };
+}
+
+export function renderBookingPaymentTransferEmail(
+  payload: BookingPaymentTransferPayload,
+): { html: string; plain: string } {
+  const name = plain(payload.fullName) || "Player";
+  const reason = plain(payload.reason) ||
+    "Your payment was moved from a cancelled booking to the correct booking.";
+  const sourceRef = plain(payload.sourceBookingRef);
+  const targetRef = plain(payload.targetBookingRef);
+  const scheduleDate = formatDate(payload.date);
+  const bodyHtml = `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;">
+      <tr>
+        <td class="stack-cell" width="48%" style="width:48%;vertical-align:top;background:${BRAND.dangerTint};border:1px solid ${BRAND.danger};border-radius:12px;padding:17px;box-sizing:border-box;">
+          <div style="font-size:10px;line-height:1.3;font-weight:900;letter-spacing:.9px;text-transform:uppercase;color:${BRAND.danger};">Cancelled booking</div>
+          <div style="margin-top:8px;font-family:Consolas,'Courier New',monospace;font-size:15px;line-height:1.5;font-weight:900;color:${BRAND.muted};text-decoration:line-through;overflow-wrap:anywhere;">${escapeHtml(sourceRef)}</div>
+        </td>
+        <td class="stack-cell" width="4%" style="width:4%;font-size:0;line-height:0;">&nbsp;</td>
+        <td class="stack-cell stack-gap" width="48%" style="width:48%;vertical-align:top;background:${BRAND.neonTint};border:1px solid ${BRAND.neonDark};border-radius:12px;padding:17px;box-sizing:border-box;">
+          <div style="font-size:10px;line-height:1.3;font-weight:900;letter-spacing:.9px;text-transform:uppercase;color:${BRAND.neon};">Confirmed booking</div>
+          <div style="margin-top:8px;font-family:Consolas,'Courier New',monospace;font-size:15px;line-height:1.5;font-weight:900;color:${BRAND.neon};overflow-wrap:anywhere;">${escapeHtml(targetRef)}</div>
+        </td>
+      </tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;border:1px solid ${BRAND.border};border-radius:13px;">
+      <tr><td style="padding:17px 20px;border-bottom:1px solid ${BRAND.border};">
+        <div style="font-size:10px;line-height:1.3;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:${BRAND.muted};">New confirmed schedule</div>
+        <div style="margin-top:5px;font-size:14px;line-height:1.6;font-weight:800;color:${BRAND.text};">${escapeHtml(payload.courtName)}<br>${escapeHtml(scheduleDate)}<br>${escapeHtml(payload.startTime)} &ndash; ${escapeHtml(payload.endTime)}</div>
+      </td></tr>
+      <tr><td style="padding:17px 20px;">
+        <div style="font-size:10px;line-height:1.3;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:${BRAND.muted};">Payment moved</div>
+        <div style="margin-top:4px;font-size:18px;line-height:1.4;font-weight:900;color:${BRAND.neon};">${formatPhp(payload.amount)}</div>
+      </td></tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;background:${BRAND.surfaceRaised};border-left:4px solid ${BRAND.neon};border-radius:8px;">
+      <tr><td style="padding:16px 18px;">
+        <div style="font-size:10px;line-height:1.3;font-weight:900;letter-spacing:.8px;text-transform:uppercase;color:${BRAND.neon};">Correction note</div>
+        <div style="margin-top:7px;font-size:14px;line-height:1.7;color:${BRAND.text};">${escapeHtml(reason)}</div>
+      </td></tr>
+    </table>
+    <div style="font-size:14px;line-height:1.7;color:${BRAND.muted};">Your original booking remains cancelled. Its court slots stay released. The existing payment was moved to the confirmed booking above; no new charge was made.</div>`;
+
+  return {
+    html: layout({
+      preheader: `Payment moved to confirmed booking ${targetRef}.`,
+      status: "PAYMENT MOVED · BOOKING CONFIRMED",
+      statusBackground: BRAND.neon,
+      statusColor: BRAND.black,
+      title: "Your payment is now on the correct booking.",
+      introHtml: `<p style="margin:0 0 10px;">Hi <strong>${escapeHtml(name)}</strong>,</p><p style="margin:0;">We corrected your Paddle Rage reservation and moved the existing payment to your new booking.</p>`,
+      bodyHtml,
+      footerText:
+        "Questions about this correction? Reply to this email or contact the Paddle Rage team with your new booking reference.",
+    }),
+    plain: `PADDLE RAGE PICKLEBALL\nPAYMENT MOVED - BOOKING CONFIRMED\n\nHi ${name},\n\nWe corrected your reservation and moved the existing payment to your new booking.\n\nCancelled booking: ${sourceRef}\nConfirmed booking: ${targetRef}\nCourt: ${plain(payload.courtName)}\nNew schedule: ${scheduleDate}, ${plain(payload.startTime)} - ${plain(payload.endTime)}\nPayment moved: ${formatPhpPlain(payload.amount)}\n\nCorrection note: ${reason}\n\nThe original booking remains cancelled and its slots stay released. No new charge was made.\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
   };
 }
 

@@ -645,7 +645,13 @@ function rowToBooking(r) {
     receiptExtracted:  r.receipt_extracted || null,
     receiptConfidence: r.receipt_confidence != null ? Number(r.receipt_confidence) : null,
     receiptImageUrl:   r.receipt_image_url || null,
+    receiptImageHash:  r.receipt_image_hash || null,
+    receiptPhash:      r.receipt_phash || null,
     receiptVerifiedAt: r.receipt_verified_at || null,
+    receiptVerificationId: Number(r.receipt_verification_id) || null,
+    paymentTransferId: r.payment_transfer_id || null,
+    paymentReassignedFromRef: r.payment_reassigned_from_ref || null,
+    paymentReassignedToRef: r.payment_reassigned_to_ref || null,
     billedAt:      r.billed_at || null,
     weeklyFeeId:   r.weekly_fee_id || null,
     confirmationEmailId: r.confirmation_email_id || null,
@@ -1469,6 +1475,55 @@ window.DB = {
       paymentStatus: paymentStatus || undefined,
       status: status || undefined,
       refs,
+    };
+  },
+
+  async transferCancelledBookingPayment(sourceRef, targetRef, reason, noRefundConfirmed, idempotencyKey) {
+    const sourceBookingRef = String(sourceRef || '').trim();
+    const targetBookingRef = String(targetRef || '').trim();
+    const transferReason = String(reason || '').trim();
+    const requestKey = String(idempotencyKey || '').trim();
+    if (!sourceBookingRef || !targetBookingRef || sourceBookingRef === targetBookingRef) {
+      throw new Error('Choose two different source and destination bookings.');
+    }
+    if (transferReason.length < 10 || transferReason.length > 1000) {
+      throw new Error('Enter a transfer reason between 10 and 1000 characters.');
+    }
+    if (noRefundConfirmed !== true) {
+      throw new Error('Confirm that no refund or chargeback was issued for the cancelled booking.');
+    }
+    if (!requestKey) throw new Error('A payment-transfer idempotency key is required.');
+
+    const { data, error } = await _sb.rpc('transfer_cancelled_booking_payment', {
+      p_source_booking_ref: sourceBookingRef,
+      p_target_booking_ref: targetBookingRef,
+      p_reason: transferReason,
+      p_no_refund_confirmed: true,
+      p_idempotency_key: requestKey,
+    });
+    if (error) {
+      console.error('transferCancelledBookingPayment:', error);
+      throw new Error(_extractFnError(error, 'Could not move this payment to the new booking'));
+    }
+
+    const result = Array.isArray(data) ? data[0] || null : data;
+    if (!result || typeof result.transitioned !== 'boolean' || !result.transfer_id) {
+      throw new Error('The payment transfer service returned an invalid result.');
+    }
+    _pbClearFastCache(['bookings']);
+    return {
+      transitioned: result.transitioned,
+      transferId: String(result.transfer_id),
+      sourceBookingRef: String(result.source_booking_ref || sourceBookingRef),
+      targetBookingRef: String(result.target_booking_ref || targetBookingRef),
+      targetBookingStatus: String(result.target_booking_status || ''),
+      targetPaymentStatus: String(result.target_payment_status || ''),
+      sourceBookingRefs: Array.isArray(result.source_booking_refs)
+        ? result.source_booking_refs.map(value => String(value))
+        : [sourceBookingRef],
+      targetBookingRefs: Array.isArray(result.target_booking_refs)
+        ? result.target_booking_refs.map(value => String(value))
+        : [targetBookingRef],
     };
   },
 
@@ -4013,6 +4068,355 @@ window.DB = {
         refs,
       };
     },
+    async transferCancelledBookingPayment(sourceRef, targetRef, reason, noRefundConfirmed, idempotencyKey) {
+      const sourceBookingRef = String(sourceRef || '').trim();
+      const targetBookingRef = String(targetRef || '').trim();
+      const transferReason = String(reason || '').trim();
+      const requestKey = String(idempotencyKey || '').trim();
+      if (!sourceBookingRef || !targetBookingRef || sourceBookingRef === targetBookingRef) {
+        throw new Error('Choose two different source and destination bookings.');
+      }
+      if (transferReason.length < 10 || transferReason.length > 1000) {
+        throw new Error('Enter a transfer reason between 10 and 1000 characters.');
+      }
+      if (noRefundConfirmed !== true) {
+        throw new Error('Confirm that no refund or chargeback was issued for the cancelled booking.');
+      }
+      if (!requestKey) throw new Error('A payment-transfer idempotency key is required.');
+
+      const session = window.Auth?.getSession?.() || null;
+      if (!session || !['owner', 'court_owner'].includes(String(session.role || '')) ||
+          (session.status && session.status !== 'active')) {
+        throw new Error('Only an active owner or court owner can move a cancelled booking payment.');
+      }
+
+      const db = readDb();
+      db.bookingPaymentTransfers = Array.isArray(db.bookingPaymentTransfers)
+        ? db.bookingPaymentTransfers
+        : [];
+      const replay = db.bookingPaymentTransfers.find(item => String(item.idempotencyKey) === requestKey);
+      if (replay) {
+        if (replay.sourceBookingRef !== sourceBookingRef || replay.targetBookingRef !== targetBookingRef ||
+            replay.reason !== transferReason || replay.noRefundConfirmed !== true) {
+          throw new Error('This payment-transfer request key was already used for different details.');
+        }
+        return {
+          transitioned: false,
+          transferId: replay.id,
+          sourceBookingRef,
+          targetBookingRef,
+          targetBookingStatus: replay.targetBookingStatus,
+          targetPaymentStatus: replay.targetPaymentStatus,
+          sourceBookingRefs: [...replay.sourceBookingRefs],
+          targetBookingRefs: [...replay.targetBookingRefs],
+        };
+      }
+
+      const logicalGroup = booking => {
+        const groupRef = String(booking?.groupRef || booking?.bookingGroupRef || booking?.booking_group_ref || '').trim();
+        return groupRef
+          ? db.bookings.filter(item => String(item.groupRef || item.bookingGroupRef || item.booking_group_ref || '').trim() === groupRef)
+          : booking ? [booking] : [];
+      };
+      const source = db.bookings.find(booking => String(booking.ref) === sourceBookingRef);
+      const target = db.bookings.find(booking => String(booking.ref) === targetBookingRef);
+      if (!source || !target) throw new Error('The source or destination booking was not found.');
+      const sourceItems = logicalGroup(source);
+      const targetItems = logicalGroup(target);
+      const sourceRefs = sourceItems.map(item => String(item.ref)).sort();
+      const targetRefs = targetItems.map(item => String(item.ref)).sort();
+      if (sourceRefs.some(ref => targetRefs.includes(ref))) {
+        throw new Error('The source and destination must be different logical bookings.');
+      }
+      if (!sourceItems.length || sourceItems.length !== targetItems.length) {
+        throw new Error('The complete cancelled and replacement booking groups must have the same number of rows.');
+      }
+
+      const lower = value => String(value || '').trim().toLowerCase();
+      const normalizedName = value => lower(value).replace(/\s+/g, ' ');
+      const digits = value => String(value || '').replace(/\D/g, '');
+      const one = (items, value, message) => {
+        const values = [...new Set(items.map(value))];
+        if (values.length !== 1) throw new Error(message);
+        return values[0];
+      };
+      const sourceStatus = one(sourceItems, item => lower(item.status), 'The cancelled booking group has mixed reservation states.');
+      const targetStatus = one(targetItems, item => lower(item.status), 'The new booking group has mixed reservation states.');
+      const sourcePaymentStatus = one(sourceItems, item => lower(item.paymentStatus ?? item.payment_status), 'The cancelled booking group has mixed payment states.');
+      const targetPaymentStatus = one(targetItems, item => lower(item.paymentStatus ?? item.payment_status), 'The new booking group has mixed payment states.');
+      const sourceMethod = one(sourceItems, item => lower(item.paymentMethod ?? item.payment_method), 'The cancelled booking group has mixed payment methods.');
+      const targetMethod = one(targetItems, item => lower(item.paymentMethod ?? item.payment_method), 'The new booking group has mixed payment methods.');
+      if (sourceStatus !== 'cancelled') throw new Error('The source booking must already be cancelled.');
+      if (!['pending', 'verifying'].includes(targetStatus)) throw new Error('The new booking is no longer awaiting confirmation.');
+      if (!['unpaid', 'for_verification', 'paid', 'downpayment_paid'].includes(sourcePaymentStatus)) {
+        throw new Error('The cancelled source must contain one reviewable or accepted payment.');
+      }
+      if (targetPaymentStatus !== 'for_verification') throw new Error('The new booking payment must still be For Verification.');
+      const sourceHasSettlementEvidence = sourceItems.every(item =>
+        Boolean(String(item.paidAt || item.paid_at || '').trim()) &&
+        Boolean(String(item.bookingFeeEarnedAt || item.booking_fee_earned_at || '').trim()),
+      );
+      if (['unpaid', 'paid', 'downpayment_paid'].includes(sourcePaymentStatus) && !sourceHasSettlementEvidence) {
+        throw new Error('The cancelled booking lacks durable prior-acceptance timestamps.');
+      }
+      if (sourceMethod !== targetMethod || !PB_DIGITAL_PAYMENT_METHODS.includes(sourceMethod)) {
+        throw new Error('Both bookings must use the same digital payment method.');
+      }
+
+      const normalizeReference = (method, typedReference) => {
+        const raw = String(typedReference || '');
+        const normalized = method === 'gcash'
+          ? raw.replace(/[^0-9]/g, '')
+          : raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return normalized ? (method === 'gcash' ? normalized : `${method}:${normalized}`) : '';
+      };
+      const sourcePaymentRef = one(sourceItems, item => normalizeReference(sourceMethod, item.gcashRef ?? item.gcash_ref), 'The cancelled booking reference is inconsistent.');
+      const targetPaymentRef = one(targetItems, item => normalizeReference(targetMethod, item.gcashRef ?? item.gcash_ref), 'The new booking reference is inconsistent.');
+      if (!sourcePaymentRef || sourcePaymentRef !== targetPaymentRef) {
+        throw new Error('Both bookings must carry the same payment reference.');
+      }
+
+      const sourceEmail = one(sourceItems, item => lower(item.email), 'The cancelled booking group has mixed customer emails.');
+      const targetEmail = one(targetItems, item => lower(item.email), 'The new booking group has mixed customer emails.');
+      const sourcePhone = one(sourceItems, item => digits(item.contactNumber ?? item.contact_number), 'The cancelled booking group has mixed contact numbers.');
+      const targetPhone = one(targetItems, item => digits(item.contactNumber ?? item.contact_number), 'The new booking group has mixed contact numbers.');
+      const sourceName = one(sourceItems, item => normalizedName(item.fullName ?? item.full_name), 'The cancelled booking group has mixed customer names.');
+      const targetName = one(targetItems, item => normalizedName(item.fullName ?? item.full_name), 'The new booking group has mixed customer names.');
+      if (!sourceEmail || sourceEmail !== targetEmail || sourcePhone !== targetPhone || !sourceName || sourceName !== targetName) {
+        throw new Error('Both bookings must belong to the same player.');
+      }
+      const sourceHost = one(sourceItems, item => !!(item.hostBooking ?? item.host_booking), 'The cancelled booking group has mixed booking types.');
+      const targetHost = one(targetItems, item => !!(item.hostBooking ?? item.host_booking), 'The new booking group has mixed booking types.');
+      if (sourceHost !== targetHost) throw new Error('Both bookings must have the same booking type.');
+      const sourceHostId = one(sourceItems, item => String(item.hostUserId ?? item.host_user_id ?? ''), 'The cancelled booking has mixed host ownership.');
+      const targetHostId = one(targetItems, item => String(item.hostUserId ?? item.host_user_id ?? ''), 'The new booking has mixed host ownership.');
+      if (sourceHostId !== targetHostId) throw new Error('Both bookings must have the same host ownership.');
+
+      const roundMoney = value => Math.round(Number(value) * 100) / 100;
+      const signatureMoney = value => {
+        if (value === null || value === undefined || value === '') return '';
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? roundMoney(parsed).toFixed(2) : 'invalid';
+      };
+      const snapshotBoolean = value => value === true || value === 1 || lower(value) === 'true';
+      const paymentShape = items => {
+        let total = 0;
+        let paid = 0;
+        let fullRows = 0;
+        let partialRows = 0;
+        const signatures = items.map(item => {
+          const rowTotal = Number(item.total);
+          const hasDownpayment = item.downpayment !== null && item.downpayment !== undefined && item.downpayment !== '';
+          const rowPaid = hasDownpayment ? Number(item.downpayment) : NaN;
+          if (!Number.isFinite(rowTotal) || rowTotal <= 0 || !Number.isFinite(rowPaid) || rowPaid <= 0 || rowPaid > rowTotal + 0.01) {
+            throw new Error('Stored booking payment amounts require manual review.');
+          }
+          total += rowTotal;
+          paid += rowPaid;
+          if (Math.abs(rowPaid - rowTotal) <= 0.01) fullRows += 1;
+          else if (rowPaid < rowTotal - 0.01) partialRows += 1;
+          const slots = Array.isArray(item.slots) ? item.slots : [];
+          const duration = item.duration ?? slots.length ?? 0;
+          const bookingFeeAmountSnapshot = item.bookingFeeAmountSnapshot ?? item.booking_fee_amount_snapshot;
+          const bookingFeeRateSnapshot = item.bookingFeeRateSnapshot ?? item.booking_fee_rate_snapshot;
+          const bookingFeeTypeSnapshot = item.bookingFeeTypeSnapshot ?? item.booking_fee_type_snapshot ?? '';
+          const bookingFeeUnitsSnapshot = item.bookingFeeUnitsSnapshot ?? item.booking_fee_units_snapshot;
+          const bookingFeeLedgerEligibleSnapshot = item.bookingFeeLedgerEligibleSnapshot ?? item.booking_fee_ledger_eligible_snapshot ?? false;
+          return [
+            signatureMoney(rowTotal),
+            signatureMoney(rowPaid),
+            String(duration),
+            String(slots.length),
+            signatureMoney(bookingFeeAmountSnapshot),
+            signatureMoney(bookingFeeRateSnapshot),
+            String(bookingFeeTypeSnapshot),
+            bookingFeeUnitsSnapshot === null || bookingFeeUnitsSnapshot === undefined ? '' : String(bookingFeeUnitsSnapshot),
+            String(snapshotBoolean(bookingFeeLedgerEligibleSnapshot)),
+          ].join('|');
+        }).sort();
+        return { total: roundMoney(total), paid: roundMoney(paid), fullRows, partialRows, signatures };
+      };
+      const sourceAmount = paymentShape(sourceItems);
+      const targetAmount = paymentShape(targetItems);
+      if (sourceAmount.total !== targetAmount.total || sourceAmount.paid !== targetAmount.paid ||
+          JSON.stringify(sourceAmount.signatures) !== JSON.stringify(targetAmount.signatures)) {
+        throw new Error('The cancelled and replacement court-hour or fee snapshots do not match.');
+      }
+      let resolvedTargetPaymentStatus = '';
+      if (targetAmount.fullRows === targetItems.length) {
+        resolvedTargetPaymentStatus = 'paid';
+      } else if (targetHost && targetAmount.partialRows === targetItems.length) {
+        const settings = db.settings || {};
+        const feeRate = Number(settings.maintenance_fee ?? settings.service_fee_rate ?? settings.booking_fee ?? 0);
+        const flatFee = ['flat', 'booking', 'per_booking', 'per_transaction'].includes(lower(settings.fee_type));
+        const underpaid = targetItems.some(item => {
+          const total = Number(item.total);
+          const paid = Number(item.downpayment);
+          const slots = Array.isArray(item.slots) ? item.slots : [];
+          const storedFee = item.bookingFeeAmountSnapshot ?? item.booking_fee_amount_snapshot;
+          const parsedStoredFee = Number(storedFee);
+          const configuredFee = Number.isFinite(feeRate) && feeRate >= 0 ? feeRate * (flatFee ? 1 : slots.length) : 0;
+          const requestedFee = storedFee !== null && storedFee !== undefined && Number.isFinite(parsedStoredFee)
+            ? parsedStoredFee : configuredFee;
+          const serviceFee = Math.min(Math.max(requestedFee, 0), total);
+          const required = roundMoney(serviceFee + ((total - serviceFee) * 0.25));
+          return Math.abs(paid - required) > 0.01;
+        });
+        if (underpaid) throw new Error('The replacement host payment is lower than the required amount.');
+        resolvedTargetPaymentStatus = 'downpayment_paid';
+      } else {
+        throw new Error('The replacement payment amount cannot be accepted as stored.');
+      }
+      if (['paid', 'downpayment_paid'].includes(sourcePaymentStatus) && sourcePaymentStatus !== resolvedTargetPaymentStatus) {
+        throw new Error('The accepted source payment state does not match the replacement amount.');
+      }
+
+      const allRefs = new Set([...sourceRefs, ...targetRefs]);
+      const alreadyTransferredOrRejected = [...sourceItems, ...targetItems].some(item =>
+        item.paymentTransferId || item.payment_transfer_id || item.paymentReassignedFromRef || item.payment_reassigned_from_ref ||
+        item.paymentReassignedToRef || item.payment_reassigned_to_ref || lower(item.receiptStatus ?? item.receipt_status) === 'rejected',
+      );
+      if (alreadyTransferredOrRejected) throw new Error('A previously transferred or rejected receipt cannot be moved.');
+
+      const distinctEvidence = (items, camelKey, snakeKey) => [...new Set(items
+        .map(item => String(item[camelKey] ?? item[snakeKey] ?? '').trim())
+        .filter(Boolean))];
+      const sourceReceiptHashes = distinctEvidence(sourceItems, 'receiptImageHash', 'receipt_image_hash');
+      const targetReceiptHashes = distinctEvidence(targetItems, 'receiptImageHash', 'receipt_image_hash');
+      const sourceReceiptPhashes = distinctEvidence(sourceItems, 'receiptPhash', 'receipt_phash');
+      const targetReceiptPhashes = distinctEvidence(targetItems, 'receiptPhash', 'receipt_phash');
+      const sourceReceiptHash = sourceReceiptHashes[0] || '';
+      const targetReceiptHash = targetReceiptHashes[0] || '';
+      const sourceReceiptPhash = sourceReceiptPhashes[0] || '';
+      const targetReceiptPhash = targetReceiptPhashes[0] || '';
+      const consistentReceiptEvidence = sourceReceiptHashes.length <= 1 && targetReceiptHashes.length <= 1 &&
+        sourceReceiptPhashes.length <= 1 && targetReceiptPhashes.length <= 1;
+      const exactReceiptEvidence = (sourceReceiptHash && targetReceiptHash && sourceReceiptHash === targetReceiptHash) ||
+        (sourceReceiptPhash && targetReceiptPhash && sourceReceiptPhash === targetReceiptPhash);
+      if (!consistentReceiptEvidence || !exactReceiptEvidence) {
+        throw new Error('The cancelled and replacement bookings must contain the same stored receipt fingerprint.');
+      }
+
+      const sourceGroupRef = String(source.groupRef || source.bookingGroupRef || source.booking_group_ref || '').trim();
+      const targetGroupRef = String(target.groupRef || target.bookingGroupRef || target.booking_group_ref || '').trim();
+      const balanceHistory = (db.hostBookingBalancePayments || []).some(payment => {
+        const bookingRefs = Array.isArray(payment.bookingRefs ?? payment.booking_refs) ? (payment.bookingRefs ?? payment.booking_refs).map(String) : [];
+        const bookingRef = String(payment.bookingRef ?? payment.booking_ref ?? '');
+        const bookingGroupRef = String(payment.bookingGroupRef ?? payment.booking_group_ref ?? '');
+        return allRefs.has(bookingRef) || bookingRefs.some(ref => allRefs.has(ref)) ||
+          Boolean(bookingGroupRef && (bookingGroupRef === sourceGroupRef || bookingGroupRef === targetGroupRef));
+      });
+      if (balanceHistory) throw new Error('A booking with Payment 2 or balance history cannot move its initial payment.');
+
+      const remittanceHistory = (db.bookingFeeRemittanceItems || []).some(item => allRefs.has(String(item.bookingRef ?? item.booking_ref ?? '')));
+      const billedBooking = [...sourceItems, ...targetItems].some(item =>
+        item.weeklyFeeId || item.weekly_fee_id || item.billedAt || item.billed_at,
+      );
+      const statementContainsRef = (db.weeklyFees || []).some(statement => {
+        let billedRefs = statement.billedRefs ?? statement.billed_refs ?? [];
+        if (typeof billedRefs === 'string') {
+          try { billedRefs = JSON.parse(billedRefs); } catch (_) { billedRefs = []; }
+        }
+        return Array.isArray(billedRefs) && billedRefs.some(ref => allRefs.has(String(ref)));
+      });
+      if (remittanceHistory || billedBooking || statementContainsRef) {
+        throw new Error('A remitted or prepared booking payment cannot be moved.');
+      }
+
+      const transferHistory = db.bookingPaymentTransfers.some(transfer => {
+        const refs = [
+          transfer.sourceBookingRef,
+          transfer.targetBookingRef,
+          ...(Array.isArray(transfer.sourceBookingRefs) ? transfer.sourceBookingRefs : []),
+          ...(Array.isArray(transfer.targetBookingRefs) ? transfer.targetBookingRefs : []),
+        ].map(String);
+        return refs.some(ref => allRefs.has(ref));
+      });
+      if (transferHistory) throw new Error('One of these bookings already has payment transfer history.');
+
+      const thirdBookingClaim = db.bookings.some(item =>
+        !allRefs.has(String(item.ref)) &&
+        normalizeReference(lower(item.paymentMethod ?? item.payment_method), item.gcashRef ?? item.gcash_ref) === sourcePaymentRef,
+      );
+      const thirdOpenPlayClaim = (db.openPlayRegistrations || []).some(item =>
+        normalizeReference(lower(item.paymentMethod ?? item.payment_method), item.gcashRef ?? item.gcash_ref) === sourcePaymentRef,
+      );
+      const thirdHostSessionClaim = (db.openPlayHostSessionRegistrations || []).some(item =>
+        normalizeReference(lower(item.paymentMethod ?? item.payment_method), item.gcashRef ?? item.gcash_ref) === sourcePaymentRef,
+      );
+      const thirdBalanceClaim = (db.hostBookingBalancePayments || []).some(item =>
+        normalizeReference(lower(item.paymentProvider ?? item.payment_provider), item.paymentReference ?? item.payment_reference) === sourcePaymentRef,
+      );
+      if (thirdBookingClaim || thirdOpenPlayClaim || thirdHostSessionClaim || thirdBalanceClaim) {
+        throw new Error('This payment reference is also attached to a third payment.');
+      }
+
+      const transferId = globalThis.crypto?.randomUUID?.() || `local-transfer-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const transferredAt = nowIso();
+      const sourceRefSet = new Set(sourceRefs);
+      const targetRefSet = new Set(targetRefs);
+      const receiptSource = sourceItems.find(item => item.receiptImageUrl || item.receipt_image_url) || sourceItems[0];
+      db.bookings = db.bookings.map(booking => {
+        const bookingRef = String(booking.ref);
+        if (sourceRefSet.has(bookingRef)) {
+          return {
+            ...booking,
+            paymentTransferId: transferId,
+            paymentReassignedToRef: targetBookingRef,
+          };
+        }
+        if (!targetRefSet.has(bookingRef)) return booking;
+        return {
+          ...booking,
+          status: 'confirmed',
+          paymentStatus: resolvedTargetPaymentStatus,
+          paidAt: booking.paidAt || booking.paid_at || receiptSource.paidAt || receiptSource.paid_at || transferredAt,
+          bookingFeeEarnedAt: booking.bookingFeeEarnedAt || booking.booking_fee_earned_at || transferredAt,
+          paymentTransferId: transferId,
+          paymentReassignedFromRef: sourceBookingRef,
+          receiptImageUrl: booking.receiptImageUrl || booking.receipt_image_url || receiptSource.receiptImageUrl || receiptSource.receipt_image_url || null,
+          receiptImageHash: booking.receiptImageHash || booking.receipt_image_hash || receiptSource.receiptImageHash || receiptSource.receipt_image_hash || null,
+          receiptPhash: booking.receiptPhash || booking.receipt_phash || receiptSource.receiptPhash || receiptSource.receipt_phash || null,
+          receiptExtracted: booking.receiptExtracted || booking.receipt_extracted || receiptSource.receiptExtracted || receiptSource.receipt_extracted || null,
+          receiptConfidence: booking.receiptConfidence ?? booking.receipt_confidence ?? receiptSource.receiptConfidence ?? receiptSource.receipt_confidence ?? null,
+          receiptVerifiedAt: booking.receiptVerifiedAt || booking.receipt_verified_at || receiptSource.receiptVerifiedAt || receiptSource.receipt_verified_at || null,
+        };
+      });
+      const audit = {
+        id: transferId,
+        idempotencyKey: requestKey,
+        sourceBookingRef,
+        targetBookingRef,
+        sourceBookingRefs: sourceRefs,
+        targetBookingRefs: targetRefs,
+        sourceBookingGroupRef: sourceGroupRef || null,
+        targetBookingGroupRef: targetGroupRef || null,
+        paymentMethod: sourceMethod,
+        paymentReferenceKey: sourcePaymentRef,
+        evidenceLedgerKeys: [sourcePaymentRef],
+        amount: targetAmount.paid,
+        sourcePaymentStatus,
+        targetBookingStatus: 'confirmed',
+        targetPaymentStatus: resolvedTargetPaymentStatus,
+        reason: transferReason,
+        noRefundConfirmed: true,
+        createdAt: transferredAt,
+        actorUserId: session.userId || session.id || null,
+        actorRole: session.role,
+      };
+      db.bookingPaymentTransfers.push(audit);
+      writeDb(db);
+      return {
+        transitioned: true,
+        transferId,
+        sourceBookingRef,
+        targetBookingRef,
+        targetBookingStatus: 'confirmed',
+        targetPaymentStatus: resolvedTargetPaymentStatus,
+        sourceBookingRefs: sourceRefs,
+        targetBookingRefs: targetRefs,
+      };
+    },
     async rejectBookingPaymentTransaction(ref, reason) {
       const bookingRef = String(ref || '').trim();
       const reviewReason = String(reason || '').trim();
@@ -5385,12 +5789,13 @@ window.DB = {
       };
       const earned = readDb().bookings.filter(booking => {
         const earnedAt = booking.bookingFeeEarnedAt || booking.booking_fee_earned_at;
+        const transferredOut = booking.paymentReassignedToRef || booking.payment_reassigned_to_ref;
         const eligible = booking.bookingFeeLedgerEligibleSnapshot
           ?? booking.booking_fee_ledger_eligible_snapshot;
         const amount = Number(
           booking.bookingFeeAmountSnapshot ?? booking.booking_fee_amount_snapshot ?? 0,
         );
-        return !!earnedAt && eligible !== false && Number.isFinite(amount) && amount > 0;
+        return !!earnedAt && !transferredOut && eligible !== false && Number.isFinite(amount) && amount > 0;
       });
       const reservations = new Set(earned.map(reservationKeyFor).filter(Boolean));
       const breakdown = new Map();

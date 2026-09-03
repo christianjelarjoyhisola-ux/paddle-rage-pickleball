@@ -535,6 +535,182 @@ test('remote and local booking clients expose the same canonical confirmation re
   }
 });
 
+test('remote and local clients expose the same narrow cancelled-payment transfer contract', () => {
+  const adapters = methodSources(client, 'transferCancelledBookingPayment');
+  assert.equal(adapters.length, 2, 'remote and local DB adapters must both implement payment transfer');
+  const remote = adapters.find(source => source.includes("_sb.rpc('transfer_cancelled_booking_payment'")) || '';
+  const local = adapters.find(source => source.includes('bookingPaymentTransfers')) || '';
+  assert.ok(remote, 'missing remote transfer_cancelled_booking_payment adapter');
+  assert.ok(local, 'missing local transferCancelledBookingPayment adapter');
+
+  for (const adapter of adapters) {
+    assert.match(adapter, /sourceBookingRef[\s\S]*?targetBookingRef/);
+    assert.match(adapter, /sourceBookingRef === targetBookingRef/);
+    assert.match(adapter, /transferReason\.length < 10 \|\| transferReason\.length > 1000/);
+    assert.match(adapter, /noRefundConfirmed !== true/);
+    assert.match(adapter, /requestKey/);
+    for (const field of [
+      'transitioned',
+      'transferId',
+      'sourceBookingRef',
+      'targetBookingRef',
+      'targetBookingStatus',
+      'targetPaymentStatus',
+      'sourceBookingRefs',
+      'targetBookingRefs',
+    ]) {
+      assert.match(adapter, new RegExp(`\\b${field}\\b`), `${field} missing from transfer adapter`);
+    }
+  }
+
+  assert.match(remote, /p_source_booking_ref:\s*sourceBookingRef/);
+  assert.match(remote, /p_target_booking_ref:\s*targetBookingRef/);
+  assert.match(remote, /p_reason:\s*transferReason/);
+  assert.match(remote, /p_no_refund_confirmed:\s*true/);
+  assert.match(remote, /p_idempotency_key:\s*requestKey/);
+  assert.match(remote, /typeof result\.transitioned !== 'boolean' \|\| !result\.transfer_id/);
+  assert.match(remote, /_pbClearFastCache\(\['bookings'\]\)/);
+
+  assert.match(local, /\['owner', 'court_owner'\]\.includes\(String\(session\.role/);
+  assert.match(local, /session\.status && session\.status !== 'active'/);
+  assert.match(local, /bookingPaymentTransfers\.find\(item => String\(item\.idempotencyKey\) === requestKey\)/);
+  assert.match(local, /replay\.sourceBookingRef !== sourceBookingRef[\s\S]*?replay\.targetBookingRef !== targetBookingRef[\s\S]*?replay\.reason !== transferReason[\s\S]*?replay\.noRefundConfirmed !== true/);
+  assert.match(local, /targetPaymentStatus !== 'for_verification'/, 'local target state must match the server-only For Verification gate');
+  assert.match(local, /sourceStatus !== 'cancelled'/);
+  assert.match(local, /sourceMethod !== targetMethod[\s\S]*?!PB_DIGITAL_PAYMENT_METHODS\.includes\(sourceMethod\)/);
+  assert.match(local, /sourcePaymentRef !== targetPaymentRef/);
+  assert.match(local, /sourceEmail !== targetEmail[\s\S]*?sourcePhone !== targetPhone/);
+  assert.match(local, /sourceName !== targetName/, 'local mode must enforce the server same-player name check');
+  assert.match(local, /sourceHost !== targetHost/);
+  assert.match(local, /sourceHostId !== targetHostId/);
+  assert.match(local, /sourceItems\.length !== targetItems\.length/, 'local mode must reject partial or differently sized groups');
+  for (const shapeField of [
+    'duration',
+    'slots',
+    'bookingFeeAmountSnapshot',
+    'bookingFeeRateSnapshot',
+    'bookingFeeTypeSnapshot',
+    'bookingFeeUnitsSnapshot',
+    'bookingFeeLedgerEligibleSnapshot',
+  ]) {
+    assert.match(local, new RegExp(`\\b${shapeField}\\b`), `local transfer does not compare ${shapeField}`);
+  }
+  assert.match(local, /receiptImageHash[\s\S]*?receiptPhash/);
+  assert.match(local, /sourceReceiptHash[\s\S]*?targetReceiptHash|sourceHash[\s\S]*?targetHash/);
+  assert.match(local, /hostBookingBalancePayments/, 'local mode must reject any Payment 2 history');
+  assert.match(local, /weeklyFeeId|weekly_fee_id|billedAt|billed_at/, 'local mode must reject billed/remitted source money');
+  assert.match(local, /openPlayRegistrations/, 'local mode must detect Open Play reference ownership');
+  assert.match(local, /openPlayHostSessionRegistrations/, 'local mode must detect host-session reference ownership');
+  assert.match(local, /paymentTransferId:\s*transferId[\s\S]*?paymentReassignedToRef:\s*targetBookingRef/);
+  assert.match(local, /paymentReassignedFromRef:\s*sourceBookingRef/);
+  assert.match(local, /db\.bookingPaymentTransfers\.push\(audit\)[\s\S]*?writeDb\(db\)/);
+});
+
+test('local cancelled-payment transfer is idempotent and moves the one fee allocation to the confirmed replacement', async () => {
+  const localTransferSource = methodSources(client, 'transferCancelledBookingPayment')
+    .find(source => source.includes('bookingPaymentTransfers')) || '';
+  const localDashboardSource = methodSources(client, 'getBookingFeeRemittanceDashboard')
+    .find(source => source.includes('const earned = readDb().bookings.filter')) || '';
+  assert.ok(localTransferSource && localDashboardSource, 'missing local transfer/remittance methods');
+
+  let localDb;
+  const readDb = () => localDb;
+  const writeDb = next => { localDb = next; };
+  const session = { id: 'owner-1', userId: 'owner-1', role: 'owner', status: 'active' };
+  const nowIso = () => '2026-09-03T04:00:00.000Z';
+  const transfer = new Function(
+    'PB_DIGITAL_PAYMENT_METHODS',
+    'readDb',
+    'writeDb',
+    'nowIso',
+    'window',
+    `return ({${localTransferSource}}).transferCancelledBookingPayment;`,
+  )(
+    ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'],
+    readDb,
+    writeDb,
+    nowIso,
+    { Auth: { getSession: () => session } },
+  );
+  const dashboard = new Function(
+    'readDb',
+    'Auth',
+    `return ({${localDashboardSource}}).getBookingFeeRemittanceDashboard;`,
+  )(readDb, { getSession: () => session });
+
+  const acceptedAt = '2026-09-02T23:08:34.000Z';
+  const booking = ({ ref, groupRef, courtId, courtName, source }) => ({
+    ref,
+    groupRef,
+    courtId,
+    courtName,
+    fullName: 'Same Player',
+    email: 'player@example.com',
+    contactNumber: '0917 555 0101',
+    hostBooking: false,
+    hostUserId: null,
+    status: source ? 'cancelled' : 'pending',
+    paymentStatus: source ? 'paid' : 'for_verification',
+    paymentMethod: 'maya',
+    gcashRef: '9F34 952D 6576',
+    total: 800,
+    downpayment: 800,
+    slots: ['7:00 PM'],
+    duration: 1,
+    paidAt: source ? acceptedAt : null,
+    bookingFeeEarnedAt: source ? acceptedAt : null,
+    bookingFeeAmountSnapshot: 10,
+    bookingFeeRateSnapshot: 10,
+    bookingFeeTypeSnapshot: 'per_hour',
+    bookingFeeUnitsSnapshot: 1,
+    bookingFeeLedgerEligibleSnapshot: true,
+    receiptStatus: 'manual_review',
+    receiptImageUrl: 'receipts/same.png',
+    receiptImageHash: 'same-hash',
+    receiptPhash: 'same-phash',
+  });
+  localDb = {
+    bookings: [
+      booking({ ref: 'OLD-1', groupRef: 'OLD-G', courtId: 'old-1', courtName: 'Old Court 1', source: true }),
+      booking({ ref: 'OLD-2', groupRef: 'OLD-G', courtId: 'old-2', courtName: 'Old Court 2', source: true }),
+      booking({ ref: 'NEW-1', groupRef: 'NEW-G', courtId: 'new-1', courtName: 'New Court 1', source: false }),
+      booking({ ref: 'NEW-2', groupRef: 'NEW-G', courtId: 'new-2', courtName: 'New Court 2', source: false }),
+    ],
+    settings: {},
+    bookingPaymentTransfers: [],
+    bookingFeeRemittanceItems: [],
+    weeklyFees: [],
+    hostBookingBalancePayments: [],
+    openPlayRegistrations: [],
+    openPlayHostSessionRegistrations: [],
+  };
+
+  const request = ['OLD-1', 'NEW-1', 'Player cancelled a mistaken reservation and rebooked.', true, '8bb20150-e11e-4fe7-a4e8-0d9752d00c31'];
+  const [first, replay] = await Promise.all([transfer(...request), transfer(...request)]);
+  assert.equal(first.transitioned, true);
+  assert.equal(replay.transitioned, false);
+  assert.equal(replay.transferId, first.transferId);
+  assert.equal(localDb.bookingPaymentTransfers.length, 1, 'an idempotent replay must not append another audit');
+
+  const sourceRows = localDb.bookings.filter(row => row.groupRef === 'OLD-G');
+  const targetRows = localDb.bookings.filter(row => row.groupRef === 'NEW-G');
+  assert.ok(sourceRows.every(row => row.status === 'cancelled' && row.paymentStatus === 'paid'));
+  assert.ok(sourceRows.every(row => row.paidAt === acceptedAt && row.bookingFeeEarnedAt === acceptedAt));
+  assert.ok(sourceRows.every(row => row.paymentTransferId === first.transferId && row.paymentReassignedToRef === 'NEW-1'));
+  assert.ok(targetRows.every(row => row.status === 'confirmed' && row.paymentStatus === 'paid'));
+  assert.ok(targetRows.every(row => row.bookingFeeEarnedAt === nowIso()), 'the confirmed target must own the earned allocation');
+  assert.ok(targetRows.every(row => row.paymentTransferId === first.transferId && row.paymentReassignedFromRef === 'OLD-1'));
+
+  const ledger = await dashboard();
+  assert.equal(ledger.accumulated.booking_rows_count, 2, 'source and target fees must never both be billable');
+  assert.equal(ledger.accumulated.amount, 20);
+  assert.deepEqual(
+    ledger.accumulated.court_breakdown.map(row => row.court_name),
+    ['New Court 1', 'New Court 2'],
+    'the fee allocation must be attributed to the replacement courts',
+  );
+});
+
 test('local booking creation stamps the same bounded private allocation', () => {
   assert.match(client, /const localBookingFeeSnapshot = \(booking, settings = \{\}\) =>/);
   assert.match(

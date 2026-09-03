@@ -7,7 +7,10 @@ import {
 } from "../_shared/email-request.ts";
 import { confirmedBookingPaidAmount } from "../_shared/booking-email-payment.ts";
 import { isEmailAddress, sendMailerooEmail } from "../_shared/maileroo.ts";
-import { renderBookingCancellationEmail } from "../_shared/paddle-rage-email.ts";
+import {
+  renderBookingCancellationEmail,
+  renderBookingPaymentTransferEmail,
+} from "../_shared/paddle-rage-email.ts";
 
 type BookingRow = {
   ref: string;
@@ -22,6 +25,22 @@ type BookingRow = {
   downpayment: number | null;
   payment_status: string;
   status: string;
+  payment_transfer_id: string | null;
+  payment_reassigned_from_ref: string | null;
+  payment_reassigned_to_ref: string | null;
+};
+
+type BookingPaymentTransferRow = {
+  id: string;
+  source_booking_ref: string;
+  source_booking_group_ref: string | null;
+  target_booking_ref: string;
+  target_booking_group_ref: string | null;
+  source_booking_refs: string[];
+  target_booking_refs: string[];
+  amount: number;
+  reason: string;
+  created_at: string;
 };
 
 const BOOKING_COLUMNS = [
@@ -37,6 +56,9 @@ const BOOKING_COLUMNS = [
   "downpayment",
   "payment_status",
   "status",
+  "payment_transfer_id",
+  "payment_reassigned_from_ref",
+  "payment_reassigned_to_ref",
 ].join(",");
 
 function validBookingRef(value: unknown): string {
@@ -59,6 +81,54 @@ async function loadRows(db: any, bookingRef: string): Promise<BookingRow[]> {
     .order("start_time", { ascending: true });
   if (error) throw error;
   return (data || []) as BookingRow[];
+}
+
+async function loadCanonicalPaymentRejectionReason(
+  db: any,
+  rows: BookingRow[],
+): Promise<string> {
+  const first = rows[0];
+  let query = db.from("payment_review_decisions")
+    .select("reason,created_at")
+    .eq("decision", "reject");
+  query = first.booking_group_ref
+    ? query.eq("booking_group_ref", first.booking_group_ref)
+    : query.eq("booking_ref", first.ref);
+  const { data, error } = await query
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  const reason = String(data?.reason || "").trim().slice(0, 1000);
+  if (reason.length < 3) {
+    throw new Error("Rejected payment reason could not be verified");
+  }
+  return reason;
+}
+
+async function loadCanonicalPaymentTransfer(
+  db: any,
+  rows: BookingRow[],
+): Promise<BookingPaymentTransferRow> {
+  const first = rows[0];
+  let query = db.from("booking_payment_transfers").select(
+    "id,source_booking_ref,source_booking_group_ref,target_booking_ref,target_booking_group_ref,source_booking_refs,target_booking_refs,amount,reason,created_at",
+  );
+  query = first.booking_group_ref
+    ? query.eq("target_booking_group_ref", first.booking_group_ref)
+    : query.eq("target_booking_ref", first.ref);
+  const { data, error } = await query
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  const transfer = data as BookingPaymentTransferRow | null;
+  const reason = String(transfer?.reason || "").trim();
+  const amount = Number(transfer?.amount || 0);
+  if (!transfer || reason.length < 10 || !Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Payment transfer audit could not be verified");
+  }
+  return { ...transfer, reason: reason.slice(0, 1000), amount };
 }
 
 Deno.serve(async (req) => {
@@ -93,14 +163,27 @@ Deno.serve(async (req) => {
     } | null;
     const bookingRef = validBookingRef(body?.bookingRef);
     const event = String(body?.event || "").trim();
-    if (!new Set(["booking_cancelled", "payment_rejected"]).has(event)) {
+    if (!new Set([
+      "booking_cancelled",
+      "payment_rejected",
+      "payment_reassigned",
+    ]).has(event)) {
       throw new Error("Invalid booking email event");
     }
     const rows = await loadRows(db, bookingRef);
-    if (!rows.length || rows.some((row) => row.status !== "cancelled")) {
+    const paymentReassigned = event === "payment_reassigned";
+    const validState = paymentReassigned
+      ? rows.length > 0 && rows.every((row) =>
+        row.status === "confirmed" &&
+        new Set(["paid", "downpayment_paid"]).has(row.payment_status)
+      )
+      : rows.length > 0 && rows.every((row) => row.status === "cancelled");
+    if (!validState) {
       return jsonResponse(req, {
         ok: false,
-        error: "Cancelled booking could not be verified",
+        error: paymentReassigned
+          ? "Reassigned booking could not be verified"
+          : "Cancelled booking could not be verified",
       }, 409);
     }
     if (
@@ -135,25 +218,81 @@ Deno.serve(async (req) => {
     const displayRef = first.booking_group_ref
       ? first.booking_group_ref.replace(/-G$/, "")
       : first.ref;
-    const content = renderBookingCancellationEmail({
-      bookingRef: displayRef,
-      fullName: first.full_name || "Player",
-      courtName: [
-        ...new Set(rows.map((row) => row.court_name).filter(Boolean)),
-      ].join(", ") || "Court",
-      date: first.date,
-      startTime: first.start_time || "",
-      endTime: first.end_time || "",
-      total,
-      paid,
-      reason: String(body?.reason || "").trim().slice(0, 1200),
-      paymentRejected: event === "payment_rejected",
-    });
+    const transfer = paymentReassigned
+      ? await loadCanonicalPaymentTransfer(db, rows)
+      : null;
+    if (transfer) {
+      const sourceRows = await loadRows(db, transfer.source_booking_ref);
+      const targetEmail = String(first.email || "").trim().toLowerCase();
+      const sourceRefs = new Set(transfer.source_booking_refs.map(String));
+      const targetRefs = new Set(transfer.target_booking_refs.map(String));
+      if (
+        !sourceRows.length ||
+        sourceRows.some((row) => row.status !== "cancelled") ||
+        sourceRows.some((row) =>
+          String(row.email || "").trim().toLowerCase() !== targetEmail
+        ) ||
+        sourceRows.length !== sourceRefs.size ||
+        sourceRows.some((row) =>
+          !sourceRefs.has(row.ref) ||
+          row.payment_transfer_id !== transfer.id ||
+          row.payment_reassigned_from_ref !== null ||
+          row.payment_reassigned_to_ref !== transfer.target_booking_ref
+        ) ||
+        rows.length !== targetRefs.size ||
+        rows.some((row) =>
+          !targetRefs.has(row.ref) ||
+          row.payment_transfer_id !== transfer.id ||
+          row.payment_reassigned_from_ref !== transfer.source_booking_ref ||
+          row.payment_reassigned_to_ref !== null
+        )
+      ) {
+        throw new Error("Payment transfer audit could not be verified");
+      }
+    }
+    const reason = event === "payment_rejected"
+      ? await loadCanonicalPaymentRejectionReason(db, rows)
+      : event === "payment_reassigned"
+      ? transfer!.reason
+      : String(body?.reason || "").trim().slice(0, 1200);
+    const courtName = [
+      ...new Set(rows.map((row) => row.court_name).filter(Boolean)),
+    ].join(", ") || "Court";
+    const content = transfer
+      ? renderBookingPaymentTransferEmail({
+        sourceBookingRef: transfer.source_booking_group_ref
+          ? transfer.source_booking_group_ref.replace(/-G$/, "")
+          : transfer.source_booking_ref,
+        targetBookingRef: displayRef,
+        fullName: first.full_name || "Player",
+        courtName,
+        date: first.date,
+        startTime: first.start_time || "",
+        endTime: first.end_time || "",
+        amount: transfer.amount,
+        reason,
+      })
+      : renderBookingCancellationEmail({
+        bookingRef: displayRef,
+        fullName: first.full_name || "Player",
+        courtName,
+        date: first.date,
+        startTime: first.start_time || "",
+        endTime: first.end_time || "",
+        total,
+        paid,
+        reason,
+        paymentRejected: event === "payment_rejected",
+      });
     const sent = await sendMailerooEmail({
       to: email,
       toName: first.full_name || "Player",
       subject: `${
-        event === "payment_rejected" ? "Payment rejected" : "Booking cancelled"
+        event === "payment_rejected"
+          ? "Payment rejected"
+          : event === "payment_reassigned"
+          ? "Payment moved to your new booking"
+          : "Booking cancelled"
       }: ${displayRef} | Paddle Rage Pickleball`,
       html: content.html,
       plain: content.plain,
@@ -169,6 +308,9 @@ Deno.serve(async (req) => {
       : "Unable to send booking status email";
     const status = message === "Admin access required"
       ? 403
+      : message === "Rejected payment reason could not be verified" ||
+          message === "Payment transfer audit could not be verified"
+      ? 409
       : message.startsWith("Invalid ")
       ? 400
       : 500;

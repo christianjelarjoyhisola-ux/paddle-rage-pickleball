@@ -645,8 +645,15 @@ tr:hover td { background: var(--bg2); }
 }
 .host-balance-review-button::before { content: '✓'; font-weight: 950; }
 .host-balance-review-button.host-balance-review-mobile { grid-column: 1 / -1; min-height: 44px; }
+.booking-reject-payment { font-weight: 900; }
+.booking-reject-payment::before { content: '×'; font-size: 1rem; font-weight: 950; line-height: 1; }
+.booking-reject-payment.booking-reject-payment-mobile { grid-column: 1 / -1; min-height: 44px; }
+.booking-rejection-email { font-weight: 850; }
+.booking-rejection-email::before { content: '↻'; font-weight: 950; }
+.booking-rejection-email.booking-rejection-email-mobile { grid-column: 1 / -1; min-height: 44px; }
 .host-deposit-evidence { color: var(--green); font-size: .67rem; font-weight: 850; line-height: 1.35; }
 .host-deposit-evidence.warn { color: var(--yellow); }
+.host-deposit-evidence.review { color: var(--yellow); }
 .host-deposit-evidence.flagged { color: var(--red); }
 .host-payment-ledger { display: grid; gap: 3px; min-width: 0; }
 .host-payment-ledger .host-deposit-evidence,
@@ -1056,6 +1063,88 @@ tr:hover td { background: var(--bg2); }
 .verify-payment-modal .m-hd h2 { line-height: 1.15; margin: 0; }
 .verify-payment-modal .m-body { overflow-x: hidden; }
 .verify-payment-modal .receipt-detail-grid { max-width: 100%; }
+.booking-payment-reject-overlay { z-index: 560; }
+.booking-payment-reject-modal { max-width: 560px; display: flex; flex-direction: column; overflow: hidden; }
+.booking-payment-reject-modal .m-hd,
+.booking-payment-reject-modal .m-foot { flex: 0 0 auto; z-index: 2; }
+.booking-payment-reject-modal .m-body { min-height: 0; overflow-y: auto; }
+.booking-payment-reject-modal button:disabled,
+.booking-payment-reject-modal textarea:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+.booking-payment-reject-head {
+  background: linear-gradient(135deg,rgba(229,57,53,.12),transparent);
+}
+.booking-payment-reject-head h2 { color: var(--red); }
+.booking-payment-reject-summary {
+  display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px;
+  padding: 14px 16px; margin-bottom: 16px; border: 1px solid rgba(229,57,53,.24);
+  border-radius: 12px; background: rgba(229,57,53,.065);
+}
+.booking-payment-reject-summary span {
+  display: block; margin-bottom: 4px; color: var(--muted); font-size: .66rem;
+  font-weight: 850; letter-spacing: .06em; text-transform: uppercase;
+}
+.booking-payment-reject-summary strong { color: var(--text); overflow-wrap: anywhere; }
+.booking-payment-reject-summary .amount { color: var(--red); text-align: right; }
+.booking-payment-reject-impact {
+  margin: 0 0 16px; color: var(--text2); font-size: .82rem; line-height: 1.6;
+}
+.booking-payment-reject-reason { min-height: 126px; resize: vertical; line-height: 1.55; }
+.booking-payment-reject-help {
+  display: flex; justify-content: space-between; gap: 12px; margin-top: 7px;
+  color: var(--muted); font-size: .68rem; line-height: 1.45;
+}
+.booking-payment-reject-warning {
+  margin-top: 16px; padding: 12px 14px; border-left: 3px solid var(--red);
+  border-radius: 8px; background: var(--red-bg); color: var(--text2);
+  font-size: .75rem; line-height: 1.55;
+}
+.booking-payment-reject-warning strong { color: var(--red); }
+.booking-payment-transfer-overlay { z-index: 570; }
+.booking-payment-transfer-modal { max-width: 780px; display: flex; flex-direction: column; overflow: hidden; }
+.booking-payment-transfer-modal .m-hd,
+.booking-payment-transfer-modal .m-foot { flex: 0 0 auto; z-index: 2; }
+.booking-payment-transfer-modal .m-body { min-height: 0; overflow-y: auto; }
+.booking-payment-transfer-modal button:disabled,
+.booking-payment-transfer-modal textarea:disabled,
+.booking-payment-transfer-modal input:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+.booking-payment-transfer-head { background: linear-gradient(135deg,rgba(var(--green-rgb),.14),rgba(200,160,96,.08),transparent); }
+.booking-payment-transfer-head h2 { color: var(--green); }
+.booking-payment-transfer-reference {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  padding: 12px 14px; margin-bottom: 14px; border: 1px solid rgba(var(--green-rgb),.25);
+  border-radius: 11px; background: rgba(var(--green-rgb),.065);
+}
+.booking-payment-transfer-reference span { color: var(--muted); font-size: .7rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.booking-payment-transfer-reference code { color: var(--green); font-size: .9rem; font-weight: 850; overflow-wrap: anywhere; text-align: right; }
+.booking-payment-transfer-explainer { margin: 0 0 16px; color: var(--text2); font-size: .82rem; line-height: 1.55; }
+.booking-payment-transfer-compare { display: grid; grid-template-columns: minmax(0,1fr) 34px minmax(0,1fr); align-items: stretch; gap: 10px; }
+.booking-payment-transfer-arrow { display: grid; place-items: center; color: var(--green); font-size: 1.25rem; font-weight: 900; }
+.booking-payment-transfer-card { padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface2); min-width: 0; }
+.booking-payment-transfer-card.target { border-color: rgba(var(--green-rgb),.34); box-shadow: inset 0 0 0 1px rgba(var(--green-rgb),.06); }
+.booking-payment-transfer-card-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.booking-payment-transfer-card-title strong { font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; }
+.booking-payment-transfer-state { padding: 3px 7px; border-radius: 999px; font-size: .62rem; font-weight: 850; text-transform: uppercase; }
+.booking-payment-transfer-state.cancelled { color: var(--red); background: var(--red-bg); }
+.booking-payment-transfer-state.pending { color: #b87e00; background: rgba(184,126,0,.14); }
+.booking-payment-transfer-row { display: grid; grid-template-columns: 72px minmax(0,1fr); gap: 8px; padding: 5px 0; border-top: 1px solid var(--border); font-size: .73rem; line-height: 1.35; }
+.booking-payment-transfer-row span { color: var(--muted); }
+.booking-payment-transfer-row strong { color: var(--text); overflow-wrap: anywhere; text-align: right; }
+.booking-payment-transfer-checks { display: grid; gap: 7px; margin: 16px 0; padding: 12px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg2); }
+.booking-payment-transfer-check { display: flex; align-items: flex-start; gap: 8px; color: var(--text2); font-size: .75rem; line-height: 1.4; }
+.booking-payment-transfer-check::before { content: '\2713'; color: var(--green); font-weight: 900; }
+.booking-payment-transfer-check.fail::before { content: '\2715'; color: var(--red); }
+.booking-payment-transfer-check.fail { color: var(--red); }
+.booking-payment-transfer-server-note { color: var(--muted); font-size: .68rem; line-height: 1.45; margin: -7px 0 16px; }
+.booking-payment-transfer-confirmation {
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px 13px; margin-top: 14px;
+  border: 1px solid rgba(200,160,96,.32); border-radius: 10px; background: rgba(200,160,96,.075);
+  color: var(--text2); font-size: .76rem; line-height: 1.45; cursor: pointer;
+}
+.booking-payment-transfer-confirmation input { margin-top: 2px; flex: 0 0 auto; accent-color: var(--green); }
+.booking-payment-transfer-warning { margin-top: 14px; padding: 11px 13px; border-left: 3px solid var(--yellow); border-radius: 8px; background: rgba(200,160,96,.08); color: var(--text2); font-size: .73rem; line-height: 1.5; }
+.booking-payment-transfer-warning strong { color: var(--yellow); }
+.booking-duplicate-transfer { background: rgba(200,160,96,.13); color: var(--yellow); border: 1px solid rgba(200,160,96,.38); }
+.booking-duplicate-transfer:hover { background: rgba(200,160,96,.22); }
 @media (max-width: 520px) {
   .overlay { align-items: flex-start; padding: 12px; overflow-y: auto; }
   .verify-payment-modal { max-width: 100%; max-height: calc(100dvh - 24px); }
@@ -1064,6 +1153,19 @@ tr:hover td { background: var(--bg2); }
   .verify-payment-modal .m-body { padding: 14px 16px; }
   .verify-payment-modal .m-foot { padding: 12px 16px; }
   .verify-payment-modal #vmGcashRef { font-size: 1.08rem; letter-spacing: .8px; overflow-wrap: anywhere; }
+  .booking-payment-reject-modal { max-width: 100%; max-height: calc(100dvh - 24px); }
+  .booking-payment-reject-summary { grid-template-columns: 1fr; }
+  .booking-payment-reject-summary .amount { text-align: left; }
+  .booking-payment-reject-help { align-items: flex-start; }
+  .booking-payment-transfer-modal { max-width: 100%; max-height: calc(100dvh - 24px); }
+  .booking-payment-transfer-modal .m-hd { padding: 14px 16px; }
+  .booking-payment-transfer-modal .m-body { padding: 14px 16px; }
+  .booking-payment-transfer-modal .m-foot { padding: 12px 16px; flex-wrap: wrap; }
+  .booking-payment-transfer-modal .m-foot .btn { flex: 1 1 100%; }
+  .booking-payment-transfer-reference { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .booking-payment-transfer-reference code { text-align: left; }
+  .booking-payment-transfer-compare { grid-template-columns: 1fr; }
+  .booking-payment-transfer-arrow { transform: rotate(90deg); min-height: 20px; }
 }
 
 /* ── BLOCKED ───────────────────────────────────────────── */
@@ -4658,7 +4760,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
   </div>
 </div>
 <div id="adminShell" inert aria-hidden="true">
-<div class="toasts" id="toasts"></div>
+<div class="toasts" id="toasts" aria-label="Notifications" aria-live="polite" aria-relevant="additions"></div>
 
 <!-- TOP NAV -->
 <nav class="topnav">
@@ -6290,8 +6392,101 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
     </div>
     <div class="m-foot">
       <button class="btn btn-d" id="vmRejectBtn" onclick="rejectPayment()">❌ Not Received</button>
+      <button class="btn booking-duplicate-transfer" id="vmResolveDuplicateBtn" style="display:none" onclick="openDuplicatePaymentTransferFromVerify()">Resolve duplicate</button>
       <button class="btn btn-p" id="vmConfirmBtn" onclick="verifyAndConfirm()">✅ Received — Confirm</button>
       <button class="btn btn-g" id="vmResolvedClose" style="display:none" onclick="closeVerifyModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOOKING PAYMENT REJECTION REASON -->
+<div class="overlay booking-payment-reject-overlay" id="bookingPaymentRejectModal" aria-hidden="true" inert hidden>
+  <div class="modal booking-payment-reject-modal" id="bookingPaymentRejectDialog" role="dialog" aria-modal="true" aria-labelledby="bookingPaymentRejectTitle" aria-describedby="bookingPaymentRejectImpact" aria-busy="false" tabindex="-1" onkeydown="bookingPaymentRejectModalKeydown(event)">
+    <div class="m-hd booking-payment-reject-head">
+      <div>
+        <h2 id="bookingPaymentRejectTitle">REJECT PAYMENT</h2>
+        <p style="margin:4px 0 0;color:var(--muted);font-size:.75rem">The reason below will be sent to the player.</p>
+      </div>
+      <button class="m-x" type="button" id="bookingPaymentRejectClose" aria-label="Keep booking and close" onclick="closeBookingPaymentRejectModal()">&#10005;</button>
+    </div>
+    <div class="m-body">
+      <div class="booking-payment-reject-summary">
+        <div><span>Booking</span><strong id="bookingPaymentRejectRef">—</strong></div>
+        <div><span>Payment submitted</span><strong class="amount" id="bookingPaymentRejectAmount">—</strong></div>
+      </div>
+      <p class="booking-payment-reject-impact" id="bookingPaymentRejectImpact">Loading booking impact…</p>
+      <div class="fg">
+        <label class="fl" for="bookingPaymentRejectReason">Reason sent to player</label>
+        <textarea class="fi booking-payment-reject-reason" id="bookingPaymentRejectReason" required minlength="3" maxlength="1000" aria-describedby="bookingPaymentRejectReasonHelp bookingPaymentRejectCount" placeholder="Example: The submitted payment reference has already been used and could not be accepted." oninput="syncBookingPaymentRejectReason()"></textarea>
+        <div class="booking-payment-reject-help">
+          <span id="bookingPaymentRejectReasonHelp">Minimum 3 characters. Use a clear customer-facing explanation and do not include another player’s information.</span>
+          <span id="bookingPaymentRejectCount">0 / 1000</span>
+        </div>
+      </div>
+      <div class="booking-payment-reject-warning"><strong>This cannot be undone.</strong> <span id="bookingPaymentRejectWarningText">This booking will be cancelled and its court slots released.</span></div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-g" type="button" id="bookingPaymentRejectCancel" onclick="closeBookingPaymentRejectModal()">Keep booking</button>
+      <button class="btn btn-d" type="button" id="bookingPaymentRejectConfirm" disabled onclick="confirmBookingPaymentRejection()">Reject payment &amp; email player</button>
+    </div>
+  </div>
+</div>
+
+<!-- CANCELLED-BOOKING PAYMENT REASSIGNMENT -->
+<div class="overlay booking-payment-transfer-overlay" id="bookingPaymentTransferModal" aria-hidden="true" inert hidden>
+  <div class="modal booking-payment-transfer-modal" id="bookingPaymentTransferDialog" role="dialog" aria-modal="true" aria-labelledby="bookingPaymentTransferTitle" aria-describedby="bookingPaymentTransferExplainer bookingPaymentTransferServerNote" aria-busy="false" tabindex="-1" onkeydown="bookingPaymentTransferModalKeydown(event)">
+    <div class="m-hd booking-payment-transfer-head">
+      <div>
+        <h2 id="bookingPaymentTransferTitle">MOVE PAYMENT TO NEW BOOKING</h2>
+        <p style="margin:4px 0 0;color:var(--muted);font-size:.75rem">Resolve one protected duplicate without releasing the payment reference.</p>
+      </div>
+      <button class="m-x" type="button" id="bookingPaymentTransferClose" aria-label="Close without moving payment" onclick="closeBookingPaymentTransferModal()">&#10005;</button>
+    </div>
+    <div class="m-body">
+      <div class="booking-payment-transfer-reference">
+        <span>Protected payment reference</span>
+        <code id="bookingPaymentTransferReference">—</code>
+      </div>
+      <p class="booking-payment-transfer-explainer" id="bookingPaymentTransferExplainer">Cancelling released the old court slots, but the payment reference stayed protected against reuse. This action moves that payment allocation to the player’s replacement booking.</p>
+      <div class="booking-payment-transfer-compare">
+        <section class="booking-payment-transfer-card" aria-labelledby="bookingPaymentTransferSourceTitle">
+          <div class="booking-payment-transfer-card-title"><strong id="bookingPaymentTransferSourceTitle">Old booking</strong><span class="booking-payment-transfer-state cancelled">Cancelled</span></div>
+          <div class="booking-payment-transfer-row"><span>Booking</span><strong id="bookingPaymentTransferSourceRef">—</strong></div>
+          <div class="booking-payment-transfer-row"><span>Schedule</span><strong id="bookingPaymentTransferSourceSchedule">—</strong></div>
+          <div class="booking-payment-transfer-row"><span>Courts</span><strong id="bookingPaymentTransferSourceCourts">—</strong></div>
+          <div class="booking-payment-transfer-row"><span>Player</span><strong id="bookingPaymentTransferSourcePlayer">—</strong></div>
+          <div class="booking-payment-transfer-row"><span>Payment</span><strong id="bookingPaymentTransferSourceAmount">—</strong></div>
+        </section>
+        <div class="booking-payment-transfer-arrow" aria-hidden="true">&#10132;</div>
+        <section class="booking-payment-transfer-card target" aria-labelledby="bookingPaymentTransferTargetTitle">
+          <div class="booking-payment-transfer-card-title"><strong id="bookingPaymentTransferTargetTitle">New booking</strong><span class="booking-payment-transfer-state pending">Awaiting review</span></div>
+          <div class="booking-payment-transfer-row"><span>Booking</span><strong id="bookingPaymentTransferTargetRef">—</strong></div>
+          <div class="booking-payment-transfer-row"><span>Schedule</span><strong id="bookingPaymentTransferTargetSchedule">—</strong></div>
+          <div class="booking-payment-transfer-row"><span>Courts</span><strong id="bookingPaymentTransferTargetCourts">—</strong></div>
+          <div class="booking-payment-transfer-row"><span>Player</span><strong id="bookingPaymentTransferTargetPlayer">—</strong></div>
+          <div class="booking-payment-transfer-row"><span>Payment</span><strong id="bookingPaymentTransferTargetAmount">—</strong></div>
+        </section>
+      </div>
+      <div class="booking-payment-transfer-checks" id="bookingPaymentTransferChecks" aria-live="polite"></div>
+      <p class="booking-payment-transfer-server-note" id="bookingPaymentTransferServerNote">This is a preview only. The secure server rechecks the player, amount, receipt evidence, refund state, and both complete booking groups before changing anything.</p>
+      <div class="fg">
+        <label class="fl" for="bookingPaymentTransferReason">Reason recorded in the audit and sent to the player</label>
+        <textarea class="fi booking-payment-reject-reason" id="bookingPaymentTransferReason" required minlength="10" maxlength="1000" aria-describedby="bookingPaymentTransferReasonHelp bookingPaymentTransferCount" placeholder="Example: Player cancelled the mistaken reservation and rebooked the correct schedule." oninput="syncBookingPaymentTransferForm()"></textarea>
+        <div class="booking-payment-reject-help">
+          <span id="bookingPaymentTransferReasonHelp">Minimum 10 characters. Do not include private information about another player.</span>
+          <span id="bookingPaymentTransferCount">0 / 1000</span>
+        </div>
+      </div>
+      <label class="booking-payment-transfer-confirmation" for="bookingPaymentTransferNoRefund">
+        <input type="checkbox" id="bookingPaymentTransferNoRefund" onchange="syncBookingPaymentTransferForm()" />
+        <span>I verified that both bookings belong to the same player and no refund or chargeback was issued for the cancelled booking.</span>
+      </label>
+      <div class="booking-payment-transfer-warning"><strong>The old booking stays cancelled.</strong> Its court slots remain available. This does not charge or refund the player; it moves the existing verified payment and confirms the new booking.</div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-g" type="button" id="bookingPaymentTransferViewSource" onclick="viewDuplicatePaymentSource()">View old booking</button>
+      <button class="btn btn-g" type="button" id="bookingPaymentTransferCancel" onclick="closeBookingPaymentTransferModal()">Keep unchanged</button>
+      <button class="btn btn-p" type="button" id="bookingPaymentTransferConfirm" disabled onclick="confirmBookingPaymentTransfer()">Move payment &amp; confirm new booking</button>
     </div>
   </div>
 </div>
@@ -6848,8 +7043,14 @@ function groupBookings(bookings = [], duplicateScope = bookings) {
       receiptExtracted: items.find(b => b.receiptExtracted)?.receiptExtracted || receiptItem.receiptExtracted,
       receiptConfidence: receiptItem.receiptConfidence,
       receiptImageUrl: receiptItem.receiptImageUrl,
+      receiptImageHash: receiptItem.receiptImageHash,
+      receiptPhash: receiptItem.receiptPhash,
       receiptRef: receiptItem.ref,
       receiptVerifiedAt: receiptItem.receiptVerifiedAt,
+      receiptVerificationId: receiptItem.receiptVerificationId,
+      paymentTransferId: commonValue(items, 'paymentTransferId', primary.paymentTransferId || null),
+      paymentReassignedFromRef: commonValue(items, 'paymentReassignedFromRef', primary.paymentReassignedFromRef || null),
+      paymentReassignedToRef: commonValue(items, 'paymentReassignedToRef', primary.paymentReassignedToRef || null),
       createdAt: items.map(b => b.createdAt || b.created_at).filter(Boolean).sort()[0] || primary.createdAt || primary.created_at,
       duration: items.reduce((sum, b) => sum + (Number(b.duration) || 0), 0),
     };
@@ -6866,6 +7067,13 @@ function groupBookings(bookings = [], duplicateScope = bookings) {
   paymentRefsByGroup.forEach(keys => {
     keys.forEach(key => refCounts.set(key, (refCounts.get(key) || 0) + 1));
   });
+  const groupsByPaymentRef = new Map();
+  groups.forEach(group => {
+    const key = normalizedPaymentRefKey(group);
+    if (!key) return;
+    if (!groupsByPaymentRef.has(key)) groupsByPaymentRef.set(key, []);
+    groupsByPaymentRef.get(key).push(group);
+  });
   return groups.map(g => {
     const key = normalizedPaymentRefKey(g);
     const count = key ? (refCounts.get(key) || 0) : 0;
@@ -6873,6 +7081,9 @@ function groupBookings(bookings = [], duplicateScope = bookings) {
       ...g,
       duplicatePaymentRef: count > 1,
       duplicatePaymentRefCount: count,
+      duplicatePaymentGroups: key
+        ? (groupsByPaymentRef.get(key) || []).filter(other => other.groupKey !== g.groupKey)
+        : [],
     };
   }).sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
@@ -7099,11 +7310,17 @@ function hostDepositEvidenceBadge(b){
   if (!b?.hostBooking) return '';
   const receiptState = String(b.receiptStatus || 'none').toLowerCase();
   const paymentState = String(b.paymentStatus || '').toLowerCase();
+  if (paymentState === 'rejected') {
+    return '<span class="host-deposit-evidence flagged">× Payment 1 rejected</span>';
+  }
+  if (['downpayment_paid','paid','deposit_retained'].includes(paymentState)) {
+    return '<span class="host-deposit-evidence">✓ Payment 1 accepted</span>';
+  }
   if (receiptState === 'rejected') {
     return '<span class="host-deposit-evidence flagged">⚠ Payment 1 flagged</span>';
   }
-  if (b.gcashRef || receiptState !== 'none' || ['downpayment_paid','paid','deposit_retained'].includes(paymentState)) {
-    return '<span class="host-deposit-evidence">✓ Payment 1 accepted</span>';
+  if (b.gcashRef || receiptState !== 'none' || paymentState === 'for_verification') {
+    return '<span class="host-deposit-evidence review">● Payment 1 under review</span>';
   }
   return '';
 }
@@ -7123,13 +7340,25 @@ function hostPaymentEvidenceHtml(b){
   return `<div class="host-payment-ledger">${payment1}${payment2}</div>`;
 }
 function duplicatePaymentRefBadge(b){
+  if (b?.paymentReassignedFromRef) {
+    return '<div class="receipt-badge" title="Permanent payment-transfer audit: this linked booking cannot be deleted" style="color:var(--green);background:rgba(var(--green-rgb),.12)">Duplicate resolved · payment moved from cancelled booking</div>';
+  }
+  if (b?.paymentReassignedToRef) {
+    return `<div class="receipt-badge" title="Permanent payment-transfer audit: this cancelled source cannot be reactivated or deleted" style="color:var(--yellow);background:rgba(200,160,96,.12)">Payment moved to <code>${esc(b.paymentReassignedToRef)}</code></div>`;
+  }
   if (!b?.duplicatePaymentRef) return '';
   const count = Number(b.duplicatePaymentRefCount || 0);
   return `<div class="receipt-badge" style="color:#e53935;background:rgba(229,57,53,.12)">Duplicate payment ref${count > 1 ? ` (${count})` : ''}</div>`;
 }
-function receiptFlagChips(flags){
+function receiptFlagChips(flags, transferResolved = false){
   if (!flags || !flags.length) return '';
-  return flags.map(f => `<span class="receipt-chip">${RECEIPT_FLAG_LABELS[f] || f}</span>`).join(' ');
+  const duplicateFlags = new Set(['DUPLICATE_REF','POSSIBLE_DUPLICATE_REF']);
+  return flags.map(f => {
+    const label = transferResolved && duplicateFlags.has(f)
+      ? `Historical: ${RECEIPT_FLAG_LABELS[f] || f} · ownership resolved`
+      : RECEIPT_FLAG_LABELS[f] || f;
+    return `<span class="receipt-chip">${esc(label)}</span>`;
+  }).join(' ');
 }
 function receiptDetailValue(value, fallback = '--'){
   if (value === null || value === undefined || value === '') return fallback;
@@ -7385,6 +7614,228 @@ function hostBalanceReviewButton(b, mobile = false){
   if (!actionRef) return '';
   return `<button type="button" class="btn btn-sm host-balance-review-button${mobile?' host-balance-review-mobile':''}" data-booking-ref="${esc(actionRef)}" aria-label="Review and confirm Payment 2" onclick="openHostPaymentHistory('${jsArg(actionRef)}',this)">Review & Confirm</button>`;
 }
+function bookingPaymentCanBeRejected(b){
+  if (!b || !['owner','court_owner'].includes(String(sess?.role || '').toLowerCase())) return false;
+  if (b.hostBooking && hostBalancePendingPayment(b)) return false;
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  if (!rows.length) return false;
+  const methods = [...new Set(rows.map(row => String(row?.paymentMethod || '').toLowerCase()).filter(Boolean))];
+  if (methods.length !== 1 || !isDigitalPayment(methods[0])) return false;
+  if (!rows.every(row => ['pending','verifying'].includes(String(row?.status || '').toLowerCase()))) return false;
+  if (!rows.every(row => ['unpaid','pending','for_verification'].includes(String(row?.paymentStatus || '').toLowerCase()))) return false;
+  return rows.some(row =>
+    Boolean(String(row?.receiptImageUrl || '').trim()) ||
+    Boolean(String(row?.gcashRef || '').trim()) ||
+    !['', 'none'].includes(String(row?.receiptStatus || '').toLowerCase())
+  );
+}
+function canRejectInitialDigitalPayment(b){
+  return !!b?.hostBooking && bookingPaymentCanBeRejected(b);
+}
+function hostInitialPaymentRejectButton(b, mobile = false){
+  if (!canRejectInitialDigitalPayment(b)) return '';
+  const actionRef = b.primaryRef || b.ref;
+  if (!actionRef) return '';
+  const displayRef = b.displayRef || actionRef;
+  return `<button type="button" class="btn btn-d btn-sm booking-reject-payment${mobile?' booking-reject-payment-mobile':''}" data-booking-ref="${esc(actionRef)}" aria-label="Reject payment for ${esc(displayRef)}" onclick="openBookingPaymentRejectModal('${jsArg(actionRef)}',this)">Reject Payment</button>`;
+}
+function bookingPaymentCanResendRejectionEmail(b){
+  if (!b || !['owner','court_owner'].includes(String(sess?.role || '').toLowerCase())) return false;
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  return rows.length > 0
+    && rows.every(row => String(row?.status || '').toLowerCase() === 'cancelled')
+    && rows.every(row => String(row?.paymentStatus || '').toLowerCase() === 'rejected')
+    && Boolean(bookingPlayerEmail(b));
+}
+function bookingRejectionEmailButton(b, mobile = false){
+  if (!bookingPaymentCanResendRejectionEmail(b)) return '';
+  const actionRef = b.primaryRef || b.ref;
+  if (!actionRef) return '';
+  const displayRef = b.displayRef || actionRef;
+  return `<button type="button" class="btn btn-g btn-sm booking-rejection-email${mobile?' booking-rejection-email-mobile':''}" data-booking-ref="${esc(actionRef)}" aria-label="Resend rejection email for ${esc(displayRef)}" onclick="resendBookingRejectionEmail('${jsArg(actionRef)}',this)">Resend Rejection Email</button>`;
+}
+function bookingGroupHasAcceptedPaymentEvidence(group){
+  const rows = bookingGroupRowsForPaymentGuard(group);
+  if (!rows.length) return false;
+  const states = [...new Set(rows.map(row => String(row?.paymentStatus || 'unpaid').trim().toLowerCase()))];
+  if (states.length !== 1 || !['unpaid','for_verification','paid','downpayment_paid'].includes(states[0])) return false;
+  if (states[0] === 'for_verification') return true;
+  return rows.every(row =>
+    Boolean(String(row?.paidAt || '').trim()) &&
+    Boolean(String(row?.bookingFeeEarnedAt || '').trim())
+  );
+}
+function cancelledDuplicatePaymentSource(target){
+  if (!target || !canManuallyResolvePayment() || target.paymentReassignedFromRef) return null;
+  const targetRows = bookingGroupRowsForPaymentGuard(target);
+  if (!targetRows.length || hostBalancePendingPayment(target)) return null;
+  if (!targetRows.every(row => ['pending','verifying'].includes(String(row?.status || '').toLowerCase()))) return null;
+  if (!targetRows.every(row => String(row?.paymentStatus || '').toLowerCase() === 'for_verification')) return null;
+  if (targetRows.some(row => row?.paymentTransferId || row?.paymentReassignedFromRef || row?.paymentReassignedToRef || String(row?.receiptStatus || '').toLowerCase() === 'rejected')) return null;
+  if (!isDigitalPayment(target.paymentMethod) || !normalizedPaymentRefKey(target)) return null;
+  const collisions = Array.isArray(target.duplicatePaymentGroups) ? target.duplicatePaymentGroups : [];
+  if (collisions.length !== 1) return null;
+  const source = collisions[0];
+  const sourceRows = bookingGroupRowsForPaymentGuard(source);
+  if (!sourceRows.length || source.paymentReassignedToRef) return null;
+  if (!sourceRows.every(row => String(row?.status || '').toLowerCase() === 'cancelled')) return null;
+  if (sourceRows.some(row => row?.paymentTransferId || row?.paymentReassignedFromRef || row?.paymentReassignedToRef || String(row?.receiptStatus || '').toLowerCase() === 'rejected')) return null;
+  if (!bookingGroupHasAcceptedPaymentEvidence(source)) return null;
+  if (normalizedPaymentRefKey(source) !== normalizedPaymentRefKey(target)) return null;
+  return bookingPaymentTransferPreview(source, target).eligible ? source : null;
+}
+function bookingPaymentTransferAmount(group){
+  const rows = bookingGroupRowsForPaymentGuard(group);
+  return rows.reduce((sum, row) => {
+    const amount = Number(row?.downpayment ?? row?.total);
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+}
+function bookingPaymentTransferIdentity(group){
+  const rows = bookingGroupRowsForPaymentGuard(group);
+  const emails = [...new Set(rows.map(row => String(row?.email || '').trim().toLowerCase()))];
+  const names = [...new Set(rows.map(row => String(row?.fullName || '').trim().toLowerCase().replace(/\s+/g, ' ')))];
+  const phones = [...new Set(rows.map(row => String(row?.contactNumber || '').replace(/\D/g, '')))];
+  return {
+    valid: emails.length === 1 && names.length === 1 && phones.length === 1 && Boolean(emails[0] && names[0]),
+    email: emails[0] || '',
+    name: names[0] || '',
+    phone: phones[0] || '',
+  };
+}
+function bookingPaymentTransferShape(group){
+  const rows = bookingGroupRowsForPaymentGuard(group);
+  const money = value => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : null;
+  };
+  const signatureMoney = value => {
+    const parsed = money(value);
+    return parsed === null ? '' : parsed.toFixed(2);
+  };
+  let valid = rows.length > 0;
+  let total = 0;
+  let amount = 0;
+  const signatures = rows.map(row => {
+    const rowTotal = money(row?.total);
+    const rowAmount = money(row?.downpayment);
+    if (rowTotal === null || rowTotal <= 0 || rowAmount === null || rowAmount <= 0 || rowAmount > rowTotal + .01) valid = false;
+    total += rowTotal || 0;
+    amount += rowAmount || 0;
+    const slots = Array.isArray(row?.slots) ? row.slots : [];
+    const duration = row?.duration ?? slots.length ?? 0;
+    return [
+      signatureMoney(row?.total),
+      signatureMoney(row?.downpayment),
+      String(duration),
+      String(slots.length),
+      signatureMoney(row?.bookingFeeAmountSnapshot),
+      signatureMoney(row?.bookingFeeRateSnapshot),
+      String(row?.bookingFeeTypeSnapshot ?? ''),
+      row?.bookingFeeUnitsSnapshot === null || row?.bookingFeeUnitsSnapshot === undefined ? '' : String(row.bookingFeeUnitsSnapshot),
+      String(Boolean(row?.bookingFeeLedgerEligibleSnapshot)),
+    ].join('|');
+  }).sort();
+  const fullRows = rows.filter(row => Math.abs(Number(row?.downpayment) - Number(row?.total)) <= .01).length;
+  const partialRows = rows.filter(row => Number(row?.downpayment) < Number(row?.total) - .01).length;
+  const isHost = rows.length > 0 && rows.every(row => Boolean(row?.hostBooking));
+  const targetPaymentStatus = fullRows === rows.length
+    ? 'paid'
+    : isHost && partialRows === rows.length ? 'downpayment_paid' : '';
+  return {
+    count: rows.length,
+    valid,
+    total: Math.round(total * 100) / 100,
+    amount: Math.round(amount * 100) / 100,
+    signatures,
+    targetPaymentStatus,
+  };
+}
+function bookingPaymentTransferReceiptIdentity(group){
+  const rows = bookingGroupRowsForPaymentGuard(group);
+  const distinct = key => [...new Set(rows.map(row => String(row?.[key] || '').trim()).filter(Boolean))];
+  return {
+    hashes: distinct('receiptImageHash'),
+    phashes: distinct('receiptPhash'),
+  };
+}
+function bookingPaymentTransferHasEvidence(group){
+  const identity = bookingPaymentTransferReceiptIdentity(group);
+  return identity.hashes.length === 1 || identity.phashes.length === 1;
+}
+function bookingPaymentTransferPreview(source, target){
+  const sourceIdentity = bookingPaymentTransferIdentity(source);
+  const targetIdentity = bookingPaymentTransferIdentity(target);
+  const identityMatches = Boolean(
+    sourceIdentity.valid && targetIdentity.valid &&
+    sourceIdentity.email === targetIdentity.email &&
+    sourceIdentity.name === targetIdentity.name &&
+    sourceIdentity.phone === targetIdentity.phone
+  );
+  const sourceRows = bookingGroupRowsForPaymentGuard(source);
+  const targetRows = bookingGroupRowsForPaymentGuard(target);
+  const sourceShape = bookingPaymentTransferShape(source);
+  const targetShape = bookingPaymentTransferShape(target);
+  const shapeMatches = sourceShape.valid && targetShape.valid &&
+    sourceShape.count === targetShape.count &&
+    sourceShape.total === targetShape.total &&
+    sourceShape.amount === targetShape.amount &&
+    JSON.stringify(sourceShape.signatures) === JSON.stringify(targetShape.signatures) &&
+    Boolean(targetShape.targetPaymentStatus);
+  const sourcePaymentState = String(source?.paymentStatus || '').toLowerCase();
+  const amountMatches = shapeMatches && sourceShape.amount > 0 &&
+    (!['paid','downpayment_paid'].includes(sourcePaymentState) || sourcePaymentState === targetShape.targetPaymentStatus);
+  const sameReference = Boolean(normalizedPaymentRefKey(source)) && normalizedPaymentRefKey(source) === normalizedPaymentRefKey(target);
+  const sourceReceipt = bookingPaymentTransferReceiptIdentity(source);
+  const targetReceipt = bookingPaymentTransferReceiptIdentity(target);
+  const fingerprintsConsistent = sourceReceipt.hashes.length <= 1 && targetReceipt.hashes.length <= 1 &&
+    sourceReceipt.phashes.length <= 1 && targetReceipt.phashes.length <= 1;
+  const exactHashMatch = sourceReceipt.hashes.length === 1 && targetReceipt.hashes.length === 1 && sourceReceipt.hashes[0] === targetReceipt.hashes[0];
+  const exactPhashMatch = sourceReceipt.phashes.length === 1 && targetReceipt.phashes.length === 1 && sourceReceipt.phashes[0] === targetReceipt.phashes[0];
+  const evidenceMatches = sameReference && fingerprintsConsistent && (exactHashMatch || exactPhashMatch) &&
+    bookingPaymentTransferHasEvidence(source) && bookingPaymentTransferHasEvidence(target);
+  const sourceHosts = [...new Set(sourceRows.map(row => Boolean(row?.hostBooking)))];
+  const targetHosts = [...new Set(targetRows.map(row => Boolean(row?.hostBooking)))];
+  const sourceHostIds = [...new Set(sourceRows.map(row => String(row?.hostUserId || '')))];
+  const targetHostIds = [...new Set(targetRows.map(row => String(row?.hostUserId || '')))];
+  const ownershipMatches = sourceHosts.length === 1 && targetHosts.length === 1 && sourceHosts[0] === targetHosts[0] &&
+    sourceHostIds.length === 1 && targetHostIds.length === 1 && sourceHostIds[0] === targetHostIds[0];
+  const sourceAccepted = bookingGroupHasAcceptedPaymentEvidence(source);
+  return {
+    identityMatches,
+    amountMatches,
+    shapeMatches,
+    ownershipMatches,
+    evidenceMatches,
+    sourceAccepted,
+    sourceAmount: sourceShape.amount,
+    targetAmount: targetShape.amount,
+    eligible: identityMatches && ownershipMatches && amountMatches && evidenceMatches && sourceAccepted,
+  };
+}
+function bookingDuplicateTransferButton(b, mobile = false){
+  const source = cancelledDuplicatePaymentSource(b);
+  if (!source) return '';
+  const actionRef = b.primaryRef || b.ref;
+  if (!actionRef) return '';
+  const displayRef = b.displayRef || actionRef;
+  return `<button type="button" class="btn btn-sm booking-duplicate-transfer${mobile?' booking-duplicate-transfer-mobile':''}" data-booking-ref="${esc(actionRef)}" aria-label="Resolve duplicate payment for ${esc(displayRef)}" onclick="openBookingPaymentTransferModal('${jsArg(actionRef)}',this)">Resolve duplicate</button>`;
+}
+function bookingPaymentCanResendTransferEmail(b){
+  if (!b || !canManuallyResolvePayment() || !b.paymentTransferId || !b.paymentReassignedFromRef || !bookingPlayerEmail(b)) return false;
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  return rows.length > 0
+    && rows.every(row => String(row?.status || '').toLowerCase() === 'confirmed')
+    && rows.every(row => ['paid','downpayment_paid'].includes(String(row?.paymentStatus || '').toLowerCase()));
+}
+function bookingPaymentTransferEmailButton(b, mobile = false){
+  if (!bookingPaymentCanResendTransferEmail(b)) return '';
+  const actionRef = b.primaryRef || b.ref;
+  if (!actionRef) return '';
+  const displayRef = b.displayRef || actionRef;
+  return `<button type="button" class="btn btn-g btn-sm booking-payment-transfer-email${mobile?' booking-payment-transfer-email-mobile':''}" data-booking-ref="${esc(actionRef)}" aria-label="Resend payment move email for ${esc(displayRef)}" onclick="resendBookingPaymentTransferEmail('${jsArg(actionRef)}',this)">Resend Payment Move Email</button>`;
+}
 async function openHostPaymentHistory(ref, trigger){
   try {
     if (!window.HostBalanceAdmin?.openHistoryForBooking) throw new Error('Payment history is unavailable. Refresh and try again.');
@@ -7401,9 +7852,13 @@ async function openHostPaymentHistoryFromDetails(ref){
   trigger?.focus();
   await openHostPaymentHistory(ref, trigger);
 }
-function bookingActionsHtml(b, canDelete, includePrimaryActions = true){
+function bookingActionsHtml(b, canDelete, includePrimaryActions = true, includeDuplicateTransfer = true){
+  const includePaymentTransferActions = includeDuplicateTransfer;
   const grouped = Array.isArray(b.items) && b.items.length > 1;
   const actionRef = b.primaryRef || b.ref;
+  const transferRows = bookingGroupRowsForPaymentGuard(b);
+  const transferLocked = Boolean(b.paymentTransferId) || transferRows.some(row => Boolean(row?.paymentTransferId));
+  const transferredOut = Boolean(b.paymentReassignedToRef) || transferRows.some(row => Boolean(row?.paymentReassignedToRef));
   const forfeited = b.status === 'forfeited' || b.paymentStatus === 'deposit_retained';
   const hasBalance = b.hostBooking && b.paymentStatus === 'downpayment_paid';
   const balanceReviewState = hostBalanceReviewState(b);
@@ -7413,15 +7868,17 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true){
   if (isPlaceholderHold(b)) {
     return `${includePrimaryActions ? bookingDetailsButton(b) : ''}
       ${!['cancelled','forfeited'].includes(String(b.status || '').toLowerCase()) ? `<button class="btn btn-d btn-sm" onclick="updateStatus('${jsArg(actionRef)}','cancelled')">Release Hold</button>` : ''}
-      ${canDelete ? `<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>` : ''}`;
+      ${canDelete && !transferLocked ? `<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>` : ''}`;
   }
-  return `${includePrimaryActions ? `${bookingDetailsButton(b)} ${hostBalanceReviewButton(b)} ${hostPaymentHistoryButton(b)}` : ''}
+  return `${includePrimaryActions ? `${bookingDetailsButton(b)} ${hostInitialPaymentRejectButton(b)} ${bookingRejectionEmailButton(b)} ${hostBalanceReviewButton(b)} ${hostPaymentHistoryButton(b)}` : ''}
+    ${includePrimaryActions && includePaymentTransferActions ? bookingPaymentTransferEmailButton(b) : ''}
+    ${includePaymentTransferActions ? bookingDuplicateTransferButton(b) : ''}
     ${!balanceReviewLocked && !grouped && !['cancelled','forfeited'].includes(b.status)?`<button class="btn btn-sm" style="background:rgba(74,154,220,.12);color:#5a9ad4;border:1px solid rgba(74,154,220,.3)" onclick="openRescheduleModal('${jsArg(actionRef)}')">Reschedule</button>`:''}
     ${b.email && (forfeited || (hasBalance && balanceReviewState === 'clear'))?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Notice':'Balance Reminder'}</button>`:''}
     ${b.status==='confirmed' && b.email && !hasBalance?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendConfirmationEmail('${jsArg(actionRef)}')">Resend Email</button>`:''}
     ${canRecordManualPayment?`<button class="btn btn-p btn-sm" onclick="updatePaymentStatus('${jsArg(actionRef)}','paid')">Record Fully Paid</button>`:''}
     ${canCorrectForfeiture?`<button class="btn btn-p btn-sm" onclick="restoreForfeitedHostBooking('${jsArg(actionRef)}')">Restore Fully Paid</button>`:''}
-    ${balanceReviewState === 'pending' ? '' : `<select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" ${forfeited?'disabled title="Forfeited records are permanent"':balanceReviewLocked?'disabled title="Balance review status is unavailable"':''} onchange="updateStatus('${jsArg(actionRef)}',this.value)">
+    ${transferredOut ? '<span class="bdg bdg-x" title="Payment-transfer source records stay cancelled permanently">CANCELLED · AUDIT LOCKED</span>' : balanceReviewState === 'pending' ? '' : `<select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" ${forfeited?'disabled title="Forfeited records are permanent"':balanceReviewLocked?'disabled title="Balance review status is unavailable"':''} onchange="updateStatus('${jsArg(actionRef)}',this.value)">
       ${b.status==='mixed'?'<option value="mixed" selected disabled>Mixed</option>':''}
       <option value="pending" ${b.status==='pending'?'selected':''}>Pending</option>
       <option value="confirmed" ${b.status==='confirmed'?'selected':''}>Confirmed</option>
@@ -7430,11 +7887,14 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true){
       <option value="cancelled" ${b.status==='cancelled'?'selected':''}>Cancelled</option>
       ${(b.hostBooking && (b.paymentStatus==='downpayment_paid' || b.status==='forfeited')) ? `<option value="forfeited" ${b.status==='forfeited'?'selected':''}>Forfeited</option>` : ''}
     </select>`}
-    ${canDelete && !forfeited && !balanceReviewLocked?`<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>`:''}`;
+    ${canDelete && !forfeited && !balanceReviewLocked && !transferLocked?`<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>`:''}`;
 }
 function bookingPayStateSelect(b){
   if (isPlaceholderHold(b)) return '<span class="bdg bdg-x">NO PAYMENT EVIDENCE</span>';
   const actionRef = b.primaryRef || b.ref;
+  if (b.paymentTransferId || bookingGroupRowsForPaymentGuard(b).some(row => Boolean(row?.paymentTransferId))) {
+    return `<span title="Payment state is protected by a permanent transfer audit">${payStatusBdg(b.paymentStatus)}</span>`;
+  }
   if (b.status === 'forfeited' || b.paymentStatus === 'deposit_retained') return payStatusBdg('deposit_retained');
   if (hostBalancePendingPayment(b)) {
     return `<div class="booking-payment-review"><strong>PAYMENT REVIEW NEEDED</strong><span>${fmt(hostBalancePendingAmount(b))} receipt submitted</span></div>`;
@@ -7568,8 +8028,8 @@ function mobileBookingCard(b, canDelete){
       ${duplicatePaymentRefBadge(b)}
     </div>
     ${b.hostBooking
-      ? `<div class="mb-book-primary-actions">${hostBalanceReviewButton(b, true)}${bookingDetailsButton(b)}${hostPaymentHistoryButton(b, true)}</div>`
-      : bookingQuickConfirmButton(b, true)}
+      ? `<div class="mb-book-primary-actions">${hostBalanceReviewButton(b, true)}${bookingDetailsButton(b)}${hostPaymentHistoryButton(b, true)}${hostInitialPaymentRejectButton(b, true)}${bookingRejectionEmailButton(b, true)}</div><div class="mb-book-primary-actions">${bookingPaymentTransferEmailButton(b, true)}${bookingDuplicateTransferButton(b, true)}</div>`
+      : `<div class="mb-book-primary-actions">${bookingQuickConfirmButton(b, true)}${bookingPaymentTransferEmailButton(b, true)}${bookingDuplicateTransferButton(b, true)}</div>`}
     <details class="mb-book-pay">
       <summary>Actions</summary>
       <div class="mb-book-detail-grid">
@@ -7586,7 +8046,7 @@ function mobileBookingCard(b, canDelete){
           ? `<div class="mb-book-detail-row"><span>Payments</span><span>${hostPaymentEvidenceHtml(b) || 'Not recorded'}</span></div>`
           : b.receiptStatus && b.receiptStatus !== 'none' ? `<div class="mb-book-detail-row"><span>Receipt</span><span>${receiptBadge(b)}</span></div>` : ''}
       </div>
-      <div class="mb-book-actions">${bookingActionsHtml(b, canDelete, !b.hostBooking)}</div>
+      <div class="mb-book-actions">${bookingActionsHtml(b, canDelete, !b.hostBooking, false)}</div>
     </details>
   </div>`;
 }
@@ -7690,7 +8150,7 @@ async function resendHostBalanceNotice(ref) {
     toast(error?.message || 'Could not send the host balance notice.', 'err');
   }
 }
-function toast(msg,type='ok'){const icons={ok:'✅',err:'❌',inf:'ℹ️'};const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span>${icons[type]||''}</span><span></span>`;el.lastElementChild.textContent=String(msg ?? '');$('toasts').appendChild(el);setTimeout(()=>el.remove(),3800);}
+function toast(msg,type='ok'){const icons={ok:'✅',err:'❌',inf:'ℹ️'};const el=document.createElement('div');el.className=`toast ${type}`;el.setAttribute('role',type==='err'?'alert':'status');el.innerHTML=`<span aria-hidden="true">${icons[type]||''}</span><span></span>`;el.lastElementChild.textContent=String(msg ?? '');$('toasts').appendChild(el);setTimeout(()=>el.remove(),3800);}
 let _vmReceiptLoadToken = 0;
 let _ovReceiptLoadToken = 0;
 let _vmOpenToken = 0;
@@ -9302,7 +9762,7 @@ function paymentReviewRow(item) {
   const typeLabel = item.type === 'booking' ? 'Court Booking' : item.type === 'host_session' ? 'Hosted Open Play Signup' : 'Open Play Reservation';
   const typeClass = item.type === 'booking' ? 'pr-type-booking' : 'pr-type-open';
   const flags = item.flags?.length
-    ? receiptFlagChips(item.flags)
+    ? receiptFlagChips(item.flags, item.paymentTransferResolved)
     : '<span style="color:var(--text3);font-size:.72rem;font-weight:800">No flags</span>';
   return `<article class="pr-card">
     <div class="pr-card-top">
@@ -9351,6 +9811,7 @@ async function renderPaymentReview() {
       amount: b.downpayment || b.total || 0,
       status: bookingReviewStatus(b),
       flags: b.receiptFlags || [],
+      paymentTransferResolved: Boolean(b.paymentReassignedFromRef || b.paymentReassignedToRef),
       createdAt: b.receiptVerifiedAt || b.createdAt,
     }));
   const opItems = regs
@@ -10014,7 +10475,7 @@ async function confirmBookingTransaction(ref, {
       /(?:reference|receipt|evidence)[^.]*already (?:used|claimed|linked)|reference is also attached to another booking|duplicate (?:payment|reference|receipt)/i.test(rawMessage)
     );
     toast(collision
-      ? 'This receipt is already linked to another payment. Nothing was changed. Compare the other booking or choose Not Received.'
+      ? 'This receipt is already linked to another payment. Nothing was changed. If the other booking was cancelled, use Resolve duplicate to move it safely.'
       : rawMessage, 'err');
     return false;
   } finally {
@@ -10028,6 +10489,11 @@ function quickConfirmBooking(ref, trigger) {
 
 async function updateStatus(ref, status) {
   const current = await getBookingGroupByRef(ref);
+  if (current?.paymentReassignedToRef || bookingGroupRowsForPaymentGuard(current).some(row => Boolean(row?.paymentReassignedToRef))) {
+    toast('This is the cancelled source of a completed payment move. It must remain cancelled for the permanent audit.', 'err');
+    await renderBookings();
+    return;
+  }
   if (current?.hostBooking && String(current.paymentStatus || '').toLowerCase() === 'downpayment_paid') {
     try { await window.HostBalanceAdmin?.load?.(true); }
     catch (_) { }
@@ -10114,14 +10580,18 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   if (openToken !== _vmOpenToken) return;
   const readOnly = bookingPaymentIsResolved(b);
   const canReview = canManuallyResolvePayment();
+  const transferSource = !readOnly && canReview ? cancelledDuplicatePaymentSource(b) : null;
   if ($('vmRejectBtn')) $('vmRejectBtn').style.display = !readOnly && canReview ? '' : 'none';
   if ($('vmConfirmBtn')) $('vmConfirmBtn').style.display = !readOnly && canReview ? '' : 'none';
+  if ($('vmResolveDuplicateBtn')) $('vmResolveDuplicateBtn').style.display = transferSource ? '' : 'none';
   if ($('vmResolvedClose')) $('vmResolvedClose').style.display = readOnly || !canReview ? '' : 'none';
   if ($('vmReviewHint')) {
     $('vmReviewHint').textContent = readOnly
       ? 'This payment is already resolved. Receipt evidence remains available for audit.'
       : !canReview
       ? 'Only the system owner or court owner can decide a pending payment. Receipt evidence remains available for review.'
+      : transferSource
+      ? 'This reference is protected by one cancelled booking. Use Resolve duplicate to compare both bookings and move the payment safely.'
       : 'Match the source-app reference with the receiving account, then choose Received or Not Received. This owner decision is recorded.';
   }
   $('verifyModal').dataset.ref = ref;
@@ -10192,7 +10662,11 @@ async function vmPopulateReceipt(b){
     none:          ['#888','var(--input)','No automated result'],
   };
   let [c,bg,lbl] = map[s] || map.none;
-  if (paymentState === 'deposit_retained' || bookingState === 'forfeited') {
+  if (b.paymentReassignedFromRef) {
+    [c,bg,lbl] = ['var(--green)','rgba(var(--green-rgb),.12)','Payment moved from cancelled booking · replacement confirmed'];
+  } else if (b.paymentReassignedToRef) {
+    [c,bg,lbl] = ['var(--yellow)','rgba(200,160,96,.12)',`Payment moved to ${b.paymentReassignedToRef} · old booking remains cancelled`];
+  } else if (paymentState === 'deposit_retained' || bookingState === 'forfeited') {
     [c,bg,lbl] = ['#e67e22','rgba(230,126,34,.14)','Resolved — deposit retained and slot released'];
   } else if (paymentState === 'paid' || paymentState === 'downpayment_paid') {
     [c,bg,lbl] = s === 'auto_approved'
@@ -10206,7 +10680,7 @@ async function vmPopulateReceipt(b){
     lbl = `Needs review: ${receiptReasonText(displayFlags)}`;
   }
   if (st) { st.style.color = c; st.style.background = bg; st.textContent = lbl; }
-  $('vmReceiptFlags').innerHTML = receiptFlagChips(displayFlags);
+  $('vmReceiptFlags').innerHTML = receiptFlagChips(displayFlags, Boolean(b.paymentReassignedFromRef || b.paymentReassignedToRef));
   const detailBox = $('vmReceiptDetails');
   if (detailBox) {
     detailBox.innerHTML = receiptDetailsHtml(b);
@@ -10254,56 +10728,594 @@ async function resendConfirmationEmail(ref) {
   }
 }
 
-async function rejectPayment() {
-  if (!canManuallyResolvePayment()) { toast('Only the system owner or court owner can mark a payment not received.', 'err'); return; }
+let _bookingPaymentRejectContext = null;
+let _bookingPaymentRejectInFlight = false;
+
+function bookingPlayerEmail(b){
+  const email = String(b?.email || '').trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : '';
+}
+
+function bookingPaymentRejectCourtCount(b){
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  return Math.max(1, new Set(rows.map(row => row?.courtId || row?.courtName).filter(Boolean)).size || rows.length);
+}
+
+function syncBookingPaymentRejectReason(){
+  const field = $('bookingPaymentRejectReason');
+  const reason = String(field?.value || '').trim();
+  if ($('bookingPaymentRejectCount')) $('bookingPaymentRejectCount').textContent = `${String(field?.value || '').length} / 1000`;
+  const button = $('bookingPaymentRejectConfirm');
+  if (button) button.disabled = _bookingPaymentRejectInFlight || !_bookingPaymentRejectContext || reason.length < 3;
+}
+
+function setBookingPaymentRejectBusy(busy){
+  $('bookingPaymentRejectDialog')?.setAttribute('aria-busy', busy ? 'true' : 'false');
+  ['bookingPaymentRejectClose','bookingPaymentRejectCancel'].forEach(id => {
+    const control = $(id);
+    if (control) control.disabled = !!busy;
+  });
+  const field = $('bookingPaymentRejectReason');
+  if (field) field.disabled = !!busy;
+  syncBookingPaymentRejectReason();
+}
+
+function bookingPaymentRejectModalKeydown(event){
+  const overlay = $('bookingPaymentRejectModal');
+  if (!overlay?.classList.contains('show')) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeBookingPaymentRejectModal();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const focusable = [...overlay.querySelectorAll('button:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+}
+
+function closeBookingPaymentRejectModal({ restoreFocus = true, force = false, resumeParent = true } = {}){
+  if (_bookingPaymentRejectInFlight && !force) return;
+  const overlay = $('bookingPaymentRejectModal');
+  const context = _bookingPaymentRejectContext;
+  const previous = context?.trigger || null;
+  if (overlay) {
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.inert = true;
+    overlay.hidden = true;
+  }
+  if ($('bookingPaymentRejectReason')) $('bookingPaymentRejectReason').value = '';
+  _bookingPaymentRejectContext = null;
+  if (resumeParent && context?.suspendedVerify) {
+    const verifyOverlay = $('verifyModal');
+    if (verifyOverlay?.classList.contains('show')) {
+      verifyOverlay.inert = false;
+      verifyOverlay.setAttribute('aria-hidden', 'false');
+    }
+  }
+  syncBookingPaymentRejectReason();
+  if (restoreFocus && previous?.isConnected) requestAnimationFrame(() => previous.focus());
+}
+
+async function openBookingPaymentRejectModal(ref, trigger = null, { closeVerifyOnSuccess = false } = {}){
+  if (!canManuallyResolvePayment()) {
+    toast('Only the system owner or court owner can reject a payment.', 'err');
+    return;
+  }
+  const actionRef = String(ref || '').trim();
+  if (!actionRef || _bookingPaymentRejectInFlight) return;
+  const idleText = trigger?.textContent || '';
+  if (trigger) { trigger.disabled = true; trigger.textContent = 'Opening…'; }
+  try {
+    const booking = await getBookingGroupByRef(actionRef);
+    if (!booking) throw new Error('Booking not found.');
+    if (!bookingPaymentCanBeRejected(booking)) {
+      throw new Error(bookingPaymentIsResolved(booking)
+        ? 'This payment is already resolved and cannot be rejected.'
+        : 'This digital payment is not currently eligible for rejection.');
+    }
+    const courtCount = bookingPaymentRejectCourtCount(booking);
+    const email = bookingPlayerEmail(booking);
+    const canonicalRef = booking.primaryRef || booking.ref || actionRef;
+    const verifyOverlay = $('verifyModal');
+    const suspendedVerify = Boolean(closeVerifyOnSuccess && verifyOverlay?.classList.contains('show'));
+    _bookingPaymentRejectContext = { ref: canonicalRef, trigger, closeVerifyOnSuccess, suspendedVerify };
+    $('bookingPaymentRejectRef').textContent = booking.displayRef || canonicalRef;
+    $('bookingPaymentRejectAmount').textContent = fmt(booking.downpayment || booking.total || 0);
+    const reservationImpact = courtCount === 1
+      ? 'the court reservation and release its slots'
+      : `all ${courtCount} court reservations and release their slots`;
+    $('bookingPaymentRejectImpact').textContent = email
+      ? `This will cancel ${reservationImpact}, then email the exact reason to ${email}.`
+      : `This will cancel ${reservationImpact}. No valid player email is recorded, so an email cannot be sent.`;
+    $('bookingPaymentRejectWarningText').textContent = courtCount === 1
+      ? 'This booking will be cancelled and its court slots released.'
+      : `The complete ${courtCount}-court booking will be cancelled and all of its court slots released.`;
+    $('bookingPaymentRejectConfirm').textContent = email ? 'Reject payment & email player' : 'Reject payment';
+    const field = $('bookingPaymentRejectReason');
+    field.value = '';
+    const overlay = $('bookingPaymentRejectModal');
+    overlay.hidden = false;
+    overlay.inert = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.classList.add('show');
+    if (suspendedVerify) {
+      verifyOverlay.inert = true;
+      verifyOverlay.setAttribute('aria-hidden', 'true');
+    }
+    setBookingPaymentRejectBusy(false);
+    requestAnimationFrame(() => field.focus());
+  } catch (error) {
+    toast(error?.message || 'Could not open payment rejection.', 'err');
+  } finally {
+    if (trigger?.isConnected) { trigger.disabled = false; trigger.textContent = idleText; }
+  }
+}
+
+async function refreshBookingPaymentRejectionViews(){
+  const refreshes = [
+    Promise.resolve().then(() => renderBookings()),
+    Promise.resolve().then(() => renderDash()),
+  ];
+  if (_curSection === 'payreview') refreshes.push(Promise.resolve().then(() => renderPaymentReview()));
+  const results = await Promise.allSettled(refreshes);
+  const failed = results.filter(result => result.status === 'rejected');
+  if (failed.length) console.warn('Payment rejection saved, but some admin views did not refresh.', failed.map(result => result.reason));
+  const focusTarget = $('topTitle');
+  if (focusTarget) requestAnimationFrame(() => { focusTarget.tabIndex = -1; focusTarget.focus({ preventScroll: true }); });
+  return failed.length > 0;
+}
+
+async function resendBookingRejectionEmail(ref, trigger = null){
+  if (!canManuallyResolvePayment()) {
+    toast('Only the system owner or court owner can resend a rejection email.', 'err');
+    return;
+  }
+  const idleText = trigger?.textContent || 'Resend Rejection Email';
+  if (trigger) { trigger.disabled = true; trigger.textContent = 'Sending…'; }
+  try {
+    const booking = await getBookingGroupByRef(ref);
+    if (!booking || !bookingPaymentCanResendRejectionEmail(booking)) {
+      throw new Error('This rejected payment does not have an eligible player email.');
+    }
+    const canonicalRef = booking.primaryRef || booking.ref || ref;
+    const email = bookingPlayerEmail(booking);
+    const result = await DB.sendBookingStatusEmail(canonicalRef, 'payment_rejected', '', { allowFailure: true });
+    if (!result?.ok || result?.skipped) {
+      throw new Error(result?.error || result?.reason || 'Email delivery failed');
+    }
+    toast(`Rejection email resent to ${email}.`, 'ok');
+  } catch (error) {
+    toast(`Could not resend the rejection email: ${error?.message || error}`, 'err');
+  } finally {
+    if (trigger?.isConnected) { trigger.disabled = false; trigger.textContent = idleText; }
+  }
+}
+
+async function confirmBookingPaymentRejection(){
+  const context = _bookingPaymentRejectContext;
+  const reason = String($('bookingPaymentRejectReason')?.value || '').trim();
+  if (!context || _bookingPaymentRejectInFlight) return;
+  if (reason.length < 3) { toast('Enter a rejection reason of at least 3 characters.', 'err'); return; }
+  if (reason.length > 1000) { toast('Keep the rejection reason within 1000 characters.', 'err'); return; }
+  if (typeof DB.rejectBookingPaymentTransaction !== 'function') {
+    toast('Secure payment review is unavailable. Refresh and try again.', 'err');
+    return;
+  }
+
+  const button = $('bookingPaymentRejectConfirm');
+  const idleText = button?.textContent || 'Reject payment';
+  let rejectionCommitted = false;
+  _bookingPaymentRejectInFlight = true;
+  if (button) { button.disabled = true; button.textContent = 'Rejecting…'; }
+  setBookingPaymentRejectBusy(true);
+  try {
+    const current = await getBookingGroupByRef(context.ref);
+    if (!current || !bookingPaymentCanBeRejected(current)) {
+      throw new Error('This booking changed and is no longer eligible for rejection. Refresh and review it again.');
+    }
+    const canonicalRef = current.primaryRef || current.ref || context.ref;
+    const currentEmail = bookingPlayerEmail(current);
+    const courtCount = bookingPaymentRejectCourtCount(current);
+    const result = await DB.rejectBookingPaymentTransaction(canonicalRef, reason);
+
+    if (result?.transitioned === false) {
+      closeBookingPaymentRejectModal({ restoreFocus: false, force: true, resumeParent: false });
+      if (context.closeVerifyOnSuccess) closeVerifyModal({ restoreFocus: false });
+      const refreshFailed = await refreshBookingPaymentRejectionViews();
+      toast('This payment was already marked Not Received. No duplicate email was sent.', 'inf');
+      if (refreshFailed) toast('The saved rejection is safe, but this screen could not fully refresh. Reload to see the latest status.', 'inf');
+      return;
+    }
+
+    rejectionCommitted = true;
+    notifyBookingUpdateSafe(canonicalRef, 'payment_rejected', 'Payment marked not received by admin.').catch(() => {});
+    let emailResult = { ok: false, skipped: true, reason: 'No customer email' };
+    if (currentEmail) {
+      if (button?.isConnected) button.textContent = 'Sending email…';
+      try {
+        emailResult = await DB.sendBookingStatusEmail(canonicalRef, 'payment_rejected', reason, { allowFailure: true });
+      } catch (emailError) {
+        emailResult = { ok: false, error: emailError?.message || 'Email delivery failed' };
+      }
+    }
+    closeBookingPaymentRejectModal({ restoreFocus: false, force: true, resumeParent: false });
+    if (context.closeVerifyOnSuccess) closeVerifyModal({ restoreFocus: false });
+    const refreshFailed = await refreshBookingPaymentRejectionViews();
+    const released = courtCount === 1
+      ? 'the court reservation was cancelled and its slots released'
+      : `all ${courtCount} court reservations were cancelled and their slots released`;
+    if (emailResult?.ok && !emailResult?.skipped) {
+      toast(`Payment rejected, ${released}, and the reason was emailed to ${currentEmail}.`, 'ok');
+    } else if (!currentEmail) {
+      toast('Payment rejected and court slots released. No player email was available.', 'inf');
+    } else {
+      toast(`Payment rejected and court slots released, but the email could not be sent: ${emailResult?.error || emailResult?.reason || 'unknown error'}`, 'err');
+    }
+    if (refreshFailed) toast('The rejection is saved, but this screen could not fully refresh. Reload to see the latest status.', 'inf');
+  } catch (error) {
+    if (rejectionCommitted) {
+      closeBookingPaymentRejectModal({ restoreFocus: false, force: true, resumeParent: false });
+      if (context.closeVerifyOnSuccess) closeVerifyModal({ restoreFocus: false });
+      toast('The payment was rejected, but follow-up processing was interrupted. Reload, then use Resend Rejection Email if needed.', 'err');
+    } else {
+      toast(error?.message || 'Failed to reject this payment.', 'err');
+    }
+  } finally {
+    _bookingPaymentRejectInFlight = false;
+    setBookingPaymentRejectBusy(false);
+    if (button?.isConnected) { button.disabled = false; button.textContent = idleText; }
+    syncBookingPaymentRejectReason();
+  }
+}
+
+let _bookingPaymentTransferContext = null;
+let _bookingPaymentTransferInFlight = false;
+
+function newBookingPaymentTransferIdempotencyKey(){
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  if (!globalThis.crypto?.getRandomValues) throw new Error('Secure payment transfer is unavailable in this browser. Refresh or use an updated browser.');
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+}
+
+function bookingPaymentTransferSchedule(group){
+  return group?.scheduleLabel || `${group?.dateLabel || fmtD(group?.date)} · ${group?.timeLabel || `${group?.startTime || '--'}–${group?.endTime || '--'}`}`;
+}
+
+function bookingPaymentTransferPlayer(group){
+  const email = bookingPlayerEmail(group);
+  return `${group?.fullName || 'Player'}${email ? ` · ${email}` : ''}`;
+}
+
+function renderBookingPaymentTransferChecks(preview){
+  const checks = [
+    [preview.identityMatches, 'Same player name, email, and contact number'],
+    [preview.ownershipMatches, 'Same regular/host booking ownership'],
+    [preview.shapeMatches, 'Same court count, hours, amount, and fee snapshots'],
+    [preview.amountMatches, 'Same payment amount and payment stage'],
+    [preview.evidenceMatches, 'Same provider, protected reference, and exact receipt fingerprint'],
+    [preview.sourceAccepted, 'Cancelled source is reviewable or has durable accepted-payment evidence'],
+  ];
+  $('bookingPaymentTransferChecks').innerHTML = checks.map(([passed, label]) =>
+    `<div class="booking-payment-transfer-check${passed ? '' : ' fail'}">${esc(label)}</div>`
+  ).join('');
+}
+
+function syncBookingPaymentTransferForm(){
+  const field = $('bookingPaymentTransferReason');
+  const reason = String(field?.value || '').trim();
+  const checked = $('bookingPaymentTransferNoRefund')?.checked === true;
+  if ($('bookingPaymentTransferCount')) $('bookingPaymentTransferCount').textContent = `${String(field?.value || '').length} / 1000`;
+  const button = $('bookingPaymentTransferConfirm');
+  if (button) button.disabled = _bookingPaymentTransferInFlight || !_bookingPaymentTransferContext?.preview?.eligible || reason.length < 10 || reason.length > 1000 || !checked;
+}
+
+function setBookingPaymentTransferBusy(busy){
+  $('bookingPaymentTransferDialog')?.setAttribute('aria-busy', busy ? 'true' : 'false');
+  ['bookingPaymentTransferClose','bookingPaymentTransferViewSource','bookingPaymentTransferCancel'].forEach(id => {
+    const control = $(id);
+    if (control) control.disabled = !!busy;
+  });
+  const reason = $('bookingPaymentTransferReason');
+  const confirmation = $('bookingPaymentTransferNoRefund');
+  if (reason) reason.disabled = !!busy;
+  if (confirmation) confirmation.disabled = !!busy;
+  syncBookingPaymentTransferForm();
+}
+
+function bookingPaymentTransferModalKeydown(event){
+  const overlay = $('bookingPaymentTransferModal');
+  if (!overlay?.classList.contains('show')) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeBookingPaymentTransferModal();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const focusable = [...overlay.querySelectorAll('button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+}
+
+function closeBookingPaymentTransferModal({ restoreFocus = true, force = false, resumeParent = true } = {}){
+  if (_bookingPaymentTransferInFlight && !force) return;
+  const overlay = $('bookingPaymentTransferModal');
+  const context = _bookingPaymentTransferContext;
+  const previous = context?.trigger || null;
+  if (overlay) {
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.inert = true;
+    overlay.hidden = true;
+  }
+  if ($('bookingPaymentTransferReason')) $('bookingPaymentTransferReason').value = '';
+  if ($('bookingPaymentTransferNoRefund')) $('bookingPaymentTransferNoRefund').checked = false;
+  _bookingPaymentTransferContext = null;
+  if (resumeParent && context?.suspendedVerify) {
+    const verifyOverlay = $('verifyModal');
+    if (verifyOverlay?.classList.contains('show')) {
+      verifyOverlay.inert = false;
+      verifyOverlay.setAttribute('aria-hidden', 'false');
+    }
+  }
+  syncBookingPaymentTransferForm();
+  if (restoreFocus && previous?.isConnected) requestAnimationFrame(() => previous.focus());
+}
+
+async function freshBookingPaymentTransferGroups(){
+  DB.clearCache?.(['bookings']);
+  const rows = (await DB.getBookings()).filter(booking => !isPlaceholderHold(booking));
+  return groupBookings(rows, rows);
+}
+
+async function openBookingPaymentTransferModal(targetRef, trigger = null, { closeVerifyOnSuccess = false } = {}){
+  if (!canManuallyResolvePayment()) {
+    toast('Only the system owner or court owner can move a cancelled booking payment.', 'err');
+    return false;
+  }
+  const actionRef = String(targetRef || '').trim();
+  if (!actionRef || _bookingPaymentTransferInFlight) return false;
+  const idleText = trigger?.textContent || '';
+  if (trigger) { trigger.disabled = true; trigger.textContent = 'Opening…'; }
+  try {
+    const groups = await freshBookingPaymentTransferGroups();
+    const target = groups.find(group => (group.refs || []).map(String).includes(actionRef));
+    if (!target) throw new Error('The new booking was not found.');
+    const source = cancelledDuplicatePaymentSource(target);
+    if (!source) throw new Error('This duplicate no longer has exactly one eligible cancelled booking. Refresh and review both records.');
+    const preview = bookingPaymentTransferPreview(source, target);
+    const canonicalSourceRef = source.primaryRef || source.ref;
+    const canonicalTargetRef = target.primaryRef || target.ref;
+    const verifyOverlay = $('verifyModal');
+    const suspendedVerify = Boolean(closeVerifyOnSuccess && verifyOverlay?.classList.contains('show'));
+    _bookingPaymentTransferContext = {
+      sourceRef: canonicalSourceRef,
+      targetRef: canonicalTargetRef,
+      trigger,
+      closeVerifyOnSuccess,
+      suspendedVerify,
+      preview,
+      idempotencyKey: newBookingPaymentTransferIdempotencyKey(),
+    };
+
+    $('bookingPaymentTransferReference').textContent = target.gcashRef || source.gcashRef || '—';
+    $('bookingPaymentTransferSourceRef').textContent = source.displayRef || canonicalSourceRef;
+    $('bookingPaymentTransferSourceSchedule').textContent = bookingPaymentTransferSchedule(source);
+    $('bookingPaymentTransferSourceCourts').textContent = source.courtName || '—';
+    $('bookingPaymentTransferSourcePlayer').textContent = bookingPaymentTransferPlayer(source);
+    $('bookingPaymentTransferSourceAmount').textContent = `${paymentMethodLabel(source.paymentMethod)} · ${fmt(preview.sourceAmount)}`;
+    $('bookingPaymentTransferTargetRef').textContent = target.displayRef || canonicalTargetRef;
+    $('bookingPaymentTransferTargetSchedule').textContent = bookingPaymentTransferSchedule(target);
+    $('bookingPaymentTransferTargetCourts').textContent = target.courtName || '—';
+    $('bookingPaymentTransferTargetPlayer').textContent = bookingPaymentTransferPlayer(target);
+    $('bookingPaymentTransferTargetAmount').textContent = `${paymentMethodLabel(target.paymentMethod)} · ${fmt(preview.targetAmount)}`;
+    renderBookingPaymentTransferChecks(preview);
+    $('bookingPaymentTransferServerNote').textContent = preview.eligible
+      ? 'All browser preview checks match. The secure server will independently recheck the payment ledger, refund state, receipt evidence, and both complete booking groups before committing.'
+      : 'One or more preview checks do not match. Nothing can be moved from this screen; review the two bookings and payment history.';
+    const field = $('bookingPaymentTransferReason');
+    field.value = '';
+    $('bookingPaymentTransferNoRefund').checked = false;
+    const overlay = $('bookingPaymentTransferModal');
+    overlay.hidden = false;
+    overlay.inert = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.classList.add('show');
+    if (suspendedVerify) {
+      verifyOverlay.inert = true;
+      verifyOverlay.setAttribute('aria-hidden', 'true');
+    }
+    setBookingPaymentTransferBusy(false);
+    requestAnimationFrame(() => field.focus());
+    return true;
+  } catch (error) {
+    toast(error?.message || 'Could not open the duplicate-payment resolver.', 'err');
+    return false;
+  } finally {
+    if (trigger?.isConnected) { trigger.disabled = false; trigger.textContent = idleText; }
+  }
+}
+
+async function openDuplicatePaymentTransferFromVerify(){
+  const ref = $('verifyModal')?.dataset.ref;
+  if (!ref) return;
+  await openBookingPaymentTransferModal(ref, $('vmResolveDuplicateBtn'), { closeVerifyOnSuccess: true });
+}
+
+async function viewDuplicatePaymentSource(){
+  const context = _bookingPaymentTransferContext;
+  if (!context || _bookingPaymentTransferInFlight) return;
+  const sourceRef = context.sourceRef;
+  const suspendedVerify = context.suspendedVerify;
+  closeBookingPaymentTransferModal({ restoreFocus: false, resumeParent: false });
+  if (suspendedVerify) closeVerifyModal({ restoreFocus: false });
+  _bookingType = 'all';
+  _bookingStatusView = 'all';
+  _bookingPage = 1;
+  if ($('srch')) $('srch').value = sourceRef;
+  if ($('fDate')) $('fDate').value = '';
+  if ($('fPayment')) $('fPayment').value = '';
+  updateBookingQuickFilterControls();
+  await renderBookings();
+  const focusTarget = document.querySelector(`[data-booking-ref="${CSS.escape(sourceRef)}"]`) || $('topTitle');
+  if (focusTarget) requestAnimationFrame(() => { focusTarget.tabIndex = focusTarget.tabIndex < 0 ? 0 : focusTarget.tabIndex; focusTarget.focus({ preventScroll: false }); });
+}
+
+async function refreshBookingPaymentTransferViews(){
+  const refreshes = [
+    Promise.resolve().then(() => renderBookings()),
+    Promise.resolve().then(() => renderDash()),
+  ];
+  if (_curSection === 'payreview') refreshes.push(Promise.resolve().then(() => renderPaymentReview()));
+  const results = await Promise.allSettled(refreshes);
+  const failed = results.filter(result => result.status === 'rejected');
+  if (failed.length) console.warn('Payment transfer saved, but some admin views did not refresh.', failed.map(result => result.reason));
+  const focusTarget = $('topTitle');
+  if (focusTarget) requestAnimationFrame(() => { focusTarget.tabIndex = -1; focusTarget.focus({ preventScroll: true }); });
+  return failed.length > 0;
+}
+
+async function resendBookingPaymentTransferEmail(ref, trigger = null){
+  if (!canManuallyResolvePayment()) {
+    toast('Only the system owner or court owner can resend a payment-move email.', 'err');
+    return;
+  }
+  const idleText = trigger?.textContent || 'Resend Payment Move Email';
+  if (trigger) { trigger.disabled = true; trigger.textContent = 'Sending…'; }
+  try {
+    DB.clearCache?.(['bookings']);
+    const booking = await getBookingGroupByRef(ref);
+    if (!booking || !bookingPaymentCanResendTransferEmail(booking)) {
+      throw new Error('This booking does not have a completed payment reassignment with an eligible player email.');
+    }
+    const canonicalRef = booking.primaryRef || booking.ref || ref;
+    const email = bookingPlayerEmail(booking);
+    const result = await DB.sendBookingStatusEmail(canonicalRef, 'payment_reassigned', '', { allowFailure: true });
+    if (!result?.ok || result?.skipped) throw new Error(result?.error || result?.reason || 'Email delivery failed');
+    toast(`Payment-move email resent to ${email}.`, 'ok');
+  } catch (error) {
+    toast(`Could not resend the payment-move email: ${error?.message || error}`, 'err');
+  } finally {
+    if (trigger?.isConnected) { trigger.disabled = false; trigger.textContent = idleText; }
+  }
+}
+
+async function confirmBookingPaymentTransfer(){
+  const context = _bookingPaymentTransferContext;
+  const reason = String($('bookingPaymentTransferReason')?.value || '').trim();
+  const noRefundConfirmed = $('bookingPaymentTransferNoRefund')?.checked === true;
+  if (!context || _bookingPaymentTransferInFlight) return;
+  if (reason.length < 10) { toast('Enter a transfer reason of at least 10 characters.', 'err'); return; }
+  if (reason.length > 1000) { toast('Keep the transfer reason within 1000 characters.', 'err'); return; }
+  if (!noRefundConfirmed) { toast('Confirm that no refund or chargeback was issued before moving the payment.', 'err'); return; }
+  if (typeof DB.transferCancelledBookingPayment !== 'function') {
+    toast('Secure payment reassignment is unavailable. Refresh and try again.', 'err');
+    return;
+  }
+
+  const button = $('bookingPaymentTransferConfirm');
+  const idleText = button?.textContent || 'Move payment & confirm new booking';
+  let transferCommitted = false;
+  _bookingPaymentTransferInFlight = true;
+  if (button) { button.disabled = true; button.textContent = 'Checking & moving…'; }
+  setBookingPaymentTransferBusy(true);
+  try {
+    const groups = await freshBookingPaymentTransferGroups();
+    const target = groups.find(group => (group.refs || []).map(String).includes(String(context.targetRef)));
+    const source = target ? cancelledDuplicatePaymentSource(target) : null;
+    if (!target || !source || String(source.primaryRef || source.ref) !== String(context.sourceRef)) {
+      throw new Error('These bookings changed and are no longer an eligible duplicate pair. Refresh and review them again.');
+    }
+    const preview = bookingPaymentTransferPreview(source, target);
+    if (!preview.eligible) throw new Error('The player, amount, or receipt evidence no longer matches. Nothing was moved.');
+    const currentEmail = bookingPlayerEmail(target);
+    const result = await DB.transferCancelledBookingPayment(
+      context.sourceRef,
+      context.targetRef,
+      reason,
+      true,
+      context.idempotencyKey,
+    );
+    if (result?.transitioned === false) {
+      closeBookingPaymentTransferModal({ restoreFocus: false, force: true, resumeParent: false });
+      if (context.closeVerifyOnSuccess) closeVerifyModal({ restoreFocus: false });
+      const refreshFailed = await refreshBookingPaymentTransferViews();
+      toast('This payment was already moved to the new booking. No duplicate email was sent; use Resend Payment Move Email if needed.', 'inf');
+      if (refreshFailed) toast('The saved transfer is safe, but this screen could not fully refresh. Reload to see the latest status.', 'inf');
+      return;
+    }
+
+    transferCommitted = true;
+    const canonicalTargetRef = result?.targetBookingRef || context.targetRef;
+    notifyBookingUpdateSafe(canonicalTargetRef, 'payment_reassigned', 'Payment moved from a cancelled booking and the replacement booking was confirmed.').catch(() => {});
+    let emailResult = { ok: false, skipped: true, reason: 'No customer email' };
+    if (currentEmail) {
+      if (button?.isConnected) button.textContent = 'Sending email…';
+      try {
+        emailResult = await DB.sendBookingStatusEmail(canonicalTargetRef, 'payment_reassigned', '', { allowFailure: true });
+      } catch (emailError) {
+        emailResult = { ok: false, error: emailError?.message || 'Email delivery failed' };
+      }
+    }
+    closeBookingPaymentTransferModal({ restoreFocus: false, force: true, resumeParent: false });
+    if (context.closeVerifyOnSuccess) closeVerifyModal({ restoreFocus: false });
+    const refreshFailed = await refreshBookingPaymentTransferViews();
+    if (emailResult?.ok && !emailResult?.skipped) {
+      toast(`Payment moved, new booking confirmed, and the player was emailed at ${currentEmail}.`, 'ok');
+    } else if (!currentEmail) {
+      toast('Payment moved and the new booking was confirmed. No player email was available.', 'inf');
+    } else {
+      toast(`Payment moved and the new booking was confirmed, but the email could not be sent: ${emailResult?.error || emailResult?.reason || 'unknown error'}. Use Resend Payment Move Email.`, 'err');
+    }
+    if (refreshFailed) toast('The transfer is saved, but this screen could not fully refresh. Reload to see the latest status.', 'inf');
+  } catch (error) {
+    if (transferCommitted) {
+      closeBookingPaymentTransferModal({ restoreFocus: false, force: true, resumeParent: false });
+      if (context.closeVerifyOnSuccess) closeVerifyModal({ restoreFocus: false });
+      toast('The payment was moved, but follow-up processing was interrupted. Reload, then use Resend Payment Move Email if needed.', 'err');
+    } else {
+      toast(error?.message || 'Failed to move this payment.', 'err');
+    }
+  } finally {
+    _bookingPaymentTransferInFlight = false;
+    setBookingPaymentTransferBusy(false);
+    if (button?.isConnected) { button.disabled = false; button.textContent = idleText; }
+    syncBookingPaymentTransferForm();
+  }
+}
+
+async function rejectPayment(){
   const ref = $('verifyModal').dataset.ref;
   if (!ref) return;
-  try {
-    const bkForPay = await getBookingGroupByRef(ref);
-    if (!bkForPay) {
-      toast('Booking not found.', 'err');
-      return;
-    }
-    if (bookingPaymentIsResolved(bkForPay)) {
-      toast('This payment is already resolved and cannot be changed here.', 'inf');
-      return;
-    }
-    const reviewReason = prompt(
-      `Why was payment for ${bkForPay.displayRef || ref} not received?\n\nThis note is stored in the owner review audit.`,
-      'Payment could not be found in the receiving account.',
-    );
-    if (reviewReason === null) return;
-    if (reviewReason.trim().length < 3) {
-      toast('Enter a Not Received reason of at least 3 characters.', 'err');
-      return;
-    }
-    if (!confirm(`Mark payment for ${bkForPay.displayRef || ref} as Not Received and cancel this booking? This cannot be undone.`)) return;
-    if (typeof DB.rejectBookingPaymentTransaction !== 'function') {
-      throw new Error('Secure payment review is unavailable. Refresh and try again.');
-    }
-    const result = await DB.rejectBookingPaymentTransaction(bkForPay.primaryRef || ref, reviewReason.trim());
-    closeVerifyModal();
-    toast(result?.transitioned === false
-      ? 'This payment was already marked Not Received.'
-      : 'Payment marked Not Received and booking cancelled.',
-    result?.transitioned === false ? 'inf' : 'err');
-    await renderBookings();
-    if (_curSection === 'payreview') await renderPaymentReview();
-    renderDash();
-    if (result?.transitioned !== false) {
-      Promise.all([
-        DB.sendBookingStatusEmail(ref, 'payment_rejected', 'The court owner reviewed the submitted proof and marked the payment as not received.', { allowFailure: true }),
-        notifyBookingUpdateSafe(ref, 'payment_rejected', 'Payment marked not received by admin.'),
-      ]).catch(() => {});
-    }
-  } catch(e) {
-    toast(e?.message || 'Failed to mark payment as Not Received.', 'err');
-  }
+  await openBookingPaymentRejectModal(ref, $('vmRejectBtn'), { closeVerifyOnSuccess: true });
 }
 
 async function delBooking(ref){
   if (!Auth.can('owner_only', sess.role)) {
     toast('Only the System Owner can void and delete bookings.', 'err');
+    return;
+  }
+  try {
+    const current = await getBookingGroupByRef(ref);
+    if (current?.paymentTransferId || bookingGroupRowsForPaymentGuard(current).some(row => Boolean(row?.paymentTransferId))) {
+      toast('This booking is linked to a permanent payment-transfer audit and cannot be deleted.', 'err');
+      await renderBookings();
+      return;
+    }
+  } catch (error) {
+    toast(`Could not verify whether this booking is safe to delete: ${error?.message || error}`, 'err');
     return;
   }
   const reason = prompt(`Void and delete booking ${ref}?\n\nIts unremitted platform fee will be excluded from computation. This action is final.\n\nEnter the reason:`, 'Test/demo booking');
@@ -15859,6 +16871,8 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     if(ov.id==='hostAccountModal') closeHostAccountDetails();
     else if(ov.id==='bookingDetailsModal') closeBookingDetails();
     else if(ov.id==='verifyModal') closeVerifyModal();
+    else if(ov.id==='bookingPaymentRejectModal') closeBookingPaymentRejectModal();
+    else if(ov.id==='bookingPaymentTransferModal') closeBookingPaymentTransferModal();
     else if(ov.id==='opVerifyModal') closeModal('opVerifyModal');
     else if(['rmPrepareModal','rmPayModal','rmReviewModal','rmDetailModal','rmCancelModal'].includes(ov.id)) closeRemittanceModal(ov.id);
     else ov.classList.remove('show');

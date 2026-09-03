@@ -72,6 +72,9 @@ const gcashAutoFinalizer = read(
 const digitalReceiptMigration = read(
   'supabase/migrations/20260901090000_receipt_review_maribank.sql'
 );
+const bookingPaymentTransferMigration = read(
+  'supabase/migrations/20260903100000_booking_payment_transfer.sql'
+);
 
 test('public creation paths keep configured Edge and database boundaries', () => {
   const config = read('supabase/config.toml');
@@ -238,6 +241,10 @@ test('booking status emails require an admin and use saved cancellation data', (
   assert.match(bookingStatusEmailEdge, /requireAdminEmailRequest\(req, db\)/);
   assert.match(bookingStatusEmailEdge, /row\.status !== "cancelled"/);
   assert.match(bookingStatusEmailEdge, /row\.payment_status !== "rejected"/);
+  assert.match(bookingStatusEmailEdge, /from\("payment_review_decisions"\)/);
+  assert.match(bookingStatusEmailEdge, /\.eq\("decision", "reject"\)/);
+  assert.match(bookingStatusEmailEdge, /first\.booking_group_ref[\s\S]*?\.eq\("booking_group_ref", first\.booking_group_ref\)[\s\S]*?\.eq\("booking_ref", first\.ref\)/);
+  assert.match(bookingStatusEmailEdge, /event === "payment_rejected"[\s\S]*?await loadCanonicalPaymentRejectionReason\(db, rows\)/);
   assert.match(bookingStatusEmailEdge, /renderBookingCancellationEmail/);
   assert.doesNotMatch(bookingStatusEmailEdge, /body\?\.email/);
 });
@@ -795,7 +802,10 @@ test('payment review covers every receipt-backed registration type', () => {
     admin,
     /vmConfirmBtn'\)\.style\.display = !readOnly && canReview \? '' : 'none'/
   );
-  assert.ok((admin.match(/if \(bookingPaymentIsResolved\(bkForPay\)\)/g) || []).length >= 1);
+  assert.match(
+    admin,
+    /openBookingPaymentRejectModal[\s\S]*?bookingPaymentIsResolved\(booking\)[\s\S]*?already resolved/,
+  );
   assert.match(admin, /item\.status === 'retained'[\s\S]*?>Resolved</);
   assert.match(client, /async updateOpenPlayHostSessionRegistration\(id, updates\)/);
 });
@@ -1135,4 +1145,202 @@ test('deliberate owner review ignores analyzer labels but atomically claims real
     digitalReceiptMigration,
     /create trigger y95_claim_owner_confirmed_receipt_evidence[\s\S]*?before update of payment_status on public\.bookings/,
   );
+});
+
+test('cancelled-booking payment moves have an immutable, role-gated audit boundary', () => {
+  assert.match(bookingPaymentTransferMigration, /create table if not exists public\.booking_payment_transfers/);
+  for (const field of [
+    'idempotency_key',
+    'source_booking_ref',
+    'source_booking_group_ref',
+    'target_booking_ref',
+    'target_booking_group_ref',
+    'source_booking_refs',
+    'target_booking_refs',
+    'payment_method',
+    'payment_reference_key',
+    'evidence_ledger_keys',
+    'amount',
+    'source_payment_status',
+    'target_payment_status',
+    'reason',
+    'no_refund_confirmed',
+    'actor_user_id',
+    'actor_role',
+  ]) {
+    assert.match(
+      bookingPaymentTransferMigration,
+      new RegExp(`\\b${field}\\b`),
+      `transfer audit is missing ${field}`,
+    );
+  }
+  assert.match(bookingPaymentTransferMigration, /idempotency_key uuid not null unique/);
+  assert.match(bookingPaymentTransferMigration, /char_length\(reason\) between 10 and 1000[\s\S]*?reason !~ '\[\[:cntrl:\]\]'/);
+  assert.match(bookingPaymentTransferMigration, /constraint booking_payment_transfers_no_refund_check[\s\S]*?check \(no_refund_confirmed\)/);
+  assert.match(bookingPaymentTransferMigration, /unique index if not exists uq_booking_payment_transfers_source_owner/);
+  assert.match(bookingPaymentTransferMigration, /unique index if not exists uq_booking_payment_transfers_target_owner/);
+  assert.match(bookingPaymentTransferMigration, /alter table public\.booking_payment_transfers enable row level security/);
+  assert.match(bookingPaymentTransferMigration, /account\.status = 'active'[\s\S]*?account\.role in \('owner', 'court_owner', 'staff'\)/);
+  assert.match(bookingPaymentTransferMigration, /revoke all on table public\.booking_payment_transfers[\s\S]*?from public, anon, authenticated/);
+  assert.match(bookingPaymentTransferMigration, /grant select on table public\.booking_payment_transfers to authenticated/);
+  assert.doesNotMatch(bookingPaymentTransferMigration, /grant (?:insert|update|delete|all) on table public\.booking_payment_transfers to authenticated/i);
+  assert.match(bookingPaymentTransferMigration, /create trigger z99_prevent_booking_payment_transfer_mutation[\s\S]*?before update or delete/);
+  assert.match(bookingPaymentTransferMigration, /Booking payment transfer audits are immutable/);
+
+  assert.match(bookingPaymentTransferMigration, /payment_transfer_id uuid[\s\S]*?references public\.booking_payment_transfers\(id\) on delete restrict/);
+  assert.match(bookingPaymentTransferMigration, /num_nonnulls\([\s\S]*?payment_reassigned_from_ref,[\s\S]*?payment_reassigned_to_ref[\s\S]*?\) = 1/);
+  assert.match(bookingPaymentTransferMigration, /create trigger a15_guard_booking_payment_transfer_linkage[\s\S]*?before insert or update/);
+  assert.match(bookingPaymentTransferMigration, /current_setting\([\s\S]*?'paddle_rage\.booking_payment_transfer_id'/);
+  assert.match(bookingPaymentTransferMigration, /Booking payment transfer links are immutable and server-managed/);
+});
+
+test('payment transfer RPC serializes retries, groups, confirmations, and ledger ownership', () => {
+  const transferFunction = bookingPaymentTransferMigration.match(
+    /create or replace function public\.transfer_cancelled_booking_payment\([\s\S]*?\n\$\$;/i,
+  )?.[0] || '';
+  assert.ok(transferFunction, 'missing transfer_cancelled_booking_payment transaction');
+  assert.match(transferFunction, /language plpgsql[\s\S]*?security definer[\s\S]*?set search_path = public, pg_temp/);
+  assert.match(transferFunction, /auth\.uid\(\) is null[\s\S]*?v_actor_role not in \('owner', 'court_owner'\)/);
+  assert.match(transferFunction, /p_no_refund_confirmed[\s\S]*?not coalesce\(p_no_refund_confirmed, false\)/);
+  assert.match(transferFunction, /char_length\(coalesce\(v_reason, ''\)\) < 10/);
+  assert.match(transferFunction, /p_idempotency_key is null/);
+
+  const feeLockAt = transferFunction.indexOf("paddle-rage-pickleball-booking-fee-remittance");
+  const idempotencyLockAt = transferFunction.indexOf('paddle-rage-booking-payment-transfer-idempotency:');
+  const replayAt = transferFunction.indexOf('where transfer.idempotency_key = p_idempotency_key');
+  const firstBookingReadAt = transferFunction.indexOf('where b.ref = v_source_requested');
+  assert.ok(
+    feeLockAt >= 0 && idempotencyLockAt > feeLockAt && replayAt > idempotencyLockAt &&
+      firstBookingReadAt > replayAt,
+    'fee cutoff and idempotency locks must precede replay and booking inspection',
+  );
+  assert.match(transferFunction, /if found then[\s\S]*?source_booking_ref <> v_source_requested[\s\S]*?target_booking_ref <> v_target_requested[\s\S]*?reason <> v_reason[\s\S]*?return query[\s\S]*?false/);
+  assert.match(transferFunction, /unnest\(array\[v_source_key, v_target_key\]\)[\s\S]*?order by lock_value/);
+  for (const namespace of [
+    'paddle-rage-booking-payment-rejection:',
+    'paddle-rage-public-booking-group:',
+    'paddle-rage-booking-confirmation:',
+    'paddle-rage-booking-payment-transfer:',
+  ]) {
+    assert.match(transferFunction, new RegExp(namespace.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  assert.match(transferFunction, /where b\.ref = any\(v_all_refs\)[\s\S]*?order by b\.ref[\s\S]*?for update/);
+  assert.match(transferFunction, /v_source_refs && v_target_refs[\s\S]*?Booking group membership changed/);
+
+  assert.match(transferFunction, /from public\.used_gcash_refs ledger[\s\S]*?where ledger\.gcash_ref = v_evidence_key[\s\S]*?for update/);
+  assert.match(transferFunction, /v_incumbent_scope = v_source_scope[\s\S]*?v_incumbent_owner = v_source_key/);
+  assert.match(transferFunction, /update public\.used_gcash_refs ledger[\s\S]*?set booking_ref = v_target_requested,[\s\S]*?claim_scope = v_target_scope,[\s\S]*?claim_owner_id = v_target_key[\s\S]*?where ledger\.gcash_ref = v_evidence_key[\s\S]*?ledger\.claim_scope = v_source_scope[\s\S]*?ledger\.claim_owner_id = v_source_key/);
+  assert.doesNotMatch(transferFunction, /delete\s+from\s+public\.used_gcash_refs/i, 'a move must never create an unclaimed replay window');
+  assert.match(transferFunction, /This receipt or payment-rail reference belongs to another payment[\s\S]*?errcode = '23505'/);
+
+  const auditAt = transferFunction.indexOf('insert into public.booking_payment_transfers');
+  const sourceUpdateAt = transferFunction.indexOf('update public.bookings b', auditAt);
+  const targetUpdateAt = transferFunction.indexOf('update public.bookings b', sourceUpdateAt + 1);
+  assert.ok(auditAt >= 0 && sourceUpdateAt > auditAt && targetUpdateAt > sourceUpdateAt);
+  const sourceMutation = transferFunction.slice(
+    sourceUpdateAt,
+    transferFunction.indexOf('where b.ref = any(v_source_refs)', sourceUpdateAt),
+  );
+  assert.match(sourceMutation, /set payment_transfer_id = v_transfer_id,[\s\S]*?payment_reassigned_to_ref = v_target_requested/);
+  assert.doesNotMatch(
+    sourceMutation,
+    /\b(?:status|payment_status|paid_at|booking_fee_earned_at|receipt_[a-z_]+)\s*=/,
+    'the cancelled source must retain its reservation, settlement, fee, and receipt history',
+  );
+  assert.match(transferFunction, /get diagnostics v_updated_count = row_count;[\s\S]*?v_updated_count <> cardinality\(v_source_refs\)/);
+  assert.match(transferFunction, /get diagnostics v_updated_count = row_count;[\s\S]*?v_updated_count <> cardinality\(v_target_refs\)/);
+  assert.match(transferFunction, /set status = 'confirmed',[\s\S]*?payment_status = v_target_payment_status,[\s\S]*?paid_at = coalesce\(v_paid_at, v_transfer_time\)/);
+  assert.match(bookingPaymentTransferMigration, /revoke all on function public\.transfer_cancelled_booking_payment\([\s\S]*?from public, anon, authenticated/);
+  assert.match(bookingPaymentTransferMigration, /grant execute on function public\.transfer_cancelled_booking_payment\([\s\S]*?to authenticated/);
+});
+
+test('payment transfer RPC proves identity, payment shape, receipt identity, and absence of competing money', () => {
+  const transferFunction = bookingPaymentTransferMigration.match(
+    /create or replace function public\.transfer_cancelled_booking_payment\([\s\S]*?\n\$\$;/i,
+  )?.[0] || '';
+  for (const guard of [
+    /v_source_statuses\[1\] <> 'cancelled'/,
+    /v_target_statuses\[1\] not in \('pending', 'verifying'\)/,
+    /v_target_payment_statuses\[1\] <> 'for_verification'/,
+    /v_source_methods\[1\] is distinct from v_target_methods\[1\]/,
+    /v_source_reference_keys\[1\] is distinct from v_target_reference_keys\[1\]/,
+    /v_source_host_ids\[1\] is distinct from v_target_host_ids\[1\]/,
+    /v_source_emails\[1\] is distinct from v_target_emails\[1\]/,
+    /v_source_names\[1\] is distinct from v_target_names\[1\]/,
+    /v_source_contacts\[1\] is distinct from v_target_contacts\[1\]/,
+    /v_source_row_count <> v_target_row_count/,
+    /v_source_total is distinct from v_target_total/,
+    /v_source_amount is distinct from v_target_amount/,
+    /v_source_signatures is distinct from v_target_signatures/,
+  ]) {
+    assert.match(transferFunction, guard);
+  }
+  for (const feeField of [
+    'booking_fee_amount_snapshot',
+    'booking_fee_rate_snapshot',
+    'booking_fee_type_snapshot',
+    'booking_fee_units_snapshot',
+    'booking_fee_ledger_eligible_snapshot',
+  ]) {
+    assert.match(transferFunction, new RegExp(`\\b${feeField}\\b`));
+  }
+  assert.match(transferFunction, /v_target_full_count = v_target_row_count[\s\S]*?v_target_payment_status := 'paid'/);
+  assert.match(transferFunction, /v_target_host[\s\S]*?v_target_partial_count = v_target_row_count[\s\S]*?calculate_booking_service_fee[\s\S]*?v_target_payment_status := 'downpayment_paid'/);
+  assert.match(transferFunction, /v_source_payment_status in \('paid', 'downpayment_paid'\)[\s\S]*?v_source_payment_status <> v_target_payment_status/);
+  assert.match(transferFunction, /v_source_paid_at_count <> v_source_row_count[\s\S]*?v_source_fee_earned_count <> v_source_row_count/);
+
+  assert.match(transferFunction, /v_source_hash_count > 1[\s\S]*?v_target_hash_count > 1[\s\S]*?v_source_phash_count > 1[\s\S]*?v_target_phash_count > 1/);
+  assert.match(transferFunction, /v_source_hash = v_target_hash[\s\S]*?or[\s\S]*?v_source_phash = v_target_phash/);
+  assert.match(transferFunction, /(?:from|lateral) public\.payment_review_ledger_keys\([\s\S]*?where b\.ref = any\(v_all_refs\)/);
+  assert.match(transferFunction, /not \(v_reference_key = any\(v_evidence_keys\)\)/);
+  assert.doesNotMatch(transferFunction, /update\s+public\.receipt_verifications|delete\s+from\s+public\.receipt_verifications/i);
+  assert.doesNotMatch(transferFunction, /update\s+public\.payment_review_decisions|delete\s+from\s+public\.payment_review_decisions/i);
+
+  assert.match(transferFunction, /from public\.host_booking_balance_payments balance_payment[\s\S]*?Payment 2 or balance history cannot move its initial payment/);
+  assert.match(transferFunction, /from public\.booking_fee_remittance_items item[\s\S]*?b\.weekly_fee_id is not null[\s\S]*?b\.billed_at is not null[\s\S]*?from public\.weekly_fees fee/);
+  assert.match(transferFunction, /from public\.booking_payment_transfers transfer[\s\S]*?source_booking_refs && v_all_refs[\s\S]*?target_booking_refs && v_all_refs/);
+  for (const competingFlow of [
+    'public.bookings other_booking',
+    'public.open_play_registrations registration',
+    'public.open_play_host_session_registrations registration',
+    'public.host_booking_balance_payments balance_payment',
+  ]) {
+    assert.match(
+      transferFunction,
+      new RegExp(`from ${competingFlow.replace(/\./g, '\\.')}`),
+      `missing third-claim guard for ${competingFlow}`,
+    );
+  }
+
+  const feeRows = bookingPaymentTransferMigration.match(
+    /create or replace function public\.booking_fee_unclaimed_rows\(\)[\s\S]*?\n\$\$;/i,
+  )?.[0] || '';
+  assert.match(feeRows, /not exists \([\s\S]*?from public\.booking_payment_transfers transfer[\s\S]*?b\.ref = any\(transfer\.source_booking_refs\)/);
+  assert.doesNotMatch(feeRows, /b\.ref = any\(transfer\.target_booking_refs\)/, 'the confirmed target must remain the one billable allocation');
+  assert.match(
+    read('supabase/migrations/20260830090000_atomic_booking_confirmation.sql'),
+    /This payment reference is also attached to another booking/,
+    'ordinary confirmation must remain fail-closed; only the audited RPC resolves a collision',
+  );
+});
+
+test('payment-move emails use canonical audit and booking state, never caller-supplied facts', () => {
+  assert.match(bookingStatusEmailEdge, /"payment_reassigned"/);
+  assert.match(bookingStatusEmailEdge, /const BOOKING_COLUMNS = \[[\s\S]*?"payment_transfer_id"[\s\S]*?"payment_reassigned_from_ref"[\s\S]*?"payment_reassigned_to_ref"[\s\S]*?\]\.join/);
+  assert.match(bookingStatusEmailEdge, /async function loadCanonicalPaymentTransfer/);
+  assert.match(bookingStatusEmailEdge, /from\("booking_payment_transfers"\)\.select\(/);
+  assert.match(bookingStatusEmailEdge, /source_booking_refs,target_booking_refs/);
+  assert.match(bookingStatusEmailEdge, /target_booking_group_ref[\s\S]*?target_booking_ref/);
+  assert.match(bookingStatusEmailEdge, /reason\.length < 10[\s\S]*?Number\.isFinite\(amount\)[\s\S]*?amount <= 0/);
+  assert.match(bookingStatusEmailEdge, /paymentReassigned[\s\S]*?row\.status === "confirmed"[\s\S]*?new Set\(\["paid", "downpayment_paid"\]\)\.has\(row\.payment_status\)/);
+  assert.match(bookingStatusEmailEdge, /const sourceRows = await loadRows\(db, transfer\.source_booking_ref\)/);
+  assert.match(bookingStatusEmailEdge, /sourceRows\.some\(\(row\) => row\.status !== "cancelled"\)/);
+  assert.match(bookingStatusEmailEdge, /sourceRows\.some\([\s\S]*?row\.email[\s\S]*?targetEmail/);
+  assert.match(bookingStatusEmailEdge, /sourceRows\.length !== sourceRefs\.size[\s\S]*?!sourceRefs\.has\(row\.ref\)[\s\S]*?row\.payment_transfer_id !== transfer\.id[\s\S]*?row\.payment_reassigned_from_ref !== null[\s\S]*?row\.payment_reassigned_to_ref !== transfer\.target_booking_ref/);
+  assert.match(bookingStatusEmailEdge, /rows\.length !== targetRefs\.size[\s\S]*?!targetRefs\.has\(row\.ref\)[\s\S]*?row\.payment_transfer_id !== transfer\.id[\s\S]*?row\.payment_reassigned_from_ref !== transfer\.source_booking_ref[\s\S]*?row\.payment_reassigned_to_ref !== null/);
+  assert.match(bookingStatusEmailEdge, /const reason = event === "payment_rejected"[\s\S]*?: event === "payment_reassigned"[\s\S]*?transfer(?:!|\?)?\.reason[\s\S]*?: String\(body\?\.reason/);
+  assert.match(bookingStatusEmailEdge, /renderBookingPaymentTransferEmail\(\{[\s\S]*?sourceBookingRef:[\s\S]*?targetBookingRef: displayRef[\s\S]*?amount: transfer\.amount,[\s\S]*?reason/);
+  assert.match(bookingStatusEmailEdge, /to: email/);
+  assert.doesNotMatch(bookingStatusEmailEdge, /body\?\.(?:email|fullName|courtName|amount|sourceBookingRef|targetBookingRef)/);
+  assert.match(bookingStatusEmailEdge, /Payment transfer audit could not be verified[\s\S]*?\? 409/);
 });

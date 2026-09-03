@@ -179,9 +179,25 @@ test('automated uncertainty queues owner review while owners retain both deliber
   assert.match(admin, /id="vmRejectBtn"[\s\S]*?❌ Not Received/);
   assert.match(admin, /id="vmConfirmBtn"[\s\S]*?✅ Received — Confirm/);
   assert.match(admin, /function canManuallyResolvePayment\(\)[\s\S]*?\['owner', 'court_owner'\]/);
-  assert.match(admin, /DB\.rejectBookingPaymentTransaction\(bkForPay\.primaryRef \|\| ref, reviewReason\.trim\(\)\)/);
+  assert.match(admin, /id="bookingPaymentRejectReason"[^>]*required[^>]*minlength="3"[^>]*maxlength="1000"[^>]*aria-describedby/);
+  assert.match(admin, /DB\.rejectBookingPaymentTransaction\(canonicalRef, reason\)/);
+  assert.match(admin, /DB\.sendBookingStatusEmail\(canonicalRef, 'payment_rejected', reason, \{ allowFailure: true \}\)/);
+  assert.match(admin, /result\?\.transitioned === false[\s\S]*?No duplicate email was sent/);
+  assert.match(admin, /bookingPaymentRejectDialog[^>]*aria-busy="false"/);
+  assert.match(admin, /setBookingPaymentRejectBusy\(true\)/);
+  assert.match(admin, /suspendedVerify[\s\S]*?verifyOverlay\.inert = true[\s\S]*?aria-hidden', 'true'/);
+  const rejectFlow = admin.slice(
+    admin.indexOf('async function confirmBookingPaymentRejection'),
+    admin.indexOf('async function rejectPayment'),
+  );
+  const transactionAt = rejectFlow.indexOf('DB.rejectBookingPaymentTransaction');
+  const emailAt = rejectFlow.indexOf('DB.sendBookingStatusEmail');
+  const refreshAt = rejectFlow.indexOf('refreshBookingPaymentRejectionViews', emailAt);
+  assert.ok(transactionAt >= 0 && emailAt > transactionAt, 'email must follow the committed rejection');
+  assert.ok(refreshAt > emailAt, 'nonessential UI refresh must not be able to skip the rejection email');
+  assert.match(admin, /Promise\.allSettled\(refreshes\)/);
   assert.doesNotMatch(
-    admin.slice(admin.indexOf('async function rejectPayment'), admin.indexOf('async function delBooking')),
+    admin.slice(admin.indexOf('async function confirmBookingPaymentRejection'), admin.indexOf('async function delBooking')),
     /updateBookingGroupByRef/,
   );
   assert.match(client, /async rejectBookingPaymentTransaction\(ref, reason\)[\s\S]*?\.rpc\('reject_booking_payment_transaction'/);
@@ -193,6 +209,126 @@ test('automated uncertainty queues owner review while owners retain both deliber
   );
   assert.doesNotMatch(page, /invalid payment may release this reservation/i);
   assert.doesNotMatch(page, /receipt[^\n]*(?:automatically|automatic)[^\n]*(?:reject|cancel|release)/i);
+});
+
+test('duplicate-payment resolver requires an exact preview and an explicit no-refund decision', () => {
+  const admin = read('admin.html');
+  assert.match(admin, /id="bookingPaymentTransferModal"[^>]*aria-hidden="true"[^>]*inert[^>]*hidden/);
+  assert.match(admin, /id="bookingPaymentTransferDialog"[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="bookingPaymentTransferTitle"[^>]*aria-describedby=/);
+  assert.match(admin, /id="bookingPaymentTransferReason"[^>]*required[^>]*minlength="10"[^>]*maxlength="1000"[^>]*aria-describedby=/);
+  assert.match(admin, /<input[^>]*type="checkbox"[^>]*id="bookingPaymentTransferNoRefund"/);
+  assert.match(admin, /id="bookingPaymentTransferConfirm"[^>]*disabled[^>]*onclick="confirmBookingPaymentTransfer\(\)"/);
+  assert.match(admin, /Old booking[\s\S]*?Cancelled[\s\S]*?New booking[\s\S]*?Awaiting review/);
+  assert.match(admin, /The old booking stays cancelled[\s\S]*?does not charge or refund the player/);
+
+  const eligibilityStart = admin.indexOf('function bookingGroupHasAcceptedPaymentEvidence');
+  const eligibilityEnd = admin.indexOf('\nfunction bookingDuplicateTransferButton', eligibilityStart);
+  assert.ok(eligibilityStart >= 0 && eligibilityEnd > eligibilityStart, 'missing duplicate-transfer preview helpers');
+  const eligibilitySource = admin.slice(eligibilityStart, eligibilityEnd);
+  const build = canResolve => new Function(
+    'canManuallyResolvePayment',
+    'bookingGroupRowsForPaymentGuard',
+    'hostBalancePendingPayment',
+    'isDigitalPayment',
+    'normalizedPaymentRefKey',
+    `${eligibilitySource}; return { cancelledDuplicatePaymentSource, bookingPaymentTransferPreview };`,
+  )(
+    () => canResolve,
+    group => group?.allItems || group?.items || (group ? [group] : []),
+    () => false,
+    method => ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'].includes(String(method || '').toLowerCase()),
+    group => `${String(group?.paymentMethod || '').toLowerCase()}:${String(group?.gcashRef || '').toUpperCase().replace(/[^A-Z0-9]/g, '')}`,
+  );
+  const row = {
+    fullName: 'Same Player', email: 'player@example.com', contactNumber: '0917 555 0101',
+    hostBooking: true, hostUserId: 'host-1', paymentMethod: 'maya', gcashRef: '9F34 952D 6576',
+    total: 4800, downpayment: 1290, receiptStatus: 'manual_review',
+    receiptImageUrl: 'private/receipt.png', receiptImageHash: 'same-hash', receiptPhash: 'same-phash',
+    paidAt: '2026-09-02T23:08:34.000Z', bookingFeeEarnedAt: '2026-09-02T23:08:34.000Z',
+  };
+  const source = {
+    ...row, ref: 'OLD-1', status: 'cancelled', paymentStatus: 'downpayment_paid',
+    allItems: [{ ...row, ref: 'OLD-1', status: 'cancelled', paymentStatus: 'downpayment_paid' }],
+  };
+  const target = {
+    ...row, ref: 'NEW-1', status: 'pending', paymentStatus: 'for_verification',
+    allItems: [{ ...row, ref: 'NEW-1', status: 'pending', paymentStatus: 'for_verification' }],
+    duplicatePaymentGroups: [source],
+  };
+  const allowed = build(true);
+  assert.equal(allowed.cancelledDuplicatePaymentSource(target), source);
+  assert.equal(allowed.bookingPaymentTransferPreview(source, target).eligible, true);
+  assert.equal(build(false).cancelledDuplicatePaymentSource(target), null, 'non-review roles must never receive the action');
+  assert.equal(allowed.cancelledDuplicatePaymentSource({ ...target, duplicatePaymentGroups: [source, { ...source, ref: 'OLD-2' }] }), null);
+  assert.equal(allowed.cancelledDuplicatePaymentSource({ ...target, paymentStatus: 'unpaid', allItems: [{ ...target.allItems[0], paymentStatus: 'unpaid' }] }), null, 'server requires the target to remain For Verification');
+  assert.equal(allowed.cancelledDuplicatePaymentSource({ ...target, duplicatePaymentGroups: [{ ...source, status: 'confirmed', allItems: [{ ...source.allItems[0], status: 'confirmed' }] }] }), null);
+  assert.equal(allowed.bookingPaymentTransferPreview(source, {
+    ...target,
+    email: 'other@example.com',
+    allItems: [{ ...target.allItems[0], email: 'other@example.com' }],
+  }).eligible, false);
+  assert.equal(allowed.bookingPaymentTransferPreview(source, { ...target, downpayment: 1200, allItems: [{ ...target.allItems[0], downpayment: 1200 }] }).eligible, false);
+  assert.equal(allowed.bookingPaymentTransferPreview(source, {
+    ...target,
+    receiptImageHash: 'other-hash',
+    receiptPhash: 'other-phash',
+    allItems: [{ ...target.allItems[0], receiptImageHash: 'other-hash', receiptPhash: 'other-phash' }],
+  }).eligible, false);
+  const noStoredReceipt = {
+    ...target,
+    receiptImageUrl: '', receiptImageHash: '', receiptPhash: '', receiptStatus: 'none',
+    allItems: [{ ...target.allItems[0], receiptImageUrl: '', receiptImageHash: '', receiptPhash: '', receiptStatus: 'none' }],
+  };
+  assert.equal(allowed.bookingPaymentTransferPreview(source, noStoredReceipt).eligible, false, 'a typed reference alone is not durable receipt evidence');
+});
+
+test('duplicate-payment modal is accessible, revalidates, commits once, then emails from canonical state', () => {
+  const admin = read('admin.html');
+  const transferFlow = admin.slice(
+    admin.indexOf('let _bookingPaymentTransferContext'),
+    admin.indexOf('async function rejectPayment'),
+  );
+  assert.match(transferFlow, /globalThis\.crypto\?\.randomUUID|globalThis\.crypto\?\.getRandomValues/);
+  assert.match(transferFlow, /idempotencyKey:\s*newBookingPaymentTransferIdempotencyKey\(\)/);
+  assert.match(transferFlow, /freshBookingPaymentTransferGroups[\s\S]*?DB\.clearCache\?\.\(\['bookings'\]\)[\s\S]*?await DB\.getBookings\(\)/);
+  assert.match(transferFlow, /function syncBookingPaymentTransferForm[\s\S]*?reason\.length < 10[\s\S]*?reason\.length > 1000[\s\S]*?!checked/);
+  assert.match(transferFlow, /bookingPaymentTransferDialog'\)\?\.setAttribute\('aria-busy'/);
+  assert.match(transferFlow, /bookingPaymentTransferClose','bookingPaymentTransferViewSource','bookingPaymentTransferCancel/);
+  assert.match(transferFlow, /reason\.disabled = !!busy[\s\S]*?confirmation\.disabled = !!busy/);
+  assert.match(transferFlow, /event\.key === 'Escape'[\s\S]*?closeBookingPaymentTransferModal\(\)/);
+  assert.match(transferFlow, /event\.key !== 'Tab'[\s\S]*?event\.shiftKey[\s\S]*?last\.focus\(\)/);
+  assert.match(transferFlow, /closeBookingPaymentTransferModal[\s\S]*?overlay\.inert = true[\s\S]*?overlay\.hidden = true/);
+  assert.match(transferFlow, /context\?\.suspendedVerify[\s\S]*?verifyOverlay\.inert = false[\s\S]*?aria-hidden', 'false'/);
+  assert.match(transferFlow, /restoreFocus[\s\S]*?previous\?\.isConnected[\s\S]*?previous\.focus\(\)/);
+  assert.match(transferFlow, /suspendedVerify[\s\S]*?verifyOverlay\.inert = true[\s\S]*?aria-hidden', 'true'/);
+  assert.match(transferFlow, /requestAnimationFrame\(\(\) => field\.focus\(\)\)/);
+
+  const confirmStart = transferFlow.indexOf('async function confirmBookingPaymentTransfer');
+  const confirmFlow = transferFlow.slice(confirmStart);
+  assert.match(confirmFlow, /const groups = await freshBookingPaymentTransferGroups\(\)/);
+  assert.match(confirmFlow, /String\(source\.primaryRef \|\| source\.ref\) !== String\(context\.sourceRef\)/);
+  assert.match(confirmFlow, /const preview = bookingPaymentTransferPreview\(source, target\)[\s\S]*?!preview\.eligible/);
+  assert.match(confirmFlow, /DB\.transferCancelledBookingPayment\([\s\S]*?context\.sourceRef,[\s\S]*?context\.targetRef,[\s\S]*?reason,[\s\S]*?true,[\s\S]*?context\.idempotencyKey/);
+  assert.match(confirmFlow, /result\?\.transitioned === false[\s\S]*?No duplicate email was sent/);
+  assert.doesNotMatch(confirmFlow, /\b(?:updateBooking|updateBookingGroupByRef|updatePaymentStatus)\s*\(/);
+
+  const rpcAt = confirmFlow.indexOf('DB.transferCancelledBookingPayment');
+  const emailAt = confirmFlow.indexOf("DB.sendBookingStatusEmail(canonicalTargetRef, 'payment_reassigned'");
+  const refreshAt = confirmFlow.indexOf('refreshBookingPaymentTransferViews', emailAt);
+  assert.ok(rpcAt >= 0 && emailAt > rpcAt, 'the canonical email must follow the committed transfer');
+  assert.ok(refreshAt > emailAt, 'UI refresh failure must not be able to skip the transfer email');
+  assert.match(confirmFlow, /transferCommitted = true/);
+  assert.match(confirmFlow, /Payment moved and the new booking was confirmed, but the email could not be sent[\s\S]*?Resend Payment Move Email/);
+  assert.match(confirmFlow, /if \(transferCommitted\)[\s\S]*?follow-up processing was interrupted/);
+  assert.match(transferFlow, /Promise\.allSettled\(refreshes\)/);
+
+  assert.match(transferFlow, /async function resendBookingPaymentTransferEmail/);
+  assert.match(transferFlow, /bookingPaymentCanResendTransferEmail\(booking\)/);
+  assert.match(transferFlow, /DB\.sendBookingStatusEmail\(canonicalRef, 'payment_reassigned', '', \{ allowFailure: true \}\)/);
+  assert.match(admin, /function bookingPaymentCanResendTransferEmail[\s\S]*?paymentReassignedFromRef[\s\S]*?status[\s\S]*?=== 'confirmed'[\s\S]*?\['paid','downpayment_paid'\]/);
+  assert.match(admin, /Resend Payment Move Email/);
+  assert.match(admin, /id="vmResolveDuplicateBtn"[\s\S]*?>Resolve duplicate<\/button>/);
+  assert.match(admin, /function bookingDuplicateTransferButton[\s\S]*?openBookingPaymentTransferModal/);
 });
 
 test('browser configuration does not expose server keys and CSP blocks frames', () => {

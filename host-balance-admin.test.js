@@ -83,11 +83,11 @@ test('separates reservation state from pending balance review on desktop and mob
   assert.match(admin, /balanceReviewState === 'pending' \? '' : `<select/);
   assert.match(admin, /deposit accepted · \$\{fmt\(pendingAmount\)\} submitted/);
   assert.match(admin, /Awaiting owner verification/);
-  assert.match(admin, /<div class="mb-book-primary-actions">\$\{hostBalanceReviewButton\(b, true\)\}\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}<\/div>/);
+  assert.match(admin, /<div class="mb-book-primary-actions">\$\{hostBalanceReviewButton\(b, true\)\}\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}\$\{hostInitialPaymentRejectButton\(b, true\)\}\$\{bookingRejectionEmailButton\(b, true\)\}<\/div>/);
   assert.match(admin, /b\.hostBooking \? hostPaymentEvidenceHtml\(b\) : receiptBadge\(b\)/);
   assert.match(admin, /<span>Payment status<\/span><span>\$\{bookingPayStateSelect\(b\)\}<\/span>/);
   assert.match(admin, /<span>Payments<\/span><span>\$\{hostPaymentEvidenceHtml\(b\) \|\| 'Not recorded'\}<\/span>/);
-  assert.match(admin, /bookingActionsHtml\(b, canDelete, !b\.hostBooking\)/);
+  assert.match(admin, /bookingActionsHtml\(b, canDelete, !b\.hostBooking, false\)/);
   const pendingBranch = admin.match(/if \(hostBalancePendingPayment\(b\)\) \{([\s\S]*?)\n  \}/)?.[1] || '';
   assert.match(pendingBranch, /PAYMENT REVIEW NEEDED/);
   assert.doesNotMatch(pendingBranch, /payStatusBdg\('downpayment_paid'\)/);
@@ -142,8 +142,8 @@ test('retrieves reviewer-only historical host payments without exposing receipt 
 });
 
 test('keeps permanent Payment History and adds Review & Confirm only for pending Payment 2', () => {
-  assert.match(admin, /includePrimaryActions \? `\$\{bookingDetailsButton\(b\)\} \$\{hostBalanceReviewButton\(b\)\} \$\{hostPaymentHistoryButton\(b\)\}`/);
-  assert.match(admin, /b\.hostBooking[\s\S]{0,100}<div class="mb-book-primary-actions">\$\{hostBalanceReviewButton\(b, true\)\}\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}<\/div>/);
+  assert.match(admin, /includePrimaryActions \? `\$\{bookingDetailsButton\(b\)\} \$\{hostInitialPaymentRejectButton\(b\)\} \$\{bookingRejectionEmailButton\(b\)\} \$\{hostBalanceReviewButton\(b\)\} \$\{hostPaymentHistoryButton\(b\)\}`/);
+  assert.match(admin, /b\.hostBooking[\s\S]{0,100}<div class="mb-book-primary-actions">\$\{hostBalanceReviewButton\(b, true\)\}\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}\$\{hostInitialPaymentRejectButton\(b, true\)\}\$\{bookingRejectionEmailButton\(b, true\)\}<\/div>/);
   assert.match(admin, /function hostBalanceReviewButton\(b, mobile = false\)[\s\S]*?if \([^\n]*!hostBalancePendingPayment\(b\)\) return ''/);
   assert.match(admin, /host-balance-review-button[\s\S]{0,240}>Review & Confirm<\/button>/);
   assert.match(admin, /function openHostPaymentHistoryFromDetails\(ref\)/);
@@ -402,11 +402,95 @@ test('shows truthful Payment 1 and Payment 2 evidence on desktop and mobile book
     'generic paid state without authoritative history must not invent Payment 2 evidence',
   );
 
+  const underReview = renderEvidence({
+    hostBooking: true,
+    receiptStatus: 'manual_review',
+    paymentStatus: 'for_verification',
+    gcashRef: 'REVIEW-REF',
+  });
+  assert.match(underReview, /Payment 1 under review/);
+  assert.doesNotMatch(underReview, /Payment 1 accepted/);
+
+  const rejected = renderEvidence({
+    hostBooking: true,
+    receiptStatus: 'rejected',
+    paymentStatus: 'rejected',
+  });
+  assert.match(rejected, /Payment 1 rejected/);
+  assert.doesNotMatch(rejected, /Payment 1 accepted/);
+
+  const flagged = renderEvidence({
+    hostBooking: true,
+    receiptStatus: 'rejected',
+    paymentStatus: 'for_verification',
+  });
+  assert.match(flagged, /Payment 1 flagged/);
+  assert.doesNotMatch(flagged, /Payment 1 accepted/);
+
   assert.match(admin, /b\.hostBooking \? hostPaymentEvidenceHtml\(b\) : receiptBadge\(b\)/);
   assert.match(
     admin,
     /<div class="mb-book-detail-row"><span>Payments<\/span><span>\$\{hostPaymentEvidenceHtml\(b\) \|\| 'Not recorded'\}<\/span><\/div>/,
   );
+});
+
+test('shows Reject Payment only for an unresolved initial host digital payment', () => {
+  const eligibilityStart = admin.indexOf('function bookingPaymentCanBeRejected(b)');
+  const eligibilityEnd = admin.indexOf('\nfunction canRejectInitialDigitalPayment', eligibilityStart);
+  const eligibilitySource = admin.slice(eligibilityStart, eligibilityEnd);
+  assert.notEqual(eligibilityStart, -1, 'initial payment rejection eligibility must exist');
+  assert.notEqual(eligibilityEnd, -1, 'initial payment rejection eligibility must be isolated');
+
+  const makeEligibility = (role = 'owner', pendingBalance = false) => new Function(
+    'sess',
+    'hostBalancePendingPayment',
+    'bookingGroupRowsForPaymentGuard',
+    'isDigitalPayment',
+    `${eligibilitySource}; return bookingPaymentCanBeRejected;`,
+  )(
+    { role },
+    () => pendingBalance,
+    group => group?.allItems || group?.items || (group ? [group] : []),
+    method => ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'].includes(String(method || '').toLowerCase()),
+  );
+
+  const unresolvedRow = {
+    paymentMethod: 'maya',
+    status: 'pending',
+    paymentStatus: 'for_verification',
+    receiptStatus: 'manual_review',
+    receiptImageUrl: 'https://example.invalid/private-proof',
+    gcashRef: '9F34 952D 6576',
+  };
+  const grouped = { hostBooking: true, allItems: [unresolvedRow, { ...unresolvedRow }] };
+
+  assert.equal(makeEligibility()(grouped), true);
+  assert.equal(makeEligibility('court_owner')(grouped), true);
+  assert.equal(makeEligibility('staff')(grouped), false);
+  assert.equal(makeEligibility('owner', true)(grouped), false, 'Payment 2 review owns its own rejection flow');
+  assert.equal(makeEligibility()({ ...grouped, allItems: [{ ...unresolvedRow, paymentMethod: 'cash' }] }), false);
+  assert.equal(makeEligibility()({ ...grouped, allItems: [unresolvedRow, { ...unresolvedRow, paymentMethod: 'bpi' }] }), false);
+  assert.equal(makeEligibility()({ ...grouped, allItems: [{ ...unresolvedRow, status: 'confirmed' }] }), false);
+  assert.equal(makeEligibility()({ ...grouped, allItems: [{ ...unresolvedRow, paymentStatus: 'downpayment_paid' }] }), false);
+  assert.equal(makeEligibility()({
+    ...grouped,
+    allItems: [{ ...unresolvedRow, receiptStatus: 'none', receiptImageUrl: '', gcashRef: '' }],
+  }), false);
+
+  assert.match(admin, /function canRejectInitialDigitalPayment\(b\)[\s\S]*?!!b\?\.hostBooking/);
+  assert.match(admin, /bookingDetailsButton\(b\)\} \$\{hostInitialPaymentRejectButton\(b\)\}/);
+  const mobileCardStart = admin.indexOf('function mobileBookingCard(b, canDelete)');
+  const mobileCardEnd = admin.indexOf('\nfunction renderBookings', mobileCardStart);
+  const mobileCard = admin.slice(mobileCardStart, mobileCardEnd);
+  assert.ok(mobileCard.indexOf('hostInitialPaymentRejectButton(b, true)') < mobileCard.indexOf('<details class="mb-book-pay">'));
+});
+
+test('keeps a recoverable rejection-email resend action on terminal rows', () => {
+  assert.match(admin, /function bookingPaymentCanResendRejectionEmail\(b\)[\s\S]*?row\?\.status[\s\S]*?=== 'cancelled'[\s\S]*?row\?\.paymentStatus[\s\S]*?=== 'rejected'/);
+  assert.match(admin, /function bookingRejectionEmailButton\(b, mobile = false\)[\s\S]*?>Resend Rejection Email<\/button>/);
+  assert.match(admin, /async function resendBookingRejectionEmail\(ref, trigger = null\)/);
+  assert.match(admin, /DB\.sendBookingStatusEmail\(canonicalRef, 'payment_rejected', '', \{ allowFailure: true \}\)/);
+  assert.match(admin, /Rejection email resent to \$\{email\}/);
 });
 
 test('blocks conflicting booking mutations and reminders during pending review', () => {
