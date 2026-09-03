@@ -8073,6 +8073,19 @@ function bookingSlotLabel(b) {
   if (b.status === 'completed') return 'Completed';
   return 'Reserved';
 }
+function openOwnerBookingPreview(ref) {
+  if (String(sess?.role || '') !== 'owner') {
+    toast('Only the System Owner can open this preview.', 'err');
+    return;
+  }
+  const bookingRef = String(ref || '').trim().toUpperCase().replace(/-G$/i, '');
+  if (!/^PB-[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(bookingRef)) {
+    toast('A valid Paddle Rage booking reference is required.', 'err');
+    return;
+  }
+  const target = `manage-booking.html#ref=${encodeURIComponent(bookingRef)}&ownerPreview=1`;
+  window.open(target, '_blank', 'noopener');
+}
 function balanceNotificationLabel(value) {
   return ({ reminder_3d:'3-day reminder', reminder_2d:'2-day reminder', reminder_1d:'Final reminder', forfeited:'Forfeiture notice', manual:'Manual notice' })[value] || value;
 }
@@ -8130,6 +8143,7 @@ async function openBookingDetails(ref) {
     const hasReceipt = (b.gcashRef || (b.receiptStatus && b.receiptStatus !== 'none')) && isDigitalPayment(b.paymentMethod);
     $('bookingDetailsActions').innerHTML = `
       <button class="btn btn-g" onclick="closeBookingDetails()">Close</button>
+      ${sess?.role === 'owner' ? `<button type="button" class="btn btn-g" onclick="openOwnerBookingPreview('${jsArg(b.displayRef || actionRef)}')">Preview guest view ↗</button>` : ''}
       ${b.hostBooking && canViewHostPaymentHistory() ? `<button type="button" class="btn btn-g" onclick="openHostPaymentHistoryFromDetails('${jsArg(actionRef)}')">Payment History</button>` : ''}
       ${b.hostBooking && pendingBalance && canViewHostPaymentHistory() ? `<button type="button" class="btn host-balance-review-button" onclick="openHostPaymentHistoryFromDetails('${jsArg(actionRef)}')">Review & Confirm</button>` : ''}
       ${!b.hostBooking && hasReceipt ? `<button class="btn btn-g" onclick="closeBookingDetails();openVerifyModal('${jsArg(actionRef)}')">View Payment</button>` : ''}
@@ -17192,7 +17206,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260903-manage-booking-v1"></script>
+<script src="supabase-config.js?v=20260903-owner-preview-v2"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260902-availability-studio-v5"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>

@@ -65,6 +65,12 @@
   let lookupButton;
   let resultRegion;
   let formFeedback;
+  let ownerPreviewBanner;
+  let ownerPreviewModeButton;
+  let guestAccessModeButton;
+  let ownerResultNote;
+  let ownerPreviewRequested = false;
+  let ownerPreviewActive = false;
 
   function element(tagName, className, text) {
     const node = document.createElement(tagName);
@@ -187,11 +193,28 @@
     return link;
   }
 
+  function ownerSignInHref() {
+    const returnTo = "manage-booking.html#ownerPreview=1";
+    return `login.html?next=${encodeURIComponent(returnTo)}`;
+  }
+
+  function makeOwnerSignInButton(label) {
+    const link = element("a", "owner-state-action is-primary", label || "Sign in to Admin");
+    link.href = ownerSignInHref();
+    return link;
+  }
+
+  function idleLookupLabel() {
+    return ownerPreviewActive ? "Preview booking" : "Find my booking";
+  }
+
   function setLoading(isLoading) {
     lookupButton.disabled = isLoading;
     lookupButton.classList.toggle("is-loading", isLoading);
     lookupButton.setAttribute("aria-busy", String(isLoading));
-    lookupButton.querySelector(".button-label").textContent = isLoading ? "Finding your booking…" : "Find my booking";
+    lookupButton.querySelector(".button-label").textContent = isLoading
+      ? (ownerPreviewActive ? "Opening owner preview…" : "Finding your booking…")
+      : idleLookupLabel();
     resultRegion.setAttribute("aria-busy", String(isLoading));
   }
 
@@ -212,6 +235,7 @@
   }
 
   function renderLoadingState() {
+    if (ownerResultNote) ownerResultNote.hidden = true;
     const card = element("div", "state-card");
     const heading = element("div", "state-heading");
     const icon = element("span", "state-icon", "…");
@@ -227,6 +251,7 @@
   }
 
   function renderMessageState(options) {
+    if (ownerResultNote) ownerResultNote.hidden = true;
     const tone = options.tone === "warning" ? "is-warning" : "is-error";
     const card = element("div", `state-card ${tone}`);
     if (options.alert !== false) card.setAttribute("role", "alert");
@@ -237,8 +262,20 @@
     copy.append(element("h2", "", options.title), element("p", "", options.message));
     heading.append(icon, copy);
     card.append(heading);
+    const actions = [];
     if (options.contact) {
-      card.append(makeContactButton(options.reference, "Contact Paddle Rage", "Booking access help"));
+      actions.push(makeContactButton(
+        options.reference,
+        "Contact Paddle Rage",
+        "Booking access help",
+        "owner-state-action",
+      ));
+    }
+    if (Array.isArray(options.actions)) actions.push(...options.actions.filter(Boolean));
+    if (actions.length) {
+      const actionRow = element("div", "owner-state-actions");
+      actionRow.append(...actions);
+      card.append(actionRow);
     }
     resultRegion.replaceChildren(card);
     focusResult();
@@ -382,13 +419,106 @@
     }
     root.append(policy);
 
+    if (ownerResultNote) {
+      ownerResultNote.hidden = !rows.some((row) => row.managementAccess === "owner_preview");
+    }
     resultRegion.replaceChildren(root);
     focusResult();
+  }
+
+  function renderEmptyState() {
+    if (ownerResultNote) ownerResultNote.hidden = true;
+    const empty = element("div", "empty-state");
+    const icon = element("div", "empty-icon");
+    icon.setAttribute("aria-hidden", "true");
+    icon.innerHTML = '<svg viewBox="0 0 48 48" role="img"><circle cx="21" cy="21" r="10"></circle><path d="m29 29 9 9"></path><path d="M17 21h8M21 17v8"></path></svg>';
+    empty.append(
+      icon,
+      element("h2", "", "Your booking details will appear here"),
+      element("p", "", "Once found, you can view the schedule, payment status, and available support options."),
+    );
+    resultRegion.replaceChildren(empty);
+  }
+
+  function setOwnerPreviewUrl(enabled) {
+    const url = new URL(window.location.href);
+    const fragment = new URLSearchParams(url.hash.replace(/^#/, ""));
+    const reference = normalizeReference(refInput?.value);
+    if (referenceLooksValid(reference)) fragment.set("ref", reference);
+    else fragment.delete("ref");
+    if (enabled) fragment.set("ownerPreview", "1");
+    else fragment.delete("ownerPreview");
+    const hash = fragment.toString();
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${hash ? `#${hash}` : ""}`);
+  }
+
+  function setOwnerPreviewMode(enabled, updateUrl = true) {
+    ownerPreviewActive = Boolean(enabled);
+    document.body.classList.toggle("owner-preview-active", ownerPreviewActive);
+    ownerPreviewModeButton?.classList.toggle("is-active", ownerPreviewActive);
+    ownerPreviewModeButton?.setAttribute("aria-pressed", String(ownerPreviewActive));
+    guestAccessModeButton?.classList.toggle("is-active", !ownerPreviewActive);
+    guestAccessModeButton?.setAttribute("aria-pressed", String(!ownerPreviewActive));
+    if (lookupButton) lookupButton.querySelector(".button-label").textContent = idleLookupLabel();
+    if (ownerResultNote) ownerResultNote.hidden = true;
+    if (updateUrl) setOwnerPreviewUrl(ownerPreviewActive);
+  }
+
+  function continueAsGuest() {
+    ownerPreviewRequested = false;
+    setOwnerPreviewMode(false);
+    renderEmptyState();
+    refInput?.focus();
+  }
+
+  function makeContinueAsGuestButton() {
+    const button = element("button", "owner-state-action", "Continue as guest");
+    button.type = "button";
+    button.addEventListener("click", continueAsGuest);
+    return button;
+  }
+
+  async function configureOwnerPreview() {
+    if (!ownerPreviewRequested) return;
+    lookupButton.disabled = true;
+    lookupButton.setAttribute("aria-busy", "true");
+    try {
+      const context = typeof window.DB?.getBookingManagementViewerContext === "function"
+        ? await window.DB.getBookingManagementViewerContext()
+        : { isAuthenticated: false, isSystemOwner: false };
+
+      if (!context?.isSystemOwner) {
+        setOwnerPreviewMode(false, false);
+        renderMessageState({
+          tone: "warning",
+          title: "Owner preview isn’t available in this browser",
+          message: "Sign in to the Admin Dashboard in this browser, then open Preview guest view again. Normal guest access remains protected by the original booking device.",
+          actions: [makeOwnerSignInButton(), makeContinueAsGuestButton()],
+        });
+        return;
+      }
+
+      ownerPreviewBanner.hidden = false;
+      setOwnerPreviewMode(true, false);
+    } catch (_) {
+      setOwnerPreviewMode(false, false);
+      renderMessageState({
+        tone: "warning",
+        title: "Owner session could not be verified",
+        message: "Sign in to the Admin Dashboard in this browser, then try the owner preview again.",
+        actions: [makeOwnerSignInButton(), makeContinueAsGuestButton()],
+      });
+    } finally {
+      lookupButton.disabled = false;
+      lookupButton.setAttribute("aria-busy", "false");
+      lookupButton.querySelector(".button-label").textContent = idleLookupLabel();
+    }
   }
 
   function prefillReference() {
     const url = new URL(window.location.href);
     const fragment = new URLSearchParams(url.hash.replace(/^#/, ""));
+    ownerPreviewRequested = fragment.get("ownerPreview") === "1";
     const rawReference = fragment.get("ref") || url.searchParams.get("ref") || "";
     const reference = normalizeReference(rawReference);
     if (referenceLooksValid(reference)) refInput.value = reference;
@@ -432,7 +562,9 @@
         throw unavailable;
       }
 
-      const response = await window.DB.getBookingForManagement(reference, email);
+      const response = await window.DB.getBookingForManagement(reference, email, {
+        ownerPreview: ownerPreviewActive,
+      });
       const allRows = Array.isArray(response) ? response.filter((row) => row && typeof row === "object") : [];
       if (!allRows.length) {
         renderMessageState({
@@ -452,6 +584,18 @@
           message: "For privacy, this booking can only be viewed in the browser and device used to complete checkout. If you changed device, changed browser, or cleared browser data, contact Paddle Rage and include your PB booking reference.",
           contact: true,
           reference,
+          actions: [makeOwnerSignInButton("System owner? Sign in to preview")],
+        });
+        return;
+      }
+
+      if (["OWNER_PREVIEW_UNAUTHORIZED", "42501"].includes(String(error?.code || ""))) {
+        setOwnerPreviewMode(false, false);
+        renderMessageState({
+          tone: "warning",
+          title: "Your System Owner session has expired",
+          message: "Sign in to the Admin Dashboard in this browser, then reopen the owner preview.",
+          actions: [makeOwnerSignInButton(), makeContinueAsGuestButton()],
         });
         return;
       }
@@ -474,9 +618,18 @@
     lookupButton = document.getElementById("lookupButton");
     resultRegion = document.getElementById("bookingResult");
     formFeedback = document.getElementById("formFeedback");
+    ownerPreviewBanner = document.getElementById("ownerPreviewBanner");
+    ownerPreviewModeButton = document.getElementById("ownerPreviewModeButton");
+    guestAccessModeButton = document.getElementById("guestAccessModeButton");
+    ownerResultNote = document.getElementById("ownerResultNote");
     if (!form || !refInput || !emailInput || !lookupButton || !resultRegion || !formFeedback) return;
 
     prefillReference();
+    ownerPreviewModeButton?.addEventListener("click", () => {
+      setOwnerPreviewMode(true);
+      renderEmptyState();
+    });
+    guestAccessModeButton?.addEventListener("click", continueAsGuest);
     form.addEventListener("submit", submitLookup);
     refInput.addEventListener("input", () => {
       refInput.setAttribute("aria-invalid", "false");
@@ -489,6 +642,7 @@
       emailInput.setAttribute("aria-invalid", "false");
       formFeedback.textContent = "";
     });
+    void configureOwnerPreview();
   }
 
   if (document.readyState === "loading") {

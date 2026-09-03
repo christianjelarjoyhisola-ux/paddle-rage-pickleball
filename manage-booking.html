@@ -12,10 +12,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="manage-booking.css?v=20260903-manage-booking-v1" />
+  <link rel="stylesheet" href="manage-booking.css?v=20260903-owner-preview-v2" />
   <script defer src="supabase.min.js"></script>
-  <script defer src="supabase-config.js?v=20260903-manage-booking-v1"></script>
-  <script defer src="manage-booking.js?v=20260903-manage-booking-v1"></script>
+  <script defer src="supabase-config.js?v=20260903-owner-preview-v2"></script>
+  <script defer src="manage-booking.js?v=20260903-owner-preview-v2"></script>
 </head>
 <body>
   <a class="skip-link" href="#manageMain">Skip to booking lookup</a>
@@ -68,6 +68,31 @@
           <p>Use the Paddle Rage reference and booking email shown in your confirmation.</p>
         </div>
 
+        <section class="owner-preview-banner" id="ownerPreviewBanner" aria-labelledby="ownerPreviewTitle" hidden>
+          <div class="owner-preview-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 3.25 19 6v5.3c0 4.15-2.66 7.74-7 9.45-4.34-1.71-7-5.3-7-9.45V6l7-2.75Z"></path>
+              <path d="m8.9 11.9 2.05 2.05 4.35-4.45"></path>
+            </svg>
+          </div>
+          <div class="owner-preview-copy">
+            <div class="owner-preview-meta">
+              <span class="owner-preview-kicker">System Owner Preview</span>
+              <span class="owner-preview-badge">Owner only</span>
+            </div>
+            <h3 id="ownerPreviewTitle">Preview the guest booking card</h3>
+            <p>Enter the Paddle Rage reference and matching booking email. Your verified owner session can preview the guest-safe result without the original-device key.</p>
+          </div>
+          <div class="owner-preview-switch" id="ownerPreviewSwitch" role="group" aria-label="Choose booking lookup mode">
+            <button class="owner-preview-mode is-active" id="ownerPreviewModeButton" type="button" aria-pressed="true">
+              Owner preview
+            </button>
+            <button class="owner-preview-mode" id="guestAccessModeButton" type="button" aria-pressed="false">
+              Continue as guest
+            </button>
+          </div>
+        </section>
+
         <form class="lookup-form" id="bookingLookupForm" novalidate>
           <div class="field reference-field">
             <label for="bookingRef">Paddle Rage booking reference</label>
@@ -119,6 +144,14 @@
         <div class="form-feedback" id="formFeedback" role="status" aria-live="polite" aria-atomic="true"></div>
 
         <div class="lookup-divider" aria-hidden="true"></div>
+
+        <div class="owner-result-note" id="ownerResultNote" role="status" hidden>
+          <span class="owner-result-note-icon" aria-hidden="true">✓</span>
+          <span>
+            <strong>Owner preview · guest-safe data</strong>
+            <span>This preview uses your System Owner account. Guests still need their booking email and original booking device.</span>
+          </span>
+        </div>
 
         <section class="result-region" id="bookingResult" aria-live="polite" aria-busy="false" tabindex="-1">
           <div class="empty-state">

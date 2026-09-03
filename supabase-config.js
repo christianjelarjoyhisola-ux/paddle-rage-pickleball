@@ -1396,9 +1396,45 @@ window.DB = {
     return rowToBooking(data);
   },
 
-  async getBookingForManagement(ref, email) {
+  async getBookingManagementViewerContext() {
+    try {
+      const role = await _pbCurrentAccountRole();
+      return {
+        isAuthenticated: Boolean(role),
+        isSystemOwner: role === 'owner',
+      };
+    } catch (error) {
+      console.error('getBookingManagementViewerContext:', error);
+      return { isAuthenticated: false, isSystemOwner: false };
+    }
+  },
+
+  async getBookingForManagement(ref, email, options = {}) {
     const bookingRef = String(ref || '').trim().toUpperCase();
     const bookingEmail = String(email || '').trim().toLowerCase();
+
+    if (options?.ownerPreview === true) {
+      const accountRole = await _pbCurrentAccountRole().catch(() => '');
+      if (accountRole !== 'owner') {
+        const denied = new Error('An active System Owner account is required.');
+        denied.code = 'OWNER_PREVIEW_UNAUTHORIZED';
+        throw denied;
+      }
+
+      const { data, error } = await _sb.rpc('get_owner_booking_for_management', {
+        p_ref: bookingRef,
+        p_email: bookingEmail,
+      });
+      if (error) {
+        console.error('getBookingForManagement owner preview:', error);
+        throw error;
+      }
+      return (Array.isArray(data) ? data : data ? [data] : []).map(row => ({
+        ...rowToBooking(row),
+        managementAccess: 'owner_preview',
+      }));
+    }
+
     const tokenCandidates = [
       bookingRef,
       bookingRef.endsWith('-G') ? bookingRef.slice(0, -2) : `${bookingRef}-G`,
@@ -3875,9 +3911,29 @@ window.DB = {
       return ref;
     },
     async getBookingByRef(ref) { return readDb().bookings.find(b => String(b.ref) === String(ref)) || null; },
-    async getBookingForManagement(ref, email) {
+    async getBookingManagementViewerContext() {
+      const session = window.Auth?.getSession?.() || null;
+      const active = Boolean(session) && (!session.status || session.status === 'active');
+      return {
+        isAuthenticated: active,
+        isSystemOwner: active && session.role === 'owner',
+      };
+    },
+    async getBookingForManagement(ref, email, options = {}) {
       const requestedRef = String(ref || '').trim().toUpperCase();
       const requestedEmail = String(email || '').trim().toLowerCase();
+      const ownerPreview = options?.ownerPreview === true;
+      if (ownerPreview) {
+        const session = window.Auth?.getSession?.() || null;
+        const activeOwner = Boolean(session)
+          && session.role === 'owner'
+          && (!session.status || session.status === 'active');
+        if (!activeOwner) {
+          const denied = new Error('An active System Owner account is required.');
+          denied.code = 'OWNER_PREVIEW_UNAUTHORIZED';
+          throw denied;
+        }
+      }
       const matchesReference = booking => {
         const rowRef = String(booking.ref || '').trim().toUpperCase();
         const groupRef = String(booking.groupRef || booking.booking_group_ref || '').trim().toUpperCase();
@@ -3895,7 +3951,11 @@ window.DB = {
           ? String(booking.groupRef || booking.booking_group_ref || '') === groupRef
           : String(booking.ref || '') === String(anchor.ref || ''))
         .sort((a, b) => `${a.date || ''}|${a.startTime || ''}|${a.courtName || ''}`
-          .localeCompare(`${b.date || ''}|${b.startTime || ''}|${b.courtName || ''}`));
+          .localeCompare(`${b.date || ''}|${b.startTime || ''}|${b.courtName || ''}`))
+        .slice(0, 8)
+        .map(booking => ownerPreview
+          ? { ...booking, managementAccess: 'owner_preview' }
+          : booking);
     },
     async updateBooking(ref, updates) {
       if (updates.date !== undefined) _pbAssertPublicBookingDate(updates.date);
