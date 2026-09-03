@@ -87,6 +87,7 @@ export type GcashReceiptParse = {
   reference: GcashReferenceField;
   amount: ReceiptAmountExtraction & {
     conflictingPrimaryAmounts: boolean;
+    matchingPrimaryAmountDisplays: boolean;
   };
   timestamp: GcashTimestamp;
   receiver: GcashReceiver;
@@ -614,10 +615,30 @@ function conflictingPrimaryAmounts(
     !candidate.excluded &&
     (
       candidate.evidence.includes("amount_label") ||
-      candidate.evidence.includes("total_label")
+      candidate.evidence.includes("total_label") ||
+      candidate.evidence.includes("gcash_amount_block_observation")
     )
   );
   return new Set(primary.map((candidate) => candidate.amount)).size > 1;
+}
+
+function matchingPrimaryAmountDisplays(
+  amount: ReceiptAmountExtraction,
+): boolean {
+  if (amount.amount == null) return false;
+  const matchingLocations = new Set(
+    amount.candidates
+      .filter((candidate) =>
+        !candidate.excluded && candidate.amount === amount.amount &&
+        (
+          candidate.evidence.includes("amount_label") ||
+          candidate.evidence.includes("total_label") ||
+          candidate.evidence.includes("gcash_concordant_amount_block")
+        )
+      )
+      .map((candidate) => candidate.lineIndex),
+  );
+  return matchingLocations.size >= 2;
 }
 
 function normalizedExpectedNameTokens(expectedName: string): string[] {
@@ -780,6 +801,7 @@ export function parseGcashReceipt(
   const amount = {
     ...baseAmount,
     conflictingPrimaryAmounts: conflictingPrimaryAmounts(baseAmount),
+    matchingPrimaryAmountDisplays: matchingPrimaryAmountDisplays(baseAmount),
   };
   const timestamp = parseTimestamp(text, lines);
   const receiver = parseReceiver(lines);

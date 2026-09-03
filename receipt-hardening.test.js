@@ -102,6 +102,18 @@ test('receipt verification preserves authorization, resource, and settlement bou
   assert.match(edge, /parseProviderReceipt\(provider,\s*ocrText,\s*\{\s*typedReference:\s*typedRef/);
   assert.match(parser, /export function parseGcashReceipt\(/);
   assert.match(providerRegistry, /case "gcash"[\s\S]*?parseGcashReceipt/);
+  assert.match(
+    providerRegistry,
+    /!receipt\.amount\.matchingPrimaryAmountDisplays[\s\S]*?AMOUNT_CONFIRMATION_UNREADABLE/,
+  );
+  assert.match(
+    edge,
+    /parsed\.receipt\.amount\.conflictingPrimaryAmounts \|\|[\s\S]*?!parsed\.receipt\.amount\.matchingPrimaryAmountDisplays/,
+  );
+  assert.match(
+    edge,
+    /matchingPrimaryAmountDisplays:\s*gcashParse\.amount\.matchingPrimaryAmountDisplays/,
+  );
   assert.match(providerRegistry, /case "gotyme"[\s\S]*?parseGotymeToGcashReceipt/);
   assert.match(providerRegistry, /case "maribank"[\s\S]*?parseMaribankToGcashReceipt/);
   assert.match(gotymeParser, /export function parseGotymeToGcashReceipt/);

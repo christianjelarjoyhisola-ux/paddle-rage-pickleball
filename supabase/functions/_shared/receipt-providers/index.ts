@@ -189,6 +189,8 @@ function verifyGcashReceipt(
     addUnique(flags, "AMOUNT_UNREADABLE");
   } else if (receipt.amount.conflictingPrimaryAmounts) {
     addUnique(flags, "AMOUNT_REVIEW");
+  } else if (!receipt.amount.matchingPrimaryAmountDisplays) {
+    addUnique(flags, "AMOUNT_CONFIRMATION_UNREADABLE");
   } else if (
     Math.abs(receipt.amount.amount - context.expectedAmount) >
       context.amountTolerance

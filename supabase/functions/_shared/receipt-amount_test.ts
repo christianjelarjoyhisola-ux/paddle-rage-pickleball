@@ -64,6 +64,17 @@ Deno.test("a genuine small Maya principal remains a reliable underpayment read",
   );
 });
 
+Deno.test("Maya dash bullets remain layout markers rather than negative signs", () => {
+  for (const bullet of ["-", "–", "—", "−"]) {
+    const result = extractReceiptAmount(
+      `Sent money via\n${bullet} P1,080.00\nInstaPay QRPh`,
+      { provider: "maya" },
+    );
+    assertEquals(result.amount, 1080, `${bullet} Maya bullet amount`);
+    assertEquals(result.reliable, true, `${bullet} Maya bullet reliability`);
+  }
+});
+
 Deno.test("a fee-only Maya read is not accepted as the principal", () => {
   const result = extractReceiptAmount(
     "Sent money via\nTransfer Fee P10.00\nmaya",
@@ -206,6 +217,213 @@ Deno.test("amount labels apply to a bare value on the next OCR line", () => {
   assertEquals(result.reliable, true, "cross-line amount reliability");
   assertEquals(result.ambiguous, false, "equivalent cross-line amounts");
   assert(result.evidence.includes("total_label"), "cross-line total evidence");
+});
+
+Deno.test("recovers two concordant GCash displays from reordered Vision text", () => {
+  const result = extractReceiptAmount(
+    `
+1:36 1
+Amount
+Express Send
+J•• KE••••H M.
++63 945 510 7667
+Sent via GCash
+Total Amount Sent
+55
+3,600.00
+P3600.00
+Ref No. 4044666766999
+Sep 4, 2026 1:36 AM
+279g (gCO2e)
+`,
+    { provider: "gcash" },
+  );
+
+  assertEquals(result.amount, 3600, "reordered GCash amount");
+  assertEquals(result.reliable, true, "reordered GCash reliability");
+  assertEquals(result.ambiguous, false, "reordered GCash ambiguity");
+  assert(
+    result.evidence.includes("gcash_concordant_amount_block"),
+    "concordant block evidence",
+  );
+  assert(
+    !result.candidates.some((candidate) => candidate.amount === 55),
+    "integer status-bar noise must not become money",
+  );
+  assert(
+    !result.candidates.some((candidate) => candidate.amount === 279),
+    "carbon text outside the bounded block must not become money",
+  );
+});
+
+Deno.test("GCash reordered block fails closed on conflicting displays", () => {
+  const result = extractReceiptAmount(
+    `
+Sent via GCash
+Total Amount Sent
+55
+3,500.00
+P3600.00
+Ref No. 4044666766999
+`,
+    { provider: "gcash" },
+  );
+
+  assertEquals(result.reliable, false, "conflicting display reliability");
+  assert(
+    !result.evidence.includes("gcash_concordant_amount_block"),
+    "conflicting displays must not receive recovery evidence",
+  );
+});
+
+Deno.test("GCash reordered block cannot use excluded money as corroboration", () => {
+  for (
+    const excludedLine of [
+      "Account balance P3600.00",
+      "Fee P3600.00",
+    ]
+  ) {
+    const result = extractReceiptAmount(
+      `
+Sent via GCash
+Total Amount Sent
+55
+${excludedLine}
+3,600.00
+Ref No. 4044666766999
+`,
+      { provider: "gcash" },
+    );
+
+    assertEquals(result.reliable, false, excludedLine);
+    assert(
+      !result.evidence.includes("gcash_concordant_amount_block"),
+      `${excludedLine} must not corroborate the principal`,
+    );
+  }
+});
+
+Deno.test("negative-looking money is never normalized into a positive amount", () => {
+  for (
+    const value of [
+      "-3,600.00",
+      "P-3600.00",
+      "P–3600.00",
+      "P—3600.00",
+      "P−3600.00",
+      "-P3600.00",
+      "−P3600.00",
+      "P3600.00-",
+      "P3600.00−",
+      "(P3600.00)",
+      "P(3600.00)",
+    ]
+  ) {
+    const result = extractReceiptAmount(`Total Amount Sent\n${value}`, {
+      provider: "gcash",
+    });
+    assertEquals(result.amount, null, value);
+    assertEquals(result.reliable, false, `${value} reliability`);
+  }
+
+  const sameLine = extractReceiptAmount("Total Amount Sent -3,600.00", {
+    provider: "gcash",
+  });
+  assertEquals(sameLine.amount, null, "same-line negative amount");
+
+  const explicitPositive = extractReceiptAmount(
+    "Total Amount Sent\nP+3600.00",
+    {
+      provider: "gcash",
+    },
+  );
+  assertEquals(explicitPositive.amount, 3600, "explicit positive amount");
+});
+
+Deno.test("GCash block rejects signed and alphanumeric pseudo-displays", () => {
+  const cases = [
+    ["negative displays", "-3,600.00\nP-3600.00"],
+    ["sign before marker", "3,600.00\n-P3600.00"],
+    ["Unicode sign before marker", "3,600.00\n−P3600.00"],
+    ["trailing negative sign", "3,600.00\nP3600.00-"],
+    ["accounting parentheses", "3,600.00\n(P3600.00)"],
+    ["letter prefix", "ABC3600.00\nP3600.00"],
+    ["letter suffix", "3600.00XYZ\nP3600.00"],
+    ["marked letter suffix", "3,600.00\nP3600.00XYZ"],
+  ] as const;
+
+  for (const [label, displays] of cases) {
+    const result = extractReceiptAmount(
+      `Sent via GCash\nTotal Amount Sent\n55\n${displays}\nRef No. 4044666766999`,
+      { provider: "gcash" },
+    );
+    assertEquals(result.reliable, false, label);
+    assert(
+      !result.evidence.includes("gcash_concordant_amount_block"),
+      `${label} must not receive recovery evidence`,
+    );
+  }
+});
+
+Deno.test("GCash block requires whole-line displays on separate lines", () => {
+  for (
+    const [label, displays] of [
+      ["descriptive lines", "Available balance P3,600.00\nDiscount 3,600.00"],
+      ["same-line repetition", "P3,600.00 P3,600.00"],
+    ] as const
+  ) {
+    const result = extractReceiptAmount(
+      `Sent via GCash\nTotal Amount Sent\n55\n${displays}\nRef No. 4044666766999`,
+      { provider: "gcash" },
+    );
+    assertEquals(result.reliable, false, label);
+    assert(
+      !result.evidence.includes("gcash_concordant_amount_block"),
+      `${label} must not receive recovery evidence`,
+    );
+  }
+});
+
+Deno.test("GCash reordered block requires repetition, currency, and Ref boundary", () => {
+  const cases = [
+    [
+      "single display",
+      "Sent via GCash\nTotal Amount Sent\n55\nP3600.00\nRef No. 4044666766999",
+    ],
+    [
+      "no currency marker",
+      "Sent via GCash\nTotal Amount Sent\n55\n3,600.00\n3600.00\nRef No. 4044666766999",
+    ],
+    [
+      "second display after boundary",
+      "Sent via GCash\nTotal Amount Sent\n55\nP3600.00\nRef No. 4044666766999\n3,600.00",
+    ],
+    [
+      "missing boundary",
+      "Sent via GCash\nTotal Amount Sent\n55\n3,600.00\nP3600.00",
+    ],
+  ] as const;
+
+  for (const [label, text] of cases) {
+    const result = extractReceiptAmount(text, { provider: "gcash" });
+    assertEquals(result.reliable, false, label);
+    assert(
+      !result.evidence.includes("gcash_concordant_amount_block"),
+      `${label} must not receive recovery evidence`,
+    );
+  }
+});
+
+Deno.test("reordered GCash recovery never applies to another provider", () => {
+  const result = extractReceiptAmount(
+    "Sent via GCash\nTotal Amount Sent\n55\n3,600.00\nP3600.00\nRef No. 4044666766999",
+    { provider: "bpi" },
+  );
+  assertEquals(result.reliable, false, "non-GCash provider reliability");
+  assert(
+    !result.evidence.includes("gcash_concordant_amount_block"),
+    "non-GCash provider evidence",
+  );
 });
 
 Deno.test("a bare decimal remains untrusted without a preceding label", () => {

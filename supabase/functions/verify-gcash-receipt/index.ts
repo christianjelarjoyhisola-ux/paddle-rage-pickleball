@@ -1046,7 +1046,8 @@ function ocrCriticalGaps(
       receipt.amount.amount == null || !receipt.amount.reliable ||
       receipt.amount.ambiguous ||
       (parsed.provider === "gcash" &&
-        parsed.receipt.amount.conflictingPrimaryAmounts)
+        (parsed.receipt.amount.conflictingPrimaryAmounts ||
+          !parsed.receipt.amount.matchingPrimaryAmountDisplays))
     ) gaps.push("amount");
     if (receipt.timestamp.completeness !== "date_time") gaps.push("date");
     return gaps;
@@ -3056,6 +3057,8 @@ Deno.serve(async (req) => {
             reason: gcashParse.amount.reason,
             conflictingPrimaryAmounts:
               gcashParse.amount.conflictingPrimaryAmounts,
+            matchingPrimaryAmountDisplays:
+              gcashParse.amount.matchingPrimaryAmountDisplays,
           },
           timestamp: gcashParse.timestamp,
           receiver: gcashParse.receiver,

@@ -1083,6 +1083,39 @@ test('receipt review copy identifies each dedicated parser without mislabeling b
   assert.doesNotMatch(receiptDetails, /Anchored Maya amount/);
 });
 
+test('receipt review displays missing amounts and parser diagnostics honestly', () => {
+  const admin = read('admin.html');
+  const amountSource = functionSource(admin, 'receiptAmountValue');
+  const receiptAmountValue = new Function(
+    'fmt',
+    `${amountSource}; return receiptAmountValue;`,
+  )(value => `₱${Number(value).toFixed(2)}`);
+
+  assert.equal(receiptAmountValue(null), '--');
+  assert.equal(receiptAmountValue(undefined), '--');
+  assert.equal(receiptAmountValue(''), '--');
+  assert.equal(receiptAmountValue(0), '₱0.00');
+  assert.equal(receiptAmountValue('0'), '₱0.00');
+  assert.match(
+    admin,
+    /AMOUNT_CONFIRMATION_UNREADABLE:'Amount confirmation incomplete'/,
+  );
+
+  const receiptDetails = functionSource(admin, 'receiptDetailsHtml');
+  assert.match(
+    receiptDetails,
+    /ocrFallbackProvider\s*\?\s*'OCR Fallback'\s*:\s*'Parser Diagnostic'/,
+  );
+  assert.match(receiptDetails, /\[ocrDiagnosticLabel,\s*receiptDetailValue\(ex\.ocrFallbackReason\)/);
+
+  const bookingReview = functionSource(admin, 'vmPopulateReceipt');
+  const registrationReview = functionSource(admin, 'ovPopulateReceipt');
+  for (const source of [bookingReview, registrationReview]) {
+    assert.match(source, /Payment manually confirmed · parser result kept for audit/);
+    assert.doesNotMatch(source, /Payment confirmed by staff/);
+  }
+});
+
 test('deliberate owner review ignores analyzer labels but atomically claims real evidence keys', () => {
   assert.match(
     digitalReceiptMigration,

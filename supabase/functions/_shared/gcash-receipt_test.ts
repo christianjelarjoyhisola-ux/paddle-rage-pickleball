@@ -54,6 +54,11 @@ Deno.test("parses the supplied masked-name GCash receipt", () => {
     false,
     "amount consistency",
   );
+  assertEquals(
+    parsed.amount.matchingPrimaryAmountDisplays,
+    true,
+    "amount display confirmation",
+  );
   assertEquals(parsed.timestamp.date, "2026-07-28", "receipt date");
   assertEquals(parsed.timestamp.time24, "10:41", "receipt time");
   assertEquals(

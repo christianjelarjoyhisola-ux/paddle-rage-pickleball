@@ -73,6 +73,23 @@ Total Amount Sent
 Ref No. 2043350406766 Aug 31, 2026 10:41 AM
 `;
 
+const REORDERED_GCASH_OCR = `
+1:36 1
+Amount
+Express Send
+J•• KE••••H M.
++63 945 510 7667
+Sent via GCash
+Total Amount Sent
+55
+3,600.00
+P3600.00
+Ref No. 4044666766999
+Sep 4, 2026 1:36 AM
+279g (gCO2e)
+By going digital, you reduce your carbon footprint.
+`;
+
 const BPI_OCR = `
 Transfer successful!
 Wednesday, Sep 02, 2026, 07:08:34 AM (GMT +8)
@@ -182,6 +199,216 @@ Deno.test("dispatches clean GCash, GoTyme-to-GCash, and MariBank-to-GCash eviden
     assert(
       !("status" in verified),
       `${provider} verifier returns evidence, never a payment status`,
+    );
+  }
+});
+
+Deno.test("verifies the reported reordered GCash Express Send OCR layout", () => {
+  const typedReference = "4044666766999";
+  const parsed = parseProviderReceipt("gcash", REORDERED_GCASH_OCR, {
+    typedReference,
+  });
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 3600,
+    expectedRecipientName: "Jan Kennith Magallano",
+    bookingStartedAt: "2026-09-03T17:35:00.000Z",
+    bookingStartedDate: "2026-09-04",
+  });
+
+  assert(parsed.provider === "gcash", "reordered GCash provider");
+  assertEquals(parsed.parserVersion, "gcash_v1", "GCash parser version");
+  assertEquals(parsed.receipt.amount.amount, 3600, "GCash amount");
+  assertEquals(
+    parsed.receipt.amount.reliable,
+    true,
+    "GCash amount reliability",
+  );
+  assertEquals(
+    parsed.receipt.amount.ambiguous,
+    false,
+    "GCash amount ambiguity",
+  );
+  assertEquals(
+    parsed.receipt.amount.matchingPrimaryAmountDisplays,
+    true,
+    "GCash amount display confirmation",
+  );
+  assertEquals(verified.flags, [], "clean reordered GCash flags");
+});
+
+Deno.test("GCash verifier keeps a single amount display in review", () => {
+  const typedReference = "2043350406766";
+  const parsed = parseProviderReceipt(
+    "gcash",
+    GCASH_OCR.replace("Amount\n1,080.00\n", ""),
+    { typedReference },
+  );
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+  });
+
+  assert(parsed.provider === "gcash", "single-display GCash provider");
+  assertEquals(parsed.receipt.amount.amount, 1080, "single display amount");
+  assertEquals(parsed.receipt.amount.reliable, true, "single display parse");
+  assertEquals(
+    parsed.receipt.amount.matchingPrimaryAmountDisplays,
+    false,
+    "single display confirmation",
+  );
+  assert(
+    verified.flags.includes("AMOUNT_CONFIRMATION_UNREADABLE"),
+    "single display must stay in review",
+  );
+});
+
+Deno.test("GCash verifier catches a labeled amount contradicting the total block", () => {
+  const typedReference = "4044666766999";
+  const parsed = parseProviderReceipt(
+    "gcash",
+    `
+J•• KE••••H M.
++63 945 510 7667
+Sent via GCash
+Amount P3,500.00
+Amount P3,500.00
+Total Amount Sent
+55
+3,600.00
+P3600.00
+Ref No. 4044666766999
+Sep 4, 2026 1:36 AM
+`,
+    { typedReference },
+  );
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 3500,
+    expectedRecipientName: "Jan Kennith Magallano",
+    bookingStartedAt: "2026-09-03T17:35:00.000Z",
+    bookingStartedDate: "2026-09-04",
+  });
+
+  assert(parsed.provider === "gcash", "contradictory GCash provider");
+  assertEquals(
+    parsed.receipt.amount.conflictingPrimaryAmounts,
+    true,
+    "contradictory amount evidence",
+  );
+  assert(
+    verified.flags.includes("AMOUNT_REVIEW"),
+    "contradictory labels and total block must stay in review",
+  );
+});
+
+Deno.test("GCash verifier inspects every bounded total block", () => {
+  const typedReference = "4044666766999";
+  const parsed = parseProviderReceipt(
+    "gcash",
+    `${REORDERED_GCASH_OCR}
+Total Amount Sent
+55
+3,500.00
+P3500.00
+Ref No. 4044666766999
+`,
+    { typedReference },
+  );
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 3600,
+    expectedRecipientName: "Jan Kennith Magallano",
+    bookingStartedAt: "2026-09-03T17:35:00.000Z",
+    bookingStartedDate: "2026-09-04",
+  });
+
+  assert(parsed.provider === "gcash", "multi-block GCash provider");
+  assertEquals(
+    parsed.receipt.amount.conflictingPrimaryAmounts,
+    true,
+    "later total block contradiction",
+  );
+  assert(
+    verified.flags.includes("AMOUNT_UNREADABLE") ||
+      verified.flags.includes("AMOUNT_REVIEW"),
+    "a later contradictory total block must stay in review",
+  );
+});
+
+Deno.test("GCash verifier rejects a second total anchor without a Ref boundary", () => {
+  const typedReference = "4044666766999";
+  const parsed = parseProviderReceipt(
+    "gcash",
+    `${REORDERED_GCASH_OCR}
+Total Amount Sent
+55
+3,500.00
+P3500.00
+`,
+    { typedReference },
+  );
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 3600,
+    expectedRecipientName: "Jan Kennith Magallano",
+    bookingStartedAt: "2026-09-03T17:35:00.000Z",
+    bookingStartedDate: "2026-09-04",
+  });
+
+  assert(parsed.provider === "gcash", "duplicate-anchor GCash provider");
+  assertEquals(
+    parsed.receipt.amount.reliable,
+    false,
+    "duplicate total anchors are unreliable",
+  );
+  assert(
+    verified.flags.includes("AMOUNT_UNREADABLE"),
+    "a truncated duplicate total block must stay in review",
+  );
+});
+
+Deno.test("GCash verifier rejects descriptive or same-line amount lookalikes", () => {
+  const typedReference = "4044666766999";
+  for (
+    const [label, displays] of [
+      ["descriptive", "Available balance P3,600.00\nDiscount 3,600.00"],
+      ["same line", "P3,600.00 P3,600.00"],
+    ] as const
+  ) {
+    const parsed = parseProviderReceipt(
+      "gcash",
+      `
+J•• KE••••H M.
++63 945 510 7667
+Sent via GCash
+Amount
+Total Amount Sent
+55
+${displays}
+Ref No. 4044666766999
+Sep 4, 2026 1:36 AM
+`,
+      { typedReference },
+    );
+    const verified = verifyProviderReceipt(parsed, {
+      ...CONTEXT,
+      typedReference,
+      expectedAmount: 3600,
+      expectedRecipientName: "Jan Kennith Magallano",
+      bookingStartedAt: "2026-09-03T17:35:00.000Z",
+      bookingStartedDate: "2026-09-04",
+    });
+
+    assert(parsed.provider === "gcash", `${label} GCash provider`);
+    assert(
+      verified.flags.includes("AMOUNT_UNREADABLE") ||
+        verified.flags.includes("AMOUNT_CONFIRMATION_UNREADABLE"),
+      `${label} lookalikes must stay in review`,
     );
   }
 });

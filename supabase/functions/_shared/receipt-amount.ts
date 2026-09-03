@@ -13,6 +13,9 @@ export type ReceiptAmountEvidence =
   | "currency_ascii_p"
   | "amount_label"
   | "total_label"
+  | "gcash_amount_block_observation"
+  | "gcash_concordant_amount_block"
+  | "gcash_multiple_total_amount_anchors"
   | "maya_sent_money_context"
   | "maya_ocr_spacing_repair";
 
@@ -55,7 +58,7 @@ const CURRENCY_SOURCE = String.raw`(?:PHP|₱|P)`;
 
 const CURRENCY_AMOUNT_RE = new RegExp(
   String
-    .raw`(?<![A-Z0-9])(?<marker>${CURRENCY_SOURCE})\s*[+\-–—]?\s*(?<amount>${MONEY_SOURCE})(?![\d,.])`,
+    .raw`(?<![A-Z0-9])(?<marker>${CURRENCY_SOURCE})\s*[+\-–—−]?\s*(?<amount>${MONEY_SOURCE})(?![A-Z0-9,.])`,
   "giu",
 );
 
@@ -65,19 +68,19 @@ const CURRENCY_AMOUNT_RE = new RegExp(
 // digits (possibly split), and exactly two decimal digits.
 const MAYA_SPACED_AMOUNT_RE = new RegExp(
   String
-    .raw`(?<![A-Z0-9])(?<marker>${CURRENCY_SOURCE})\s*[+\-–—]?\s*(?<amount>[1-9]\d{0,2}(?:,\s+\d{3}|\s+\d{3}|,\s*(?:\d\s+\d{2}|\d{2}\s+\d))\.\d{2})(?![\d,.])`,
+    .raw`(?<![A-Z0-9])(?<marker>${CURRENCY_SOURCE})\s*[+\-–—−]?\s*(?<amount>[1-9]\d{0,2}(?:,\s+\d{3}|\s+\d{3}|,\s*(?:\d\s+\d{2}|\d{2}\s+\d))\.\d{2})(?![A-Z0-9,.])`,
   "giu",
 );
 
 const MAYA_SPACED_TOKEN_RE = new RegExp(
   String
-    .raw`(?<![A-Z0-9])${CURRENCY_SOURCE}\s*[+\-–—]?\s*[1-9]\d{0,2}(?:,\s+\d{3}|\s+\d{3}|,\s*(?:\d\s+\d{2}|\d{2}\s+\d))\.\d{2}(?![\d,.])`,
+    .raw`(?<![A-Z0-9])${CURRENCY_SOURCE}\s*[+\-–—−]?\s*[1-9]\d{0,2}(?:,\s+\d{3}|\s+\d{3}|,\s*(?:\d\s+\d{2}|\d{2}\s+\d))\.\d{2}(?![A-Z0-9,.])`,
   "iu",
 );
 
 const LABELED_AMOUNT_RE = new RegExp(
   String
-    .raw`(?<label>total\s+amount(?:\s+(?:sent|paid|transferred))?|amount(?:\s+(?:sent|paid|transferred))?|grand\s+total|total)\s*[:=\-–—]?\s*(?<marker>${CURRENCY_SOURCE})?\s*(?<amount>${MONEY_SOURCE})(?![\d,.])`,
+    .raw`(?<label>total\s+amount(?:\s+(?:sent|paid|transferred))?|amount(?:\s+(?:sent|paid|transferred))?|grand\s+total|total)\s*[:=\-–—−]?\s*(?<marker>${CURRENCY_SOURCE})?\s*(?<amount>${MONEY_SOURCE})(?![A-Z0-9,.])`,
   "giu",
 );
 
@@ -87,8 +90,8 @@ const MONEY_TOKEN_RE = new RegExp(
 );
 
 const BARE_MONEY_RE = new RegExp(
-  String.raw`(?<![\d,])(?<amount>${MONEY_SOURCE})(?![\d,.])`,
-  "gu",
+  String.raw`(?<![A-Z0-9,])(?<amount>${MONEY_SOURCE})(?![A-Z0-9,.])`,
+  "giu",
 );
 
 const EXCLUDED_CONTEXTS: Array<{ reason: string; pattern: RegExp }> = [
@@ -97,6 +100,7 @@ const EXCLUDED_CONTEXTS: Array<{ reason: string; pattern: RegExp }> = [
     reason: "service_fee",
     pattern: /\b(?:service|convenience|transaction|processing)\s+fee\b/i,
   },
+  { reason: "fee", pattern: /\bfee\b/i },
   {
     reason: "reference",
     pattern: /\b(?:reference|ref\.?)(?:\s*(?:id|no|number|#))?\b/i,
@@ -114,6 +118,16 @@ const EXCLUDED_CONTEXTS: Array<{ reason: string; pattern: RegExp }> = [
 const AMOUNT_LABEL_RE = /\bamount(?:\s+(?:sent|paid|transferred))?\b/i;
 const TOTAL_LABEL_RE = /\b(?:grand\s+total|total(?:\s+amount)?)\b/i;
 const MAYA_ANCHOR_RE = /\bsent\s+money\s+via\b/i;
+const GCASH_SENT_VIA_RE = /\bsent\s+via\s+gcash\b/i;
+const GCASH_TOTAL_AMOUNT_SENT_RE = /^\s*total\s+amount\s+sent\s*[:=\-–—]?\s*$/i;
+const GCASH_REFERENCE_BOUNDARY_RE =
+  /\b(?:ref(?:erence)?)(?:\s*(?:no|number|#))?\.?/i;
+const GCASH_REORDERED_BLOCK_MAX_NON_EMPTY_LINES = 6;
+const GCASH_AMOUNT_DISPLAY_LINE_RE = new RegExp(
+  String
+    .raw`^\s*(?<marker>${CURRENCY_SOURCE})?\s*[+\-–—−]?\s*(?<amount>${MONEY_SOURCE})\s*$`,
+  "iu",
+);
 
 function normalizeReceiptText(text: string): string {
   return String(text || "")
@@ -130,6 +144,25 @@ function parseMoney(raw: string): number | null {
 function parseMayaSpacedMoney(raw: string): number | null {
   const amount = Number(raw.replace(/[,\s]/g, ""));
   return Number.isFinite(amount) && amount >= 1000 ? amount : null;
+}
+
+function amountHasNegativeNotation(
+  line: string,
+  amountStart: number,
+  amountLength: number,
+  allowMayaDashBullet = false,
+): boolean {
+  const prefix = line.slice(0, Math.max(0, amountStart)).replace(/\s+$/u, "");
+  const suffix = line.slice(amountStart + amountLength).replace(/^\s+/u, "");
+  const mayaDashBullet = allowMayaDashBullet &&
+    /^\s*[\-–—−]\s+(?:PHP|₱|P)\s*(?=\d)/iu.test(line);
+  if (/[\-–—−]\s*(?:PHP|₱|P)?$/iu.test(prefix) && !mayaDashBullet) {
+    return true;
+  }
+  if (/^[\-–—−]/u.test(suffix)) return true;
+  const parenthesized = (/\(\s*(?:PHP|₱|P)?$/iu.test(prefix) ||
+    /(?:PHP|₱|P)\s*\($/iu.test(prefix)) && /^\)/u.test(suffix);
+  return parenthesized;
 }
 
 function markerEvidence(marker: string | null): ReceiptAmountEvidence | null {
@@ -237,6 +270,7 @@ function candidateScore(evidence: ReceiptAmountEvidence[]): number {
   ) score += 40;
   if (evidence.includes("amount_label")) score += 55;
   if (evidence.includes("total_label")) score += 65;
+  if (evidence.includes("gcash_concordant_amount_block")) score += 85;
   if (evidence.includes("maya_sent_money_context")) score += 80;
   return score;
 }
@@ -272,6 +306,14 @@ function collectCandidates(
     const marker = match.groups?.marker || null;
     const amountOffset = match[0].lastIndexOf(amountRaw);
     const start = (match.index || 0) + Math.max(0, amountOffset);
+    if (
+      amountHasNegativeNotation(
+        line,
+        start,
+        amountRaw.length,
+        options.provider === "maya",
+      )
+    ) return;
     const key = `${lineIndex}:${start}:${amount}`;
     const exclusions = contextExclusions(lines, lineIndex);
     const evidence = uniqueEvidence([
@@ -366,13 +408,129 @@ function collectCandidates(
     }
   });
 
+  // DOCUMENT_TEXT_DETECTION can flatten the two-column GCash receipt layout
+  // by emitting both labels before both values. Status-bar text can also land
+  // between them, for example:
+  //
+  //   Total Amount Sent
+  //   55
+  //   3,600.00
+  //   P3600.00
+  //   Ref No. 4044666766999
+  //
+  // The normal same/previous-line rules deliberately reject that currency-only
+  // read. Recover it only for GCash, only inside the short Total Amount Sent to
+  // Ref block, and only when two distinct decimal displays agree and at least
+  // one retains a currency marker. The expected booking amount is never used.
+  const gcashTotalAmountAnchors = options.provider === "gcash" &&
+      GCASH_SENT_VIA_RE.test(text)
+    ? lines.map((line, index) =>
+      GCASH_TOTAL_AMOUNT_SENT_RE.test(line) ? index : -1
+    ).filter((index) => index >= 0)
+    : [];
+  if (gcashTotalAmountAnchors.length) {
+    for (const anchorIndex of gcashTotalAmountAnchors) {
+      let boundaryIndex = -1;
+      let nonEmptyLines = 0;
+      for (let index = anchorIndex + 1; index < lines.length; index++) {
+        const line = lines[index].trim();
+        if (!line) continue;
+        nonEmptyLines++;
+        if (GCASH_REFERENCE_BOUNDARY_RE.test(line)) {
+          boundaryIndex = index;
+          break;
+        }
+        if (nonEmptyLines > GCASH_REORDERED_BLOCK_MAX_NON_EMPTY_LINES) break;
+      }
+      if (boundaryIndex < 0) continue;
+
+      const blockDisplays = new Map<
+        string,
+        {
+          line: string;
+          lineIndex: number;
+          match: RegExpExecArray;
+          amount: number;
+          currencyMarked: boolean;
+        }
+      >();
+      for (
+        let lineIndex = anchorIndex + 1;
+        lineIndex < boundaryIndex;
+        lineIndex++
+      ) {
+        const line = lines[lineIndex];
+        if (contextExclusions(lines, lineIndex).length > 0) continue;
+        const match = GCASH_AMOUNT_DISPLAY_LINE_RE.exec(line);
+        if (!match) continue;
+        const raw = match.groups?.amount || "";
+        const amount = parseMoney(raw);
+        if (amount == null) continue;
+        const start = (match.index || 0) +
+          Math.max(0, match[0].lastIndexOf(raw));
+        if (amountHasNegativeNotation(line, start, raw.length)) continue;
+        blockDisplays.set(`${lineIndex}:${start}:${amount}`, {
+          line,
+          lineIndex,
+          match,
+          amount,
+          currencyMarked: Boolean(match.groups?.marker),
+        });
+      }
+
+      const displays = [...blockDisplays.values()];
+      for (const display of displays) {
+        addMatch(
+          display.line,
+          display.lineIndex,
+          display.match,
+          ["gcash_amount_block_observation"],
+          display.amount,
+        );
+      }
+      const amounts = new Set(displays.map((display) => display.amount));
+      const displayLines = new Set(
+        displays.map((display) => display.lineIndex),
+      );
+      if (
+        gcashTotalAmountAnchors.length !== 1 || displayLines.size < 2 ||
+        amounts.size !== 1 ||
+        !displays.some((display) => display.currencyMarked)
+      ) continue;
+
+      for (const display of displays) {
+        addMatch(
+          display.line,
+          display.lineIndex,
+          display.match,
+          ["gcash_concordant_amount_block"],
+          display.amount,
+        );
+      }
+    }
+
+    if (gcashTotalAmountAnchors.length > 1) {
+      for (const candidate of byLocation.values()) {
+        candidate.evidence = uniqueEvidence([
+          ...candidate.evidence,
+          "gcash_multiple_total_amount_anchors",
+        ]);
+        candidate.score = candidateScore(candidate.evidence);
+      }
+    }
+  }
+
   return [...byLocation.values()].sort((a, b) =>
     a.lineIndex - b.lineIndex || a.start - b.start
   );
 }
 
 function isReliableCandidate(candidate: ReceiptAmountCandidate): boolean {
-  return candidate.evidence.includes("maya_sent_money_context") ||
+  if (candidate.evidence.includes("gcash_multiple_total_amount_anchors")) {
+    return false;
+  }
+  return candidate.evidence.includes("gcash_concordant_amount_block") ||
+    candidate.evidence.includes("maya_sent_money_context") ||
     candidate.evidence.includes("amount_label") ||
     candidate.evidence.includes("total_label");
 }

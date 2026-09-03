@@ -7323,7 +7323,7 @@ const RECEIPT_FLAG_LABELS = {
   METHOD_MISMATCH:'Wrong payment method selected', GCASH_RECEIPT_UNREADABLE:'GCash receipt unreadable',
   EDITED_METADATA:'Edited image metadata', SUSPECTED_FAKE:'Not a receipt', REF_FORMAT_INVALID:'Bad reference format',
   REF_UNREADABLE:'Reference unreadable', INVOICE_UNREADABLE:'Invoice unreadable', LOW_OCR_CONFIDENCE:'Blurry / low OCR', OCR_UNAVAILABLE:'OCR unavailable', AMOUNT_UNREADABLE:'Amount unreadable',
-  AMOUNT_REVIEW:'Amount needs owner review',
+  AMOUNT_REVIEW:'Amount needs owner review', AMOUNT_CONFIRMATION_UNREADABLE:'Amount confirmation incomplete',
   DATE_UNREADABLE:'Date unreadable', TIME_UNREADABLE:'Time unreadable', NUMBER_UNREADABLE:'Receiver number unreadable', REF_LABEL_UNREADABLE:'Reference label unreadable',
   BDO_PAY_UNREADABLE:'BDO Pay/InstaPay unreadable', MAYA_UNREADABLE:'Maya unreadable', BPI_UNREADABLE:'BPI success unreadable', BPI_CONFIRMATION_UNREADABLE:'BPI confirmation unreadable', BPI_TRANSACTION_UNREADABLE:'BPI transaction ref unreadable', INSTAPAY_QRPH_UNREADABLE:'InstaPay/QRPh unreadable', GXI_DESTINATION_UNREADABLE:'GXI/GCash destination unreadable', RECEIVER_NAME_UNREADABLE:'Receiver name unreadable', MERCHANT_CONFIG_MISSING:'GCash recipient number not configured', BOOKING_GROUP_PAYMENT_MISMATCH:'Booking payment details need review', AUTO_APPROVAL_FAILED:'Auto-verification could not finalize', REJECTION_FINALIZATION_FAILED:'Duplicate rejection could not finalize',
 };
@@ -7444,6 +7444,7 @@ function receiptDetailValue(value, fallback = '--'){
   return esc(value);
 }
 function receiptAmountValue(value){
+  if (value === null || value === undefined || value === '') return '--';
   const n = Number(value);
   return Number.isFinite(n) ? fmt(n) : '--';
 }
@@ -7529,6 +7530,7 @@ function receiptDetailsHtml(b){
         : ex.amountReliable === false
           ? 'Uncertain — manual review'
           : '--';
+  const ocrDiagnosticLabel = ex.ocrFallbackProvider ? 'OCR Fallback' : 'Parser Diagnostic';
   const rows = [
     ['OCR Ref', receiptDetailValue(ex.ref || b.gcashRef)],
     ['Amount Read', receiptAmountValue(ex.amount)],
@@ -7583,7 +7585,7 @@ function receiptDetailsHtml(b){
       ].join(' / ')), true],
     ] : []),
     ['Configured Recipient', receiptReceiverValue(ex), true],
-    ...(ex.ocrFallbackReason ? [['OCR Fallback', receiptDetailValue(ex.ocrFallbackReason), true]] : []),
+    ...(ex.ocrFallbackReason ? [[ocrDiagnosticLabel, receiptDetailValue(ex.ocrFallbackReason), true]] : []),
     ...(ex.amountReliable !== undefined ? [['Amount Parse', receiptDetailValue(amountParse), true]] : []),
     ['Reason', receiptDetailValue(reason), true],
     ['OCR Confidence', receiptDetailValue(ocrConfidence)],
@@ -10773,7 +10775,7 @@ async function vmPopulateReceipt(b){
   } else if (paymentState === 'paid' || paymentState === 'downpayment_paid') {
     [c,bg,lbl] = s === 'auto_approved'
       ? map.auto_approved
-      : ['var(--green)','rgba(var(--green-rgb),.12)','Payment confirmed by staff · parser result kept for audit'];
+      : ['var(--green)','rgba(var(--green-rgb),.12)','Payment manually confirmed · parser result kept for audit'];
   } else if (paymentState === 'rejected' || bookingState === 'cancelled') {
     [c,bg,lbl] = ['#e53935','rgba(229,57,53,.1)','Payment rejected · booking slot released'];
   } else if (s === 'rejected') {
@@ -16001,7 +16003,7 @@ async function ovPopulateReceipt(r, receiptType = 'open_play') {
   if (paymentState === 'paid') {
     [c,bg,lbl] = s === 'auto_approved'
       ? map.auto_approved
-      : ['var(--green)','rgba(var(--green-rgb),.12)','Payment confirmed by staff · parser result kept for audit'];
+      : ['var(--green)','rgba(var(--green-rgb),.12)','Payment manually confirmed · parser result kept for audit'];
   } else if (paymentState === 'rejected') {
     [c,bg,lbl] = ['#e53935','rgba(229,57,53,.1)','Payment rejected'];
   }
