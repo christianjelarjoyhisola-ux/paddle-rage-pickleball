@@ -7314,6 +7314,9 @@ function receiptBadge(b){
 }
 function hostDepositEvidenceBadge(b){
   if (!b?.hostBooking) return '';
+  if (b.paymentReassignedToRef) {
+    return '<span class="host-deposit-evidence warn">&#8599; Payment 1 moved</span>';
+  }
   const receiptState = String(b.receiptStatus || 'none').toLowerCase();
   const paymentState = String(b.paymentStatus || '').toLowerCase();
   if (paymentState === 'rejected') {

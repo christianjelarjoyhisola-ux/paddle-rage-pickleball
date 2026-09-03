@@ -328,6 +328,21 @@ test('payment-transfer source badge displays the replacement group reference, no
   });
   assert.match(html, /PB-MTKD3YBP-Z2HS/);
   assert.doesNotMatch(html, /PB-MTKD3YBQ-S7M2/);
+
+  const evidenceStart = admin.indexOf('function hostDepositEvidenceBadge');
+  const evidenceEnd = admin.indexOf('\nfunction hostPaymentEvidenceHtml', evidenceStart);
+  const evidenceBadge = new Function(
+    `${admin.slice(evidenceStart, evidenceEnd)}; return hostDepositEvidenceBadge;`,
+  )();
+  const movedEvidence = evidenceBadge({
+    hostBooking: true,
+    paymentReassignedToRef: 'PB-MTKD3YBQ-S7M2',
+    paymentStatus: 'unpaid',
+    receiptStatus: 'manual_review',
+    gcashRef: '9F34 952D 6576',
+  });
+  assert.match(movedEvidence, /Payment 1 moved/);
+  assert.doesNotMatch(movedEvidence, /under review/);
 });
 
 test('duplicate-payment modal is accessible, revalidates, commits once, then emails from canonical state', () => {
