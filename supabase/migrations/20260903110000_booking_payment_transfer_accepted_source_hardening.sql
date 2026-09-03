@@ -929,4 +929,3 @@ comment on function public.transfer_cancelled_booking_payment(
 notify pgrst, 'reload schema';
 
 commit;
-
