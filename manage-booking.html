@@ -7,15 +7,16 @@
   <meta name="description" content="Privately check the status, schedule, and payment summary for your Paddle Rage Pickleball booking." />
   <meta name="theme-color" content="#0b2d4d" />
   <meta name="paddle-rage-contact-email" content="bookings@paddleragecdo.ph" />
+  <meta name="paddle-rage-booking-opening-date" content="2026-09-19" />
   <link rel="canonical" href="https://paddleragecdo.ph/manage-booking.html" />
   <link rel="icon" type="image/jpeg" href="paddleragelogo.jpg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="manage-booking.css?v=20260903-owner-preview-v2" />
+  <link rel="stylesheet" href="manage-booking.css?v=20260904-reschedule-v1" />
   <script defer src="supabase.min.js"></script>
-  <script defer src="supabase-config.js?v=20260903-owner-preview-v2"></script>
-  <script defer src="manage-booking.js?v=20260903-owner-preview-v2"></script>
+  <script defer src="supabase-config.js?v=20260904-reschedule-v1"></script>
+  <script defer src="manage-booking.js?v=20260904-reschedule-v1"></script>
 </head>
 <body>
   <a class="skip-link" href="#manageMain">Skip to booking lookup</a>
@@ -52,7 +53,7 @@
         <div class="brand-panel-content">
           <p class="panel-eyebrow">Existing booking</p>
           <h2>View your booking status.</h2>
-          <p>Check your schedule and payment progress, or contact our team to request an eligible reschedule.</p>
+          <p>Check your schedule and payment progress, or request an eligible schedule change here.</p>
           <ul class="benefit-list" aria-label="Available booking information">
             <li><span aria-hidden="true">✓</span> Live booking status</li>
             <li><span aria-hidden="true">✓</span> Schedule and court details</li>
@@ -171,6 +172,45 @@
 
     <p class="privacy-note"><span aria-hidden="true">🔒</span> Your booking details are protected and are shown only after secure verification.</p>
   </main>
+
+  <div class="reschedule-dialog" id="rescheduleDialog" hidden>
+    <button class="reschedule-backdrop" id="rescheduleBackdrop" type="button" tabindex="-1" aria-label="Close reschedule request"></button>
+    <section
+      class="reschedule-sheet"
+      id="rescheduleSheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rescheduleTitle"
+      aria-describedby="rescheduleSubtitle"
+    >
+      <header class="reschedule-header">
+        <div>
+          <p class="reschedule-eyebrow">Schedule change request</p>
+          <h2 id="rescheduleTitle">Choose a better time</h2>
+          <p id="rescheduleSubtitle">Your current booking stays confirmed while our team reviews your request.</p>
+        </div>
+        <button class="reschedule-close" id="rescheduleClose" type="button" aria-label="Close reschedule request">
+          <span aria-hidden="true">×</span>
+        </button>
+      </header>
+
+      <div class="reschedule-owner-notice" id="rescheduleOwnerNotice" hidden>
+        <span class="reschedule-owner-badge">Owner preview</span>
+        <span>This is a read-only preview. Review and manage requests from the Admin Dashboard.</span>
+      </div>
+
+      <form class="reschedule-form" id="rescheduleForm" novalidate>
+        <div class="reschedule-scroll" id="rescheduleContent"></div>
+        <div class="reschedule-footer">
+          <div class="reschedule-feedback" id="rescheduleFeedback" role="status" aria-live="polite" aria-atomic="true"></div>
+          <div class="reschedule-footer-actions">
+            <button class="reschedule-secondary" id="rescheduleCancel" type="button">Not now</button>
+            <button class="reschedule-primary" id="rescheduleSubmit" type="submit">Send request <span aria-hidden="true">→</span></button>
+          </div>
+        </div>
+      </form>
+    </section>
+  </div>
 
   <footer class="site-footer">
     <span>© 2026 Paddle Rage Pickleball</span>

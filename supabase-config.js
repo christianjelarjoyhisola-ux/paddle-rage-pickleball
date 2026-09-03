@@ -763,6 +763,13 @@ function _pbMinimumPublicBookingDate() {
   return today > PB_PUBLIC_COURT_OPENING_DATE ? today : PB_PUBLIC_COURT_OPENING_DATE;
 }
 
+function _pbRpcResultError(data, fallback) {
+  return _pbApiError(
+    String(data?.error || data?.message || fallback),
+    String(data?.code || 'RPC_REQUEST_FAILED'),
+  );
+}
+
 function _pbNormalizeAvailabilityGraphicSnapshot(payload, requestedDate, requestedCourtIds = []) {
   const value = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null;
   const expectedDate = String(requestedDate || '');
@@ -1459,6 +1466,222 @@ window.DB = {
       throw error;
     }
     return (Array.isArray(data) ? data : data ? [data] : []).map(rowToBooking);
+  },
+
+  async getBookingRescheduleState(ref, email) {
+    const bookingRef = String(ref || '').trim().toUpperCase();
+    const bookingEmail = String(email || '').trim().toLowerCase();
+    const tokenCandidates = [
+      bookingRef,
+      bookingRef.endsWith('-G') ? bookingRef.slice(0, -2) : `${bookingRef}-G`,
+    ].filter(Boolean);
+    const accessToken = tokenCandidates
+      .map(candidate => _pbBookingAccessToken(candidate, false))
+      .find(Boolean) || '';
+    if (!accessToken) {
+      const denied = new Error('Open Manage booking on the browser used to make this reservation.');
+      denied.code = 'BOOKING_ACCESS_TOKEN_MISSING';
+      throw denied;
+    }
+    const { data, error } = await _sb.rpc('get_public_booking_reschedule_state', {
+      p_ref: bookingRef,
+      p_email: bookingEmail,
+      p_access_token: accessToken,
+    });
+    if (error) {
+      console.error('getBookingRescheduleState:', error);
+      throw new Error(_extractFnError(error, 'Could not load the schedule request'));
+    }
+    if (data?.ok === false) throw _pbRpcResultError(data, 'Could not load the schedule request.');
+    return data || { ok: true, request: null };
+  },
+
+  async getBookingRescheduleOptions(ref, email, itemRefs, date) {
+    const bookingRef = String(ref || '').trim().toUpperCase();
+    const bookingEmail = String(email || '').trim().toLowerCase();
+    const requestedDate = String(date || '').trim();
+    _pbAssertPublicBookingDate(requestedDate);
+    const tokenCandidates = [bookingRef, bookingRef.endsWith('-G') ? bookingRef.slice(0, -2) : `${bookingRef}-G`];
+    const accessToken = tokenCandidates.map(candidate => _pbBookingAccessToken(candidate, false)).find(Boolean) || '';
+    if (!accessToken) {
+      const denied = new Error('Secure booking access is missing from this browser.');
+      denied.code = 'BOOKING_ACCESS_TOKEN_MISSING';
+      throw denied;
+    }
+    const selectedRefs = [...new Set((Array.isArray(itemRefs) ? itemRefs : []).map(value => String(value || '').trim()).filter(Boolean))];
+    if (!selectedRefs.length || selectedRefs.length > 8) throw new Error('Choose at least one booking item to reschedule.');
+    const { data, error } = await _sb.rpc('get_public_booking_reschedule_options', {
+      p_ref: bookingRef,
+      p_email: bookingEmail,
+      p_access_token: accessToken,
+      p_item_refs: selectedRefs,
+      p_date: requestedDate,
+    });
+    if (error) {
+      console.error('getBookingRescheduleOptions:', error);
+      throw new Error(_extractFnError(error, 'Could not load available schedule options'));
+    }
+    if (data?.ok === false) throw _pbRpcResultError(data, 'Could not load available schedule options.');
+    const allowed = new Set(selectedRefs);
+    return {
+      ...(data || {}),
+      items: Array.isArray(data?.items) ? data.items.filter(item => allowed.has(String(item?.ref || ''))) : [],
+    };
+  },
+
+  async submitBookingRescheduleRequest(payload = {}) {
+    const bookingRef = String(payload.bookingRef || '').trim().toUpperCase();
+    const bookingEmail = String(payload.email || '').trim().toLowerCase();
+    const requestedDate = String(payload.requestedDate || '').trim();
+    _pbAssertPublicBookingDate(requestedDate);
+    const itemRefs = [...new Set((Array.isArray(payload.itemRefs) ? payload.itemRefs : []).map(value => String(value || '').trim()).filter(Boolean))];
+    const requestedSlots = [...new Set((Array.isArray(payload.requestedSlots) ? payload.requestedSlots : []).map(value => String(value).trim()).filter(Boolean))];
+    if (!itemRefs.length || itemRefs.length > 8) throw new Error('Choose between one and eight booking items.');
+    if (!requestedSlots.length || requestedSlots.length > 12) throw new Error('Choose an available schedule.');
+    if (payload.acknowledgedNoRefund !== true || payload.acknowledgedSlotNotHeld !== true) {
+      throw new Error('Confirm both schedule request acknowledgements before continuing.');
+    }
+    const tokenCandidates = [bookingRef, bookingRef.endsWith('-G') ? bookingRef.slice(0, -2) : `${bookingRef}-G`];
+    const accessToken = tokenCandidates.map(candidate => _pbBookingAccessToken(candidate, false)).find(Boolean) || '';
+    if (!accessToken) {
+      const denied = new Error('Secure booking access is missing from this browser.');
+      denied.code = 'BOOKING_ACCESS_TOKEN_MISSING';
+      throw denied;
+    }
+    const { data, error } = await _sb.rpc('submit_public_booking_reschedule_request', {
+      p_ref: bookingRef,
+      p_email: bookingEmail,
+      p_access_token: accessToken,
+      p_item_refs: itemRefs,
+      p_requested_date: requestedDate,
+      p_requested_slots: requestedSlots,
+      p_note: String(payload.note || '').trim() || null,
+      p_acknowledged_no_refund: true,
+      p_acknowledged_slot_not_held: true,
+    });
+    if (error) {
+      console.error('submitBookingRescheduleRequest:', error);
+      throw new Error(_extractFnError(error, 'Could not submit the schedule request'));
+    }
+    if (data?.ok === false) throw _pbRpcResultError(data, 'Could not submit the schedule request.');
+    const request = data?.request || data;
+    if (!request?.id) throw new Error('The schedule request service returned an invalid result.');
+    const notificationDelivery = await this.dispatchBookingRescheduleNotifications({
+      requestId: request.id,
+      bookingRef,
+      email: bookingEmail,
+      accessToken,
+      allowFailure: true,
+    }).catch(() => null);
+    return data && typeof data === 'object' ? { ...data, notificationDelivery } : data;
+  },
+
+  async withdrawBookingRescheduleRequest(payload = {}) {
+    const bookingRef = String(payload.bookingRef || '').trim().toUpperCase();
+    const bookingEmail = String(payload.email || '').trim().toLowerCase();
+    const requestId = String(payload.requestId || '').trim();
+    const tokenCandidates = [bookingRef, bookingRef.endsWith('-G') ? bookingRef.slice(0, -2) : `${bookingRef}-G`];
+    const accessToken = tokenCandidates.map(candidate => _pbBookingAccessToken(candidate, false)).find(Boolean) || '';
+    if (!accessToken) {
+      const denied = new Error('Secure booking access is missing from this browser.');
+      denied.code = 'BOOKING_ACCESS_TOKEN_MISSING';
+      throw denied;
+    }
+    const { data, error } = await _sb.rpc('withdraw_public_booking_reschedule_request', {
+      p_ref: bookingRef,
+      p_email: bookingEmail,
+      p_access_token: accessToken,
+      p_request_id: requestId,
+    });
+    if (error) {
+      console.error('withdrawBookingRescheduleRequest:', error);
+      throw new Error(_extractFnError(error, 'Could not withdraw the schedule request'));
+    }
+    if (data?.ok === false) throw _pbRpcResultError(data, 'Could not withdraw the schedule request.');
+    const request = data?.request || data;
+    const notificationDelivery = request?.id ? await this.dispatchBookingRescheduleNotifications({
+      requestId: request.id,
+      bookingRef,
+      email: bookingEmail,
+      accessToken,
+      allowFailure: true,
+    }).catch(() => null) : null;
+    return data && typeof data === 'object' ? { ...data, notificationDelivery } : data;
+  },
+
+  async listBookingRescheduleRequests(status = null, limit = 100) {
+    const normalizedStatus = String(status || '').trim().toLowerCase() || null;
+    const normalizedLimit = Math.max(1, Math.min(Number(limit) || 100, 200));
+    const { data, error } = await _sb.rpc('list_booking_reschedule_requests', {
+      p_status: normalizedStatus,
+      p_limit: normalizedLimit,
+    });
+    if (error) {
+      console.error('listBookingRescheduleRequests:', error);
+      throw new Error(_extractFnError(error, 'Could not load schedule requests'));
+    }
+    if (data?.ok === false) throw _pbRpcResultError(data, 'Could not load schedule requests.');
+    const result = data || { ok:true, counts:{}, requests:[] };
+    const requests = Array.isArray(result.requests) ? result.requests : [];
+    return {
+      ...result,
+      requests,
+      pendingRequests:Array.isArray(result.pendingRequests)
+        ? result.pendingRequests
+        : requests.filter(item => String(item?.status || '').toLowerCase() === 'pending'),
+      historyRequests:Array.isArray(result.historyRequests)
+        ? result.historyRequests
+        : requests.filter(item => String(item?.status || '').toLowerCase() !== 'pending'),
+    };
+  },
+
+  async getBookingRescheduleRequest(requestId) {
+    const { data, error } = await _sb.rpc('get_booking_reschedule_request', {
+      p_request_id: String(requestId || '').trim(),
+    });
+    if (error) {
+      console.error('getBookingRescheduleRequest:', error);
+      throw new Error(_extractFnError(error, 'Could not load the schedule request'));
+    }
+    if (data?.ok === false) throw _pbRpcResultError(data, 'Could not load the schedule request.');
+    return data;
+  },
+
+  async reviewBookingRescheduleRequest(requestId, decision, reason = '') {
+    const normalizedDecision = String(decision || '').trim().toLowerCase();
+    if (!['approved','rejected'].includes(normalizedDecision)) throw new Error('Choose approve or decline.');
+    const note = String(reason || '').trim();
+    if (normalizedDecision === 'rejected' && note.length < 5) throw new Error('Enter a clear reason before declining.');
+    const { data, error } = await _sb.rpc('review_booking_reschedule_request', {
+      p_request_id: String(requestId || '').trim(),
+      p_decision: normalizedDecision === 'approved' ? 'approve' : 'reject',
+      p_reason: note || null,
+    });
+    if (error) {
+      console.error('reviewBookingRescheduleRequest:', error);
+      throw new Error(_extractFnError(error, 'Could not save the schedule decision'));
+    }
+    if (data?.ok === false && String(data?.request?.status || '').toLowerCase() !== 'conflicted') {
+      throw _pbRpcResultError(data, 'Could not save the schedule decision.');
+    }
+    _pbClearFastCache(['bookings']);
+    return data;
+  },
+
+  async dispatchBookingRescheduleNotifications(payload = {}) {
+    const allowFailure = payload.allowFailure === true;
+    const body = {
+      action: payload.action === 'retry' ? 'retry' : 'dispatch',
+      ...(payload.requestId ? { requestId: String(payload.requestId) } : {}),
+      ...(payload.bookingRef ? { bookingRef: String(payload.bookingRef).trim().toUpperCase() } : {}),
+      ...(payload.email ? { email: String(payload.email).trim().toLowerCase() } : {}),
+      ...(payload.accessToken ? { accessToken: String(payload.accessToken) } : {}),
+      ...(payload.limit ? { limit: Number(payload.limit) } : {}),
+    };
+    return _invokeEdgeFunction('booking-reschedule-notifications', body, {
+      allowFailure,
+      retryDirect: false,
+    });
   },
 
   async updateBooking(ref, updates) {
@@ -3080,6 +3303,8 @@ window.DB = {
     payment_method_gotyme: '1',
     payment_method_maribank: '1',
     payment_method_pnb: '0',
+    reschedule_cutoff_hours: '24',
+    reschedule_submission_cooldown_seconds: '15',
     gcash_merchant_number: '09XXXXXXXXX',
     gcash_merchant_name: 'Court Owner Name',
     service_fee_rate: '10',
@@ -3205,6 +3430,7 @@ window.DB = {
     return {
       courts: defaultCourts(),
       bookings: defaultHostDemoBookings(),
+      bookingRescheduleRequests: [],
       openPlayRegistrations: [],
       openPlayHostApplications: [],
       openPlayHostSessions: [],
@@ -3261,6 +3487,7 @@ window.DB = {
       settings: { ...defaultSettings(), ...(parsed.settings || {}) },
       courts: Array.isArray(parsed.courts) && parsed.courts.length ? parsed.courts : defaultCourts(),
       bookings,
+      bookingRescheduleRequests: Array.isArray(parsed.bookingRescheduleRequests) ? parsed.bookingRescheduleRequests : [],
       openPlayRegistrations: Array.isArray(parsed.openPlayRegistrations) ? parsed.openPlayRegistrations : [],
       openPlayHostApplications: Array.isArray(parsed.openPlayHostApplications) ? parsed.openPlayHostApplications : [],
       openPlayHostSessions: Array.isArray(parsed.openPlayHostSessions) ? parsed.openPlayHostSessions : [],
@@ -3611,15 +3838,21 @@ window.DB = {
     };
   }
 
-  function buildLocalAvailabilityGraphic(date, courtIds = []) {
-    const role = window.Auth?.getSession?.()?.role || '';
-    if (!['owner', 'court_owner'].includes(role)) {
+  function buildLocalAvailabilityGraphic(date, courtIds = [], options) {
+    const session = window.Auth?.getSession?.() || null;
+    const role = session?.role || '';
+    const guestSafe = options?.guestSafe === true;
+    if (!guestSafe && (!['owner', 'court_owner'].includes(role)
+        || (session?.status && session.status !== 'active'))) {
       throw new Error('An active Paddle Rage owner account is required.');
     }
 
     const requestedDate = String(date || '').trim();
     const requestedCourtIds = [...new Set((Array.isArray(courtIds) ? courtIds : [])
       .map(id => String(id || '').trim()).filter(Boolean))];
+    const excludedBookingRefs = new Set((Array.isArray(options?.excludeBookingRefs)
+      ? options.excludeBookingRefs
+      : []).map(value => String(value || '').trim()).filter(Boolean));
     const phParts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Manila',
       year: 'numeric', month: '2-digit', day: '2-digit',
@@ -3718,7 +3951,9 @@ window.DB = {
     const snapshotCourts = courts.sort((a, b) => String(a.id).localeCompare(String(b.id))).map(court => {
       const occupied = new Set((db.bookings || [])
         .filter(booking => String(booking.courtId ?? booking.court_id) === String(court.id)
-          && String(booking.date) === requestedDate && bookingOccupiesSlot(booking))
+          && String(booking.date) === requestedDate
+          && !excludedBookingRefs.has(String(booking.ref || '').trim())
+          && bookingOccupiesSlot(booking))
         .flatMap(booking => booking.slots || []).map(Number).filter(Number.isInteger));
       const slots = [];
       for (let hour = openHour; hour < closeHour; hour += 1) {
@@ -3744,6 +3979,140 @@ window.DB = {
       version: 1, date: requestedDate, timezone: 'Asia/Manila', asOf,
       openHour, closeHour, courts: snapshotCourts,
     }, requestedDate, requestedCourtIds);
+  }
+
+  const localRescheduleNotificationSummary = () => ({
+    pending: 0,
+    processing: 0,
+    sent: 0,
+    failed: 0,
+    cancelled: 0,
+    retryable: 0,
+    exhausted: 0,
+  });
+
+  const localRescheduleCutoffHours = db => {
+    const configured = Number(db?.settings?.reschedule_cutoff_hours ?? 24);
+    return Number.isInteger(configured) ? Math.max(1, Math.min(configured, 720)) : 24;
+  };
+
+  const localRescheduleCooldownSeconds = db => {
+    const configured = Number(db?.settings?.reschedule_submission_cooldown_seconds ?? 15);
+    return Number.isInteger(configured) ? Math.max(5, Math.min(configured, 300)) : 15;
+  };
+
+  const localRescheduleFamilyKey = booking => [
+    booking?.groupRef,
+    booking?.bookingGroupRef,
+    booking?.booking_group_ref,
+    booking?.ref,
+  ].map(value => String(value || '').trim()).find(Boolean) || '';
+
+  const localRescheduleCourtId = booking => String(
+    booking?.courtId ?? booking?.court_id ?? '',
+  ).trim();
+
+  const localRescheduleSlots = booking => (Array.isArray(booking?.slots)
+    ? booking.slots
+      .map(value => /^(?:[0-9]|1[0-9]|2[0-3])$/.test(String(value).trim())
+        ? Number(String(value).trim())
+        : Number.NaN)
+      .filter(Number.isInteger)
+      .sort((left, right) => left - right)
+    : []);
+
+  const localRescheduleSameSlots = (left, right) => {
+    const firstRaw = Array.isArray(left) ? left : [];
+    const secondRaw = Array.isArray(right) ? right : [];
+    const first = localRescheduleSlots({ slots: left });
+    const second = localRescheduleSlots({ slots: right });
+    return first.length === firstRaw.length
+      && second.length === secondRaw.length
+      && new Set(first).size === first.length
+      && new Set(second).size === second.length
+      && first.length === second.length
+      && first.every((hour, index) => hour === second[index]);
+  };
+
+  const localRescheduleValidDate = value => {
+    const date = String(value || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+    const parsed = new Date(`${date}T12:00:00Z`);
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+  };
+
+  const localRescheduleMaxDate = () => {
+    const maxDate = new Date(`${_pbManilaToday()}T12:00:00Z`);
+    maxDate.setUTCDate(maxDate.getUTCDate() + 366);
+    return maxDate.toISOString().slice(0, 10);
+  };
+
+  const localRescheduleStartMs = booking => {
+    const date = String(booking?.date || '').trim();
+    const rawSlots = Array.isArray(booking?.slots) ? booking.slots : [];
+    const slots = localRescheduleSlots(booking);
+    if (!localRescheduleValidDate(date) || !slots.length
+        || slots.length !== rawSlots.length || new Set(slots).size !== slots.length) {
+      return Number.NaN;
+    }
+    return Date.parse(`${date}T${String(slots[0]).padStart(2, '0')}:00:00+08:00`);
+  };
+
+  const localRescheduleEligibility = (rows, db) => {
+    const cutoffHours = localRescheduleCutoffHours(db);
+    const starts = (Array.isArray(rows) ? rows : []).map(localRescheduleStartMs);
+    const earliestStartMs = starts.length ? Math.min(...starts) : Number.NaN;
+    const allConfirmed = rows.length > 0 && rows.every(row =>
+      String(row?.status || '').trim().toLowerCase() === 'confirmed'
+    );
+    return {
+      cutoffHours,
+      earliestStartMs,
+      earliestStart: Number.isFinite(earliestStartMs)
+        ? new Date(earliestStartMs).toISOString()
+        : null,
+      eligible: allConfirmed && Number.isFinite(earliestStartMs)
+        && earliestStartMs > Date.now() + cutoffHours * 60 * 60 * 1000,
+    };
+  };
+
+  function localRescheduleRequestView(request, includePrivate = false) {
+    if (!request) return null;
+    const oldSchedule = request.oldSchedule ? {
+      ...request.oldSchedule,
+      items:(request.oldSchedule.items || []).map(item => {
+        if (includePrivate) return { ...item };
+        const guestItem = { ...(item || {}) };
+        delete guestItem.scheduleFingerprint;
+        return guestItem;
+      }),
+    } : request.oldSchedule;
+    const payload = {
+      ...request,
+      oldSchedule,
+      requestedSchedule:request.requestedSchedule ? {
+        ...request.requestedSchedule,
+        items:(request.requestedSchedule.items || []).map(item => ({ ...item })),
+      } : request.requestedSchedule,
+      canWithdraw:String(request.status || '').toLowerCase() === 'pending',
+      decision:{
+        reason:request.decision?.reason || null,
+        reviewedAt:request.decision?.reviewedAt || null,
+        ...(includePrivate ? { reviewedByRole:request.decision?.reviewedByRole || null } : {}),
+      },
+    };
+    if (!includePrivate) {
+      delete payload.customer;
+      delete payload.canApprove;
+      delete payload.canReject;
+      delete payload.notification;
+      delete payload.events;
+      return payload;
+    }
+    payload.currentItems = oldSchedule?.items || [];
+    payload.requestedItems = payload.requestedSchedule?.items || [];
+    payload.notification = localRescheduleNotificationSummary();
+    return payload;
   }
 
   window.DB = {
@@ -3957,6 +4326,550 @@ window.DB = {
           ? { ...booking, managementAccess: 'owner_preview' }
           : booking);
     },
+    async getBookingRescheduleState(ref, email) {
+      const rows = await this.getBookingForManagement(ref, email);
+      if (!rows.length) throw new Error('Booking not found. Check the reference and booking email.');
+      const db = readDb();
+      const refs = new Set(rows.map(row => String(row.ref)));
+      const request = db.bookingRescheduleRequests
+        .filter(item => (item.itemRefs || []).some(itemRef => refs.has(String(itemRef))))
+        .sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
+      const eligibility = localRescheduleEligibility(rows, db);
+      const confirmed = rows.filter(row => String(row.status || '').toLowerCase() === 'confirmed').length;
+      const bookingRef = String(ref || '').trim().toUpperCase();
+      return {
+        ok:true,
+        booking:{
+          ref:bookingRef,
+          bookingRef,
+          bookingGroupRef:[rows[0]?.groupRef, rows[0]?.bookingGroupRef, rows[0]?.booking_group_ref]
+            .map(value => String(value || '').trim()).find(Boolean) || null,
+          status:confirmed === rows.length ? 'confirmed' : 'mixed',
+          items:rows.map(row => ({
+            ref:row.ref,
+            courtId:localRescheduleCourtId(row),
+            courtName:row.courtName,
+            date:row.date,
+            slots:localRescheduleSlots(row).map(String),
+            startTime:row.startTime,
+            endTime:row.endTime,
+            duration:Number(row.duration ?? row.slots?.length ?? 0),
+            rate:Number(row.rate || 0),
+            total:Number(row.total || 0),
+            status:row.status,
+            paymentStatus:row.paymentStatus,
+          })),
+          reschedule:{
+            eligible:eligibility.eligible,
+            cutoffHours:eligibility.cutoffHours,
+            earliestStart:eligibility.earliestStart,
+            slotIsHeldWhilePending:false,
+            refundAvailable:false,
+          },
+        },
+        request:localRescheduleRequestView(request),
+      };
+    },
+    async getBookingRescheduleOptions(ref, email, itemRefs, date) {
+      const requestedDate = String(date || '').trim();
+      if (!localRescheduleValidDate(requestedDate)) throw new Error('Choose a valid schedule date.');
+      _pbAssertPublicBookingDate(requestedDate);
+      if (requestedDate > localRescheduleMaxDate()) {
+        throw new Error('Availability is limited to the next 366 Manila calendar days.');
+      }
+      const rows = await this.getBookingForManagement(ref, email);
+      const selectedRefs = [...new Set((Array.isArray(itemRefs) ? itemRefs : [])
+        .map(value => String(value || '').trim()).filter(Boolean))].sort();
+      const selected = rows.filter(row => selectedRefs.includes(String(row.ref))).sort((left, right) =>
+        `${left.courtName || ''}|${left.ref || ''}`.localeCompare(`${right.courtName || ''}|${right.ref || ''}`)
+      );
+      if (!selected.length || selected.length !== selectedRefs.length || selected.length > 8) {
+        throw new Error('Choose between one and eight valid booking items to reschedule.');
+      }
+      const db = readDb();
+      const eligibility = localRescheduleEligibility(selected, db);
+      if (!eligibility.eligible) {
+        throw _pbApiError(
+          `Only confirmed bookings more than ${eligibility.cutoffHours} hours away can be rescheduled.`,
+          'RESCHEDULE_NOT_ELIGIBLE',
+        );
+      }
+      const durations = [...new Set(selected.map(row => {
+        const slots = localRescheduleSlots(row);
+        const duration = Number(row.duration ?? slots.length);
+        return Number.isInteger(duration) && duration === slots.length ? duration : Number.NaN;
+      }))];
+      if (durations.length !== 1 || !Number.isInteger(durations[0]) || durations[0] < 1) {
+        throw new Error('Selected booking items must have the same valid duration.');
+      }
+      const selectedCourtIds = selected.map(localRescheduleCourtId);
+      if (selectedCourtIds.some(courtId => !courtId)
+          || new Set(selectedCourtIds).size !== selected.length) {
+        throw new Error('Select no more than one booking item for each court.');
+      }
+      const duration = durations[0];
+      const snapshot = buildLocalAvailabilityGraphic(requestedDate, selectedCourtIds, {
+        guestSafe:true,
+        excludeBookingRefs:selectedRefs,
+      });
+      const courtMap = new Map((snapshot.courts || []).map(court => [String(court.id), court]));
+      const options = [];
+      for (let hour = Number(snapshot.openHour || 8); hour + duration <= Number(snapshot.closeHour || 24); hour += 1) {
+        const hours = Array.from({ length:duration }, (_, index) => hour + index);
+        const available = selected.every(row => {
+          const court = courtMap.get(localRescheduleCourtId(row));
+          return hours.every(slotHour => (court?.slots || [])
+            .some(slot => Number(slot.hour) === slotHour && slot.state === 'free'));
+        });
+        options.push({
+          date:requestedDate,
+          startTime:_fmtBookingHour(hour),
+          endTime:_fmtBookingHour(hour + duration),
+          slots:hours.map(String),
+          available,
+        });
+      }
+      return {
+        ok:true,
+        date:requestedDate,
+        duration,
+        items:selected.map(row => ({ ref:row.ref, courtId:localRescheduleCourtId(row), courtName:row.courtName, duration })),
+        slots:Array.from({ length:Number(snapshot.closeHour) - Number(snapshot.openHour) }, (_, index) => {
+          const hour = Number(snapshot.openHour) + index;
+          const available = selected.every(row => (courtMap.get(localRescheduleCourtId(row))?.slots || [])
+            .some(slot => Number(slot.hour) === hour && slot.state === 'free'));
+          return {
+            hour,
+            label:`${_fmtBookingHour(hour)}–${_fmtBookingHour(hour + 1)}`,
+            startTime:_fmtBookingHour(hour),
+            endTime:_fmtBookingHour(hour + 1),
+            available,
+          };
+        }),
+        options,
+        slotIsHeldWhilePending:false,
+      };
+    },
+    async submitBookingRescheduleRequest(payload = {}) {
+      const rows = await this.getBookingForManagement(payload.bookingRef, payload.email);
+      const suppliedRefs = Array.isArray(payload.itemRefs) ? payload.itemRefs : [];
+      const itemRefs = [...new Set(suppliedRefs.map(value => String(value || '').trim()).filter(Boolean))].sort();
+      const selected = rows.filter(row => itemRefs.includes(String(row.ref))).sort((left, right) =>
+        `${left.courtName || ''}|${left.ref || ''}`.localeCompare(`${right.courtName || ''}|${right.ref || ''}`)
+      );
+      if (!itemRefs.length || itemRefs.length > 8 || itemRefs.length !== suppliedRefs.length
+          || selected.length !== itemRefs.length) {
+        throw new Error('One or more selected booking items are invalid.');
+      }
+      if (payload.acknowledgedNoRefund !== true || payload.acknowledgedSlotNotHeld !== true) {
+        throw new Error('Confirm both request acknowledgements.');
+      }
+      const requestedDate = String(payload.requestedDate || '').trim();
+      if (!localRescheduleValidDate(requestedDate)) throw new Error('Choose a valid schedule date.');
+      _pbAssertPublicBookingDate(requestedDate);
+      if (requestedDate > localRescheduleMaxDate()) {
+        throw new Error('Availability is limited to the next 366 Manila calendar days.');
+      }
+      const suppliedSlots = Array.isArray(payload.requestedSlots) ? payload.requestedSlots : [];
+      if (!suppliedSlots.length || suppliedSlots.length > 24
+          || suppliedSlots.some(value => !/^(?:[0-9]|1[0-9]|2[0-3])$/.test(String(value).trim()))) {
+        throw new Error('Choose a valid available schedule.');
+      }
+      const requestedSlots = [...new Set(suppliedSlots.map(value => Number(String(value).trim())))]
+        .sort((left, right) => left - right);
+      if (requestedSlots.length !== suppliedSlots.length
+          || requestedSlots.some((hour,index) => index > 0 && hour !== requestedSlots[index-1] + 1)) {
+        throw new Error('Choose one continuous schedule with no duplicate time slots.');
+      }
+      const cleanNote = String(payload.note || '').trim();
+      if (cleanNote.length > 500) throw new Error('The request note must be 500 characters or less.');
+
+      const db = readDb();
+      const groupKey = localRescheduleFamilyKey(selected[0]);
+      const existingPending = db.bookingRescheduleRequests.find(item => {
+        if (String(item.status || '').toLowerCase() !== 'pending') return false;
+        const existingGroup = String(
+          item.bookingFamilyKey || item.bookingGroupRef
+          || item.oldSchedule?.bookingGroupRef || item.bookingRef || '',
+        ).trim();
+        return groupKey && existingGroup === groupKey;
+      });
+
+      const existingItemRefs = [...(existingPending?.itemRefs || [])].map(String).sort();
+      if (existingPending
+          && existingItemRefs.length === itemRefs.length
+          && existingItemRefs.every((value, index) => value === itemRefs[index])
+          && String(existingPending.requestedSchedule?.requestedDate || '') === requestedDate
+          && localRescheduleSameSlots(existingPending.requestedSchedule?.requestedSlots, requestedSlots)
+          && String(existingPending.note || '').trim() === cleanNote) {
+        return { ok:true, idempotent:true, request:localRescheduleRequestView(existingPending) };
+      }
+
+      const cooldownSeconds = localRescheduleCooldownSeconds(db);
+      const latestSubmissionAt = Math.max(...db.bookingRescheduleRequests
+        .filter(item => {
+          const itemGroup = String(
+            item.bookingFamilyKey || item.bookingGroupRef
+            || item.oldSchedule?.bookingGroupRef || item.bookingRef || '',
+          ).trim();
+          return itemGroup === groupKey;
+        })
+        .map(item => Date.parse(item.createdAt || ''))
+        .filter(Number.isFinite), Number.NEGATIVE_INFINITY);
+      if (Number.isFinite(latestSubmissionAt)
+          && latestSubmissionAt > Date.now() - cooldownSeconds * 1000) {
+        const retryAfterSeconds = Math.max(1, Math.ceil(
+          (latestSubmissionAt + cooldownSeconds * 1000 - Date.now()) / 1000,
+        ));
+        const error = _pbApiError(
+          `Please wait ${retryAfterSeconds} seconds before changing this request again.`,
+          'TOO_MANY_REQUESTS',
+        );
+        error.retryAfterSeconds = retryAfterSeconds;
+        throw error;
+      }
+
+      const eligibility = localRescheduleEligibility(selected, db);
+      if (!eligibility.eligible) {
+        throw _pbApiError(
+          `Only confirmed bookings more than ${eligibility.cutoffHours} hours away can be rescheduled.`,
+          'RESCHEDULE_NOT_ELIGIBLE',
+        );
+      }
+      const durations = [...new Set(selected.map(row => {
+        const slots = localRescheduleSlots(row);
+        const duration = Number(row.duration ?? slots.length);
+        return Number.isInteger(duration) && duration === slots.length ? duration : Number.NaN;
+      }))];
+      if (durations.length !== 1 || !Number.isInteger(durations[0]) || durations[0] < 1) {
+        throw new Error('Selected booking items must have the same valid duration.');
+      }
+      const duration = durations[0];
+      if (requestedSlots.length !== duration) {
+        throw new Error('Choose one continuous schedule with the original duration.');
+      }
+      const selectedCourtIds = selected.map(localRescheduleCourtId);
+      if (selectedCourtIds.some(courtId => !courtId)
+          || new Set(selectedCourtIds).size !== selected.length) {
+        throw new Error('Select no more than one booking item for each court.');
+      }
+      const unchangedCount = selected.filter(row =>
+        String(row.date || '') === requestedDate
+        && localRescheduleSameSlots(row.slots, requestedSlots)
+      ).length;
+      if (unchangedCount === selected.length) {
+        throw new Error('Choose a schedule different from the current booking.');
+      }
+
+      const availability = buildLocalAvailabilityGraphic(requestedDate, selectedCourtIds, {
+        guestSafe:true,
+        excludeBookingRefs:itemRefs,
+      });
+      const availabilityByCourt = new Map((availability.courts || [])
+        .map(court => [String(court.id), court]));
+      for (const row of selected) {
+        const court = availabilityByCourt.get(localRescheduleCourtId(row));
+        const allAvailable = requestedSlots.every(hour => (court?.slots || [])
+          .some(slot => Number(slot.hour) === hour && slot.state === 'free'));
+        if (!allAvailable) throw _pbApiError(
+          'One or more requested slots are no longer available.',
+          'SLOT_UNAVAILABLE',
+        );
+      }
+
+      const createdAt = new Date().toISOString();
+      if (existingPending) {
+        existingPending.status = 'superseded';
+        existingPending.canApprove = false;
+        existingPending.canReject = false;
+        existingPending.canWithdraw = false;
+        existingPending.supersededAt = createdAt;
+        existingPending.updatedAt = createdAt;
+        existingPending.decision = {
+          ...(existingPending.decision || {}),
+          reason:'Replaced by a newer player request.',
+          reviewedAt:createdAt,
+          reviewedByRole:null,
+        };
+        existingPending.events = [
+          ...(existingPending.events || []),
+          { id:localRef('event'), eventType:'superseded', createdAt },
+        ];
+        existingPending.notification = localRescheduleNotificationSummary();
+      }
+      const request = {
+        id:globalThis.crypto?.randomUUID?.() || localRef('reschedule'),
+        bookingRef:String(payload.bookingRef || '').trim().toUpperCase(),
+        bookingGroupRef:selected[0].groupRef || selected[0].bookingGroupRef || selected[0].booking_group_ref || null,
+        bookingFamilyKey:groupKey,
+        itemRefs,
+        customer:{ name:selected[0].fullName || 'Player', email:String(selected[0].email || '').toLowerCase() },
+        status:'pending',
+        note:cleanNote,
+        oldSchedule:{ bookingRef:String(payload.bookingRef || ''), bookingGroupRef:selected[0].groupRef || selected[0].bookingGroupRef || selected[0].booking_group_ref || null, capturedAt:createdAt, items:selected.map(row => ({ ref:row.ref,courtId:localRescheduleCourtId(row),courtName:row.courtName,date:row.date,slots:localRescheduleSlots(row).map(String),startTime:row.startTime,endTime:row.endTime,duration:Number(row.duration ?? row.slots?.length ?? 0),rate:Number(row.rate || 0),total:Number(row.total || 0),status:row.status,scheduleFingerprint:JSON.stringify([localRescheduleCourtId(row),row.date,localRescheduleSlots(row),Number(row.duration ?? row.slots?.length ?? 0),Number(row.rate || 0),Number(row.total || 0),String(row.status || '')]) })) },
+        requestedSchedule:{ requestedDate,requestedSlots:requestedSlots.map(String),startTime:_fmtBookingHour(requestedSlots[0]),endTime:_fmtBookingHour(requestedSlots[requestedSlots.length-1] + 1),duration,items:selected.map(row => ({ ref:row.ref,courtId:localRescheduleCourtId(row),courtName:row.courtName,date:requestedDate,slots:requestedSlots.map(String),startTime:_fmtBookingHour(requestedSlots[0]),endTime:_fmtBookingHour(requestedSlots[requestedSlots.length-1] + 1),duration,rate:Number(row.rate || 0),total:Number(row.total || 0) })) },
+        acknowledgements:{ noRefund:true, slotNotHeld:true },
+        decision:{ reason:null, reviewedAt:null, reviewedByRole:null },
+        createdAt,
+        updatedAt:createdAt,
+        canApprove:true,
+        canReject:true,
+        canWithdraw:true,
+        notification:localRescheduleNotificationSummary(),
+        events:[{ id:localRef('event'), eventType:'submitted', createdAt }],
+      };
+      db.bookingRescheduleRequests.push(request);
+      writeDb(db);
+      this.dispatchBookingRescheduleNotifications({ requestId:request.id, allowFailure:true }).catch(() => {});
+      return { ok:true, request:localRescheduleRequestView(request) };
+    },
+    async withdrawBookingRescheduleRequest(payload = {}) {
+      const rows = await this.getBookingForManagement(payload.bookingRef, payload.email);
+      const ownedRefs = new Set(rows.map(row => String(row.ref || '')));
+      const normalizedEmail = String(payload.email || '').trim().toLowerCase();
+      const db = readDb();
+      const request = db.bookingRescheduleRequests.find(item => String(item.id) === String(payload.requestId));
+      const ownsRequest = request
+        && String(request?.customer?.email || '').trim().toLowerCase() === normalizedEmail
+        && (request.itemRefs || []).some(itemRef => ownedRefs.has(String(itemRef)));
+      if (!ownsRequest || request.status !== 'pending') throw new Error('This request can no longer be withdrawn.');
+      request.status = 'withdrawn';
+      request.canApprove = false;
+      request.canReject = false;
+      request.canWithdraw = false;
+      request.updatedAt = new Date().toISOString();
+      request.withdrawnAt = request.updatedAt;
+      request.decision = {
+        reason:'Withdrawn by the player before review.',
+        reviewedAt:null,
+        reviewedByRole:null,
+      };
+      request.events = [...(request.events || []), { id:localRef('event'), eventType:'withdrawn', createdAt:request.updatedAt }];
+      request.notification = localRescheduleNotificationSummary();
+      writeDb(db);
+      return { ok:true, request:localRescheduleRequestView(request) };
+    },
+    async listBookingRescheduleRequests(status = null, limit = 100) {
+      const session = window.Auth?.getSession?.() || null;
+      if (!session || !['owner','court_owner'].includes(String(session.role || '')) || (session.status && session.status !== 'active')) throw new Error('Only an active owner can review schedule requests.');
+      const db = readDb();
+      const normalizedStatus = String(status || '').toLowerCase();
+      const all = [...db.bookingRescheduleRequests].sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+      const safeLimit = Math.max(1,Math.min(Number(limit)||100,200));
+      const requests = (normalizedStatus && normalizedStatus !== 'all'
+        ? all.filter(item => String(item.status) === normalizedStatus)
+        : all)
+        .slice(0,safeLimit)
+        .map(item => localRescheduleRequestView(item, true));
+      const pendingRequests = all
+        .filter(item => String(item.status || '').toLowerCase() === 'pending')
+        .slice(0,safeLimit)
+        .map(item => localRescheduleRequestView(item, true));
+      const historyRequests = all
+        .filter(item => String(item.status || '').toLowerCase() !== 'pending')
+        .slice(0,safeLimit)
+        .map(item => localRescheduleRequestView(item, true));
+      const counts = all.reduce((out,item) => { const key=String(item.status || 'pending'); out[key]=(out[key]||0)+1; return out; }, { pending:0,approved:0,rejected:0,withdrawn:0,conflicted:0,superseded:0 });
+      return { ok:true, counts, requests, pendingRequests, historyRequests };
+    },
+    async getBookingRescheduleRequest(requestId) {
+      const result = await this.listBookingRescheduleRequests(null,250);
+      const request = result.requests.find(item => String(item.id) === String(requestId));
+      if (!request) throw new Error('Schedule request not found.');
+      return { ok:true, request, events:[...(request.events || [])] };
+    },
+    async reviewBookingRescheduleRequest(requestId, decision, reason = '') {
+      const session = window.Auth?.getSession?.() || null;
+      if (!session || !['owner','court_owner'].includes(String(session.role || '')) || (session.status && session.status !== 'active')) throw new Error('Only an active owner can review schedule requests.');
+      const db = readDb();
+      const request = db.bookingRescheduleRequests.find(item => String(item.id) === String(requestId));
+      if (!request || request.status !== 'pending') throw new Error('This request is no longer pending.');
+      const normalizedDecision = String(decision || '').toLowerCase();
+      const note = String(reason || '').trim();
+      if (!['approved','rejected'].includes(normalizedDecision)) throw new Error('Choose approve or decline.');
+      if (note.length > 500) throw new Error('The decision note must be 500 characters or less.');
+      if (normalizedDecision === 'rejected' && note.length < 5) throw new Error('Enter a clear reason before declining.');
+
+      const markConflicted = (decisionReason, errorMessage) => {
+        const reviewedAt = new Date().toISOString();
+        request.status = 'conflicted';
+        request.canApprove = false;
+        request.canReject = false;
+        request.canWithdraw = false;
+        request.updatedAt = reviewedAt;
+        request.conflictedAt = reviewedAt;
+        request.decision = {
+          reason:decisionReason,
+          reviewedAt,
+          reviewedByRole:session.role,
+        };
+        request.events = [
+          ...(request.events || []),
+          {
+            id:localRef('event'),
+            eventType:'conflicted',
+            fromStatus:'pending',
+            toStatus:'conflicted',
+            createdAt:reviewedAt,
+          },
+        ];
+        request.notification = localRescheduleNotificationSummary();
+        writeDb(db);
+        return {
+          ok:false,
+          code:'SLOT_CONFLICT',
+          error:errorMessage,
+          request:localRescheduleRequestView(request, true),
+        };
+      };
+
+      if (normalizedDecision === 'approved') {
+        const refs = new Set((request.itemRefs || []).map(String));
+        const oldByRef = new Map((request.oldSchedule?.items || []).map(item => [String(item.ref),item]));
+        const expectedFamilyKey = String(
+          request.bookingFamilyKey || request.bookingGroupRef
+          || request.oldSchedule?.bookingGroupRef || request.bookingRef || '',
+        ).trim();
+        if (!refs.size || refs.size > 8 || oldByRef.size !== refs.size) {
+          return markConflicted(
+            'The saved request evidence is incomplete. Nothing was moved.',
+            'The saved request no longer has a complete booking selection.',
+          );
+        }
+        for (const ref of refs) {
+          const current = db.bookings.find(row => String(row.ref) === ref);
+          const old = oldByRef.get(ref);
+          const currentDuration = Number(current?.duration ?? current?.slots?.length ?? 0);
+          const oldDuration = Number(old?.duration ?? old?.slots?.length ?? 0);
+          const customerEmail = String(request.customer?.email || '').trim().toLowerCase();
+          const currentEmail = String(current?.email || '').trim().toLowerCase();
+          const snapshotMatches = current && old
+            && String(current.status || '').toLowerCase() === 'confirmed'
+            && localRescheduleCourtId(current) === String(old.courtId || '')
+            && String(current.date || '') === String(old.date || '')
+            && localRescheduleSameSlots(current.slots, old.slots)
+            && Number.isInteger(currentDuration) && currentDuration === oldDuration
+            && currentDuration === localRescheduleSlots(current).length
+            && Number(current.rate || 0) === Number(old.rate || 0)
+            && Number(current.total || 0) === Number(old.total || 0)
+            && (!customerEmail || currentEmail === customerEmail)
+            && (!expectedFamilyKey || localRescheduleFamilyKey(current) === expectedFamilyKey);
+          if (!snapshotMatches) {
+            return markConflicted(
+              'The original booking changed after this request was submitted. Nothing was moved.',
+              'The current booking changed after this request was submitted.',
+            );
+          }
+        }
+
+        const eligibility = localRescheduleEligibility(
+          db.bookings.filter(row => refs.has(String(row.ref))),
+          db,
+        );
+        if (!eligibility.eligible) {
+          return markConflicted(
+            `The original booking is now inside the ${eligibility.cutoffHours}-hour reschedule cutoff. Nothing was moved.`,
+            'The booking is now too close to its start time to reschedule.',
+          );
+        }
+
+        const requestedItems = Array.isArray(request.requestedSchedule?.items)
+          ? request.requestedSchedule.items
+          : [];
+        const requestedByRef = new Map(requestedItems.map(item => [String(item.ref),item]));
+        const requestedDate = String(request.requestedSchedule?.requestedDate || '').trim();
+        const requestedRawSlots = Array.isArray(request.requestedSchedule?.requestedSlots)
+          ? request.requestedSchedule.requestedSlots
+          : [];
+        const requestedSlots = localRescheduleSlots({
+          slots:requestedRawSlots,
+        });
+        const requestedEvidenceValid = requestedItems.length === refs.size
+          && requestedByRef.size === refs.size
+          && localRescheduleValidDate(requestedDate)
+          && requestedDate >= _pbMinimumPublicBookingDate()
+          && requestedDate <= localRescheduleMaxDate()
+          && requestedSlots.length > 0
+          && requestedSlots.length <= 24
+          && requestedSlots.length === requestedRawSlots.length
+          && new Set(requestedSlots).size === requestedSlots.length
+          && requestedSlots.every((hour, index) => index === 0 || hour === requestedSlots[index - 1] + 1)
+          && [...refs].every(ref => {
+            const old = oldByRef.get(ref);
+            const requested = requestedByRef.get(ref);
+            return requested && old
+              && String(requested.date || '') === requestedDate
+              && localRescheduleSameSlots(requested.slots, requestedSlots)
+              && localRescheduleCourtId(requested) === String(old.courtId || '')
+              && Number(requested.duration ?? requested.slots?.length ?? 0) === Number(old.duration ?? old.slots?.length ?? 0)
+              && Number(requested.duration ?? requested.slots?.length ?? 0) === requestedSlots.length
+              && Number(requested.rate || 0) === Number(old.rate || 0)
+              && Number(requested.total || 0) === Number(old.total || 0);
+          });
+        if (!requestedEvidenceValid
+            || new Set(requestedItems.map(localRescheduleCourtId)).size !== requestedItems.length) {
+          return markConflicted(
+            'The saved requested schedule is no longer valid. Nothing was moved.',
+            'The saved requested schedule is invalid.',
+          );
+        }
+
+        const noScheduleChange = [...refs].every(ref => {
+          const current = db.bookings.find(row => String(row.ref) === ref);
+          const requested = requestedByRef.get(ref);
+          return String(current?.date || '') === String(requested?.date || '')
+            && localRescheduleSameSlots(current?.slots, requested?.slots);
+        });
+        if (noScheduleChange) {
+          return markConflicted(
+            'The requested schedule is identical to the current reservation. Nothing was moved.',
+            'The request does not change the booking schedule.',
+          );
+        }
+
+        const availability = buildLocalAvailabilityGraphic(
+          requestedDate,
+          requestedItems.map(localRescheduleCourtId),
+          { guestSafe:true, excludeBookingRefs:[...refs] },
+        );
+        const availabilityByCourt = new Map((availability.courts || [])
+          .map(court => [String(court.id), court]));
+        const unavailable = requestedItems.some(item => {
+          const court = availabilityByCourt.get(localRescheduleCourtId(item));
+          return requestedSlots.some(hour => !(court?.slots || [])
+            .some(slot => Number(slot.hour) === hour && slot.state === 'free'));
+        });
+        if (unavailable) {
+          return markConflicted(
+            'The requested schedule is no longer available. Nothing was moved.',
+            'A requested slot was booked or blocked after this request was submitted.',
+          );
+        }
+
+        db.bookings = db.bookings.map(row => {
+          const requested = requestedByRef.get(String(row.ref));
+          return requested ? { ...row,date:requested.date,slots:[...(requested.slots || [])].map(Number),startTime:requested.startTime,endTime:requested.endTime,duration:Number(requested.duration || requested.slots?.length || row.duration) } : row;
+        });
+      }
+      request.status = normalizedDecision;
+      request.canApprove = false;
+      request.canReject = false;
+      request.canWithdraw = false;
+      request.updatedAt = new Date().toISOString();
+      request.reviewedAt = request.updatedAt;
+      if (normalizedDecision === 'approved') request.approvedAt = request.updatedAt;
+      else request.rejectedAt = request.updatedAt;
+      request.decision = {
+        reason:note || (normalizedDecision === 'approved' ? 'Approved by Paddle Rage.' : null),
+        reviewedAt:request.updatedAt,
+        reviewedByRole:session.role,
+      };
+      request.events = [...(request.events || []), { id:localRef('event'),eventType:normalizedDecision,createdAt:request.updatedAt }];
+      request.notification = localRescheduleNotificationSummary();
+      writeDb(db);
+      return { ok:true, request:localRescheduleRequestView(request, true) };
+    },
+    async dispatchBookingRescheduleNotifications() { return { ok:true,skipped:true,reason:'Local data mode' }; },
     async updateBooking(ref, updates) {
       if (updates.date !== undefined) _pbAssertPublicBookingDate(updates.date);
       const db = readDb();

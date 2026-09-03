@@ -188,6 +188,7 @@ try {
     "send-booking-status-email",
     "process-host-balance-deadlines",
     "send-reschedule-email",
+    "booking-reschedule-notifications",
     "send-telegram-notification",
     "submit-public-registration",
     "submit-public-booking",

@@ -4745,6 +4745,32 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
     }
   }
 }
+/* Premium guest reschedule request desk */
+.booking-reschedule-queue{position:relative;min-height:36px;padding:6px 9px 6px 11px;color:var(--text);border:1px solid rgba(var(--yellow-rgb),.4);background:linear-gradient(135deg,rgba(var(--yellow-rgb),.15),rgba(var(--green-rgb),.07));box-shadow:0 8px 24px rgba(0,0,0,.1),inset 0 1px rgba(255,255,255,.06);font-weight:850}
+.booking-reschedule-queue:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.booking-reschedule-queue-icon{color:var(--yellow);font-size:1rem;line-height:1}
+.booking-reschedule-queue-count{min-width:24px;height:24px;padding:0 7px;display:inline-grid;place-items:center;border-radius:999px;background:var(--yellow);color:#17202a;font:900 .68rem/1 'DM Mono',monospace;box-shadow:0 0 0 3px rgba(var(--yellow-rgb),.11)}
+.booking-reschedule-queue.has-pending::after{content:'';position:absolute;width:7px;height:7px;right:-2px;top:-2px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px var(--surface),0 0 14px rgba(229,57,53,.52)}
+.booking-reschedule-note{display:inline-flex;align-items:center;gap:5px;margin-top:6px;padding:4px 7px;border:1px solid rgba(var(--yellow-rgb),.32);border-radius:999px;color:var(--yellow);background:rgba(var(--yellow-rgb),.09);font-size:.63rem;font-weight:900;line-height:1.2;white-space:nowrap}
+.booking-reschedule-note::before{content:'\21C4';font-size:.82rem}
+.brq-overlay{z-index:590;background:rgba(3,9,14,.72);backdrop-filter:blur(12px) saturate(120%)}
+.brq-modal{width:min(1080px,calc(100vw - 32px));max-width:1080px;height:min(760px,calc(100dvh - 42px));display:flex;flex-direction:column;overflow:hidden;border-radius:22px;border:1px solid rgba(var(--yellow-rgb),.28);background:linear-gradient(145deg,var(--surface),var(--bg2));box-shadow:0 36px 90px rgba(0,0,0,.38),0 0 0 1px rgba(255,255,255,.035) inset}
+.brq-head{flex:0 0 auto;z-index:3;padding:19px 22px;background:radial-gradient(circle at 78% -50%,rgba(var(--yellow-rgb),.2),transparent 48%),linear-gradient(120deg,rgba(var(--green-rgb),.13),rgba(var(--yellow-rgb),.045),var(--surface))}
+.brq-heading{display:flex;align-items:center;gap:13px;min-width:0}.brq-mark{width:46px;height:46px;flex:0 0 46px;display:grid;place-items:center;border:1px solid rgba(var(--yellow-rgb),.34);border-radius:14px;background:linear-gradient(145deg,rgba(var(--yellow-rgb),.19),rgba(var(--green-rgb),.1));color:var(--yellow);font-size:1.55rem;box-shadow:inset 0 1px rgba(255,255,255,.08)}
+.brq-kicker{margin-bottom:3px;color:var(--yellow);font-size:.61rem;font-weight:950;letter-spacing:.14em;text-transform:uppercase}.brq-head h2{margin:0;color:var(--text);font:400 1.48rem/1 'Bebas Neue',sans-serif;letter-spacing:.055em}.brq-head p{margin:5px 0 0;color:var(--text3);font-size:.72rem;line-height:1.35}
+.brq-command{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);background:rgba(var(--green-rgb),.035)}
+.brq-tabs{display:inline-flex;gap:4px;padding:4px;border:1px solid var(--border);border-radius:12px;background:var(--bg2)}.brq-tab{min-height:34px;padding:6px 12px;border:0;border-radius:9px;color:var(--text3);background:transparent;font:850 .75rem 'DM Sans',sans-serif;cursor:pointer}.brq-tab span{margin-left:4px;padding:2px 6px;border-radius:999px;background:rgba(var(--yellow-rgb),.12);color:var(--yellow);font-size:.65rem}.brq-tab.active{color:var(--text);background:var(--surface);box-shadow:var(--shadow)}
+.brq-layout{display:grid;grid-template-columns:330px minmax(0,1fr);flex:1;min-height:0}.brq-list-pane{min-height:0;border-right:1px solid var(--border);background:rgba(0,0,0,.025)}.brq-list{height:100%;padding:11px;overflow:auto;scrollbar-width:thin}
+.brq-request-card{width:100%;margin:0 0 9px;padding:12px;display:block;text-align:left;border:1px solid var(--border);border-radius:14px;color:var(--text);background:linear-gradient(145deg,var(--surface),rgba(var(--green-rgb),.02));box-shadow:0 8px 22px rgba(0,0,0,.055);cursor:pointer;transition:.18s ease}.brq-request-card:hover{transform:translateY(-1px);border-color:rgba(var(--yellow-rgb),.34)}.brq-request-card.active{border-color:rgba(var(--yellow-rgb),.58);background:linear-gradient(145deg,rgba(var(--yellow-rgb),.12),rgba(var(--green-rgb),.055));box-shadow:0 11px 28px rgba(var(--yellow-rgb),.08)}
+.brq-card-top,.brq-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:9px}.brq-card-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;font-weight:900}.brq-card-ref{margin-top:3px;color:var(--text3);font:.68rem 'DM Mono',monospace;overflow-wrap:anywhere}.brq-card-route{margin:11px 0 9px;display:grid;grid-template-columns:minmax(0,1fr) 20px minmax(0,1fr);align-items:center;gap:5px}.brq-card-route div{min-width:0;padding:7px 8px;border:1px solid var(--border);border-radius:9px;background:var(--bg2)}.brq-card-route span{display:block;color:var(--text3);font-size:.55rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase}.brq-card-route strong{display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:.69rem}.brq-card-route i{color:var(--yellow);font-style:normal;text-align:center;font-weight:900}.brq-card-bottom{color:var(--text3);font-size:.64rem;font-weight:750}
+.brq-status{display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:999px;font-size:.59rem;font-weight:950;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}.brq-status::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}.brq-status.pending{color:#a96c00;background:rgba(var(--yellow-rgb),.15)}[data-theme="dark"] .brq-status.pending{color:#ffd35f}.brq-status.approved{color:var(--green);background:rgba(var(--green-rgb),.12)}.brq-status.rejected,.brq-status.conflicted{color:var(--red);background:var(--red-bg)}.brq-status.withdrawn,.brq-status.superseded{color:var(--text3);background:var(--input)}
+.brq-detail{min-height:0;padding:20px;overflow:auto}.brq-detail-empty,.brq-empty{min-height:100%;display:grid;place-content:center;justify-items:center;padding:28px;text-align:center;color:var(--text3)}.brq-empty{min-height:240px}.brq-detail-empty-mark,.brq-empty>span{width:54px;height:54px;margin-bottom:12px;display:grid;place-items:center;border:1px solid var(--border);border-radius:17px;color:var(--yellow);background:var(--bg2);font-size:1.45rem}.brq-detail-empty strong,.brq-empty strong{color:var(--text);font-size:.9rem}.brq-detail-empty p,.brq-empty p{max-width:390px;margin:6px 0 0;font-size:.75rem;line-height:1.55}
+.brq-detail-top{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:15px}.brq-detail-top h3{margin:0;color:var(--text);font-size:1.12rem;line-height:1.2}.brq-detail-top p{margin:5px 0 0;color:var(--text3);font:.7rem 'DM Mono',monospace}.brq-customer{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;margin-bottom:14px;padding:12px 14px;border:1px solid var(--border);border-radius:13px;background:linear-gradient(135deg,rgba(var(--green-rgb),.08),rgba(var(--yellow-rgb),.035))}.brq-customer small,.brq-note small,.brq-section-kicker{display:block;color:var(--text3);font-size:.58rem;font-weight:950;letter-spacing:.11em;text-transform:uppercase}.brq-customer strong{display:block;margin-top:4px;color:var(--text);font-size:.84rem;overflow-wrap:anywhere}.brq-customer-email{color:var(--text2);font-size:.73rem;overflow-wrap:anywhere;text-align:right}
+.brq-schedule-grid{display:grid;grid-template-columns:minmax(0,1fr) 42px minmax(0,1fr);gap:10px;align-items:stretch}.brq-schedule{min-width:0;padding:13px;border:1px solid var(--border);border-radius:14px;background:var(--surface)}.brq-schedule.requested{border-color:rgba(var(--yellow-rgb),.36);background:linear-gradient(145deg,rgba(var(--yellow-rgb),.1),var(--surface))}.brq-schedule h4{margin:5px 0 10px;color:var(--text);font-size:.84rem}.brq-route-arrow{display:grid;place-items:center;color:var(--yellow);font-size:1.25rem;font-weight:900}.brq-schedule-item{padding:9px 0;border-top:1px solid var(--border)}.brq-schedule-item:first-of-type{border-top:0;padding-top:0}.brq-schedule-item strong{display:block;color:var(--text);font-size:.78rem}.brq-schedule-item span{display:block;margin-top:3px;color:var(--text2);font-size:.7rem;line-height:1.4}
+.brq-note{margin-top:13px;padding:12px 13px;border-left:3px solid var(--yellow);border-radius:10px;background:rgba(var(--yellow-rgb),.075)}.brq-note p{margin:6px 0 0;color:var(--text2);font-size:.76rem;line-height:1.52;white-space:pre-wrap}.brq-assurance{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.brq-assurance span{padding:5px 8px;border:1px solid rgba(var(--green-rgb),.22);border-radius:999px;background:rgba(var(--green-rgb),.065);color:var(--text2);font-size:.63rem;font-weight:800}.brq-assurance span::before{content:'\2713';margin-right:5px;color:var(--green);font-weight:950}
+.brq-decision{margin-top:15px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--bg2)}.brq-decision label{display:block;margin-bottom:7px;color:var(--text);font-size:.72rem;font-weight:900}.brq-decision textarea{min-height:88px;resize:vertical;line-height:1.45}.brq-decision-help{display:flex;justify-content:space-between;gap:10px;margin-top:6px;color:var(--text3);font-size:.63rem;line-height:1.4}.brq-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;flex-wrap:wrap}.brq-approve{background:linear-gradient(135deg,var(--green),#91bd00);color:#071006;font-weight:950;box-shadow:0 9px 24px rgba(var(--green-rgb),.16)}.brq-approve:hover{transform:translateY(-1px)}.brq-danger{background:transparent;color:var(--red);border:1px solid rgba(229,57,53,.42)}.brq-danger:hover{color:#fff;background:var(--red)}.brq-actions button:disabled,.brq-command button:disabled{opacity:.55;cursor:wait;transform:none}.brq-decision-result{margin-top:14px;padding:12px 13px;border:1px solid var(--border);border-radius:11px;color:var(--text2);font-size:.74rem;line-height:1.5}.brq-decision-result strong{color:var(--text)}.brq-notification{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap;margin-top:10px;color:var(--text3);font-size:.64rem}.brq-notification .btn{min-height:30px;padding:5px 9px;font-size:.66rem}
+@media(max-width:760px){.brq-overlay{align-items:flex-end;padding:0;overflow:hidden}.brq-modal{width:100%;height:min(94dvh,900px);max-height:none;border-radius:22px 22px 0 0}.brq-head{padding:15px 16px}.brq-head p{display:none}.brq-mark{width:40px;height:40px;flex-basis:40px;border-radius:12px}.brq-layout{grid-template-columns:1fr;grid-template-rows:minmax(145px,34%) minmax(0,1fr)}.brq-list-pane{border-right:0;border-bottom:1px solid var(--border)}.brq-list{display:flex;gap:9px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity}.brq-request-card{min-width:min(290px,82vw);margin:0;scroll-snap-align:start}.brq-detail{padding:15px}.brq-schedule-grid{grid-template-columns:1fr}.brq-route-arrow{min-height:20px;transform:rotate(90deg)}.brq-customer{grid-template-columns:1fr}.brq-customer-email{text-align:left}.brq-actions{display:grid;grid-template-columns:1fr}.brq-actions .btn{width:100%;min-height:44px;justify-content:center}}
+@media(max-width:520px){.booking-reschedule-queue{flex:1 1 100%;justify-content:center;order:10}.brq-command{padding:9px 11px}.brq-tab{padding:6px 9px}}
 </style>
 </head>
 <body class="admin-booting" data-theme="dark">
@@ -5060,6 +5086,11 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
           </div>
           <button class="btn btn-g btn-sm booking-export-btn" data-perm="export" onclick="exportCSV()">Export</button>
           <button class="btn btn-sm availability-post-launch" type="button" data-perm="export" onclick="openAvailabilityGraphic()"><span aria-hidden="true">&#10022;</span><span>Availability Post</span></button>
+          <button class="btn btn-sm booking-reschedule-queue" id="bookingRescheduleQueueBtn" type="button" hidden onclick="openBookingRescheduleRequests()">
+            <span class="booking-reschedule-queue-icon" aria-hidden="true">&#8644;</span>
+            <span>Schedule requests</span>
+            <span class="booking-reschedule-queue-count" id="bookingRescheduleQueueCount" aria-label="0 pending requests">0</span>
+          </button>
           <button class="btn btn-p btn-sm" onclick="openNewBookingModal()">+ New</button>
         </div>
       </div>
@@ -6661,6 +6692,44 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
   </div>
 </div>
 
+<!-- CUSTOMER RESCHEDULE REQUEST REVIEW -->
+<div class="overlay brq-overlay" id="bookingRescheduleRequestsModal" aria-hidden="true" hidden inert>
+  <section class="modal brq-modal" role="dialog" aria-modal="true" aria-labelledby="brqTitle" tabindex="-1" onkeydown="bookingRescheduleRequestKeydown(event)">
+    <header class="m-hd brq-head">
+      <div class="brq-heading">
+        <span class="brq-mark" aria-hidden="true">&#8644;</span>
+        <div>
+          <div class="brq-kicker">Guest schedule desk</div>
+          <h2 id="brqTitle">RESCHEDULE REQUESTS</h2>
+          <p>Review the player&rsquo;s current booking beside their requested move.</p>
+        </div>
+      </div>
+      <button class="m-x" type="button" aria-label="Close reschedule requests" onclick="closeBookingRescheduleRequests()">&#10005;</button>
+    </header>
+    <div class="brq-command">
+      <div class="brq-tabs" aria-label="Reschedule request status">
+        <button class="brq-tab active" id="brqPendingTab" type="button" aria-pressed="true" onclick="setBookingRescheduleRequestView('pending')">Pending <span id="brqPendingCount">0</span></button>
+        <button class="brq-tab" id="brqHistoryTab" type="button" aria-pressed="false" onclick="setBookingRescheduleRequestView('history')">History</button>
+      </div>
+      <button class="btn btn-g btn-sm" id="brqRefreshBtn" type="button" onclick="refreshBookingRescheduleRequests({force:true})">Refresh</button>
+    </div>
+    <div class="brq-layout">
+      <aside class="brq-list-pane" aria-label="Reschedule request list">
+        <div class="brq-list" id="brqList" role="group" aria-label="Reschedule requests">
+          <div class="brq-empty"><span aria-hidden="true">&#8987;</span><strong>Loading requests</strong><p>Checking the latest player requests&hellip;</p></div>
+        </div>
+      </aside>
+      <main class="brq-detail" id="brqDetail" aria-live="polite">
+        <div class="brq-detail-empty">
+          <span class="brq-detail-empty-mark" aria-hidden="true">&#8644;</span>
+          <strong>Select a request</strong>
+          <p>Its current and requested schedules will appear here for a safe side-by-side review.</p>
+        </div>
+      </main>
+    </div>
+  </section>
+</div>
+
 <!-- PREPARE REMITTANCE — freezes an exact server-side cutoff -->
 <div class="overlay" id="rmPrepareModal" aria-hidden="true">
   <div class="modal rm-modal" role="dialog" aria-modal="true" aria-labelledby="rmPrepareTitle" tabindex="-1" onkeydown="remittanceModalKeydown(event)">
@@ -7875,6 +7944,7 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true, includeD
   const balanceReviewLocked = hasBalance && balanceReviewState !== 'clear';
   const canRecordManualPayment = hasBalance && !balanceReviewLocked && ['owner','court_owner'].includes(String(sess?.role || ''));
   const canCorrectForfeiture = forfeited && b.hostBooking && ['owner','court_owner'].includes(String(sess?.role || ''));
+  const hasPendingRescheduleRequest = Boolean(pendingRescheduleRequestForBooking(b));
   if (isPlaceholderHold(b)) {
     return `${includePrimaryActions ? bookingDetailsButton(b) : ''}
       ${!['cancelled','forfeited'].includes(String(b.status || '').toLowerCase()) ? `<button class="btn btn-d btn-sm" onclick="updateStatus('${jsArg(actionRef)}','cancelled')">Release Hold</button>` : ''}
@@ -7883,7 +7953,8 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true, includeD
   return `${includePrimaryActions ? `${bookingDetailsButton(b)} ${hostInitialPaymentRejectButton(b)} ${bookingRejectionEmailButton(b)} ${hostBalanceReviewButton(b)} ${hostPaymentHistoryButton(b)}` : ''}
     ${includePrimaryActions && includePaymentTransferActions ? bookingPaymentTransferEmailButton(b) : ''}
     ${includePaymentTransferActions ? bookingDuplicateTransferButton(b) : ''}
-    ${!balanceReviewLocked && !grouped && !['cancelled','forfeited'].includes(b.status)?`<button class="btn btn-sm" style="background:rgba(74,154,220,.12);color:#5a9ad4;border:1px solid rgba(74,154,220,.3)" onclick="openRescheduleModal('${jsArg(actionRef)}')">Reschedule</button>`:''}
+    ${includePrimaryActions ? bookingRescheduleRequestAction(b) : ''}
+    ${!hasPendingRescheduleRequest && !balanceReviewLocked && !grouped && !['cancelled','forfeited'].includes(b.status)?`<button class="btn btn-sm" style="background:rgba(74,154,220,.12);color:#5a9ad4;border:1px solid rgba(74,154,220,.3)" onclick="openRescheduleModal('${jsArg(actionRef)}')">Reschedule</button>`:''}
     ${b.email && (forfeited || (hasBalance && balanceReviewState === 'clear'))?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Notice':'Balance Reminder'}</button>`:''}
     ${b.status==='confirmed' && b.email && !hasBalance?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendConfirmationEmail('${jsArg(actionRef)}')">Resend Email</button>`:''}
     ${canRecordManualPayment?`<button class="btn btn-p btn-sm" onclick="updatePaymentStatus('${jsArg(actionRef)}','paid')">Record Fully Paid</button>`:''}
@@ -8034,6 +8105,7 @@ function mobileBookingCard(b, canDelete){
         ${pendingBalance ? `<span class="mb-book-chip warn">Payment review needed</span>` : `<span class="mb-book-chip ${['unpaid','rejected','failed'].includes(String(b.paymentStatus || '').toLowerCase()) ? 'warn' : ''}">${esc(mobilePayState)}</span>`}
         ${!pendingBalance && deadlineState.label ? `<span class="mb-book-chip warn">${esc(deadlineState.label)}</span>` : ''}
         ${bookingSourceBadge(b)}
+        ${bookingRescheduleRequestBadge(b)}
       </div>
       ${duplicatePaymentRefBadge(b)}
     </div>
@@ -8385,11 +8457,13 @@ function stopAdminRealtime(){
 
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden && _admRtRefreshQueued) scheduleAdminRealtimeRefresh(0);
+  if(!document.hidden) void pollBookingRescheduleRequests({processNotifications:true});
 });
-window.addEventListener('pagehide',event=>{ if(!event.persisted) stopAdminRealtime(); });
+window.addEventListener('pagehide',event=>{ if(!event.persisted) stopAdminRealtime(); if(!event.persisted) stopBookingReschedulePolling(); });
 window.addEventListener('pageshow',event=>{
   if(!event.persisted) return;
   if(!_admRtChannel) startAdminRealtime();
+  startBookingReschedulePolling();
   scheduleAdminRealtimeRefresh(0);
 });
 
@@ -9461,6 +9535,7 @@ function updateBookingPagination(total) {
   if ($('bookingNext')) $('bookingNext').disabled = _bookingPage >= pages;
 }
 async function renderBookings(){
+  const skipRequestRefresh = arguments[0]?.skipRequestRefresh === true;
   const seq = ++_bookingRenderSeq;
   const canDelete=Auth.can('booking_delete', sess.role);
   const body = $('bookBody');
@@ -9475,7 +9550,10 @@ async function renderBookings(){
           return [];
         })
       : Promise.resolve([]);
-    [bks] = await Promise.all([DB.getBookings(), pendingBalances]);
+    const scheduleRequests = canReviewBookingRescheduleRequests() && !skipRequestRefresh
+      ? refreshBookingRescheduleRequests({ silent:true })
+      : Promise.resolve([]);
+    [bks] = await Promise.all([DB.getBookings(), pendingBalances, scheduleRequests]);
   } catch (e) {
     console.error('renderBookings getBookings failed:', e);
     updateBookingFilterMeta(0, 0, bookingFilters());
@@ -9562,7 +9640,7 @@ async function renderBookings(){
       <td data-label="Ref"><code style="color:var(--green);font-size:.76rem">${esc(b.displayRef || b.ref)}</code>${b.isGroup?`<div style="font-size:.68rem;color:var(--muted);margin-top:3px">${b.items.length} courts</div>`:''}</td>
       <td data-label="Customer"><div style="font-weight:600">${esc(b.fullName)}</div><div style="font-size:.75rem;color:var(--text)">${esc(b.email)}</div><div style="margin-top:4px">${bookingSourceBadge(b)}</div></td>
       <td data-label="Court">${esc(b.courtName)}</td>
-      <td data-label="Schedule">${fmtD(b.date)}<div style="font-size:.75rem;color:var(--text);font-weight:600">${esc(b.startTime)}–${esc(b.endTime)}</div></td>
+      <td data-label="Schedule">${fmtD(b.date)}<div style="font-size:.75rem;color:var(--text);font-weight:600">${esc(b.startTime)}–${esc(b.endTime)}</div>${bookingRescheduleRequestBadge(b)}</td>
       <td data-label="Booked On">${b.createdAt ? (() => { const d=new Date(b.createdAt); return d.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'}) + '<div style="font-size:.75rem;color:var(--muted);font-weight:600">' + d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true}) + '</div>'; })() : '<span style="color:var(--muted)">—</span>'}</td>
       <td data-label="Amount">${bookingAmountSummaryHtml(b)}<div class="amount-stack" style="display:none">
         <div class="amount-main">${fmt(b.total)}</div>
@@ -12181,6 +12259,463 @@ async function calOpenBookingSlot(dateStr, courtId, hour) {
   await nbRenderSlots();
   const key = nbCellKey(courtId, hour);
   if (!_nbSelectedCells.has(key)) nbToggleSlot(courtId, hour);
+}
+
+/* ==============================================
+   GUEST RESCHEDULE REQUEST DESK
+   ============================================== */
+let _bookingRescheduleRequests = [];
+let _bookingRescheduleRequestCounts = {};
+let _bookingRescheduleRequestView = 'pending';
+let _bookingRescheduleRequestSelectedId = '';
+let _bookingRescheduleRequestLoadSeq = 0;
+let _bookingRescheduleRequestLastFocus = null;
+let _bookingRescheduleRequestReviewBusy = false;
+let _bookingRescheduleRequestPollTimer = null;
+let _bookingRescheduleRequestPollInFlight = false;
+let _bookingRescheduleRequestOpenSeq = 0;
+const _bookingRescheduleRequestDrafts = new Map();
+
+function canReviewBookingRescheduleRequests() {
+  return ['owner','court_owner'].includes(String(sess?.role || '').toLowerCase());
+}
+
+async function pollBookingRescheduleRequests({ processNotifications = false } = {}) {
+  if (document.hidden || !canReviewBookingRescheduleRequests() || _bookingRescheduleRequestReviewBusy || _bookingRescheduleRequestPollInFlight) return;
+  if ($('bookingRescheduleRequestsModal')?.classList.contains('show')) return;
+  _bookingRescheduleRequestPollInFlight = true;
+  const before = bookingReschedulePendingSignature();
+  try {
+    if (processNotifications && typeof DB.dispatchBookingRescheduleNotifications === 'function') {
+      await DB.dispatchBookingRescheduleNotifications({ limit:5, allowFailure:true }).catch(() => null);
+    }
+    await refreshBookingRescheduleRequests({ force:true, silent:true });
+    if (before !== bookingReschedulePendingSignature() && _curSection === 'bookings') {
+      await renderBookings({ skipRequestRefresh:true });
+    }
+  } finally {
+    _bookingRescheduleRequestPollInFlight = false;
+  }
+}
+
+function startBookingReschedulePolling() {
+  if (_bookingRescheduleRequestPollTimer || !canReviewBookingRescheduleRequests()) return;
+  void pollBookingRescheduleRequests({ processNotifications:true });
+  _bookingRescheduleRequestPollTimer = setInterval(() => {
+    void pollBookingRescheduleRequests({ processNotifications:true });
+  }, 30000);
+}
+
+function stopBookingReschedulePolling() {
+  if (_bookingRescheduleRequestPollTimer) clearInterval(_bookingRescheduleRequestPollTimer);
+  _bookingRescheduleRequestPollTimer = null;
+}
+
+function bookingRescheduleRequestRefs(request) {
+  return [...new Set([
+    request?.bookingRef,
+    request?.bookingGroupRef,
+    ...(Array.isArray(request?.itemRefs) ? request.itemRefs : []),
+    ...((request?.oldSchedule?.items || []).map(item => item?.ref)),
+  ].map(value => String(value || '').trim()).filter(Boolean))];
+}
+
+function bookingReschedulePendingSignature() {
+  return _bookingRescheduleRequests
+    .filter(request => String(request?.status || '').toLowerCase() === 'pending')
+    .map(request => `${request?.id || ''}:${request?.updatedAt || request?.createdAt || ''}`)
+    .sort()
+    .join('|');
+}
+
+function pendingRescheduleRequestForBooking(booking) {
+  if (!booking) return null;
+  const refs = new Set([
+    booking.ref,
+    booking.primaryRef,
+    booking.displayRef,
+    booking.groupRef,
+    ...(Array.isArray(booking.refs) ? booking.refs : []),
+    ...(Array.isArray(booking.items) ? booking.items.map(item => item?.ref) : []),
+  ].map(value => String(value || '').trim()).filter(Boolean));
+  return _bookingRescheduleRequests.find(request =>
+    String(request?.status || '').toLowerCase() === 'pending' &&
+    bookingRescheduleRequestRefs(request).some(ref => refs.has(ref))
+  ) || null;
+}
+
+function bookingRescheduleRequestBadge(booking) {
+  const request = pendingRescheduleRequestForBooking(booking);
+  return request ? '<span class="booking-reschedule-note">Reschedule requested</span>' : '';
+}
+
+function bookingRescheduleRequestAction(booking) {
+  const request = pendingRescheduleRequestForBooking(booking);
+  if (!request || !canReviewBookingRescheduleRequests()) return '';
+  return `<button class="btn btn-sm" style="background:rgba(var(--yellow-rgb),.12);color:var(--yellow);border:1px solid rgba(var(--yellow-rgb),.38);font-weight:900" type="button" onclick="openBookingRescheduleRequests('${jsArg(request.id)}')">Review request</button>`;
+}
+
+function updateBookingRescheduleRequestCount() {
+  const pending = Number(_bookingRescheduleRequestCounts?.pending ?? _bookingRescheduleRequests.filter(request => String(request?.status || '').toLowerCase() === 'pending').length) || 0;
+  const button = $('bookingRescheduleQueueBtn');
+  const count = $('bookingRescheduleQueueCount');
+  const modalCount = $('brqPendingCount');
+  if (button) {
+    button.hidden = !canReviewBookingRescheduleRequests();
+    button.classList.toggle('has-pending', pending > 0);
+    button.setAttribute('aria-label', pending === 1 ? '1 pending schedule request' : `${pending} pending schedule requests`);
+  }
+  if (count) {
+    count.textContent = pending > 99 ? '99+' : String(pending);
+    count.setAttribute('aria-label', pending === 1 ? '1 pending request' : `${pending} pending requests`);
+  }
+  if (modalCount) modalCount.textContent = pending > 99 ? '99+' : String(pending);
+}
+
+function bookingRescheduleDateLabel(value) {
+  return value ? fmtD(String(value).slice(0,10)) : 'Date unavailable';
+}
+
+function bookingRescheduleTimeLabel(schedule) {
+  const items = Array.isArray(schedule?.items) ? schedule.items : [];
+  const first = items[0] || schedule || {};
+  const start = first.startTime || schedule?.startTime || '';
+  const end = first.endTime || schedule?.endTime || '';
+  return start && end ? `${start}–${end}` : start || 'Time unavailable';
+}
+
+function bookingRescheduleCompactLabel(schedule) {
+  const items = Array.isArray(schedule?.items) ? schedule.items : [];
+  const first = items[0] || schedule || {};
+  const date = first.date || schedule?.requestedDate || schedule?.date;
+  const suffix = items.length > 1 ? ` · ${items.length} courts` : '';
+  return `${bookingRescheduleDateLabel(date)} · ${bookingRescheduleTimeLabel(schedule)}${suffix}`;
+}
+
+function bookingRescheduleWhen(value) {
+  const date = new Date(value || '');
+  if (Number.isNaN(date.getTime())) return 'Time unavailable';
+  return date.toLocaleString('en-PH', { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit', hour12:true });
+}
+
+function bookingRescheduleStatusLabel(status) {
+  const labels = { pending:'Pending review', approved:'Approved', rejected:'Declined', withdrawn:'Withdrawn', conflicted:'Slot conflict', superseded:'Superseded' };
+  return labels[String(status || '').toLowerCase()] || String(status || 'Unknown');
+}
+
+function bookingRescheduleRequestListRows() {
+  const pending = _bookingRescheduleRequestView === 'pending';
+  return _bookingRescheduleRequests
+    .filter(request => (String(request?.status || '').toLowerCase() === 'pending') === pending)
+    .sort((a,b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
+function renderBookingRescheduleRequestList() {
+  const list = $('brqList');
+  if (!list) return;
+  const rows = bookingRescheduleRequestListRows();
+  if (!rows.length) {
+    list.innerHTML = `<div class="brq-empty"><span aria-hidden="true">${_bookingRescheduleRequestView === 'pending' ? '&#10003;' : '&#8644;'}</span><strong>${_bookingRescheduleRequestView === 'pending' ? 'You are all caught up' : 'No request history yet'}</strong><p>${_bookingRescheduleRequestView === 'pending' ? 'New player schedule requests will appear here without changing their current reservations.' : 'Approved, declined, withdrawn, and conflicted requests will appear here.'}</p></div>`;
+    const detail = $('brqDetail');
+    if (detail) detail.innerHTML = '<div class="brq-detail-empty"><span class="brq-detail-empty-mark" aria-hidden="true">&#8644;</span><strong>No request selected</strong><p>Choose another request view or wait for a player to submit one.</p></div>';
+    return;
+  }
+  if (!rows.some(request => String(request.id) === String(_bookingRescheduleRequestSelectedId))) {
+    _bookingRescheduleRequestSelectedId = String(rows[0].id || '');
+  }
+  list.innerHTML = rows.map(request => {
+    const status = String(request.status || 'pending').toLowerCase();
+    const active = String(request.id) === String(_bookingRescheduleRequestSelectedId);
+    return `<button class="brq-request-card${active?' active':''}" type="button" aria-pressed="${active?'true':'false'}" onclick="selectBookingRescheduleRequest('${jsArg(request.id)}')">
+      <div class="brq-card-top"><span class="brq-card-name">${esc(request?.customer?.name || 'Player')}</span><span class="brq-status ${esc(status)}">${esc(bookingRescheduleStatusLabel(status))}</span></div>
+      <div class="brq-card-ref">${esc(request.bookingRef || request.bookingGroupRef || '')}</div>
+      <div class="brq-card-route"><div><span>Current</span><strong>${esc(bookingRescheduleCompactLabel(request.oldSchedule))}</strong></div><i aria-hidden="true">&#8594;</i><div><span>Requested</span><strong>${esc(bookingRescheduleCompactLabel(request.requestedSchedule))}</strong></div></div>
+      <div class="brq-card-bottom"><span>${esc(bookingRescheduleWhen(request.createdAt))}</span><span>${Number(request.itemRefs?.length || request.oldSchedule?.items?.length || 1)} item${Number(request.itemRefs?.length || request.oldSchedule?.items?.length || 1)===1?'':'s'}</span></div>
+    </button>`;
+  }).join('');
+  const selected = rows.find(request => String(request.id) === String(_bookingRescheduleRequestSelectedId));
+  if (selected) renderBookingRescheduleRequestDetail(selected);
+}
+
+function bookingRescheduleScheduleItems(schedule, requested = false) {
+  const items = Array.isArray(schedule?.items) && schedule.items.length ? schedule.items : [schedule || {}];
+  return items.map(item => {
+    const date = item.date || (requested ? schedule?.requestedDate : schedule?.date);
+    const time = (item.startTime || schedule?.startTime) && (item.endTime || schedule?.endTime)
+      ? `${item.startTime || schedule.startTime}–${item.endTime || schedule.endTime}`
+      : bookingRescheduleTimeLabel({ ...schedule, items:[item] });
+    return `<div class="brq-schedule-item"><strong>${esc(item.courtName || 'Court')}</strong><span>${esc(bookingRescheduleDateLabel(date))}<br>${esc(time)} · ${Number(item.duration || schedule?.duration || item.slots?.length || 0)} hour${Number(item.duration || schedule?.duration || item.slots?.length || 0)===1?'':'s'}</span></div>`;
+  }).join('');
+}
+
+function bookingRescheduleNotificationLabel(notification) {
+  if (!notification || typeof notification !== 'object') return 'Notification status is not available.';
+  const sent = Number(notification.sent || 0);
+  const pending = Number(notification.pending || 0);
+  const processing = Number(notification.processing || 0);
+  const failed = Number(notification.failed || 0);
+  const retryable = Number(notification.retryable ?? failed);
+  const exhausted = Number(notification.exhausted || 0);
+  const parts = [];
+  if (sent) parts.push(`${sent} sent`);
+  if (pending) parts.push(`${pending} queued`);
+  if (processing) parts.push(`${processing} sending`);
+  if (retryable) parts.push(`${retryable} needs retry`);
+  if (exhausted) parts.push(`${exhausted} needs manual follow-up`);
+  return parts.length ? `Notifications: ${parts.join(' · ')}` : 'No notification delivery is pending.';
+}
+
+function renderBookingRescheduleRequestDetail(request) {
+  const detail = $('brqDetail');
+  if (!detail || !request) return;
+  const status = String(request.status || 'pending').toLowerCase();
+  const pending = status === 'pending';
+  const canApprove = pending && request.canApprove !== false;
+  const canReject = pending && request.canReject !== false;
+  const decision = request.decision || {};
+  const pendingNotifications = Number(request?.notification?.pending || 0);
+  const failedNotifications = Number(request?.notification?.failed || 0);
+  const retryableNotifications = Number(request?.notification?.retryable ?? (pendingNotifications + failedNotifications));
+  const oldScheduleCopy = pending
+    ? { kicker:'Current reservation', heading:'This stays reserved until approval' }
+    : status === 'approved'
+      ? { kicker:'Previous schedule', heading:'Original reservation time' }
+      : { kicker:'Schedule at request time', heading:'No change was made by this request' };
+  const requestedScheduleCopy = pending
+    ? { kicker:'Player requested', heading:'Availability rechecked on approval' }
+    : status === 'approved'
+      ? { kicker:'Confirmed schedule', heading:'Approved and moved together' }
+      : { kicker:'Requested schedule', heading:'Not applied to the booking' };
+  detail.innerHTML = `<article>
+    <div class="brq-detail-top"><div><h3>${esc(request?.customer?.name || 'Player schedule request')}</h3><p>${esc(request.bookingRef || request.bookingGroupRef || '')}</p></div><span class="brq-status ${esc(status)}">${esc(bookingRescheduleStatusLabel(status))}</span></div>
+    <div class="brq-customer"><div><small>Player</small><strong>${esc(request?.customer?.name || 'Player')}</strong></div><div class="brq-customer-email">${esc(request?.customer?.email || '')}</div></div>
+    <div class="brq-schedule-grid">
+      <section class="brq-schedule"><span class="brq-section-kicker">${oldScheduleCopy.kicker}</span><h4>${oldScheduleCopy.heading}</h4>${bookingRescheduleScheduleItems(request.oldSchedule)}</section>
+      <div class="brq-route-arrow" aria-hidden="true">&#8594;</div>
+      <section class="brq-schedule requested"><span class="brq-section-kicker">${requestedScheduleCopy.kicker}</span><h4>${requestedScheduleCopy.heading}</h4>${bookingRescheduleScheduleItems(request.requestedSchedule,true)}</section>
+    </div>
+    ${request.note ? `<div class="brq-note"><small>Player note</small><p>${esc(request.note)}</p></div>` : ''}
+    <div class="brq-assurance"><span>Same booking reference</span><span>Payment record preserved</span><span>No refund created</span><span>Atomic slot check</span></div>
+    ${pending ? `<section class="brq-decision"><label for="brqDecisionReason">Decision note <span style="color:var(--text3);font-weight:700">(required when declining)</span></label><textarea class="fi" id="brqDecisionReason" maxlength="500" placeholder="Give the player a clear reason, or add an optional note when approving."></textarea><div class="brq-decision-help"><span>The player receives your decision by email.</span><span id="brqDecisionLength">0 / 500</span></div><div class="brq-actions"><button class="btn brq-danger" id="brqRejectBtn" type="button" ${canReject?'':'disabled'} onclick="reviewBookingRescheduleRequest('rejected')">Decline &amp; notify</button><button class="btn brq-approve" id="brqApproveBtn" type="button" ${canApprove?'':'disabled'} onclick="reviewBookingRescheduleRequest('approved')">Approve new schedule</button></div></section>` : `<div class="brq-decision-result"><strong>${esc(bookingRescheduleStatusLabel(status))}</strong>${decision.reviewedAt ? ` on ${esc(bookingRescheduleWhen(decision.reviewedAt))}` : ''}.${decision.reason ? `<br>${esc(decision.reason)}` : ''}</div>`}
+    <div class="brq-notification"><span>Submitted ${esc(bookingRescheduleWhen(request.createdAt))} · ${esc(bookingRescheduleNotificationLabel(request.notification))}</span>${retryableNotifications > 0 ? `<button class="btn btn-g btn-sm" id="brqRetryBtn" type="button" aria-label="Process or retry notification delivery" onclick="retryBookingRescheduleNotifications('${jsArg(request.id)}')">Retry delivery</button>` : ''}</div>
+  </article>`;
+  const reason = $('brqDecisionReason');
+  if (reason) {
+    const requestId = String(request.id || '');
+    reason.value = _bookingRescheduleRequestDrafts.get(requestId) || '';
+    const updateDraft = () => {
+      _bookingRescheduleRequestDrafts.set(requestId, reason.value);
+      const count = $('brqDecisionLength');
+      if (count) count.textContent = `${reason.value.length} / 500`;
+    };
+    updateDraft();
+    reason.addEventListener('input', updateDraft);
+  }
+}
+
+async function retryBookingRescheduleNotifications(requestId) {
+  const button = $('brqRetryBtn');
+  if (button) { button.disabled = true; button.setAttribute('aria-busy','true'); button.textContent = 'Retrying…'; }
+  try {
+    const result = await DB.dispatchBookingRescheduleNotifications({ action:'retry', requestId, allowFailure:false });
+    if (result?.ok === false) throw new Error(result.error || 'Notification delivery failed.');
+    toast(result?.skipped ? 'There is no notification ready to retry.' : 'Notification delivery completed.');
+    await refreshBookingRescheduleRequests({ force:true, silent:true });
+    await selectBookingRescheduleRequest(requestId);
+  } catch (error) {
+    toast(error?.message || 'Could not retry notification delivery.', 'err');
+    if (button?.isConnected) { button.disabled = false; button.removeAttribute('aria-busy'); button.textContent = 'Retry delivery'; }
+  }
+}
+
+async function refreshBookingRescheduleRequests({ force = false, silent = false } = {}) {
+  if (!canReviewBookingRescheduleRequests() || typeof DB.listBookingRescheduleRequests !== 'function') {
+    _bookingRescheduleRequests = [];
+    _bookingRescheduleRequestCounts = {};
+    updateBookingRescheduleRequestCount();
+    return [];
+  }
+  const seq = ++_bookingRescheduleRequestLoadSeq;
+  const refresh = $('brqRefreshBtn');
+  if (refresh) { refresh.disabled = true; refresh.setAttribute('aria-busy','true'); }
+  try {
+    const result = await DB.listBookingRescheduleRequests(null, 200, { force });
+    if (seq !== _bookingRescheduleRequestLoadSeq) return _bookingRescheduleRequests;
+    const compatible = Array.isArray(result?.requests) ? result.requests : Array.isArray(result) ? result : [];
+    const pending = Array.isArray(result?.pendingRequests)
+      ? result.pendingRequests
+      : compatible.filter(request => String(request?.status || '').toLowerCase() === 'pending');
+    const history = Array.isArray(result?.historyRequests)
+      ? result.historyRequests
+      : compatible.filter(request => String(request?.status || '').toLowerCase() !== 'pending');
+    _bookingRescheduleRequests = [...new Map([...pending, ...history].map(request => [String(request?.id || ''), request])).values()];
+    _bookingRescheduleRequestCounts = result?.counts && typeof result.counts === 'object' ? result.counts : {};
+    updateBookingRescheduleRequestCount();
+    if ($('bookingRescheduleRequestsModal')?.classList.contains('show')) renderBookingRescheduleRequestList();
+    return _bookingRescheduleRequests;
+  } catch (error) {
+    console.error('refreshBookingRescheduleRequests:', error);
+    if (!silent) toast(error?.message || 'Could not load schedule requests.', 'err');
+    return _bookingRescheduleRequests;
+  } finally {
+    if (seq === _bookingRescheduleRequestLoadSeq && refresh) { refresh.disabled = false; refresh.removeAttribute('aria-busy'); }
+  }
+}
+
+async function selectBookingRescheduleRequest(requestId) {
+  _bookingRescheduleRequestSelectedId = String(requestId || '');
+  renderBookingRescheduleRequestList();
+  const detail = $('brqDetail');
+  if (detail) detail.setAttribute('aria-busy','true');
+  try {
+    const result = typeof DB.getBookingRescheduleRequest === 'function'
+      ? await DB.getBookingRescheduleRequest(_bookingRescheduleRequestSelectedId)
+      : null;
+    const request = result?.request || result;
+    if (request?.id && String(request.id) === _bookingRescheduleRequestSelectedId) {
+      const index = _bookingRescheduleRequests.findIndex(item => String(item.id) === _bookingRescheduleRequestSelectedId);
+      if (index >= 0) _bookingRescheduleRequests[index] = request;
+      renderBookingRescheduleRequestList();
+    }
+  } catch (error) {
+    console.error('selectBookingRescheduleRequest:', error);
+    toast(error?.message || 'Could not load this request.', 'err');
+  } finally {
+    if (detail) detail.removeAttribute('aria-busy');
+  }
+}
+
+async function openBookingRescheduleRequests(requestId = '') {
+  if (!canReviewBookingRescheduleRequests()) { toast('Only an owner can review schedule requests.', 'err'); return; }
+  const openSeq = ++_bookingRescheduleRequestOpenSeq;
+  _bookingRescheduleRequestLastFocus = document.activeElement;
+  const targetId = String(requestId || '');
+  if (targetId) _bookingRescheduleRequestSelectedId = targetId;
+  const modal = $('bookingRescheduleRequestsModal');
+  modal.hidden = false;
+  modal.inert = false;
+  modal.classList.add('show');
+  modal.setAttribute('aria-hidden','false');
+  document.body.style.overflow = 'hidden';
+  await refreshBookingRescheduleRequests({ force:true });
+  if (openSeq !== _bookingRescheduleRequestOpenSeq || !modal.classList.contains('show')) return;
+  let target = targetId ? _bookingRescheduleRequests.find(request => String(request?.id) === targetId) : null;
+  if (targetId && typeof DB.getBookingRescheduleRequest === 'function') {
+    try {
+      const result = await DB.getBookingRescheduleRequest(targetId);
+      if (openSeq !== _bookingRescheduleRequestOpenSeq || !modal.classList.contains('show')) return;
+      const canonical = result?.request || result;
+      if (canonical?.id) {
+        target = canonical;
+        const index = _bookingRescheduleRequests.findIndex(request => String(request?.id) === targetId);
+        if (index >= 0) _bookingRescheduleRequests[index] = canonical;
+        else _bookingRescheduleRequests.unshift(canonical);
+      }
+    } catch (error) {
+      console.error('openBookingRescheduleRequests target:', error);
+    }
+  }
+  if (openSeq !== _bookingRescheduleRequestOpenSeq || !modal.classList.contains('show')) return;
+  if (target?.id) {
+    _bookingRescheduleRequestView = String(target.status || '').toLowerCase() === 'pending' ? 'pending' : 'history';
+    syncBookingRescheduleRequestViewControls();
+    _bookingRescheduleRequestSelectedId = String(target.id);
+  }
+  renderBookingRescheduleRequestList();
+  if (!targetId && _bookingRescheduleRequestSelectedId) await selectBookingRescheduleRequest(_bookingRescheduleRequestSelectedId);
+  if (openSeq !== _bookingRescheduleRequestOpenSeq || !modal.classList.contains('show')) return;
+  requestAnimationFrame(() => modal.querySelector('.brq-modal')?.focus());
+}
+
+function closeBookingRescheduleRequests() {
+  if (_bookingRescheduleRequestReviewBusy) { toast('Please wait while this decision is saved.', 'inf'); return; }
+  const modal = $('bookingRescheduleRequestsModal');
+  if (!modal) return;
+  _bookingRescheduleRequestOpenSeq += 1;
+  modal.classList.remove('show');
+  modal.setAttribute('aria-hidden','true');
+  modal.inert = true;
+  modal.hidden = true;
+  document.body.style.overflow = '';
+  if (_bookingRescheduleRequestLastFocus?.isConnected) _bookingRescheduleRequestLastFocus.focus();
+  _bookingRescheduleRequestLastFocus = null;
+}
+
+function bookingRescheduleRequestKeydown(event) {
+  if (event.key === 'Escape' && !_bookingRescheduleRequestReviewBusy) { event.preventDefault(); closeBookingRescheduleRequests(); return; }
+  if (event.key !== 'Tab') return;
+  const modal = $('bookingRescheduleRequestsModal');
+  const focusable = [...modal.querySelectorAll('button:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(el => !el.hidden && el.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+}
+
+function syncBookingRescheduleRequestViewControls() {
+  $('brqPendingTab')?.classList.toggle('active', _bookingRescheduleRequestView === 'pending');
+  $('brqHistoryTab')?.classList.toggle('active', _bookingRescheduleRequestView === 'history');
+  $('brqPendingTab')?.setAttribute('aria-pressed', _bookingRescheduleRequestView === 'pending' ? 'true' : 'false');
+  $('brqHistoryTab')?.setAttribute('aria-pressed', _bookingRescheduleRequestView === 'history' ? 'true' : 'false');
+}
+
+function setBookingRescheduleRequestView(view) {
+  _bookingRescheduleRequestView = view === 'history' ? 'history' : 'pending';
+  syncBookingRescheduleRequestViewControls();
+  _bookingRescheduleRequestSelectedId = '';
+  renderBookingRescheduleRequestList();
+}
+
+async function reviewBookingRescheduleRequest(decision) {
+  if (_bookingRescheduleRequestReviewBusy) return;
+  const requestId = String(_bookingRescheduleRequestSelectedId || '');
+  const request = _bookingRescheduleRequests.find(item => String(item.id) === requestId);
+  if (!request || String(request.status || '').toLowerCase() !== 'pending') { toast('This request is no longer pending.', 'inf'); return; }
+  const reason = String($('brqDecisionReason')?.value || '').trim();
+  if (decision === 'rejected' && reason.length < 5) { toast('Enter a clear reason before declining this request.', 'err'); $('brqDecisionReason')?.focus(); return; }
+  if (decision === 'approved' && !confirm('Approve this requested schedule?\n\nEvery selected court will move together only if all requested slots are still available.')) return;
+  _bookingRescheduleRequestReviewBusy = true;
+  const buttons = [$('brqApproveBtn'),$('brqRejectBtn')].filter(Boolean);
+  buttons.forEach(button => { button.disabled = true; button.setAttribute('aria-busy','true'); });
+  const action = decision === 'approved' ? 'Approving schedule…' : 'Declining request…';
+  const activeButton = decision === 'approved' ? $('brqApproveBtn') : $('brqRejectBtn');
+  const idleLabel = activeButton?.textContent || '';
+  if (activeButton) activeButton.textContent = action;
+  try {
+    const result = await DB.reviewBookingRescheduleRequest(requestId, decision, reason);
+    const reviewed = result?.request || result;
+    const delivery = await DB.dispatchBookingRescheduleNotifications?.({ requestId, allowFailure:true }).catch(() => null);
+    const delivered = delivery?.ok === true && delivery?.skipped !== true;
+    const conflicted = result?.ok === false && String(reviewed?.status || '').toLowerCase() === 'conflicted';
+    if (conflicted) {
+      toast(delivered
+        ? 'That time was just booked. Nothing moved, and the player was notified.'
+        : 'That time was just booked. Nothing moved; the player notification is queued for retry.', 'inf');
+    } else {
+      toast(decision === 'approved'
+        ? delivered ? 'New schedule approved and the player was notified.' : 'New schedule approved. The player notification is queued for retry.'
+        : delivered ? 'Request declined and the player was notified.' : 'Request declined. The player notification is queued for retry.', delivered ? 'ok' : 'inf');
+    }
+    if (reviewed?.id) {
+      _bookingRescheduleRequestDrafts.delete(String(reviewed.id));
+      const index = _bookingRescheduleRequests.findIndex(item => String(item.id) === String(reviewed.id));
+      if (index >= 0) _bookingRescheduleRequests[index] = reviewed;
+    }
+    await Promise.all([
+      refreshBookingRescheduleRequests({ force:true, silent:true }),
+      renderBookings({ skipRequestRefresh:true }),
+    ]);
+    renderDash();
+    renderBookingRescheduleRequestList();
+  } catch (error) {
+    console.error('reviewBookingRescheduleRequest:', error);
+    toast(error?.message || 'Could not save this schedule decision.', 'err');
+    await refreshBookingRescheduleRequests({ force:true, silent:true });
+  } finally {
+    _bookingRescheduleRequestReviewBusy = false;
+    buttons.forEach(button => { if (button?.isConnected) { button.disabled = false; button.removeAttribute('aria-busy'); } });
+    if (activeButton?.isConnected) activeButton.textContent = idleLabel;
+  }
 }
 
 /* ==============================================
@@ -16897,6 +17432,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     else if(ov.id==='verifyModal') closeVerifyModal();
     else if(ov.id==='bookingPaymentRejectModal') closeBookingPaymentRejectModal();
     else if(ov.id==='bookingPaymentTransferModal') closeBookingPaymentTransferModal();
+    else if(ov.id==='bookingRescheduleRequestsModal') closeBookingRescheduleRequests();
     else if(ov.id==='opVerifyModal') closeModal('opVerifyModal');
     else if(['rmPrepareModal','rmPayModal','rmReviewModal','rmDetailModal','rmCancelModal'].includes(ov.id)) closeRemittanceModal(ov.id);
     else ov.classList.remove('show');
@@ -16913,6 +17449,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
   const gated = await checkAgreementGate(sess);
   if (!gated) await goto(initialSection,{historyMode:'replace',announceDenied:false});
   startAdminRealtime();
+  startBookingReschedulePolling();
   finishAdminBoot();
   } catch (error) {
     console.error('[admin boot]', error);
@@ -17206,7 +17743,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260903-owner-preview-v2"></script>
+<script src="supabase-config.js?v=20260904-reschedule-v1"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260902-availability-studio-v5"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>

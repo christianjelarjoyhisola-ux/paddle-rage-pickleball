@@ -32,6 +32,9 @@ verify_jwt = false
 [functions.send-reschedule-email]
 verify_jwt = true
 
+[functions.booking-reschedule-notifications]
+verify_jwt = true
+
 [functions.send-telegram-notification]
 verify_jwt = true
 

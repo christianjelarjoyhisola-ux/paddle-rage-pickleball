@@ -2099,7 +2099,7 @@ test("admin hides the default dashboard until the restored section is ready", ()
   );
   assert.match(
     admin,
-    /await goto\(initialSection,\{historyMode:'replace',announceDenied:false\}\)[\s\S]*?startAdminRealtime\(\);\s*finishAdminBoot\(\)/i
+    /await goto\(initialSection,\{historyMode:'replace',announceDenied:false\}\)[\s\S]*?startAdminRealtime\(\);[\s\S]*?finishAdminBoot\(\)/i
   );
   assert.match(admin, /catch \(error\) \{[\s\S]*?showAdminBootError\(/i);
 });
