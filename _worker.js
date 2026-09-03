@@ -18,12 +18,14 @@ export default {
       '/host-balance-admin.js',
       '/owner-insights.js',
       '/owner-insights.css',
+      '/manage-booking.js',
+      '/manage-booking.css',
     ]);
     const isSharedRuntime = url.pathname === '/supabase-config.js' ||
       releaseCoupledRuntime.has(url.pathname);
     const isHtmlEntry = url.pathname === '/' ||
       url.pathname.endsWith('.html') ||
-      ['/admin', '/host', '/login', '/player-live'].includes(url.pathname);
+      ['/admin', '/host', '/login', '/manage-booking', '/player-live'].includes(url.pathname);
     if (!isSharedRuntime && !isHtmlEntry) return response;
 
     // Pages' advanced-mode asset binding can attach a four-hour cache policy

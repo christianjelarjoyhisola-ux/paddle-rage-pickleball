@@ -48,3 +48,13 @@
 
 /availability-graphic.css
   Cache-Control: no-store, max-age=0
+
+/manage-booking.html
+  Cache-Control: no-cache
+  Referrer-Policy: no-referrer
+
+/manage-booking.js
+  Cache-Control: no-store, max-age=0
+
+/manage-booking.css
+  Cache-Control: no-store, max-age=0

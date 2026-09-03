@@ -333,7 +333,11 @@ export function renderConfirmationEmail(
 ): { html: string; plain: string } {
   const items = getConfirmationItems(payload);
   const name = escapeHtml(payload.fullName || "Player");
-  const ref = escapeHtml(payload.bookingRef);
+  const rawRef = plain(payload.bookingRef);
+  const ref = escapeHtml(rawRef);
+  const manageUrl = `${publicUrl()}/manage-booking.html#ref=${
+    encodeURIComponent(rawRef)
+  }`;
   const total = Number(
     payload.total ||
       items.reduce((sum, item) => sum + Number(item.total || 0), 0),
@@ -398,8 +402,12 @@ export function renderConfirmationEmail(
   const bodyHtml = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;background:${BRAND.surfaceRaised};border:1px solid ${BRAND.border};border-radius:13px;">
       <tr><td style="padding:18px 20px;">
-        <div style="font-size:11px;line-height:1.3;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:${BRAND.muted};">Booking reference</div>
+        <div style="font-size:11px;line-height:1.3;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:${BRAND.muted};">Paddle Rage booking reference</div>
         <div style="margin-top:5px;font-family:Consolas,'Courier New',monospace;font-size:19px;line-height:1.35;font-weight:900;letter-spacing:.8px;color:${BRAND.neon};overflow-wrap:anywhere;">${ref}</div>
+        <div style="margin-top:8px;font-size:12px;line-height:1.55;color:${BRAND.muted};">This <strong style="color:${BRAND.text};">PB-...</strong> number is not your GCash, Maya, BDO Pay, BPI, bank, or e-wallet payment reference.</div>
+        <div style="margin-top:16px;">
+          <a href="${escapeHtml(manageUrl)}" style="display:inline-block;padding:13px 20px;border-radius:10px;background:${BRAND.neon};color:${BRAND.black};font-size:14px;line-height:1.2;font-weight:900;text-decoration:none;">View booking status</a>
+        </div>
       </td></tr>
     </table>
     <table role="presentation" class="detail-table" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;border:1px solid ${BRAND.border};border-radius:13px;">
@@ -489,7 +497,7 @@ export function renderConfirmationEmail(
         `<p style="margin:0 0 10px;">Hi <strong>${name}</strong>,</p><p style="margin:0;">Great news&mdash;${confirmationIntro}</p>`,
       bodyHtml,
       footerText:
-        "Questions or changes? Contact the Paddle Rage team and include your booking reference.",
+        "Need to view your status or request a reschedule? Use Manage booking on the device used to reserve, or contact Paddle Rage for help.",
     }),
     plain: `PADDLE RAGE PICKLEBALL\nBOOKING CONFIRMED\n\nHi ${
       plain(payload.fullName || "Player")
@@ -499,7 +507,7 @@ export function renderConfirmationEmail(
       duration !== 1 ? "s" : ""
     }\nTotal: ${formatPhpPlain(total)}\nPaid: ${
       formatPhpPlain(paid)
-    }\n${plainPayment}\n\nPlease arrive 10 minutes early and keep your booking reference ready.\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
+    }\n${plainPayment}\n\nPlease arrive 10 minutes early and keep your booking reference ready.\nThis PB- number is your Paddle Rage booking reference, not your bank or e-wallet payment reference.\nView booking status: ${manageUrl}\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
   };
 }
 

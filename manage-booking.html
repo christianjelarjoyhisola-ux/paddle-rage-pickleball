@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Manage Booking — Paddle Rage Pickleball</title>
+  <meta name="description" content="Privately check the status, schedule, and payment summary for your Paddle Rage Pickleball booking." />
+  <meta name="theme-color" content="#0b2d4d" />
+  <meta name="paddle-rage-contact-email" content="bookings@paddleragecdo.ph" />
+  <link rel="canonical" href="https://paddleragecdo.ph/manage-booking.html" />
+  <link rel="icon" type="image/jpeg" href="paddleragelogo.jpg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="manage-booking.css?v=20260903-manage-booking-v1" />
+  <script defer src="supabase.min.js"></script>
+  <script defer src="supabase-config.js?v=20260903-manage-booking-v1"></script>
+  <script defer src="manage-booking.js?v=20260903-manage-booking-v1"></script>
+</head>
+<body>
+  <a class="skip-link" href="#manageMain">Skip to booking lookup</a>
+
+  <header class="site-header">
+    <a class="brand" href="index.html#courts" aria-label="Paddle Rage Pickleball — book a court">
+      <img class="brand-logo" src="paddleragelogo.jpg" alt="" width="48" height="48" />
+      <span class="brand-copy">
+        <strong>Paddle Rage Pickleball</strong>
+        <span>Iponan, Cagayan de Oro</span>
+      </span>
+    </a>
+    <a class="header-book-link" href="index.html#courts">Book a court <span aria-hidden="true">→</span></a>
+  </header>
+
+  <main class="page-shell" id="manageMain">
+    <div class="page-heading">
+      <div>
+        <p class="page-eyebrow">Your reservations</p>
+        <h1>Manage your booking</h1>
+      </div>
+      <nav class="mode-switch" aria-label="Booking navigation">
+        <a href="index.html#courts">Book a court</a>
+        <a class="is-active" href="manage-booking.html" aria-current="page">Manage booking</a>
+      </nav>
+    </div>
+
+    <section class="manage-card" aria-labelledby="lookupTitle">
+      <aside class="brand-panel" aria-label="Booking management introduction">
+        <div class="brand-orbit brand-orbit-one" aria-hidden="true"></div>
+        <div class="brand-orbit brand-orbit-two" aria-hidden="true"></div>
+        <div class="brand-ball" aria-hidden="true"></div>
+        <div class="brand-dot" aria-hidden="true"></div>
+        <div class="brand-panel-content">
+          <p class="panel-eyebrow">Existing booking</p>
+          <h2>View your booking status.</h2>
+          <p>Check your schedule and payment progress, or contact our team to request an eligible reschedule.</p>
+          <ul class="benefit-list" aria-label="Available booking information">
+            <li><span aria-hidden="true">✓</span> Live booking status</li>
+            <li><span aria-hidden="true">✓</span> Schedule and court details</li>
+            <li><span aria-hidden="true">✓</span> Payment summary</li>
+          </ul>
+        </div>
+      </aside>
+
+      <div class="lookup-panel">
+        <div class="lookup-intro">
+          <p class="section-kicker">Private booking lookup</p>
+          <h2 id="lookupTitle">Enter your booking details</h2>
+          <p>Use the Paddle Rage reference and booking email shown in your confirmation.</p>
+        </div>
+
+        <form class="lookup-form" id="bookingLookupForm" novalidate>
+          <div class="field reference-field">
+            <label for="bookingRef">Paddle Rage booking reference</label>
+            <input
+              id="bookingRef"
+              name="bookingRef"
+              type="text"
+              placeholder="e.g. PB-MTKD3YBP-Z2HS"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              maxlength="72"
+              aria-describedby="bookingRefHelp bookingRefDisclosure"
+              required
+            />
+            <p class="field-help" id="bookingRefHelp">Starts with PB-. Don’t enter your bank or e-wallet payment reference.</p>
+            <details class="reference-disclosure" id="bookingRefDisclosure">
+              <summary>Where can I find it?</summary>
+              <p>Your Paddle Rage booking reference appears on the confirmation screen and in your booking email. It starts with <strong>PB-</strong>.</p>
+            </details>
+          </div>
+
+          <div class="field email-field">
+            <label for="bookingEmail">Booking email</label>
+            <input
+              id="bookingEmail"
+              name="bookingEmail"
+              type="email"
+              placeholder="you@example.com"
+              autocomplete="email"
+              inputmode="email"
+              autocapitalize="none"
+              spellcheck="false"
+              maxlength="254"
+              aria-describedby="bookingEmailHelp"
+              required
+            />
+            <p class="field-help" id="bookingEmailHelp">Enter the email used when this booking was made.</p>
+          </div>
+
+          <div class="submit-field">
+            <button class="lookup-button" id="lookupButton" type="submit">
+              <span class="button-label">Find my booking</span>
+              <span class="button-arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        </form>
+
+        <div class="form-feedback" id="formFeedback" role="status" aria-live="polite" aria-atomic="true"></div>
+
+        <div class="lookup-divider" aria-hidden="true"></div>
+
+        <section class="result-region" id="bookingResult" aria-live="polite" aria-busy="false" tabindex="-1">
+          <div class="empty-state">
+            <div class="empty-icon" aria-hidden="true">
+              <svg viewBox="0 0 48 48" role="img">
+                <circle cx="21" cy="21" r="10"></circle>
+                <path d="m29 29 9 9"></path>
+                <path d="M17 21h8M21 17v8"></path>
+              </svg>
+            </div>
+            <h2>Your booking details will appear here</h2>
+            <p>Once found, you can view the schedule, payment status, and available support options.</p>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <p class="privacy-note"><span aria-hidden="true">🔒</span> Your booking details are protected and are shown only after secure verification.</p>
+  </main>
+
+  <footer class="site-footer">
+    <span>© 2026 Paddle Rage Pickleball</span>
+    <span>Iponan, Cagayan de Oro</span>
+  </footer>
+</body>
+</html>

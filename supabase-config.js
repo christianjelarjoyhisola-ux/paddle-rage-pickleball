@@ -98,7 +98,8 @@ const PB_FAST_CACHE_MS = {
   openPlay: 3500,
 };
 const PB_BOOKING_ACCESS_TOKENS_KEY = 'pb_booking_access_tokens_v1';
-const PB_BOOKING_ACCESS_TOKEN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const PB_BOOKING_ACCESS_TOKEN_LEGACY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const PB_BOOKING_ACCESS_TOKEN_HARD_MAX_AGE_MS = 400 * 24 * 60 * 60 * 1000;
 const _pbFastCache = new Map();
 let _pbAccountRoleCache = null;
 
@@ -176,20 +177,40 @@ async function _pbHasActiveAccount() {
 
 function _pbLoadBookingAccessTokens() {
   let stored = {};
+  let needsCleanup = false;
   try {
     stored = JSON.parse(localStorage.getItem(PB_BOOKING_ACCESS_TOKENS_KEY) || '{}');
   } catch (_) {
     stored = {};
+    needsCleanup = true;
   }
-  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {};
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
+    stored = {};
+    needsCleanup = true;
+  }
 
-  const cutoff = Date.now() - PB_BOOKING_ACCESS_TOKEN_MAX_AGE_MS;
-  return Object.fromEntries(
+  const now = Date.now();
+  const legacyCutoff = now - PB_BOOKING_ACCESS_TOKEN_LEGACY_MAX_AGE_MS;
+  const cleaned = Object.fromEntries(
     Object.entries(stored)
-      .filter(([, entry]) => entry && typeof entry.token === 'string' && Number(entry.createdAt || 0) >= cutoff)
+      .filter(([, entry]) => {
+        if (!entry || typeof entry.token !== 'string') return false;
+        const createdAt = Number(entry.createdAt || 0);
+        const expiresAt = Number(entry.expiresAt || 0);
+        if (Number.isFinite(expiresAt) && expiresAt > 0) {
+          return expiresAt > now && expiresAt <= createdAt + PB_BOOKING_ACCESS_TOKEN_HARD_MAX_AGE_MS;
+        }
+        // Legacy hold tokens had no explicit booking-bound expiry. Preserve
+        // their original 24-hour behavior rather than silently extending them.
+        return createdAt >= legacyCutoff;
+      })
       .sort(([, a], [, b]) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
       .slice(0, 100)
   );
+  if (needsCleanup || JSON.stringify(cleaned) !== JSON.stringify(stored)) {
+    _pbSaveBookingAccessTokens(cleaned);
+  }
+  return cleaned;
 }
 
 function _pbSaveBookingAccessTokens(tokens) {
@@ -198,11 +219,19 @@ function _pbSaveBookingAccessTokens(tokens) {
   } catch (_) {}
 }
 
-function _pbBookingAccessToken(ref, create = false) {
-  const key = String(ref || '').trim();
+function _pbBookingAccessToken(ref, create = false, expiresAt = 0) {
+  const key = String(ref || '').trim().toUpperCase();
   if (!key) return '';
   const tokens = _pbLoadBookingAccessTokens();
-  if (tokens[key]?.token) return tokens[key].token;
+  if (tokens[key]?.token) {
+    const requestedExpiry = Number(expiresAt || 0);
+    if (create && Number.isFinite(requestedExpiry) && requestedExpiry > Date.now()) {
+      const hardExpiry = Number(tokens[key].createdAt || Date.now()) + PB_BOOKING_ACCESS_TOKEN_HARD_MAX_AGE_MS;
+      tokens[key].expiresAt = Math.min(requestedExpiry, hardExpiry);
+      _pbSaveBookingAccessTokens(tokens);
+    }
+    return tokens[key].token;
+  }
   if (!create) return '';
   if (!globalThis.crypto?.getRandomValues) {
     throw new Error('This browser cannot securely create a booking access token.');
@@ -210,21 +239,45 @@ function _pbBookingAccessToken(ref, create = false) {
   const bytes = new Uint8Array(32);
   globalThis.crypto.getRandomValues(bytes);
   const token = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
-  tokens[key] = { token, createdAt: Date.now() };
+  const createdAt = Date.now();
+  const requestedExpiry = Number(expiresAt || 0);
+  tokens[key] = {
+    token,
+    createdAt,
+    ...(Number.isFinite(requestedExpiry) && requestedExpiry > createdAt
+      ? { expiresAt: Math.min(requestedExpiry, createdAt + PB_BOOKING_ACCESS_TOKEN_HARD_MAX_AGE_MS) }
+      : {}),
+  };
   _pbSaveBookingAccessTokens(tokens);
   return token;
 }
 
-function _pbRememberBookingAccessToken(ref, token) {
-  const key = String(ref || '').trim();
+function _pbRememberBookingAccessToken(ref, token, expiresAt = 0) {
+  const key = String(ref || '').trim().toUpperCase();
   if (!key || !token) return;
   const tokens = _pbLoadBookingAccessTokens();
-  tokens[key] = { token: String(token), createdAt: Date.now() };
+  const existing = tokens[key];
+  const createdAt = existing?.token === String(token) ? Number(existing.createdAt || Date.now()) : Date.now();
+  const requestedExpiry = Number(expiresAt || 0);
+  tokens[key] = {
+    token: String(token),
+    createdAt,
+    ...(Number.isFinite(requestedExpiry) && requestedExpiry > Date.now()
+      ? { expiresAt: Math.min(requestedExpiry, createdAt + PB_BOOKING_ACCESS_TOKEN_HARD_MAX_AGE_MS) }
+      : existing?.expiresAt ? { expiresAt: existing.expiresAt } : {}),
+  };
   _pbSaveBookingAccessTokens(tokens);
 }
 
+function _pbBookingAccessExpiry() {
+  // Keep the device proof long enough to survive a staff reschedule. The RPC
+  // remains authoritative and refuses access seven days after the current
+  // booking date, with the same absolute 400-day cap enforced server-side.
+  return Date.now() + PB_BOOKING_ACCESS_TOKEN_HARD_MAX_AGE_MS;
+}
+
 function _pbForgetBookingAccessToken(ref) {
-  const key = String(ref || '').trim();
+  const key = String(ref || '').trim().toUpperCase();
   if (!key) return;
   const tokens = _pbLoadBookingAccessTokens();
   if (!Object.prototype.hasOwnProperty.call(tokens, key)) return;
@@ -1277,8 +1330,9 @@ window.DB = {
     }
 
     const tokenKey = batch[0].groupRef || batch[0].ref;
-    const publicAccessToken = _pbBookingAccessToken(tokenKey, true);
-    batch.forEach(booking => _pbRememberBookingAccessToken(booking.ref, publicAccessToken));
+    const accessExpiresAt = _pbBookingAccessExpiry(batch);
+    const publicAccessToken = _pbBookingAccessToken(tokenKey, true, accessExpiresAt);
+    batch.forEach(booking => _pbRememberBookingAccessToken(booking.ref, publicAccessToken, accessExpiresAt));
 
     try {
       const response = await _invokeEdgeFunction('submit-public-booking', {
@@ -1340,6 +1394,35 @@ window.DB = {
     if (error) { console.error('getBookingByRef:', error); return null; }
     if (!data) return null;
     return rowToBooking(data);
+  },
+
+  async getBookingForManagement(ref, email) {
+    const bookingRef = String(ref || '').trim().toUpperCase();
+    const bookingEmail = String(email || '').trim().toLowerCase();
+    const tokenCandidates = [
+      bookingRef,
+      bookingRef.endsWith('-G') ? bookingRef.slice(0, -2) : `${bookingRef}-G`,
+    ].filter(Boolean);
+    const accessToken = tokenCandidates
+      .map(candidate => _pbBookingAccessToken(candidate, false))
+      .find(Boolean) || '';
+
+    if (!accessToken) {
+      const denied = new Error('Open Manage booking on the browser used to make this reservation.');
+      denied.code = 'BOOKING_ACCESS_TOKEN_MISSING';
+      throw denied;
+    }
+
+    const { data, error } = await _sb.rpc('get_public_booking_for_management', {
+      p_ref: bookingRef,
+      p_email: bookingEmail,
+      p_access_token: accessToken,
+    });
+    if (error) {
+      console.error('getBookingForManagement:', error);
+      throw error;
+    }
+    return (Array.isArray(data) ? data : data ? [data] : []).map(rowToBooking);
   },
 
   async updateBooking(ref, updates) {
@@ -3792,6 +3875,28 @@ window.DB = {
       return ref;
     },
     async getBookingByRef(ref) { return readDb().bookings.find(b => String(b.ref) === String(ref)) || null; },
+    async getBookingForManagement(ref, email) {
+      const requestedRef = String(ref || '').trim().toUpperCase();
+      const requestedEmail = String(email || '').trim().toLowerCase();
+      const matchesReference = booking => {
+        const rowRef = String(booking.ref || '').trim().toUpperCase();
+        const groupRef = String(booking.groupRef || booking.booking_group_ref || '').trim().toUpperCase();
+        return rowRef === requestedRef || groupRef === requestedRef || groupRef === `${requestedRef}-G`
+          || groupRef.replace(/-G$/, '') === requestedRef;
+      };
+      const bookings = readDb().bookings || [];
+      const anchor = bookings.find(booking => matchesReference(booking)
+        && String(booking.email || '').trim().toLowerCase() === requestedEmail);
+      if (!anchor) return [];
+      const groupRef = String(anchor.groupRef || anchor.booking_group_ref || '');
+      return bookings
+        .filter(booking => String(booking.email || '').trim().toLowerCase() === requestedEmail)
+        .filter(booking => groupRef
+          ? String(booking.groupRef || booking.booking_group_ref || '') === groupRef
+          : String(booking.ref || '') === String(anchor.ref || ''))
+        .sort((a, b) => `${a.date || ''}|${a.startTime || ''}|${a.courtName || ''}`
+          .localeCompare(`${b.date || ''}|${b.startTime || ''}|${b.courtName || ''}`));
+    },
     async updateBooking(ref, updates) {
       if (updates.date !== undefined) _pbAssertPublicBookingDate(updates.date);
       const db = readDb();

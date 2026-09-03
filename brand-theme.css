@@ -1038,3 +1038,199 @@ body[data-theme="light"] .cc-photo-avail.av,
 body[data-theme="light"] .wiz-court-badge.av {
   color: #050706;
 }
+
+/* Guest self-service entry points and post-booking handoff. */
+.nav-manage-link {
+  min-height: 44px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--accent);
+  border-radius: 11px;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background .18s ease, border-color .18s ease, color .18s ease, transform .18s ease;
+}
+
+.nav-manage-link:hover {
+  border-color: var(--accent);
+  background: rgba(182, 240, 0, 0.09);
+  transform: translateY(-1px);
+}
+
+.nav-manage-link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.pr-splash-manage:focus-visible {
+  outline: 3px solid var(--pr-neon-bright);
+  outline-offset: 3px;
+}
+
+.inv-actions .btn-manage-booking:focus-visible {
+  outline: 3px solid var(--ticket-accent, var(--accent));
+  outline-offset: 3px;
+}
+
+body.host-mode .guest-manage-link {
+  display: none;
+}
+
+.pr-splash-manage {
+  order: 1;
+  min-height: 44px;
+  margin-top: 3px;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: rgba(236, 241, 232, 0.78);
+  font-size: 0.73rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+  text-underline-offset: 4px;
+}
+
+.pr-splash-manage strong {
+  color: var(--pr-neon-bright);
+  font-weight: 850;
+}
+
+.pr-splash-manage:hover {
+  color: #fff !important;
+  text-decoration: underline;
+}
+
+.pr-splash-content .pr-splash-offer {
+  order: 2;
+  margin-top: 1px;
+}
+
+.inv-ref-wrap .inv-ref-note {
+  grid-column: 1 / -1;
+  margin: -2px 0 1px;
+  color: var(--muted);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.inv-actions {
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.inv-actions .btn-manage-booking,
+.inv-actions .btn-done,
+.inv-actions .btn-print {
+  min-height: 46px;
+  padding: 10px 13px;
+  border-radius: 12px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 850;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.inv-actions .btn-manage-booking {
+  flex: 2.25 1 230px;
+  border: 1px solid var(--ticket-accent, var(--accent));
+  background: var(--ticket-accent, var(--accent));
+  color: #071015;
+  font-size: 0.84rem;
+  box-shadow: 0 8px 24px rgba(var(--lime-rgb), 0.16);
+}
+
+.inv-actions .btn-manage-booking:hover {
+  background: var(--ticket-accent, var(--accent));
+  border-color: var(--ticket-accent, var(--accent));
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.inv-actions .btn-done {
+  flex: 1 1 88px;
+  border: 1px solid var(--border);
+  background: var(--input);
+  color: var(--text);
+  font-size: 0.82rem;
+  box-shadow: none;
+}
+
+.inv-actions .btn-done:hover {
+  border-color: rgba(var(--ticket-accent-rgb), 0.34);
+  background: var(--surface2);
+}
+
+.inv-actions .btn-print {
+  flex: 0.7 1 70px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.77rem;
+}
+
+.inv-actions .btn-print:hover {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text);
+}
+
+@media (max-width: 860px) {
+  .nav-headline {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .nav {
+    padding-inline: 12px;
+    gap: 8px;
+  }
+
+  .nav .logo-tx,
+  .nav .sw-wrap > span {
+    display: none;
+  }
+
+  .nav-r,
+  .nav .sw-wrap {
+    gap: 8px;
+  }
+
+  .nav-manage-link {
+    min-height: 44px;
+    padding-inline: 12px;
+    font-size: 0.73rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .inv-ref-wrap .inv-ref-note {
+    margin-top: 0;
+    font-size: 0.64rem;
+  }
+
+  .inv-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .inv-actions .btn-manage-booking {
+    grid-column: 1 / -1;
+  }
+
+  .inv-actions .btn-done,
+  .inv-actions .btn-print {
+    min-height: 44px;
+  }
+}

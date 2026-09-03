@@ -3470,7 +3470,7 @@ body.host-mode .courts { padding-bottom:140px; }
 @media(prefers-reduced-motion:reduce) { .host-balance-progress::after { animation:none; width:100%; background:var(--lime); } }
 
 </style>
-<link rel="stylesheet" href="brand-theme.css?v=20260901-opening-campaign-v33">
+<link rel="stylesheet" href="brand-theme.css?v=20260903-manage-booking-v1">
 </head>
 <body class="dark">
 <script>
@@ -3614,6 +3614,7 @@ try {
       <span class="pr-splash-enter-arrow" aria-hidden="true">&rarr;</span>
     </button>
     <p class="pr-splash-offer" role="note">NO BOOKING FEES</p>
+    <a class="pr-splash-manage" href="manage-booking.html" onclick="event.stopPropagation()">Already booked? <strong>Manage booking</strong> <span aria-hidden="true">&rarr;</span></a>
   </div>
   <div class="pr-splash-footer">Court booking &nbsp;&middot;&nbsp; Open play &nbsp;&middot;&nbsp; Community</div>
 </div>
@@ -3719,6 +3720,7 @@ try {
     🏓 <span class="hl">𝑺𝒆𝒓𝒗𝒆. 𝑺𝒎𝒂𝒔𝒉. 𝑾𝒊𝒏. 𝑹𝒆𝒑𝒆𝒂𝒕.</span>
   </div>
   <div class="nav-r">
+    <a class="nav-manage-link guest-manage-link" href="manage-booking.html">Manage booking</a>
     <div class="sw-wrap">
       <span>☀️</span>
       <label class="sw"><input type="checkbox" id="darkTog" checked aria-label="Use light theme"><span class="sw-tr"></span></label>
@@ -4171,6 +4173,7 @@ try {
       <ul>
         <li><a href="#courts">Courts</a></li>
         <li><a href="#courts">Book Now</a></li>
+        <li><a href="manage-booking.html">Manage booking</a></li>
       </ul>
     </div>
     <div class="ft-c">
@@ -4205,12 +4208,13 @@ try {
       <span class="inv-status-bdg inv-status-pending" id="iStatus" role="status" aria-live="polite" aria-atomic="true">Pending Confirmation</span>
     </header>
 
-    <section class="inv-ref-wrap" aria-label="Booking reference">
+    <section class="inv-ref-wrap" aria-label="Booking reference" aria-describedby="iRefNote">
       <div class="inv-ref-label">Booking Reference</div>
       <div class="inv-ref-line">
         <div class="inv-ref-num" id="iRef">—</div>
         <button class="inv-copy-btn" type="button" onclick="copyInvRef()" aria-label="Copy booking reference">Copy</button>
       </div>
+      <p class="inv-ref-note" id="iRefNote">This is your Paddle Rage booking reference—not your GCash, Maya, BDO Pay, BPI, bank, or e-wallet payment reference. For secure access, use Manage booking in this browser.</p>
     </section>
 
     <div class="inv-scroll-region">
@@ -4273,8 +4277,9 @@ try {
     </div>
 
     <footer class="inv-actions">
-      <button class="btn-print" type="button" onclick="window.print()">Print</button>
-      <button class="btn-done" type="button" onclick="closeModal()">Done ✓</button>
+      <button class="btn-manage-booking" id="iManageBookingBtn" type="button" onclick="openManageBooking($('iRef')?.textContent)">Track booking status &rarr;</button>
+      <button class="btn-done" type="button" onclick="closeModal()">Done</button>
+      <button class="btn-print" type="button" onclick="window.print()" aria-label="Print booking confirmation">Print</button>
     </footer>
   </article>
 </div>
@@ -9663,8 +9668,8 @@ function showInvoice(b) {
     ['Confirmation', 'pending'],
   ];
   let statusSummary = isDigitalPay
-    ? 'Keep this reference—do not pay again while verification is in progress.'
-    : 'Show this reference and pay at the front desk before your session.';
+    ? 'Keep your PB booking reference—do not pay again while verification is in progress.'
+    : 'Show your PB booking reference and pay at the front desk before your session.';
   let amountNote = '';
 
   if (isRejected) {
@@ -9684,7 +9689,7 @@ function showInvoice(b) {
     badge = 'Confirmed';
     badgeClass = 'inv-status-confirmed';
     timelineSteps = [['Submitted', 'done'], ['Verified', 'done'], ['Confirmed', 'done']];
-    statusSummary = 'Your court is secured. Show this booking reference at check-in.';
+    statusSummary = 'Your court is secured. Show your PB booking reference at check-in.';
     if (isPaid) {
       amountNote = '';
     } else if (isDepositPaid && partialBalance > 0) {
@@ -9703,7 +9708,7 @@ function showInvoice(b) {
       badge = 'Awaiting Confirmation';
       badgeClass = 'inv-status-confirmed';
       timelineSteps = [['Submitted', 'done'], ['Verified', 'done'], ['Confirmation', 'active']];
-      statusSummary = 'Keep this reference while the owner completes final confirmation.';
+      statusSummary = 'Keep your PB booking reference while the owner completes final confirmation.';
     }
   }
 
@@ -9722,6 +9727,15 @@ function showInvoice(b) {
   set('iHeroSub', subtitle);
   set('iDownNote', amountNote);
   set('iStatusSummary', statusSummary);
+  const manageBookingBtn = $('iManageBookingBtn');
+  if (manageBookingBtn) {
+    manageBookingBtn.textContent = isRejected
+      ? 'View booking record →'
+      : isConfirmed
+      ? 'Manage confirmed booking →'
+      : 'Track booking status →';
+    manageBookingBtn.setAttribute('aria-label', `${manageBookingBtn.textContent.replace(/\s*→\s*$/, '')}: ${b.ref}`);
+  }
   const checkIcon = $('invModal')?.querySelector('.inv-check-icon');
   if (checkIcon) checkIcon.textContent = icon;
   const statusEl = $('iStatus');
@@ -9763,14 +9777,22 @@ function showInvoice(b) {
   }
 }
 
+function openManageBooking(ref = '') {
+  const bookingRef = String(ref || '').trim();
+  const target = bookingRef && bookingRef !== '—'
+    ? `manage-booking.html#ref=${encodeURIComponent(bookingRef)}`
+    : 'manage-booking.html';
+  window.location.assign(target);
+}
+
 function copyInvRef() {
   const ref = $('iRef')?.textContent || '';
   if (!ref || ref === '—') return;
-  navigator.clipboard.writeText(ref).then(() => toast('Booking ref copied! 📋', 'ok')).catch(() => {
+  navigator.clipboard.writeText(ref).then(() => toast('Paddle Rage booking reference copied! 📋', 'ok')).catch(() => {
     const el = document.createElement('textarea');
     el.value = ref; document.body.appendChild(el); el.select();
     document.execCommand('copy'); document.body.removeChild(el);
-    toast('Booking ref copied! 📋', 'ok');
+    toast('Paddle Rage booking reference copied! 📋', 'ok');
   });
 }
 
@@ -10937,7 +10959,7 @@ function handleSplashBackgroundTap() {
 function unlockSplashMusicFromGesture(event) {
   if (!splashIsVisible() || splashAudio.active || splashAudio.starting) return;
   const target = event.target instanceof Element ? event.target : null;
-  if (target?.closest('.pr-splash-sound, .pr-splash-enter')) return;
+  if (target?.closest('.pr-splash-sound, .pr-splash-enter, .pr-splash-manage')) return;
   splashAudio.holdNextSplashClick = event.type === 'pointerdown' || event.type === 'touchstart';
   startSplashSound(false);
 }
@@ -11682,7 +11704,7 @@ async function submitOpenPlay() {
 }
 </script>
 <script src="supabase.min.js"></script>
-<script src="supabase-config.js?v=20260901-opening-gate-v2"></script>
+<script src="supabase-config.js?v=20260903-manage-booking-v1"></script>
 
 <!-- MOBILE STICKY BOOK NOW BAR -->
 <div id="mobileBookBar" class="mobile-book-bar" style="display:none">
