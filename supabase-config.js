@@ -4148,15 +4148,15 @@ window.DB = {
       const targetMethod = one(targetItems, item => lower(item.paymentMethod ?? item.payment_method), 'The new booking group has mixed payment methods.');
       if (sourceStatus !== 'cancelled') throw new Error('The source booking must already be cancelled.');
       if (!['pending', 'verifying'].includes(targetStatus)) throw new Error('The new booking is no longer awaiting confirmation.');
-      if (!['unpaid', 'for_verification', 'paid', 'downpayment_paid'].includes(sourcePaymentStatus)) {
-        throw new Error('The cancelled source must contain one reviewable or accepted payment.');
+      if (!['unpaid', 'paid', 'downpayment_paid'].includes(sourcePaymentStatus)) {
+        throw new Error('The cancelled source must contain a durably accepted payment.');
       }
       if (targetPaymentStatus !== 'for_verification') throw new Error('The new booking payment must still be For Verification.');
       const sourceHasSettlementEvidence = sourceItems.every(item =>
         Boolean(String(item.paidAt || item.paid_at || '').trim()) &&
         Boolean(String(item.bookingFeeEarnedAt || item.booking_fee_earned_at || '').trim()),
       );
-      if (['unpaid', 'paid', 'downpayment_paid'].includes(sourcePaymentStatus) && !sourceHasSettlementEvidence) {
+      if (!sourceHasSettlementEvidence) {
         throw new Error('The cancelled booking lacks durable prior-acceptance timestamps.');
       }
       if (sourceMethod !== targetMethod || !PB_DIGITAL_PAYMENT_METHODS.includes(sourceMethod)) {
@@ -4299,6 +4299,29 @@ window.DB = {
 
       const sourceGroupRef = String(source.groupRef || source.bookingGroupRef || source.booking_group_ref || '').trim();
       const targetGroupRef = String(target.groupRef || target.bookingGroupRef || target.booking_group_ref || '').trim();
+      const sourceClaimScope = sourceGroupRef ? 'booking_group' : 'booking';
+      const targetClaimScope = targetGroupRef ? 'booking_group' : 'booking';
+      const sourceClaimOwnerId = sourceGroupRef || sourceBookingRef;
+      const targetClaimOwnerId = targetGroupRef || targetBookingRef;
+      const localReferenceLedger = Array.isArray(db.usedGcashRefs)
+        ? db.usedGcashRefs
+        : Array.isArray(db.used_gcash_refs) ? db.used_gcash_refs : null;
+      let canonicalLedgerClaim = null;
+      if (localReferenceLedger) {
+        const canonicalClaims = localReferenceLedger.filter(item =>
+          String(item.gcashRef ?? item.gcash_ref ?? '').trim() === sourcePaymentRef,
+        );
+        if (canonicalClaims.length !== 1) {
+          throw new Error('The accepted source does not uniquely own its canonical payment reference.');
+        }
+        canonicalLedgerClaim = canonicalClaims[0];
+        const ledgerScope = lower(canonicalLedgerClaim.claimScope ?? canonicalLedgerClaim.claim_scope);
+        const ledgerOwnerId = String(canonicalLedgerClaim.claimOwnerId ?? canonicalLedgerClaim.claim_owner_id ?? '').trim();
+        const ledgerProvider = lower(canonicalLedgerClaim.provider);
+        if (ledgerScope !== sourceClaimScope || ledgerOwnerId !== sourceClaimOwnerId || ledgerProvider !== sourceMethod) {
+          throw new Error('The canonical payment reference belongs to another booking.');
+        }
+      }
       const balanceHistory = (db.hostBookingBalancePayments || []).some(payment => {
         const bookingRefs = Array.isArray(payment.bookingRefs ?? payment.booking_refs) ? (payment.bookingRefs ?? payment.booking_refs).map(String) : [];
         const bookingRef = String(payment.bookingRef ?? payment.booking_ref ?? '');
@@ -4356,6 +4379,18 @@ window.DB = {
       const sourceRefSet = new Set(sourceRefs);
       const targetRefSet = new Set(targetRefs);
       const receiptSource = sourceItems.find(item => item.receiptImageUrl || item.receipt_image_url) || sourceItems[0];
+      if (canonicalLedgerClaim) {
+        const usesSnakeCase = Object.prototype.hasOwnProperty.call(canonicalLedgerClaim, 'claim_scope');
+        if (usesSnakeCase) {
+          canonicalLedgerClaim.booking_ref = targetBookingRef;
+          canonicalLedgerClaim.claim_scope = targetClaimScope;
+          canonicalLedgerClaim.claim_owner_id = targetClaimOwnerId;
+        } else {
+          canonicalLedgerClaim.bookingRef = targetBookingRef;
+          canonicalLedgerClaim.claimScope = targetClaimScope;
+          canonicalLedgerClaim.claimOwnerId = targetClaimOwnerId;
+        }
+      }
       db.bookings = db.bookings.map(booking => {
         const bookingRef = String(booking.ref);
         if (sourceRefSet.has(bookingRef)) {

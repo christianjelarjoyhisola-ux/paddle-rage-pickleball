@@ -577,6 +577,8 @@ test('remote and local clients expose the same narrow cancelled-payment transfer
   assert.match(local, /replay\.sourceBookingRef !== sourceBookingRef[\s\S]*?replay\.targetBookingRef !== targetBookingRef[\s\S]*?replay\.reason !== transferReason[\s\S]*?replay\.noRefundConfirmed !== true/);
   assert.match(local, /targetPaymentStatus !== 'for_verification'/, 'local target state must match the server-only For Verification gate');
   assert.match(local, /sourceStatus !== 'cancelled'/);
+  assert.match(local, /!\['unpaid', 'paid', 'downpayment_paid'\]\.includes\(sourcePaymentStatus\)/, 'a review-only source must never be transferable');
+  assert.match(local, /if \(!sourceHasSettlementEvidence\)/, 'all accepted source shapes need durable paid and fee-earned timestamps');
   assert.match(local, /sourceMethod !== targetMethod[\s\S]*?!PB_DIGITAL_PAYMENT_METHODS\.includes\(sourceMethod\)/);
   assert.match(local, /sourcePaymentRef !== targetPaymentRef/);
   assert.match(local, /sourceEmail !== targetEmail[\s\S]*?sourcePhone !== targetPhone/);
@@ -601,6 +603,8 @@ test('remote and local clients expose the same narrow cancelled-payment transfer
   assert.match(local, /weeklyFeeId|weekly_fee_id|billedAt|billed_at/, 'local mode must reject billed/remitted source money');
   assert.match(local, /openPlayRegistrations/, 'local mode must detect Open Play reference ownership');
   assert.match(local, /openPlayHostSessionRegistrations/, 'local mode must detect host-session reference ownership');
+  assert.match(local, /localReferenceLedger[\s\S]*?canonicalClaims\.length !== 1[\s\S]*?ledgerScope !== sourceClaimScope[\s\S]*?ledgerOwnerId !== sourceClaimOwnerId/, 'an available local ledger must prove unique source ownership');
+  assert.match(local, /canonicalLedgerClaim\.claim_scope = targetClaimScope|canonicalLedgerClaim\.claimScope = targetClaimScope/, 'local canonical ledger ownership must move to the target');
   assert.match(local, /paymentTransferId:\s*transferId[\s\S]*?paymentReassignedToRef:\s*targetBookingRef/);
   assert.match(local, /paymentReassignedFromRef:\s*sourceBookingRef/);
   assert.match(local, /db\.bookingPaymentTransfers\.push\(audit\)[\s\S]*?writeDb\(db\)/);
@@ -650,7 +654,7 @@ test('local cancelled-payment transfer is idempotent and moves the one fee alloc
     hostBooking: false,
     hostUserId: null,
     status: source ? 'cancelled' : 'pending',
-    paymentStatus: source ? 'paid' : 'for_verification',
+    paymentStatus: source ? 'unpaid' : 'for_verification',
     paymentMethod: 'maya',
     gcashRef: '9F34 952D 6576',
     total: 800,
@@ -683,7 +687,36 @@ test('local cancelled-payment transfer is idempotent and moves the one fee alloc
     hostBookingBalancePayments: [],
     openPlayRegistrations: [],
     openPlayHostSessionRegistrations: [],
+    usedGcashRefs: [{
+      gcashRef: 'maya:9F34952D6576',
+      bookingRef: 'OLD-1',
+      provider: 'maya',
+      claimScope: 'booking_group',
+      claimOwnerId: 'OLD-G',
+    }],
   };
+
+  const sourceRowsForSetup = () => localDb.bookings.filter(row => row.groupRef === 'OLD-G');
+  sourceRowsForSetup().forEach(row => { row.paymentStatus = 'for_verification'; });
+  await assert.rejects(
+    transfer('OLD-1', 'NEW-1', 'Review-only source must not be movable.', true, '31fb1ea1-9877-4fd3-ad92-03569cf99d94'),
+    /durably accepted payment/,
+  );
+  sourceRowsForSetup().forEach(row => { row.paymentStatus = 'unpaid'; });
+
+  sourceRowsForSetup()[0].bookingFeeEarnedAt = null;
+  await assert.rejects(
+    transfer('OLD-1', 'NEW-1', 'Missing durable timestamp must fail.', true, '1e557fed-9427-48f0-bf65-4eca11fdd9cc'),
+    /durable prior-acceptance timestamps/,
+  );
+  sourceRowsForSetup()[0].bookingFeeEarnedAt = acceptedAt;
+
+  localDb.usedGcashRefs[0].claimOwnerId = 'ANOTHER-GROUP';
+  await assert.rejects(
+    transfer('OLD-1', 'NEW-1', 'Wrong canonical owner must fail.', true, '508e0cfb-a7df-4e03-b490-e32f9ec849e0'),
+    /canonical payment reference belongs to another booking/,
+  );
+  localDb.usedGcashRefs[0].claimOwnerId = 'OLD-G';
 
   const request = ['OLD-1', 'NEW-1', 'Player cancelled a mistaken reservation and rebooked.', true, '8bb20150-e11e-4fe7-a4e8-0d9752d00c31'];
   const [first, replay] = await Promise.all([transfer(...request), transfer(...request)]);
@@ -694,12 +727,19 @@ test('local cancelled-payment transfer is idempotent and moves the one fee alloc
 
   const sourceRows = localDb.bookings.filter(row => row.groupRef === 'OLD-G');
   const targetRows = localDb.bookings.filter(row => row.groupRef === 'NEW-G');
-  assert.ok(sourceRows.every(row => row.status === 'cancelled' && row.paymentStatus === 'paid'));
+  assert.ok(sourceRows.every(row => row.status === 'cancelled' && row.paymentStatus === 'unpaid'));
   assert.ok(sourceRows.every(row => row.paidAt === acceptedAt && row.bookingFeeEarnedAt === acceptedAt));
   assert.ok(sourceRows.every(row => row.paymentTransferId === first.transferId && row.paymentReassignedToRef === 'NEW-1'));
   assert.ok(targetRows.every(row => row.status === 'confirmed' && row.paymentStatus === 'paid'));
   assert.ok(targetRows.every(row => row.bookingFeeEarnedAt === nowIso()), 'the confirmed target must own the earned allocation');
   assert.ok(targetRows.every(row => row.paymentTransferId === first.transferId && row.paymentReassignedFromRef === 'OLD-1'));
+  assert.deepEqual(localDb.usedGcashRefs, [{
+    gcashRef: 'maya:9F34952D6576',
+    bookingRef: 'NEW-1',
+    provider: 'maya',
+    claimScope: 'booking_group',
+    claimOwnerId: 'NEW-G',
+  }], 'the canonical local ledger claim must move atomically to the replacement group');
 
   const ledger = await dashboard();
   assert.equal(ledger.accumulated.booking_rows_count, 2, 'source and target fees must never both be billable');

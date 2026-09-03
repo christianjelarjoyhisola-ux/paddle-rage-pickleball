@@ -7074,11 +7074,17 @@ function groupBookings(bookings = [], duplicateScope = bookings) {
     if (!groupsByPaymentRef.has(key)) groupsByPaymentRef.set(key, []);
     groupsByPaymentRef.get(key).push(group);
   });
+  const displayRefByBookingRef = new Map();
+  groups.forEach(group => {
+    (group.refs || []).forEach(ref => displayRefByBookingRef.set(String(ref), group.displayRef || ref));
+  });
   return groups.map(g => {
     const key = normalizedPaymentRefKey(g);
     const count = key ? (refCounts.get(key) || 0) : 0;
     return {
       ...g,
+      paymentReassignedFromDisplayRef: displayRefByBookingRef.get(String(g.paymentReassignedFromRef || '')) || null,
+      paymentReassignedToDisplayRef: displayRefByBookingRef.get(String(g.paymentReassignedToRef || '')) || null,
       duplicatePaymentRef: count > 1,
       duplicatePaymentRefCount: count,
       duplicatePaymentGroups: key
@@ -7344,7 +7350,8 @@ function duplicatePaymentRefBadge(b){
     return '<div class="receipt-badge" title="Permanent payment-transfer audit: this linked booking cannot be deleted" style="color:var(--green);background:rgba(var(--green-rgb),.12)">Duplicate resolved · payment moved from cancelled booking</div>';
   }
   if (b?.paymentReassignedToRef) {
-    return `<div class="receipt-badge" title="Permanent payment-transfer audit: this cancelled source cannot be reactivated or deleted" style="color:var(--yellow);background:rgba(200,160,96,.12)">Payment moved to <code>${esc(b.paymentReassignedToRef)}</code></div>`;
+    const displayRef = b.paymentReassignedToDisplayRef || b.paymentReassignedToRef;
+    return `<div class="receipt-badge" title="Permanent payment-transfer audit: this cancelled source cannot be reactivated or deleted" style="color:var(--yellow);background:rgba(200,160,96,.12)">Payment moved to <code>${esc(displayRef)}</code></div>`;
   }
   if (!b?.duplicatePaymentRef) return '';
   const count = Number(b.duplicatePaymentRefCount || 0);
@@ -7658,8 +7665,8 @@ function bookingGroupHasAcceptedPaymentEvidence(group){
   const rows = bookingGroupRowsForPaymentGuard(group);
   if (!rows.length) return false;
   const states = [...new Set(rows.map(row => String(row?.paymentStatus || 'unpaid').trim().toLowerCase()))];
-  if (states.length !== 1 || !['unpaid','for_verification','paid','downpayment_paid'].includes(states[0])) return false;
-  if (states[0] === 'for_verification') return true;
+  // A receipt awaiting review is not durable proof that its payment was accepted.
+  if (states.length !== 1 || !['unpaid','paid','downpayment_paid'].includes(states[0])) return false;
   return rows.every(row =>
     Boolean(String(row?.paidAt || '').trim()) &&
     Boolean(String(row?.bookingFeeEarnedAt || '').trim())

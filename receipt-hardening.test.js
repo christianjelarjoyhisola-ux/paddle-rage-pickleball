@@ -258,6 +258,36 @@ test('duplicate-payment resolver requires an exact preview and an explicit no-re
   const allowed = build(true);
   assert.equal(allowed.cancelledDuplicatePaymentSource(target), source);
   assert.equal(allowed.bookingPaymentTransferPreview(source, target).eligible, true);
+  const legacyAcceptedSource = {
+    ...source,
+    paymentStatus: 'unpaid',
+    allItems: source.allItems.map(item => ({ ...item, paymentStatus: 'unpaid' })),
+  };
+  assert.equal(
+    allowed.cancelledDuplicatePaymentSource({ ...target, duplicatePaymentGroups: [legacyAcceptedSource] }),
+    legacyAcceptedSource,
+    'a legacy cancelled/unpaid source remains eligible only with durable acceptance evidence',
+  );
+  const reviewOnlySource = {
+    ...source,
+    paymentStatus: 'for_verification',
+    allItems: source.allItems.map(item => ({ ...item, paymentStatus: 'for_verification' })),
+  };
+  assert.equal(
+    allowed.cancelledDuplicatePaymentSource({ ...target, duplicatePaymentGroups: [reviewOnlySource] }),
+    null,
+    'a source that is merely For Verification is never accepted, even when stale timestamps exist',
+  );
+  assert.equal(allowed.bookingPaymentTransferPreview(reviewOnlySource, target).eligible, false);
+  const missingAcceptanceTimestamp = {
+    ...source,
+    allItems: source.allItems.map(item => ({ ...item, bookingFeeEarnedAt: null })),
+  };
+  assert.equal(
+    allowed.cancelledDuplicatePaymentSource({ ...target, duplicatePaymentGroups: [missingAcceptanceTimestamp] }),
+    null,
+    'every source row needs both durable acceptance timestamps',
+  );
   assert.equal(build(false).cancelledDuplicatePaymentSource(target), null, 'non-review roles must never receive the action');
   assert.equal(allowed.cancelledDuplicatePaymentSource({ ...target, duplicatePaymentGroups: [source, { ...source, ref: 'OLD-2' }] }), null);
   assert.equal(allowed.cancelledDuplicatePaymentSource({ ...target, paymentStatus: 'unpaid', allItems: [{ ...target.allItems[0], paymentStatus: 'unpaid' }] }), null, 'server requires the target to remain For Verification');
@@ -280,6 +310,24 @@ test('duplicate-payment resolver requires an exact preview and an explicit no-re
     allItems: [{ ...target.allItems[0], receiptImageUrl: '', receiptImageHash: '', receiptPhash: '', receiptStatus: 'none' }],
   };
   assert.equal(allowed.bookingPaymentTransferPreview(source, noStoredReceipt).eligible, false, 'a typed reference alone is not durable receipt evidence');
+});
+
+test('payment-transfer source badge displays the replacement group reference, not an internal child ref', () => {
+  const admin = read('admin.html');
+  assert.match(admin, /const displayRefByBookingRef = new Map\(\)[\s\S]*?paymentReassignedToDisplayRef:/);
+  const badgeStart = admin.indexOf('function duplicatePaymentRefBadge');
+  const badgeEnd = admin.indexOf('\nfunction receiptFlagChips', badgeStart);
+  assert.ok(badgeStart >= 0 && badgeEnd > badgeStart, 'missing duplicate-payment badge helper');
+  const badge = new Function(
+    'esc',
+    `${admin.slice(badgeStart, badgeEnd)}; return duplicatePaymentRefBadge;`,
+  )(value => String(value));
+  const html = badge({
+    paymentReassignedToRef: 'PB-MTKD3YBQ-S7M2',
+    paymentReassignedToDisplayRef: 'PB-MTKD3YBP-Z2HS',
+  });
+  assert.match(html, /PB-MTKD3YBP-Z2HS/);
+  assert.doesNotMatch(html, /PB-MTKD3YBQ-S7M2/);
 });
 
 test('duplicate-payment modal is accessible, revalidates, commits once, then emails from canonical state', () => {

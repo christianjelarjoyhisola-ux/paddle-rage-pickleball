@@ -75,6 +75,9 @@ const digitalReceiptMigration = read(
 const bookingPaymentTransferMigration = read(
   'supabase/migrations/20260903100000_booking_payment_transfer.sql'
 );
+const bookingPaymentTransferAcceptedSourceHardeningMigration = read(
+  'supabase/migrations/20260903110000_booking_payment_transfer_accepted_source_hardening.sql'
+);
 
 test('public creation paths keep configured Edge and database boundaries', () => {
   const config = read('supabase/config.toml');
@@ -1321,6 +1324,44 @@ test('payment transfer RPC proves identity, payment shape, receipt identity, and
     read('supabase/migrations/20260830090000_atomic_booking_confirmation.sql'),
     /This payment reference is also attached to another booking/,
     'ordinary confirmation must remain fail-closed; only the audited RPC resolves a collision',
+  );
+});
+
+test('payment transfer follow-up requires durable acceptance and never creates replay claims', () => {
+  const hardenedTransferFunction = bookingPaymentTransferAcceptedSourceHardeningMigration.match(
+    /create or replace function public\.transfer_cancelled_booking_payment\([\s\S]*?\n\$\$;/i,
+  )?.[0] || '';
+  assert.ok(hardenedTransferFunction, 'missing hardened transfer_cancelled_booking_payment transaction');
+  assert.match(
+    hardenedTransferFunction,
+    /if v_paid_at is null\s+or v_source_paid_at_count <> v_source_row_count\s+or v_source_fee_earned_count <> v_source_row_count then[\s\S]*?cancelled source lacks complete durable prior-acceptance evidence/,
+  );
+  const acceptanceGuardAt = hardenedTransferFunction.indexOf('-- Every source state');
+  const nextGuardAt = hardenedTransferFunction.indexOf('  if exists (', acceptanceGuardAt);
+  assert.ok(acceptanceGuardAt >= 0 && nextGuardAt > acceptanceGuardAt);
+  assert.doesNotMatch(
+    hardenedTransferFunction.slice(acceptanceGuardAt, nextGuardAt),
+    /if\s+v_source_payment_status\s*(?:=|in)/,
+    'durable acceptance evidence must be required for every source payment label',
+  );
+
+  assert.match(hardenedTransferFunction, /not \(v_reference_key = any\(v_evidence_keys\)\)/);
+  assert.match(
+    hardenedTransferFunction,
+    /if not v_ledger_found then[\s\S]*?accepted source does not own every stored payment evidence key[\s\S]*?elsif v_incumbent_scope = v_source_scope\s+and v_incumbent_owner = v_source_key/,
+  );
+  assert.doesNotMatch(
+    hardenedTransferFunction,
+    /insert\s+into\s+public\.used_gcash_refs/i,
+    'payment transfer must never mint a missing canonical or auxiliary replay claim',
+  );
+  assert.match(
+    hardenedTransferFunction,
+    /update public\.used_gcash_refs ledger[\s\S]*?where ledger\.gcash_ref = v_evidence_key[\s\S]*?ledger\.claim_scope = v_source_scope[\s\S]*?ledger\.claim_owner_id = v_source_key/,
+  );
+  assert.match(
+    bookingPaymentTransferAcceptedSourceHardeningMigration,
+    /revoke all on function public\.transfer_cancelled_booking_payment\([\s\S]*?from public, anon, authenticated[\s\S]*?grant execute on function public\.transfer_cancelled_booking_payment\([\s\S]*?to authenticated/,
   );
 });
 
