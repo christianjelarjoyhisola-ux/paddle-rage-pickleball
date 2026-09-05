@@ -57,6 +57,14 @@ export type ReschedulePayload = {
   note?: string;
 };
 
+export type GroupedReschedulePayload = {
+  bookingRef: string;
+  email: string;
+  fullName: string;
+  note?: string;
+  items: Array<Omit<ReschedulePayload, "email" | "fullName" | "note">>;
+};
+
 export type BookingCancellationPayload = {
   bookingRef: string;
   fullName: string;
@@ -599,6 +607,58 @@ export function renderRescheduleEmail(
     } hour${Number(payload.newDuration || 0) !== 1 ? "s" : ""}${
       note ? `\n\nMessage from our team: ${note}` : ""
     }\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
+  };
+}
+
+export function renderGroupedRescheduleEmail(
+  payload: GroupedReschedulePayload,
+): { html: string; plain: string } {
+  const count = payload.items.length;
+  const itemLabel = count === 1 ? "reservation" : "reservations";
+  const note = plain(payload.note);
+  const manageUrl = `${publicUrl()}/manage-booking.html#ref=${
+    encodeURIComponent(payload.bookingRef.replace(/-G$/i, ""))
+  }`;
+  const scheduleCards = payload.items.map((item) => {
+    const duration = `${Number(item.newDuration)} hour${item.newDuration === 1 ? "" : "s"}`;
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;border:1px solid ${BRAND.border};border-radius:12px;">
+      <tr><td style="padding:16px 18px;border-bottom:1px solid ${BRAND.border};">
+        <div style="font-size:16px;line-height:1.5;font-weight:900;color:${BRAND.text};">${escapeHtml(item.courtName)}</div>
+        <div style="margin-top:3px;font-family:Consolas,'Courier New',monospace;font-size:12px;line-height:1.5;color:${BRAND.muted};overflow-wrap:anywhere;">${escapeHtml(item.bookingRef)}</div>
+      </td></tr>
+      <tr><td style="padding:16px 18px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td class="stack-cell" width="48%" style="width:48%;vertical-align:top;background:${BRAND.dangerTint};border-radius:9px;padding:13px;box-sizing:border-box;">
+          <div style="font-size:10px;line-height:1.4;font-weight:900;letter-spacing:.7px;text-transform:uppercase;color:${BRAND.danger};">Previous schedule</div>
+          <div style="margin-top:7px;font-size:14px;line-height:1.6;color:${BRAND.muted};">${escapeHtml(formatDate(item.oldDate))}<br>${escapeHtml(item.oldStartTime)} &ndash; ${escapeHtml(item.oldEndTime)}<br>${escapeHtml(duration)}</div>
+        </td>
+        <td class="stack-cell" width="4%" style="width:4%;font-size:0;line-height:0;">&nbsp;</td>
+        <td class="stack-cell stack-gap" width="48%" style="width:48%;vertical-align:top;background:${BRAND.neonTint};border-radius:9px;padding:13px;box-sizing:border-box;">
+          <div style="font-size:10px;line-height:1.4;font-weight:900;letter-spacing:.7px;text-transform:uppercase;color:${BRAND.neon};">New schedule</div>
+          <div style="margin-top:7px;font-size:14px;line-height:1.6;font-weight:900;color:${BRAND.text};">${escapeHtml(formatDate(item.newDate))}<br>${escapeHtml(item.newStartTime)} &ndash; ${escapeHtml(item.newEndTime)}<br>${escapeHtml(duration)}</div>
+        </td>
+      </tr></table></td></tr>
+    </table>`;
+  }).join("");
+  const noteHtml = note
+    ? `<div style="margin-bottom:20px;padding:15px 17px;background:${BRAND.surfaceRaised};border-left:4px solid ${BRAND.neon};border-radius:8px;font-size:14px;line-height:1.65;color:${BRAND.text};"><strong>Message from our team</strong><br>${escapeHtml(note)}</div>`
+    : "";
+  const unchangedCopy = "Only the reservations listed above were moved. Any other reservations in your booking keep their current schedules.";
+  const schedulesPlain = payload.items.map((item) =>
+    `${plain(item.courtName)} | ${plain(item.bookingRef)}\nPREVIOUS: ${formatDate(item.oldDate)} | ${plain(item.oldStartTime)} - ${plain(item.oldEndTime)}\nNEW: ${formatDate(item.newDate)} | ${plain(item.newStartTime)} - ${plain(item.newEndTime)}\nDuration: ${Number(item.newDuration)} hour${item.newDuration === 1 ? "" : "s"}`
+  ).join("\n\n");
+
+  return {
+    html: layout({
+      preheader: `${count} ${itemLabel} updated for booking ${plain(payload.bookingRef)}.`,
+      status: "BOOKING RESCHEDULED",
+      statusBackground: BRAND.danger,
+      statusColor: "#ffffff",
+      title: "Your booking has a new schedule.",
+      introHtml: `<p style="margin:0 0 10px;">Hi <strong>${escapeHtml(payload.fullName || "Player")}</strong>,</p><p style="margin:0;">We updated ${count} ${itemLabel} in your Paddle Rage booking. Review each new schedule below.</p>`,
+      bodyHtml: `${noteHtml}<div style="margin-bottom:18px;font-size:13px;line-height:1.5;color:${BRAND.muted};">Booking reference: <strong style="color:${BRAND.neon};overflow-wrap:anywhere;">${escapeHtml(payload.bookingRef)}</strong></div>${scheduleCards}<p style="margin:0 0 18px;font-size:14px;line-height:1.65;color:${BRAND.muted};">${unchangedCopy}</p><a href="${escapeHtml(manageUrl)}" style="display:inline-block;padding:13px 20px;border-radius:10px;background:${BRAND.neon};color:${BRAND.black};font-size:14px;line-height:1.3;font-weight:900;text-decoration:none;">Manage booking</a>`,
+      footerText: "Need help with the new schedule? Contact the Paddle Rage team and include your booking reference.",
+    }),
+    plain: `PADDLE RAGE PICKLEBALL\nBOOKING RESCHEDULED\n\nHi ${plain(payload.fullName || "Player")},\n\nWe updated ${count} ${itemLabel} in your booking.\nBooking reference: ${plain(payload.bookingRef)}\n\n${schedulesPlain}${note ? `\n\nMessage from our team: ${note}` : ""}\n\n${unchangedCopy}\nManage booking: ${manageUrl}\n\nPaddle Rage Pickleball\nIponan, Cagayan de Oro\n${publicUrl()}`,
   };
 }
 

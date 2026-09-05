@@ -4772,6 +4772,77 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
 @media(max-width:760px){.brq-overlay{align-items:flex-end;padding:0;overflow:hidden}.brq-modal{width:100%;height:min(94dvh,900px);max-height:none;border-radius:22px 22px 0 0}.brq-head{padding:15px 16px}.brq-head p{display:none}.brq-mark{width:40px;height:40px;flex-basis:40px;border-radius:12px}.brq-layout{grid-template-columns:1fr;grid-template-rows:minmax(145px,34%) minmax(0,1fr)}.brq-list-pane{border-right:0;border-bottom:1px solid var(--border)}.brq-list{display:flex;gap:9px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity}.brq-request-card{min-width:min(290px,82vw);margin:0;scroll-snap-align:start}.brq-detail{padding:15px}.brq-schedule-grid{grid-template-columns:1fr}.brq-route-arrow{min-height:20px;transform:rotate(90deg)}.brq-customer{grid-template-columns:1fr}.brq-customer-email{text-align:left}.brq-actions{display:grid;grid-template-columns:1fr}.brq-actions .btn{width:100%;min-height:44px;justify-content:center}}
 @media(max-width:520px){.booking-reschedule-queue{flex:1 1 100%;justify-content:center;order:10}.brq-command{padding:9px 11px}.brq-tab{padding:6px 9px}}
 
+/* Selectable, atomic rescheduling for multi-court and multi-time reservations. */
+.booking-reschedule-action { color:#397dac; border:1px solid rgba(74,154,220,.35); background:rgba(74,154,220,.1); }
+.grs-overlay { z-index:580; }
+.grs-modal { width:min(760px,100%); max-width:760px; max-height:calc(100dvh - 40px); display:flex; flex-direction:column; overflow:hidden; }
+.grs-modal [hidden] { display:none !important; }
+.grs-modal :is(.m-hd,.m-foot) { flex:0 0 auto; }
+.grs-head { gap:12px; background:linear-gradient(120deg,rgba(74,154,220,.1),var(--surface)); }
+.grs-head > div { min-width:0; }
+.grs-eyebrow { display:block; color:var(--yellow); font-size:.64rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase; margin-bottom:5px; }
+.grs-head h2 { margin:0; line-height:1.15; }
+.grs-head p { margin-top:5px; color:var(--text3); font-size:.74rem; overflow-wrap:anywhere; }
+.grs-head .m-x { flex:0 0 44px; height:44px; width:44px; }
+.grs-modal .grs-body { min-height:0; overflow:auto; overscroll-behavior:contain; }
+.grs-intro { margin:0 0 15px; font-size:.81rem; color:var(--text2); line-height:1.55; }
+.grs-tools { padding:14px; border:1px solid var(--border); border-radius:13px; background:var(--bg2); margin-bottom:16px; }
+.grs-select-all { display:flex; align-items:center; gap:9px; min-height:44px; font-size:.8rem; font-weight:800; cursor:pointer; }
+.grs-modal input[type="checkbox"] { flex:0 0 20px; width:20px; height:20px; min-height:20px; accent-color:var(--green); }
+.grs-bulk { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:end; margin-top:10px; }
+.grs-bulk .btn { min-height:44px; }
+.grs-items { display:grid; gap:14px; }
+.grs-item { padding:15px; border:1px solid var(--border); border-radius:15px; background:var(--surface); min-width:0; }
+.grs-item.is-selected { border-color:rgba(74,154,220,.4); box-shadow:0 3px 14px rgba(74,154,220,.05); }
+.grs-item-select { display:flex; align-items:center; gap:10px; min-height:44px; cursor:pointer; }
+.grs-item-select > span:nth-of-type(1) { flex:1; min-width:0; }
+.grs-item-select strong { display:block; font-size:.86rem; overflow-wrap:anywhere; }
+.grs-item-select small { display:block; margin-top:4px; color:var(--text3); font:.65rem 'DM Mono',monospace; overflow-wrap:anywhere; }
+.grs-duration { flex:0 0 auto; padding:5px 8px; border-radius:99px; background:rgba(var(--green-rgb),.09); color:var(--text2); font-size:.68rem; font-weight:850; }
+.grs-current { margin-top:13px; padding:10px 12px; border-radius:10px; background:var(--bg2); }
+.grs-current > span { display:block; font-size:.59rem; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:var(--text3); }
+.grs-current > strong { display:block; margin-top:4px; font-size:.77rem; font-weight:750; line-height:1.5; overflow-wrap:anywhere; }
+.grs-fields { display:grid; grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr); gap:12px; margin-top:15px; }
+.grs-fields > div,.grs-bulk > div { min-width:0; }
+.grs-fields .fi,.grs-bulk .fi { min-width:0; min-height:46px; }
+.grs-fields .fl { text-transform:none; letter-spacing:0; }
+.grs-availability { margin-top:9px; font-size:.73rem; color:var(--text3); line-height:1.5; overflow-wrap:anywhere; }
+.grs-availability[data-state="error"],.grs-save-error { color:var(--red); }
+.grs-retry { margin-top:8px; }
+.grs-item-summary { padding:10px 12px; margin-top:11px; border-left:3px solid var(--green); border-radius:8px; background:rgba(var(--green-rgb),.065); font-size:.75rem; line-height:1.55; white-space:pre-line; overflow-wrap:anywhere; }
+.grs-ineligible { margin:10px 0 0; color:var(--text3); font-size:.75rem; line-height:1.5; }
+.grs-note { margin:18px 0 0; }
+.grs-note .fl span { font-weight:500; text-transform:none; letter-spacing:0; }
+.grs-note textarea { resize:vertical; min-height:88px; line-height:1.5; }
+.grs-save-error { margin-top:12px; font-size:.78rem; line-height:1.5; }
+.grs-modal .grs-footer { display:grid; grid-template-columns:minmax(0,1fr); gap:9px; }
+.grs-total { min-width:0; font-size:.74rem; line-height:1.4; color:var(--text3); overflow-wrap:anywhere; }
+.grs-total[data-state="ready"] { color:var(--text); font-weight:800; }
+.grs-footer-actions { display:flex; justify-content:flex-end; gap:9px; }
+.grs-footer-actions .btn { min-height:44px; min-width:0; white-space:normal; justify-content:center; }
+@media (max-width:760px) {
+  .grs-overlay { align-items:flex-end; padding:0; overflow:hidden; }
+  .grs-modal { max-height:calc(100dvh - max(8px,env(safe-area-inset-top))); border-radius:20px 20px 0 0; padding-bottom:0; }
+  .grs-modal .grs-body { padding:15px; }
+  .grs-head { padding:15px; }
+  .grs-head h2 { font-size:1.12rem; }
+  .grs-item { padding:13px; }
+  .grs-fields { grid-template-columns:minmax(0,1fr); }
+  .grs-bulk { grid-template-columns:minmax(0,1fr); }
+  .grs-bulk .btn { width:100%; justify-content:center; }
+  .grs-modal .grs-footer { padding:11px 15px max(11px,env(safe-area-inset-bottom)); }
+  .grs-footer-actions { display:grid; grid-template-columns:minmax(0,.34fr) minmax(0,.66fr); }
+  .grs-footer-actions .btn { width:100%; padding-inline:10px; }
+  .grs-modal :is(input:not([type="checkbox"]),select,textarea) { font-size:16px; }
+}
+@media (max-height:500px) and (max-width:960px) {
+  .grs-overlay { padding:4px; align-items:center; }
+  .grs-modal { max-height:calc(100dvh - 8px); }
+  .grs-head { padding-block:10px; }
+  .grs-head p { display:none; }
+  .grs-modal .grs-footer { padding-block:9px; }
+}
+
 /* Booking dialogs retain readable labels and reachable actions on small screens. */
 .brq-heading > div, .brq-detail-top > div, .brq-list-pane, .brq-detail { min-width:0; }
 .brq-head { gap:12px; }
@@ -6779,6 +6850,30 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
   </section>
 </div>
 
+<!-- GROUPED BOOKING RESCHEDULE -->
+<div class="overlay grs-overlay" id="groupRescheduleModal" aria-hidden="true" hidden inert onclick="if(event.target===this){event.stopImmediatePropagation();closeGroupRescheduleModal();}">
+  <section class="modal grs-modal" role="dialog" aria-modal="true" aria-labelledby="grsTitle" tabindex="-1" onkeydown="groupRescheduleKeydown(event)">
+    <header class="m-hd grs-head">
+      <div><span class="grs-eyebrow">Manage booked schedules</span><h2 id="grsTitle">Reschedule bookings</h2><p id="grsBookingName"></p></div>
+      <button class="m-x" id="grsCloseBtn" type="button" aria-label="Close grouped reschedule" onclick="closeGroupRescheduleModal()">&#10005;</button>
+    </header>
+    <div class="m-body grs-body">
+      <p class="grs-intro">Choose the schedules to move. Each court and booked duration stays the same. All selected changes are saved together.</p>
+      <div class="grs-tools">
+        <label class="grs-select-all"><input id="grsSelectAll" type="checkbox" onchange="grsToggleAll(this.checked)"><span>Select all eligible schedules</span></label>
+        <div class="grs-bulk"><div><label class="fl" for="grsBulkDate">New date for selected schedules</label><input class="fi" id="grsBulkDate" type="date"></div><button class="btn btn-g" id="grsApplyDate" type="button" onclick="grsApplyBulkDate()">Apply date</button></div>
+      </div>
+      <div id="grsItems" class="grs-items"></div>
+      <div class="fg grs-note"><label class="fl" for="grsNote">Note to customer <span>(sent with the update)</span></label><textarea class="fi" id="grsNote" rows="3" maxlength="1000" placeholder="Add a reason or helpful details about the new schedules."></textarea></div>
+      <p class="grs-save-error" id="grsSaveError" role="alert" hidden></p>
+    </div>
+    <footer class="m-foot grs-footer">
+      <div id="grsSummary" class="grs-total" role="status" aria-live="polite"></div>
+      <div class="grs-footer-actions"><button class="btn btn-g" id="grsCancelBtn" type="button" onclick="closeGroupRescheduleModal()">Cancel</button><button class="btn btn-p" id="grsSaveBtn" type="button" disabled onclick="saveGroupReschedule()">Save selected &amp; notify</button></div>
+    </footer>
+  </section>
+</div>
+
 <!-- CUSTOMER RESCHEDULE REQUEST REVIEW -->
 <div class="overlay brq-overlay" id="bookingRescheduleRequestsModal" aria-hidden="true" hidden inert>
   <section class="modal brq-modal" role="dialog" aria-modal="true" aria-labelledby="brqTitle" tabindex="-1" onkeydown="bookingRescheduleRequestKeydown(event)">
@@ -8062,7 +8157,7 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true, includeD
     ${includePrimaryActions && includePaymentTransferActions ? bookingPaymentTransferEmailButton(b) : ''}
     ${includePaymentTransferActions ? bookingDuplicateTransferButton(b) : ''}
     ${includePrimaryActions ? bookingRescheduleRequestAction(b) : ''}
-    ${!hasPendingRescheduleRequest && !balanceReviewLocked && !grouped && !['cancelled','forfeited'].includes(b.status)?`<button class="btn btn-sm" style="background:rgba(74,154,220,.12);color:#5a9ad4;border:1px solid rgba(74,154,220,.3)" onclick="openRescheduleModal('${jsArg(actionRef)}')">Reschedule</button>`:''}
+    ${bookingRescheduleActionButton(b)}
     ${b.email && (forfeited || (hasBalance && balanceReviewState === 'clear'))?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Notice':'Balance Reminder'}</button>`:''}
     ${b.status==='confirmed' && b.email && !hasBalance?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendConfirmationEmail('${jsArg(actionRef)}')">Resend Email</button>`:''}
     ${canRecordManualPayment?`<button class="btn btn-p btn-sm" onclick="updatePaymentStatus('${jsArg(actionRef)}','paid')">Record Fully Paid</button>`:''}
@@ -8323,6 +8418,7 @@ async function openBookingDetails(ref) {
     const hasReceipt = (b.gcashRef || (b.receiptStatus && b.receiptStatus !== 'none')) && isDigitalPayment(b.paymentMethod);
     $('bookingDetailsActions').innerHTML = `
       <button class="btn btn-g" onclick="closeBookingDetails()">Close</button>
+      ${bookingRescheduleActionButton(b)}
       ${sess?.role === 'owner' ? `<button type="button" class="btn btn-g" onclick="openOwnerBookingPreview('${jsArg(b.displayRef || actionRef)}')">Preview guest view ↗</button>` : ''}
       ${b.hostBooking && canViewHostPaymentHistory() ? `<button type="button" class="btn btn-g" onclick="openHostPaymentHistoryFromDetails('${jsArg(actionRef)}')">Payment History</button>` : ''}
       ${b.hostBooking && pendingBalance && canViewHostPaymentHistory() ? `<button type="button" class="btn host-balance-review-button" onclick="openHostPaymentHistoryFromDetails('${jsArg(actionRef)}')">Review & Confirm</button>` : ''}
@@ -12999,7 +13095,7 @@ async function openRescheduleModal(ref) {
   try {
     const group = await getBookingGroupByRef(ref);
     if (sequence !== _rsOpenSequence) return;
-    if (group?.isGroup) { toast('Grouped bookings must be rescheduled court-by-court from individual booking records.', 'inf'); return; }
+    if (group?.isGroup || (group?.allItems || group?.items || []).length > 1) { await openGroupRescheduleModal(ref, group, trigger); return; }
     const b = await DB.getBookingByRef(ref);
     if (sequence !== _rsOpenSequence) return;
     if (!b) { toast('Booking not found.', 'err'); return; }
@@ -13103,6 +13199,301 @@ async function saveReschedule() {
     console.error('refresh after rescheduling:', error);
     toast('Booking rescheduled. Refresh the booking list to see the new schedule.', 'inf');
   }
+}
+
+// Grouped rescheduling keeps each stored booking's court and duration intact.
+let _grsState = null;
+let _grsOpenSequence = 0;
+
+function grsItemEligibility(booking) {
+  if (!['confirmed', 'pending', 'verifying'].includes(String(booking?.status || '').toLowerCase())) {
+    return { eligible:false, reason:'Only active bookings can be moved.' };
+  }
+  if (isPlaceholderHold(booking)) return { eligible:false, reason:'Release this temporary hold from the booking list.' };
+  if (pendingRescheduleRequestForBooking(booking)) return { eligible:false, reason:'Review the pending customer request first.' };
+  if (booking.hostBooking && booking.paymentStatus === 'downpayment_paid' && hostBalanceReviewState(booking) !== 'clear') {
+    return { eligible:false, reason:'Complete the balance payment review first.' };
+  }
+  try {
+    const slots = rsOriginalSlots(booking.slots);
+    if (Number(booking.duration ?? slots.length) !== slots.length) throw new Error('Duration mismatch');
+    return { eligible:true, slots };
+  } catch (_) { return { eligible:false, reason:'This booking needs a valid continuous duration before it can be moved.' }; }
+}
+
+function bookingRescheduleActionButton(booking) {
+  const rows = booking.allItems || booking.items || [booking];
+  if (!rows.some(item => grsItemEligibility(item).eligible)) return '';
+  const ref = booking.primaryRef || booking.ref;
+  if (!ref) return '';
+  return `<button class="btn btn-sm booking-reschedule-action" type="button" onclick="openRescheduleModal('${jsArg(ref)}')">Reschedule${rows.length > 1 ? ' bookings' : ''}</button>`;
+}
+
+function grsValidDate(date, min, max) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return false;
+  const parsed = new Date(`${date}T12:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0,10) === date && date >= min && date <= max;
+}
+
+function grsBuildChanges(items, min, max) {
+  const selected = items.filter(item => item.selected);
+  if (!selected.length) return { changes:[], error:'Select at least one booking schedule.' };
+  if (selected.length > 8) return { changes:[], error:'Choose up to 8 booking schedules at a time.' };
+  const occupied = new Map();
+  const changes = [];
+  for (const item of selected) {
+    if (!item.eligible) return { changes:[], error:'One selected booking is not eligible to move.' };
+    if (!grsValidDate(item.newDate,min,max)) return { changes:[], error:'Choose a valid new date for every selected schedule.' };
+    if (item.loading) return { changes:[], error:'Checking availability for the selected schedules…' };
+    const option = item.startValue !== '' && item.optionsDate === item.newDate
+      && item.options.find(value => value.start === Number(item.startValue));
+    if (!option) return { changes:[], error:'Choose an available time for every selected schedule.' };
+    if (item.newDate === item.oldDate && option.start === item.oldSlots[0]) {
+      return { changes:[], error:'Choose a different schedule or uncheck the unchanged booking.' };
+    }
+    for (let hour = option.start; hour < option.end; hour++) {
+      const key = `${item.courtId}|${item.newDate}|${hour}`;
+      if (occupied.has(key)) return { changes:[], error:`Two selected schedules overlap on ${item.courtName}. Choose separate times.` };
+      occupied.set(key,item.ref);
+    }
+    changes.push({ bookingRef:item.ref, date:item.newDate, startHour:option.start,
+      expectedDate:item.oldDate, expectedSlots:[...item.oldSlots], expectedCourtId:item.courtId });
+  }
+  return { changes, error:'' };
+}
+
+function grsRenderItems(state) {
+  $('grsItems').innerHTML = state.items.map((item,index) => `<section class="grs-item${item.selected?' is-selected':''}" id="grsItem${index}">
+    <label class="grs-item-select"><input id="grsCheck${index}" type="checkbox" ${item.selected?'checked':''} ${item.eligible?'':'disabled'} onchange="grsToggleItem(${index},this.checked)"><span><strong>${esc(item.courtName)}</strong><small>${esc(item.ref)}</small></span><span class="grs-duration">${item.duration || '—'} ${item.duration===1?'hour':'hours'}</span></label>
+    <div class="grs-current"><span>Current schedule</span><strong>${esc(fmtD(item.oldDate))} · ${esc(item.oldStartTime)} – ${esc(item.oldEndTime)}</strong></div>
+    ${item.eligible ? `<div class="grs-item-editor" id="grsEditor${index}" ${item.selected?'':'hidden'}>
+      <div class="grs-fields"><div><label class="fl" for="grsDate${index}">New date</label><input class="fi" id="grsDate${index}" type="date" min="${state.min}" max="${state.max}" value="${item.newDate}" onchange="grsChangeDate(${index})"></div>
+      <div><label class="fl" for="grsTime${index}">Available ${item.duration}-hour time</label><select class="fi" id="grsTime${index}" disabled onchange="grsUpdateSelection(${index})"><option value="">Choose a date first</option></select></div></div>
+      <div class="grs-availability" id="grsStatus${index}" role="status" aria-live="polite">Choose a new date and time.</div>
+      <button class="btn btn-g btn-sm grs-retry" id="grsRetry${index}" type="button" hidden onclick="grsLoadAvailability(${index})">Retry availability</button>
+      <div class="grs-item-summary" id="grsItemSummary${index}"></div></div>` : `<p class="grs-ineligible">${esc(item.reason)}</p>`}
+  </section>`).join('');
+}
+
+function grsSyncSummary() {
+  const state = _grsState;
+  if (!state) return;
+  for (const [index,item] of state.items.entries()) {
+    if (!item.eligible) continue;
+    item.newDate = $('grsDate'+index).value;
+    item.startValue = $('grsTime'+index).value;
+    const option = item.optionsDate === item.newDate && item.startValue !== '' && item.options.find(value => value.start === Number(item.startValue));
+    $('grsItemSummary'+index).textContent = option
+      ? `New schedule: ${fmtD(item.newDate)} · ${option.label}\nSame court · ${item.duration} ${item.duration===1?'hour':'hours'} · payment preserved`
+      : `Choose an available time. The booked ${item.duration}-hour duration stays fixed.`;
+  }
+  const eligible = state.items.filter(item => item.eligible);
+  const selected = state.items.filter(item => item.selected);
+  $('grsSelectAll').checked = eligible.length > 0 && selected.length === eligible.length;
+  $('grsSelectAll').indeterminate = selected.length > 0 && selected.length < eligible.length;
+  const validation = grsBuildChanges(state.items,state.min,state.max);
+  $('grsSummary').textContent = validation.error || `${selected.length} selected · ${selected.reduce((sum,item)=>sum+item.duration,0)} booked court-hours. Ready to save together.`;
+  $('grsSummary').dataset.state = validation.error ? 'incomplete' : 'ready';
+  $('grsSaveBtn').disabled = state.saving || Boolean(validation.error);
+  return validation;
+}
+
+function grsSetItemStatus(index,message,status) {
+  const output = $('grsStatus'+index);
+  output.textContent = message;
+  output.dataset.state = status;
+}
+
+async function grsLoadAvailability(index) {
+  const state = _grsState;
+  const item = state?.items[index];
+  if (!item?.eligible || !item.selected || state.saving) return;
+  const sequence = ++item.requestSequence;
+  const date = $('grsDate'+index).value;
+  item.newDate = date;
+  item.requestedDate = date;
+  item.options = [];
+  item.optionsDate = '';
+  item.startValue = '';
+  item.loading = false;
+  const select = $('grsTime'+index);
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'Checking available times…';
+  select.replaceChildren(placeholder);
+  select.disabled = true;
+  $('grsRetry'+index).hidden = true;
+  $('grsSaveError').hidden = true;
+  if (!grsValidDate(date,state.min,state.max)) {
+    placeholder.textContent = 'Choose a valid date';
+    grsSetItemStatus(index,'Choose a date within the available booking calendar.','empty');
+    grsSyncSummary();
+    return;
+  }
+  item.loading = true;
+  grsSetItemStatus(index,`Checking continuous ${item.duration}-hour blocks…`,'loading');
+  grsSyncSummary();
+  try {
+    const payload = await DB.getAdminRescheduleOptions(item.ref,date);
+    if (_grsState !== state || item.requestSequence !== sequence || !item.selected || $('grsDate'+index).value !== date) return;
+    item.options = buildRsStartOptions(payload,item);
+    item.optionsDate = date;
+    placeholder.textContent = item.options.length ? 'Choose an available time' : 'No available times';
+    select.replaceChildren(placeholder,...item.options.map(option => {
+      const element = document.createElement('option'); element.value=String(option.start); element.textContent=option.label; return element;
+    }));
+    select.disabled = !item.options.length;
+    grsSetItemStatus(index,item.options.length
+      ? `${item.options.length} available ${item.duration}-hour blocks. Choose one full time range.`
+      : `No continuous ${item.duration}-hour blocks are available. Choose another date.`,item.options.length?'ready':'empty');
+  } catch (error) {
+    if (_grsState !== state || item.requestSequence !== sequence || !item.selected || $('grsDate'+index).value !== date) return;
+    placeholder.textContent='Availability unavailable';
+    grsSetItemStatus(index,error?.message || 'Could not check availability. Please retry.','error');
+    $('grsRetry'+index).hidden=false;
+  } finally {
+    if (_grsState === state && item.requestSequence === sequence) { item.loading=false; grsSyncSummary(); }
+  }
+}
+
+function grsToggleItem(index,selected) {
+  const state=_grsState, item=state?.items[index];
+  if (!item?.eligible || state.saving) return;
+  item.selected=Boolean(selected);
+  item.requestSequence++;
+  item.loading=false;
+  item.options=[];
+  item.optionsDate='';
+  $('grsCheck'+index).checked=item.selected;
+  $('grsEditor'+index).hidden=!item.selected;
+  $('grsItem'+index).classList.toggle('is-selected',item.selected);
+  if (item.selected) void grsLoadAvailability(index);
+  grsSyncSummary();
+}
+
+function grsToggleAll(selected) {
+  if (!_grsState || _grsState.saving) return;
+  _grsState.items.forEach((item,index)=>{ if(item.eligible && item.selected!==selected) grsToggleItem(index,selected); });
+  grsSyncSummary();
+}
+
+function grsChangeDate(index) { if (!_grsState?.saving) void grsLoadAvailability(index); }
+function grsUpdateSelection() { if (!_grsState?.saving) { $('grsSaveError').hidden=true; grsSyncSummary(); } }
+
+async function grsApplyBulkDate() {
+  const state=_grsState;
+  if (!state || state.saving) return;
+  const date=$('grsBulkDate').value;
+  if (!grsValidDate(date,state.min,state.max)) {
+    $('grsSaveError').textContent='Choose a valid date to apply to the selected schedules.';
+    $('grsSaveError').hidden=false; $('grsBulkDate').focus(); return;
+  }
+  const selected=state.items.map((item,index)=>({item,index})).filter(({item})=>item.selected);
+  await Promise.allSettled(selected.map(({index})=>{ $('grsDate'+index).value=date; return grsLoadAvailability(index); }));
+}
+
+function grsSetSaving(state,saving) {
+  state.saving=saving;
+  for(const id of ['grsCloseBtn','grsCancelBtn','grsBulkDate','grsApplyDate','grsSelectAll','grsNote']) $(id).disabled=saving;
+  state.items.forEach((item,index)=>{
+    $('grsCheck'+index).disabled=saving || !item.eligible;
+    if(item.eligible) { $('grsDate'+index).disabled=saving; $('grsTime'+index).disabled=saving || !item.options.length; $('grsRetry'+index).disabled=saving; }
+  });
+  $('grsSaveBtn').textContent=saving?'Saving schedules…':'Save selected & notify';
+  $('grsSaveBtn').setAttribute('aria-busy',String(saving));
+  grsSyncSummary();
+}
+
+async function openGroupRescheduleModal(anchorRef, suppliedGroup=null, trigger=document.activeElement) {
+  if (_grsState?.saving) return;
+  if (_grsState) closeGroupRescheduleModal();
+  const sequence=++_grsOpenSequence;
+  try {
+    const group=suppliedGroup || await getBookingGroupByRef(anchorRef);
+    if(sequence!==_grsOpenSequence) return;
+    const rows=group?.allItems || group?.items || [];
+    if(!rows.length) throw new Error('Booking schedules could not be loaded.');
+    if(rows.length>8) throw new Error('Grouped rescheduling supports reservations of up to 8 schedules. Review this oversized reservation before moving it.');
+    const min=typeof _pbMinimumPublicBookingDate==='function' ? _pbMinimumPublicBookingDate() : phDateKeyFromTimestamp(new Date().toISOString());
+    const max=rsDateOffset(phDateKeyFromTimestamp(new Date().toISOString()),366);
+    let selectedCount=0;
+    const items=rows.map(booking=>{
+      const eligibility=grsItemEligibility(booking);
+      const slots=eligibility.slots || [];
+      return { ...eligibility, ref:String(booking.ref), courtId:String(booking.courtId), courtName:booking.courtName || 'Court',
+        oldDate:booking.date, oldSlots:slots, duration:slots.length || Number(booking.duration)||0,
+        oldStartTime:booking.startTime || '',oldEndTime:booking.endTime || '',
+        selected:eligibility.eligible && selectedCount++<8, newDate:booking.date>=min&&booking.date<=max?booking.date:min,
+        options:[],optionsDate:'',startValue:'',loading:false,requestSequence:0 };
+    });
+    const state=_grsState={anchorRef:String(anchorRef),items,min,max,saving:false,trigger,priorOverflow:document.body.style.overflow};
+    $('grsBookingName').textContent=`${group.fullName || 'Guest'} · ${group.displayRef || anchorRef}`;
+    $('grsBulkDate').min=min; $('grsBulkDate').max=max; $('grsBulkDate').value='';
+    $('grsNote').value=''; $('grsSaveError').hidden=true;
+    grsRenderItems(state); grsSetSaving(state,false);
+    const modal=$('groupRescheduleModal'); modal.hidden=false; modal.inert=false; modal.setAttribute('aria-hidden','false'); modal.classList.add('show');
+    modal.querySelector('.grs-body').scrollTop=0;
+    document.body.style.overflow='hidden';
+    requestAnimationFrame(()=>modal.querySelector('.grs-modal')?.focus());
+    await Promise.allSettled(items.map((item,index)=>item.selected?grsLoadAvailability(index):Promise.resolve()));
+  } catch(error) { toast(error?.message || 'Could not open the grouped reschedule window.','err'); }
+}
+
+function closeGroupRescheduleModal() {
+  if(_grsState?.saving) return;
+  const state=_grsState; _grsOpenSequence++; _grsState=null;
+  const modal=$('groupRescheduleModal'); modal.classList.remove('show'); modal.hidden=true; modal.inert=true; modal.setAttribute('aria-hidden','true');
+  if(state) document.body.style.overflow=state.priorOverflow;
+  if(state?.trigger?.isConnected) state.trigger.focus();
+}
+
+function groupRescheduleKeydown(event) {
+  if(event.key==='Escape') { event.preventDefault(); closeGroupRescheduleModal(); return; }
+  if(event.key!=='Tab') return;
+  const targets=[...$('groupRescheduleModal').querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])')].filter(item=>!item.hidden&&item.getClientRects().length);
+  const first=targets[0],last=targets[targets.length-1];
+  if(!first) { event.preventDefault(); return; }
+  if(event.shiftKey&&(document.activeElement===first||!targets.includes(document.activeElement))) { event.preventDefault(); last.focus(); }
+  else if(!event.shiftKey&&(document.activeElement===last||!targets.includes(document.activeElement))) { event.preventDefault(); first.focus(); }
+}
+
+async function saveGroupReschedule() {
+  const state=_grsState;
+  if(!state || state.saving) return;
+  const validation=grsSyncSummary();
+  if(validation.error) { $('grsSaveError').textContent=validation.error; $('grsSaveError').hidden=false; return; }
+  const changes=validation.changes;
+  const anchorRef=changes[0].bookingRef;
+  const selected=state.items.filter(item=>item.selected);
+  const note=$('grsNote').value.trim();
+  grsSetSaving(state,true);
+  let result;
+  try {
+    result=await DB.rescheduleBookingsTransaction(anchorRef,changes);
+  } catch(error) {
+    if(_grsState===state) {
+      grsSetSaving(state,false);
+      await Promise.allSettled(state.items.map((item,index)=>item.selected?grsLoadAvailability(index):Promise.resolve()));
+      if(_grsState===state) { $('grsSaveError').textContent=error?.message || 'Nothing was moved. Recheck the selected schedules and try again.'; $('grsSaveError').hidden=false; }
+    }
+    return;
+  }
+  grsSetSaving(state,false); closeGroupRescheduleModal();
+  if($('bookingDetailsModal')?.classList.contains('show')) closeBookingDetails();
+  toast(`${changes.length} booking ${changes.length===1?'schedule':'schedules'} rescheduled.`);
+  const payload={bookingRef:anchorRef,note,items:selected.map(item=>{
+    const moved=result.items.find(row=>String(row.bookingRef)===item.ref);
+    return {bookingRef:item.ref,oldDate:moved.oldDate,oldStartTime:moved.oldStartTime || fmtHour(moved.oldSlots[0]),oldEndTime:moved.oldEndTime || fmtHour(moved.oldSlots[moved.oldSlots.length-1]+1),
+      newDate:moved.date,newStartTime:moved.startTime,newEndTime:moved.endTime,newDuration:moved.duration};
+  })};
+  // Notify once, only after the complete transaction has succeeded.
+  await Promise.allSettled([
+    DB.sendGroupedRescheduleEmail(payload).then(result=>{ if(!result?.ok&&!result?.skipped) toast('Schedules saved. The customer email could not be delivered.','err'); })
+      .catch(()=>toast('Schedules saved. The customer email could not be delivered.','err')),
+    notifyBookingUpdateSafe(anchorRef,'booking_rescheduled',note || `${changes.length} booking schedules moved together.`),
+    renderBookings().catch(()=>toast('Schedules saved. Refresh the booking list to see the changes.','inf')),
+  ]);
+  renderDash();
 }
 
 async function exportCSV(){
@@ -18004,7 +18395,7 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260905-reschedule-slots-v2"></script>
+<script src="supabase-config.js?v=20260905-grouped-reschedule-v3"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
 <script src="availability-graphic.js?v=20260905-mobile-fit-v6"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>

@@ -1520,6 +1520,20 @@ window.DB = {
     return data;
   },
 
+  async rescheduleBookingsTransaction(ref, changes) {
+    if (!Array.isArray(changes) || changes.length < 1 || changes.length > 8) {
+      throw new Error('Choose between 1 and 8 booking items to reschedule.');
+    }
+    changes.forEach(change => _pbAssertPublicBookingDate(change?.date));
+    const { data, error } = await _sb.rpc('reschedule_bookings_transaction', {
+      p_ref: String(ref || '').trim(), p_changes: changes,
+    });
+    if (error) throw new Error(_extractFnError(error, 'Could not reschedule the selected bookings.'));
+    if (!data || data.ok === false) throw _pbRpcResultError(data, 'Could not reschedule the selected bookings.');
+    _pbClearFastCache(['bookings']);
+    return data;
+  },
+
   async getBookingRescheduleOptions(ref, email, itemRefs, date) {
     const bookingRef = String(ref || '').trim().toUpperCase();
     const bookingEmail = String(email || '').trim().toLowerCase();
@@ -2638,6 +2652,13 @@ window.DB = {
 
   async sendRescheduleEmail(payload, options = {}) {
     if (!payload?.email) return { ok: false, skipped: true, reason: 'No customer email' };
+    return _invokeEdgeFunction('send-reschedule-email', payload, {
+      allowFailure: !!options.allowFailure,
+      retryDirect: false,
+    });
+  },
+
+  async sendGroupedRescheduleEmail(payload, options = {}) {
     return _invokeEdgeFunction('send-reschedule-email', payload, {
       allowFailure: !!options.allowFailure,
       retryDirect: false,
@@ -4071,6 +4092,66 @@ window.DB = {
     booking?.ref,
   ].map(value => String(value || '').trim()).find(Boolean) || '';
 
+  function applyLocalAdminGroupedReschedule(ref, changes) {
+    const session = window.Auth?.getSession?.();
+    if (!session || !['owner','court_owner','staff'].includes(session.role)
+        || (session.status && session.status !== 'active')) {
+      throw new Error('An active dashboard account is required.');
+    }
+    if (!Array.isArray(changes) || changes.length < 1 || changes.length > 8) {
+      throw new Error('Choose between 1 and 8 booking items to reschedule.');
+    }
+    const db = readDb();
+    const anchorRef = String(ref || '').trim();
+    const anchor = db.bookings.find(row => String(row.ref) === anchorRef);
+    if (!anchor) throw new Error('Booking not found.');
+    const familyKey = localRescheduleFamilyKey(anchor);
+    if (db.bookings.filter(row => localRescheduleFamilyKey(row) === familyKey).length > 8) {
+      throw new Error('This booking group has more than 8 items. Review its records before rescheduling.');
+    }
+    const selected = new Set();
+    const targetSlots = new Set();
+    const items = changes.map(change => {
+      const bookingRef = String(change?.bookingRef || '').trim();
+      if (!bookingRef || selected.has(bookingRef)) throw new Error('Choose distinct booking items.');
+      selected.add(bookingRef);
+      const booking = db.bookings.find(row => String(row.ref) === bookingRef);
+      if (!booking || localRescheduleFamilyKey(booking) !== familyKey) {
+        throw new Error('All selected items must belong to the same booking group.');
+      }
+      const options = buildLocalAdminRescheduleOptions(bookingRef, change.date);
+      if (!Array.isArray(change.expectedSlots) || change.expectedSlots.some(hour =>
+        !['number','string'].includes(typeof hour) || !/^(?:[0-9]|1[0-9]|2[0-3])$/.test(String(hour)))) {
+        throw new Error('The original schedule changed. Reopen rescheduling.');
+      }
+      const expectedSlots = change.expectedSlots.map(Number).sort((a,b) => a-b);
+      if (change.expectedDate !== options.oldDate || change.expectedCourtId !== options.courtId
+          || JSON.stringify(expectedSlots) !== JSON.stringify(options.oldSlots)) {
+        throw new Error('The original schedule changed. Reopen rescheduling.');
+      }
+      if (!Number.isInteger(change.startHour) || !options.starts.includes(change.startHour)) {
+        throw new Error('That time is no longer available. Choose another slot.');
+      }
+      const slots = Array.from({length:options.duration},(_,index) => change.startHour+index);
+      for (const hour of slots) {
+        const key = JSON.stringify([options.courtId,change.date,hour]);
+        if (targetSlots.has(key)) throw new Error('Selected booking items overlap on the same court. Choose different times.');
+        targetSlots.add(key);
+      }
+      return {bookingRef,courtId:options.courtId,date:change.date,slots,startTime:_fmtBookingHour(change.startHour),
+        endTime:_fmtBookingHour(change.startHour+options.duration),duration:options.duration,
+        oldDate:options.oldDate,oldSlots:options.oldSlots,oldStartTime:booking.startTime,oldEndTime:booking.endTime};
+    });
+    // No storage writes occur until every item and destination has passed.
+    for (const item of items) {
+      const booking = db.bookings.find(row => String(row.ref) === item.bookingRef);
+      Object.assign(booking,{date:item.date,slots:item.slots,startTime:item.startTime,
+        endTime:item.endTime,duration:item.duration});
+    }
+    writeDb(db);
+    return {bookingRef:anchorRef,items};
+  }
+
   const localRescheduleCourtId = booking => String(
     booking?.courtId ?? booking?.court_id ?? '',
   ).trim();
@@ -4344,6 +4425,7 @@ window.DB = {
     },
     async getBookingByRef(ref) { return readDb().bookings.find(b => String(b.ref) === String(ref)) || null; },
     async getAdminRescheduleOptions(ref, date) { return buildLocalAdminRescheduleOptions(ref,date); },
+    async rescheduleBookingsTransaction(ref, changes) { return applyLocalAdminGroupedReschedule(ref,changes); },
     async rescheduleBookingTransaction(ref, schedule) {
       const options = buildLocalAdminRescheduleOptions(ref,schedule?.date);
       const expectedSlots = [...(schedule.expectedSlots || [])].map(Number).sort((a,b) => a-b);
@@ -6735,6 +6817,7 @@ window.DB = {
     async processHostBalanceDeadlines() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async getBookingBalanceNotifications() { return []; },
     async sendRescheduleEmail() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
+    async sendGroupedRescheduleEmail() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async sendBookingStatusEmail() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async sendTelegramNotification() { return { ok: true, skipped: true, reason: 'Local data mode' }; },
     async confirmOpenPlayHostVerification() { return { ok: true, reviewable: true, skipped: true, reason: 'Local data mode' }; },
