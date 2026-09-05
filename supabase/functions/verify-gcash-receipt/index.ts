@@ -1054,13 +1054,7 @@ function ocrCriticalGaps(
   }
   const gaps: string[] = [];
   if (!extractReference(text, provider, typedRef)) gaps.push("reference");
-  const mayaAmount = provider === "maya"
-    ? extractReceiptAmount(text, { provider })
-    : null;
-  const hasReliableAmount = mayaAmount
-    ? mayaAmount.amount != null && mayaAmount.reliable
-    : extractAmount(text) != null;
-  if (!hasReliableAmount) gaps.push("amount");
+  if (extractAmount(text) == null) gaps.push("amount");
   if (!parseReceiptDateTime(text).date) gaps.push("date");
   return gaps;
 }
@@ -2562,11 +2556,11 @@ Deno.serve(async (req) => {
       flags.push("MERCHANT_CONFIG_MISSING");
     }
     if (
-      provider === "gcash" && !expectedNumber &&
+      (provider === "gcash" || provider === "maya") && !expectedNumber &&
       !flags.includes("MERCHANT_CONFIG_MISSING")
     ) {
       // A QR image alone cannot prove which recipient the screenshot paid.
-      // GCash auto-approval requires a configured full mobile number.
+      // GCash and Maya auto-approval require a configured full mobile number.
       flags.push("MERCHANT_CONFIG_MISSING");
     }
     if (!isDedicatedReceiptProvider(provider)) {
@@ -2640,7 +2634,9 @@ Deno.serve(async (req) => {
       : provider === "bdopay"
       ? extractBdoInvoiceNumber(ocrText)
       : null;
-    const extractedInstapayRefNo = provider === "maya"
+    const extractedInstapayRefNo = providerParse?.provider === "maya"
+      ? providerParse.receipt.railReference.value || null
+      : provider === "maya"
       ? extractMayaInstapayRefNo(ocrText)
       : null;
     const extractedBpiTransactionRefNo = providerParse?.provider === "bpi"
@@ -2891,7 +2887,7 @@ Deno.serve(async (req) => {
         duplicateFlag: "DUPLICATE_INVOICE",
       });
     }
-    if (provider === "maya" && extractedInstapayRefNo) {
+    if (provider === "maya" && extractedInstapayRefNo && !providerVerification) {
       dedupeKeys.push({
         key: `maya_instapay:${extractedInstapayRefNo}`,
         providerKey: "maya_instapay",
@@ -2949,6 +2945,11 @@ Deno.serve(async (req) => {
     const recipientMatch = providerVerification?.provider === "gcash"
       ? providerVerification.recipientComparison.phone === "exact" &&
         providerVerification.recipientComparison.name !== "mismatch"
+      : providerVerification?.provider === "maya"
+      ? providerVerification.recipientComparison.phone === "exact" &&
+        ["exact", "masked_compatible"].includes(
+          providerVerification.recipientComparison.name,
+        )
       : providerVerification?.provider === "bdopay"
       ? providerVerification.recipientComparison.name === "exact" &&
         providerVerification.recipientComparison.account === "exact"
@@ -2987,7 +2988,7 @@ Deno.serve(async (req) => {
     let confidence = result === "auto_approved" ? ocrConfidence : 0.5;
     const route = provider === "gcash"
       ? "gcash"
-      : provider === "bdopay" || provider === "bpi" ||
+      : provider === "bdopay" || provider === "maya" || provider === "bpi" ||
           provider === "gotyme" ||
           provider === "maribank"
       ? `${provider}_to_gcash`
@@ -3071,6 +3072,7 @@ Deno.serve(async (req) => {
         ? {
           reference: bankParse.reference,
           invoice: "invoice" in bankParse ? bankParse.invoice : null,
+          transferFee: "transferFee" in bankParse ? bankParse.transferFee : null,
           railReference: "railReference" in bankParse
             ? bankParse.railReference
             : null,
@@ -3087,6 +3089,7 @@ Deno.serve(async (req) => {
           recipient: bankParse.recipient,
           indicators: bankParse.indicators,
           recipientComparison: providerVerification?.provider === "bpi" ||
+              providerVerification?.provider === "maya" ||
               providerVerification?.provider === "bdopay" ||
               providerVerification?.provider === "gotyme" ||
               providerVerification?.provider === "maribank"

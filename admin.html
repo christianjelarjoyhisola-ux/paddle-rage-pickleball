@@ -7324,6 +7324,8 @@ const RECEIPT_FLAG_LABELS = {
   EDITED_METADATA:'Edited image metadata', SUSPECTED_FAKE:'Not a receipt', REF_FORMAT_INVALID:'Bad reference format',
   REF_UNREADABLE:'Reference unreadable', INVOICE_UNREADABLE:'Invoice unreadable', LOW_OCR_CONFIDENCE:'Blurry / low OCR', OCR_UNAVAILABLE:'OCR unavailable', AMOUNT_UNREADABLE:'Amount unreadable',
   AMOUNT_REVIEW:'Amount needs owner review', AMOUNT_CONFIRMATION_UNREADABLE:'Amount confirmation incomplete',
+  REF_MISMATCH:'Reference does not match', INSTAPAY_REF_UNREADABLE:'InstaPay reference unreadable', INSTAPAY_UNREADABLE:'InstaPay unreadable', TRANSFER_STATUS_UNREADABLE:'Transfer status needs review', PROVIDER_REVIEW_REQUIRED:'Payment provider requires owner review',
+  TRANSFER_STATUS_INVALID:'Transfer failed or reversed', TRANSFER_PENDING:'Transfer still pending',
   DATE_UNREADABLE:'Date unreadable', TIME_UNREADABLE:'Time unreadable', NUMBER_UNREADABLE:'Receiver number unreadable', REF_LABEL_UNREADABLE:'Reference label unreadable',
   BDO_PAY_UNREADABLE:'BDO Pay/InstaPay unreadable', MAYA_UNREADABLE:'Maya unreadable', BPI_UNREADABLE:'BPI success unreadable', BPI_CONFIRMATION_UNREADABLE:'BPI confirmation unreadable', BPI_TRANSACTION_UNREADABLE:'BPI transaction ref unreadable', INSTAPAY_QRPH_UNREADABLE:'InstaPay/QRPh unreadable', GXI_DESTINATION_UNREADABLE:'GXI/GCash destination unreadable', RECEIVER_NAME_UNREADABLE:'Receiver name unreadable', MERCHANT_CONFIG_MISSING:'GCash recipient number not configured', BOOKING_GROUP_PAYMENT_MISMATCH:'Booking payment details need review', AUTO_APPROVAL_FAILED:'Auto-verification could not finalize', REJECTION_FINALIZATION_FAILED:'Duplicate rejection could not finalize',
 };
@@ -7341,6 +7343,9 @@ function receiptFlagsForDisplay(b){
   const ex = b?.receiptExtracted || b?.receipt_extracted || {};
   const ref = String(b?.gcashRef || b?.gcash_ref || ex.ref || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
+  const dedicatedMaya = method === 'maya' && String(ex.parserVersion || '').toLowerCase() === 'maya_to_gcash_v1';
+  // Dedicated evidence must be shown exactly as the verifier recorded it.
+  if (dedicatedMaya) return flags;
   if (method === 'bdopay' || method === 'maya') {
     flags = removeReceiptFlags(flags, ['WRONG_GCASH_NUMBER', 'NUMBER_UNREADABLE', 'RECEIVER_NAME_MISMATCH']);
   }
@@ -7499,6 +7504,7 @@ function receiptDetailsHtml(b){
   const parserLabel = ({
     gcash_v1: 'Dedicated GCash v1',
     bdopay_to_gcash_v1: 'Dedicated BDO Pay to GCash v1',
+    maya_to_gcash_v1: 'Dedicated Maya to GCash v1',
     bpi_to_gcash_v1: 'Dedicated BPI to GCash v1',
     gotyme_to_gcash_v1: 'Dedicated GoTyme → GCash v1',
     maribank_to_gcash_v1: 'Dedicated MariBank → GCash v1',
@@ -7544,6 +7550,19 @@ function receiptDetailsHtml(b){
       ['Recipient Phone', receiptDetailValue(gcashPhoneCheckLabel(recipientCheck.phone)), true],
       ['Recipient Name', receiptDetailValue(gcashNameCheckLabel(recipientCheck.name, gcash.receiver?.name?.raw)), true],
       ['Receipt Type', receiptDetailValue(gcash.indicators?.classification === 'gcash' ? 'GCash Send Money receipt' : 'Needs review'), true],
+    ] : []),
+    ...(bankTransfer && String(ex.parserVersion || '').toLowerCase() === 'maya_to_gcash_v1' ? [
+      ['Maya Reference ID', receiptDetailValue(bankTransfer.reference?.value), true],
+      ['InstaPay Ref. No.', receiptDetailValue(bankTransfer.railReference?.value), true],
+      ['Transfer Fee (separate)', receiptAmountValue(bankTransfer.transferFee?.amount), true],
+      ['Maya Recipient', receiptDetailValue(bankTransfer.recipient?.nameRaw), true],
+      ['Recipient Account', receiptDetailValue(bankTransfer.recipient?.phoneNormalized || bankTransfer.recipient?.accountRaw), true],
+      ['Recipient Check', receiptDetailValue(`Name: ${bankTransfer.recipientComparison?.name || 'review'} / Account: ${bankTransfer.recipientComparison?.phone || 'review'}`), true],
+      ['Receipt Evidence', receiptDetailValue([
+        bankTransfer.indicators?.completionScreen ? 'Sent receipt' : 'Transfer status needs review',
+        bankTransfer.indicators?.providerBrand ? 'Maya source' : 'Maya source unreadable',
+        bankTransfer.indicators?.destinationGcash ? 'GCash destination' : 'GCash destination unreadable',
+      ].join(' / ')), true],
     ] : []),
     ...(bankTransfer && String(ex.parserVersion || '').toLowerCase() === 'bdopay_to_gcash_v1' ? [
       ['BDO Pay Reference', receiptDetailValue(bankTransfer.reference?.value), true],

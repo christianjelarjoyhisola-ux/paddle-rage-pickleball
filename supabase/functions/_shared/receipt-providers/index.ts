@@ -30,10 +30,17 @@ import {
   parseMaribankToGcashReceipt,
   verifyMaribankToGcashReceipt,
 } from "./maribank.ts";
+import {
+  type MayaReceiptParse,
+  type MayaReceiptVerificationEvidence,
+  parseMayaToGcashReceipt,
+  verifyMayaToGcashReceipt,
+} from "./maya.ts";
 
 export type DedicatedReceiptProvider =
   | "gcash"
   | "bdopay"
+  | "maya"
   | "bpi"
   | "gotyme"
   | "maribank";
@@ -66,9 +73,17 @@ export type BdoPayProviderReceiptParse = {
   receipt: BdoPayReceiptParse;
 };
 
+export type MayaProviderReceiptParse = {
+  provider: "maya";
+  destinationProvider: "gcash";
+  parserVersion: "maya_to_gcash_v1";
+  receipt: MayaReceiptParse;
+};
+
 export type ProviderReceiptParse =
   | GcashProviderReceiptParse
   | BdoPayProviderReceiptParse
+  | MayaProviderReceiptParse
   | BpiProviderReceiptParse
   | BankProviderReceiptParse;
 
@@ -84,6 +99,7 @@ export type GcashReceiptVerificationEvidence = {
 export type ProviderReceiptVerificationEvidence =
   | GcashReceiptVerificationEvidence
   | BdoPayReceiptVerificationEvidence
+  | MayaReceiptVerificationEvidence
   | BpiReceiptVerificationEvidence
   | BankReceiptVerificationEvidence;
 
@@ -100,7 +116,8 @@ export function isDedicatedReceiptProvider(
   provider: string,
 ): provider is DedicatedReceiptProvider {
   return provider === "gcash" || provider === "bdopay" ||
-    provider === "gotyme" || provider === "maribank" || provider === "bpi";
+    provider === "maya" || provider === "gotyme" || provider === "maribank" ||
+    provider === "bpi";
 }
 
 export function parseProviderReceipt(
@@ -122,6 +139,13 @@ export function parseProviderReceipt(
         destinationProvider: "gcash",
         parserVersion: "bdopay_to_gcash_v1",
         receipt: parseBdoPayToGcashReceipt(rawText, options),
+      };
+    case "maya":
+      return {
+        provider,
+        destinationProvider: "gcash",
+        parserVersion: "maya_to_gcash_v1",
+        receipt: parseMayaToGcashReceipt(rawText, options),
       };
     case "gotyme":
       return {
@@ -277,6 +301,8 @@ export function verifyProviderReceipt(
       return verifyGcashReceipt(parsed, context);
     case "bdopay":
       return verifyBdoPayToGcashReceipt(parsed.receipt, context);
+    case "maya":
+      return verifyMayaToGcashReceipt(parsed.receipt, context);
     case "gotyme":
       return verifyGotymeToGcashReceipt(
         parsed.receipt as BankToGcashReceiptParse & { provider: "gotyme" },

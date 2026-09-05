@@ -4,7 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const root = __dirname;
-const read = file => fs.readFileSync(path.join(root, file), 'utf8');
+const read = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/\r\n/g, '\n');
 const migration = read('supabase/migrations/20260904100000_booking_reschedule_workflow.sql');
 const adapter = read('supabase-config.js');
 const guestHtml = read('manage-booking.html');

@@ -358,7 +358,7 @@ test('receipt and confirmation delivery use recoverable single-worker leases', (
   assert.match(receiptEdge, /ocrConfidenceSource !== "native"/);
   assert.match(
     receiptEdge,
-    /provider === "gcash" && !expectedNumber &&\s*!flags\.includes\("MERCHANT_CONFIG_MISSING"\)[\s\S]*?flags\.push\("MERCHANT_CONFIG_MISSING"\)/
+    /\(provider === "gcash" \|\| provider === "maya"\) && !expectedNumber &&\s*!flags\.includes\("MERCHANT_CONFIG_MISSING"\)[\s\S]*?flags\.push\("MERCHANT_CONFIG_MISSING"\)/
   );
   assert.match(
     receiptProviderDispatch,

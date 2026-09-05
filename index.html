@@ -8031,7 +8031,7 @@ function pickPay(m) {
     const notes = {
       gcash: 'Pay from GCash to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       bdopay: 'Pay from BDO Pay to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
-      maya: 'Pay from Maya to the GCash recipient shown. Your receipt stays pending for court-owner review.',
+      maya: 'Pay from Maya to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       bpi: [
         'BPI to GCash/G-Xchange only.',
         'Enter the BPI Confirmation No., not the Transaction Ref. No.',
@@ -8091,8 +8091,8 @@ function syncGcashSharedPanel(method) {
     maya: {
       header: 'Maya → GCash',
       title: 'Send from Maya to this GCash account',
-      guide: ['Open the QR in Maya.', 'Pay the exact amount.', 'Use Reference ID.', 'Upload the Maya receipt.'],
-      help: 'Maya → GCash. Your receipt stays pending for court-owner review.',
+      guide: ['Open the QR in Maya.', 'Send the exact payment amount; the transfer fee is separate.', 'Use Reference ID, not InstaPay Ref. No.', 'Upload the full Maya receipt with recipient, date, and both references visible.'],
+      help: 'Maya → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
     },
     bpi: {
       header: 'BPI → GCash',

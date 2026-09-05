@@ -4,6 +4,20 @@ const test = require('node:test');
 
 const read = path => fs.readFileSync(path, 'utf8');
 
+test('dedicated Maya review keeps recipient and reference failures visible to staff', () => {
+  const vm = require('node:vm');
+  const admin = read('admin.html');
+  const source = admin.slice(admin.indexOf('function removeReceiptFlags('), admin.indexOf('function receiptBadge('));
+  const context = vm.createContext({});
+  vm.runInContext(source, context);
+  const failures = ['WRONG_GCASH_NUMBER', 'NUMBER_UNREADABLE', 'RECEIVER_NAME_MISMATCH', 'REF_FORMAT_INVALID', 'TIME_EXPIRED', 'TIME_FUTURE'];
+  const result = context.receiptFlagsForDisplay({
+    paymentMethod: 'maya', gcashRef: 'B7942F55EC99', receiptFlags: failures,
+    receiptExtracted: { parserVersion: 'maya_to_gcash_v1', receiptAgeMinutes: null },
+  });
+  assert.deepEqual(Array.from(result), failures);
+});
+
 test('admin releases decoded receipt images when review modals close', () => {
   const admin = read('admin.html');
   const previewCleanup = admin.slice(
