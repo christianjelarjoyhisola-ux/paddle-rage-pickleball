@@ -1449,6 +1449,11 @@
     state.open = true;
     state.overlay.hidden = false;
     root.document.body.classList.add('prag-modal-open');
+    // A reopened studio starts at its settings, including the single mobile scroll area.
+    state.overlay.querySelectorAll('.prag-workspace, .prag-controls').forEach(panel => {
+      panel.scrollTop = 0;
+      panel.scrollLeft = 0;
+    });
     const dateInput = element('[data-prag-date]');
     if (dateInput) {
       dateInput.value = state.date;

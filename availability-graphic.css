@@ -46,7 +46,8 @@ body.prag-modal-open { overflow: hidden !important; }
 .prag-overlay,
 .prag-overlay * { box-sizing: border-box; }
 
-.prag-overlay[hidden] { display: none !important; }
+.prag-overlay[hidden],
+.prag-overlay [hidden] { display: none !important; }
 
 .prag-overlay {
   --prag-neon: #b6f000;
@@ -79,6 +80,8 @@ body.prag-modal-open { overflow: hidden !important; }
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(1440px, 100%);
+  min-width: 0;
+  height: min(930px, calc(100vh - clamp(20px, 4.4vw, 56px)));
   height: min(930px, calc(100dvh - clamp(20px, 4.4vw, 56px)));
   min-height: 620px;
   overflow: hidden;
@@ -247,10 +250,12 @@ body.prag-modal-open { overflow: hidden !important; }
 .prag-workspace {
   display: grid;
   grid-template-columns: minmax(310px, 360px) minmax(0, 1fr);
+  min-width: 0;
   min-height: 0;
 }
 
 .prag-controls {
+  min-width: 0;
   min-height: 0;
   padding: 19px;
   overflow: auto;
@@ -304,6 +309,7 @@ body.prag-modal-open { overflow: hidden !important; }
 .prag-input-wrap {
   position: relative;
   display: flex;
+  min-width: 0;
   align-items: center;
 }
 
@@ -319,6 +325,7 @@ body.prag-modal-open { overflow: hidden !important; }
 
 .prag-input-wrap input {
   width: 100%;
+  min-width: 0;
   min-height: 45px;
   padding: 0 13px 0 42px;
   border: 1px solid rgba(182, 240, 0, .17);
@@ -624,6 +631,7 @@ body.prag-modal-open { overflow: hidden !important; }
   justify-content: center;
   width: 100%;
   height: 100%;
+  min-width: 0;
   min-height: 0;
   filter: drop-shadow(0 26px 35px rgba(0, 0, 0, .62));
 }
@@ -712,7 +720,7 @@ body.prag-modal-open { overflow: hidden !important; }
 .prag-footer-copy > span { display: grid; gap: 2px; min-width: 0; }
 .prag-footer-copy strong { color: #dfe6dc; font-size: .69rem; }
 .prag-footer-copy small { overflow: hidden; color: #788276; font-size: .57rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.prag-actions { display: flex; gap: 8px; align-items: center; }
+.prag-actions { display: flex; gap: 8px; align-items: center; min-width: 0; }
 
 .prag-button {
   display: inline-flex;
@@ -728,7 +736,7 @@ body.prag-modal-open { overflow: hidden !important; }
   transition: color .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease;
 }
 
-.prag-button svg { width: 17px; height: 17px; }
+.prag-button svg { width: 17px; height: 17px; flex-shrink: 0; }
 .prag-button-secondary {
   border: 1px solid rgba(255, 255, 255, .1);
   color: #d7ddd4;
@@ -761,6 +769,7 @@ body.prag-modal-open { overflow: hidden !important; }
   .prag-overlay { place-items: end center; padding: 0; }
   .prag-modal {
     width: 100%;
+    height: min(96vh, 1040px);
     height: min(96dvh, 1040px);
     min-height: 0;
     border-width: 1px 0 0;
@@ -775,6 +784,7 @@ body.prag-modal-open { overflow: hidden !important; }
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
+    scroll-padding-block: 12px;
   }
   .prag-controls {
     display: grid;
@@ -791,11 +801,26 @@ body.prag-modal-open { overflow: hidden !important; }
   .prag-section { padding: 0; margin: 0; border: 0; }
   .prag-live-card { grid-column: 1 / -1; }
   .prag-safety-note { display: none; }
-  .prag-preview-panel { width: 100%; height: 540px; min-height: 540px; padding: 13px 14px 10px; }
-  .prag-footer { padding: 11px 14px calc(11px + env(safe-area-inset-bottom)); }
+  .prag-preview-panel { width: 100%; height: auto; min-height: 0; padding: 13px 14px 10px; }
+  .prag-canvas-stage {
+    height: clamp(220px, 55vh, 520px);
+    height: clamp(220px, 55dvh, 520px);
+  }
+  .prag-preview-toolbar { flex-wrap: wrap; gap: 10px; }
+  .prag-preview-toolbar > div:first-child { flex: 1 1 100px; }
+  .prag-preview-toolbar .prag-preview-tools { flex-wrap: wrap; }
+  .prag-page-controls { grid-template-columns: 44px auto 44px; }
+  .prag-page-controls button { width: 44px; height: 44px; }
+  .prag-page-controls span { font-size: .65rem; }
+  .prag-refresh { min-height: 44px; }
+  .prag-input-wrap input { font-size: 16px; }
+  .prag-status { overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+  .prag-footer {
+    padding: 11px max(14px, env(safe-area-inset-right)) calc(11px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
   .prag-footer-copy { display: none; }
-  .prag-actions { width: 100%; }
-  .prag-button { flex: 1 1 auto; min-width: 0; padding: 0 12px; }
+  .prag-actions { width: 100%; flex-wrap: wrap; }
+  .prag-button { flex: 1 1 130px; min-width: 0; padding: 10px 12px; white-space: normal; line-height: 1.3; }
   .prag-court-list { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -808,41 +833,46 @@ body.prag-modal-open { overflow: hidden !important; }
   .cal-day-actions,
   body #sec-bookings .cal-day-actions { grid-template-columns: 1fr; }
 
-  .prag-modal { height: 100dvh; border-radius: 0; }
-  .prag-header { gap: 11px; padding: 11px 12px; }
+  .prag-modal { height: 100vh; height: 100dvh; border: 0; border-radius: 0; }
+  .prag-header { gap: 10px; padding: calc(11px + env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 11px max(12px, env(safe-area-inset-left)); }
   .prag-brand-mark { width: 41px; height: 41px; flex-basis: 41px; border-radius: 11px; }
   .prag-brand-mark span { font-size: 1.1rem; }
   .prag-heading h2 { margin-top: 2px; font-size: 1.25rem; }
   .prag-eyebrow b { display: none; }
-  .prag-icon-button { width: 42px; height: 42px; }
+  .prag-icon-button { width: 44px; height: 44px; }
   .prag-workspace { display: block; }
-  .prag-controls { grid-template-columns: 1fr; gap: 13px; padding: 12px; }
+  .prag-controls { grid-template-columns: minmax(0, 1fr); gap: 13px; padding: 12px max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left)); }
   .prag-section { padding-bottom: 13px; border-bottom: 1px solid rgba(255, 255, 255, .065); }
   .prag-section-heading { margin-bottom: 10px; }
-  .prag-court-list { grid-template-columns: minmax(0, 1fr); }
+  .prag-court-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .prag-court-option { min-height: 49px; padding: 7px; }
   .prag-live-card { grid-column: auto; }
-  .prag-preview-panel { height: 470px; min-height: 470px; padding: 10px 10px 7px; }
+  .prag-preview-panel { padding: 10px max(10px, env(safe-area-inset-right)) 10px max(10px, env(safe-area-inset-left)); }
   .prag-preview-toolbar { padding: 0 1px 8px; }
   .prag-preview-toolbar .prag-preview-tools { gap: 5px; }
   .prag-ready-badge { display: none; }
   .prag-canvas-stage { padding: 9px; border-radius: 14px; }
+  /* Leave space for the header, export actions, and wrapped preview toolbar. */
+  .prag-canvas-stage {
+    height: clamp(160px, min(55vh, calc(100vh - 310px - env(safe-area-inset-top) - env(safe-area-inset-bottom))), 520px);
+    height: clamp(160px, min(55dvh, calc(100dvh - 310px - env(safe-area-inset-top) - env(safe-area-inset-bottom))), 520px);
+  }
   .prag-status { min-height: 24px; padding-top: 7px; }
-  .prag-footer { min-height: 70px; padding: 9px 10px calc(9px + env(safe-area-inset-bottom)); }
+  .prag-footer { min-height: 0; padding: 9px max(10px, env(safe-area-inset-right)) calc(9px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left)); }
   .prag-actions { gap: 6px; }
-  .prag-button { min-height: 47px; padding: 0 9px; border-radius: 11px; font-size: .63rem; }
-  .prag-button span { overflow: hidden; text-overflow: ellipsis; }
+  .prag-button { flex: 1 1 0; min-height: 46px; padding: 10px; border-radius: 11px; font-size: .75rem; }
+  .prag-button-primary { flex-basis: 100%; }
+  .prag-button span { min-width: 0; overflow-wrap: anywhere; }
 }
 
 @media (max-width: 390px) {
   .prag-heading h2 { font-size: 1.1rem; }
   .prag-heading .prag-eyebrow { font-size: .55rem; }
-  .prag-court-list { grid-template-columns: 1fr; }
-  .prag-button { gap: 5px; padding: 0 7px; font-size: .58rem; }
-  .prag-button svg { width: 15px; height: 15px; }
+  .prag-button { gap: 7px; }
 }
 
 @media (max-height: 720px) and (min-width: 821px) {
+  .prag-overlay { padding: 8px; }
   .prag-modal { min-height: 0; height: calc(100dvh - 16px); }
   .prag-header { padding-block: 12px; }
   .prag-footer { min-height: 66px; padding-block: 9px; }

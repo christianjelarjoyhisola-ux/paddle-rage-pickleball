@@ -1882,6 +1882,37 @@ body.has-reschedule-dialog {
   margin-top: 15px;
 }
 
+.reschedule-sheet [hidden] {
+  display: none !important;
+}
+
+.reschedule-header > div,
+.reschedule-section,
+.reschedule-field,
+.reschedule-footer-actions {
+  min-width: 0;
+}
+
+.reschedule-sheet :is(button, input, textarea),
+.reschedule-status-action,
+.reschedule-admin-link {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.reschedule-sheet :is(h2, h3, p, strong, label),
+.reschedule-status-card,
+.reschedule-admin-link {
+  overflow-wrap: anywhere;
+}
+
+.reschedule-sheet :is(.reschedule-secondary, .reschedule-primary, .reschedule-withdraw, .reschedule-admin-link),
+.reschedule-status-action {
+  white-space: normal;
+  line-height: 1.35;
+  text-align: center;
+}
+
 .privacy-note {
   display: flex;
   align-items: center;
@@ -2179,6 +2210,7 @@ body.has-reschedule-dialog {
   }
 
   .reschedule-header {
+    gap: 12px;
     padding: 24px 18px 17px;
   }
 
@@ -2237,7 +2269,25 @@ body.has-reschedule-dialog {
 
   .reschedule-footer-actions {
     display: grid;
-    grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+    grid-template-columns: minmax(0, 0.36fr) minmax(0, 0.64fr);
+  }
+
+  .reschedule-footer-actions:has(.reschedule-primary[hidden]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reschedule-field input[type="date"],
+  .reschedule-field textarea {
+    font-size: 16px;
+  }
+
+  .reschedule-owner-notice {
+    flex-wrap: wrap;
+  }
+
+  .reschedule-withdraw,
+  .reschedule-admin-link {
+    width: 100%;
   }
 
   .reschedule-secondary,
@@ -2261,6 +2311,10 @@ body.has-reschedule-dialog {
 }
 
 @media (max-width: 390px) {
+  .reschedule-slot-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .brand-copy span {
     display: none;
   }
@@ -2269,6 +2323,32 @@ body.has-reschedule-dialog {
     padding-right: 8px;
     padding-left: 8px;
     font-size: 0.76rem;
+  }
+}
+
+@media (max-height: 500px) and (max-width: 960px) {
+  .reschedule-dialog {
+    padding: 4px;
+  }
+
+  .reschedule-sheet {
+    max-height: calc(100dvh - 8px);
+  }
+
+  .reschedule-header {
+    padding: 13px 16px;
+  }
+
+  .reschedule-header p:last-child {
+    display: none;
+  }
+
+  .reschedule-scroll {
+    padding: 14px 16px;
+  }
+
+  .reschedule-footer {
+    padding: 9px 16px max(9px, env(safe-area-inset-bottom));
   }
 }
 

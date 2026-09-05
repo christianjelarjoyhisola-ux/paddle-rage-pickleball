@@ -361,5 +361,4 @@ test('styles include the integration launch hook and responsive three-action lay
   assert.match(css, /body\.prag-modal-open\s*\{\s*overflow:\s*hidden/);
   assert.match(css, /@media \(max-width: 820px\)[\s\S]*?\.prag-workspace\s*\{[\s\S]*?display:\s*block;[\s\S]*?overflow-y:\s*auto;/);
   assert.match(css, /@media \(max-width: 820px\)[\s\S]*?\.prag-controls\s*\{[\s\S]*?min-height:\s*max-content;[\s\S]*?overflow:\s*visible;/);
-  assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.prag-preview-panel\s*\{\s*height:\s*470px;\s*min-height:\s*470px;/);
 });

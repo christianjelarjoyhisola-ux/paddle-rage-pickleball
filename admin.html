@@ -6,7 +6,7 @@
 <title>Paddle Rage Pickleball — Admin Dashboard</title>
 <link rel="icon" type="image/png" href="paddleragelogo.jpg">
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
-<link rel="stylesheet" href="availability-graphic.css?v=20260902-availability-studio-v5" />
+<link rel="stylesheet" href="availability-graphic.css?v=20260905-mobile-fit-v6" />
 <script src="payment-method-brand.js?v=20260901-payment-icons-v2"></script>
 <script src="chart.min.js"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
@@ -75,7 +75,7 @@ button, input, select, textarea, label, a, [role="button"], .btn, .btn-icon, .na
   touch-action: manipulation;
 }
 @media (pointer: coarse) {
-  input, select, textarea, button, .fi, .btn, .btn-sm, .btn-icon {
+  input, select, textarea, .fi {
     font-size: 16px !important;
   }
 }
@@ -4771,6 +4771,93 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
 .brq-decision{margin-top:15px;padding:14px;border:1px solid var(--border);border-radius:14px;background:var(--bg2)}.brq-decision label{display:block;margin-bottom:7px;color:var(--text);font-size:.72rem;font-weight:900}.brq-decision textarea{min-height:88px;resize:vertical;line-height:1.45}.brq-decision-help{display:flex;justify-content:space-between;gap:10px;margin-top:6px;color:var(--text3);font-size:.63rem;line-height:1.4}.brq-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;flex-wrap:wrap}.brq-approve{background:linear-gradient(135deg,var(--green),#91bd00);color:#071006;font-weight:950;box-shadow:0 9px 24px rgba(var(--green-rgb),.16)}.brq-approve:hover{transform:translateY(-1px)}.brq-danger{background:transparent;color:var(--red);border:1px solid rgba(229,57,53,.42)}.brq-danger:hover{color:#fff;background:var(--red)}.brq-actions button:disabled,.brq-command button:disabled{opacity:.55;cursor:wait;transform:none}.brq-decision-result{margin-top:14px;padding:12px 13px;border:1px solid var(--border);border-radius:11px;color:var(--text2);font-size:.74rem;line-height:1.5}.brq-decision-result strong{color:var(--text)}.brq-notification{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap;margin-top:10px;color:var(--text3);font-size:.64rem}.brq-notification .btn{min-height:30px;padding:5px 9px;font-size:.66rem}
 @media(max-width:760px){.brq-overlay{align-items:flex-end;padding:0;overflow:hidden}.brq-modal{width:100%;height:min(94dvh,900px);max-height:none;border-radius:22px 22px 0 0}.brq-head{padding:15px 16px}.brq-head p{display:none}.brq-mark{width:40px;height:40px;flex-basis:40px;border-radius:12px}.brq-layout{grid-template-columns:1fr;grid-template-rows:minmax(145px,34%) minmax(0,1fr)}.brq-list-pane{border-right:0;border-bottom:1px solid var(--border)}.brq-list{display:flex;gap:9px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity}.brq-request-card{min-width:min(290px,82vw);margin:0;scroll-snap-align:start}.brq-detail{padding:15px}.brq-schedule-grid{grid-template-columns:1fr}.brq-route-arrow{min-height:20px;transform:rotate(90deg)}.brq-customer{grid-template-columns:1fr}.brq-customer-email{text-align:left}.brq-actions{display:grid;grid-template-columns:1fr}.brq-actions .btn{width:100%;min-height:44px;justify-content:center}}
 @media(max-width:520px){.booking-reschedule-queue{flex:1 1 100%;justify-content:center;order:10}.brq-command{padding:9px 11px}.brq-tab{padding:6px 9px}}
+
+/* Booking dialogs retain readable labels and reachable actions on small screens. */
+.brq-heading > div, .brq-detail-top > div, .brq-list-pane, .brq-detail { min-width:0; }
+.brq-head { gap:12px; }
+.brq-head .m-x { flex:0 0 44px; width:44px; height:44px; }
+.brq-detail-top h3, .brq-detail-top p, .brq-note p, .brq-decision-result,
+.brq-schedule-item strong, .brq-schedule-item span { overflow-wrap:anywhere; }
+.brq-command, .brq-decision-help { flex-wrap:wrap; }
+.brq-tab { display:inline-flex; align-items:center; justify-content:center; gap:4px; min-height:44px; white-space:nowrap; }
+.brq-tab span { margin-left:0; flex:0 0 auto; }
+.brq-card-bottom { flex-wrap:wrap; }
+.brq-actions .btn { min-width:0; max-width:100%; white-space:normal; line-height:1.35; text-align:center; }
+.brq-list, .brq-detail { overscroll-behavior:contain; }
+
+#rescheduleModal .rs-modal { max-width:520px; display:flex; flex-direction:column; overflow:hidden; }
+#rescheduleModal .m-hd, #rescheduleModal .m-foot { flex:0 0 auto; }
+#rescheduleModal .m-hd { gap:12px; }
+#rescheduleModal .m-body { min-height:0; overflow:auto; overscroll-behavior:contain; }
+#rescheduleModal .rs-heading { min-width:0; }
+#rescheduleModal .rs-eyebrow { margin-bottom:5px; color:var(--yellow); font-size:.64rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
+#rescheduleModal .rs-heading h2 { margin:0; line-height:1.2; }
+#rescheduleModal .rs-current { margin-bottom:20px; padding:14px; border:1px solid rgba(var(--yellow-rgb),.3); border-radius:14px; background:linear-gradient(135deg,rgba(var(--yellow-rgb),.1),rgba(var(--green-rgb),.035)); }
+#rescheduleModal .rs-current-label { display:block; margin-bottom:6px; color:var(--text3); font-size:.63rem; font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
+#rescheduleModal .rs-current-name { display:block; color:var(--text); font-size:.9rem; font-weight:850; }
+#rescheduleModal .rs-current-schedule { margin-top:6px; color:var(--text); font-size:.82rem; font-weight:750; line-height:1.5; }
+#rescheduleModal .rs-current-guest { margin-top:5px; color:var(--text3); font-size:.75rem; line-height:1.45; }
+#rescheduleModal :is(.rs-current-name,.rs-current-schedule,.rs-current-guest,.rs-duration-help,.rs-availability-status,.rs-selection-summary) { overflow-wrap:anywhere; }
+#rescheduleModal .rs-time-grid { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:12px; }
+#rescheduleModal .rs-time-grid > *, #rescheduleModal .fi { min-width:0; }
+#rescheduleModal .rs-duration-help { margin:0 0 12px; color:var(--text3); font-size:.74rem; line-height:1.5; }
+#rescheduleModal .rs-availability-status { margin-bottom:14px; padding:11px 12px; border:1px solid var(--border); border-radius:10px; background:var(--bg2); color:var(--text2); font-size:.75rem; line-height:1.5; }
+#rescheduleModal .rs-availability-status[data-state="error"] { border-color:rgba(229,57,53,.3); background:var(--red-bg); color:var(--red); }
+#rescheduleModal .rs-availability-status[data-state="ready"] { border-color:rgba(var(--green-rgb),.3); background:rgba(var(--green-rgb),.07); color:var(--text); }
+#rescheduleModal [hidden] { display:none !important; }
+#rescheduleModal .rs-selection-summary { margin:0 0 15px; padding:12px; border-left:3px solid var(--green); border-radius:9px; color:var(--text); background:rgba(var(--green-rgb),.07); font-size:.8rem; line-height:1.5; }
+#rescheduleModal .rs-note-field { margin-bottom:0; }
+#rescheduleModal .rs-note-field textarea { min-height:108px; resize:vertical; line-height:1.5; }
+
+@media (max-width:760px) {
+  .btn { min-width:0; max-width:100%; white-space:normal; overflow-wrap:anywhere; line-height:1.35; text-align:center; }
+  .m-hd { gap:12px; }
+  .m-hd > div, .m-hd h2 { min-width:0; overflow-wrap:anywhere; }
+  .m-x { flex:0 0 44px; width:44px; height:44px; }
+  .m-foot { flex-wrap:wrap; gap:8px; padding:12px 16px max(12px,env(safe-area-inset-bottom)); }
+  .m-foot .btn { min-height:44px; }
+  .m-body .fi { min-width:0; max-width:100%; }
+  .dash-mobile-actions .btn { min-height:48px; }
+  .brq-modal { max-height:calc(100dvh - max(8px,env(safe-area-inset-top))); height:auto; padding-bottom:env(safe-area-inset-bottom); overflow-y:auto; overscroll-behavior:contain; }
+  .brq-head { position:sticky; top:0; padding:14px; }
+  .brq-heading { gap:10px; }
+  .brq-head h2 { font-size:1.35rem; line-height:1.1; }
+  .brq-layout { display:block; flex:0 0 auto; }
+  .brq-list { height:auto; align-items:stretch; padding:11px; }
+  .brq-request-card { flex:0 0 min(280px,82vw); width:min(280px,82vw); min-width:0; }
+  .brq-list .brq-empty { width:100%; min-height:160px; flex:1 0 100%; padding:18px; }
+  .brq-detail { overflow:visible; padding:16px 14px 20px; }
+  .brq-detail-empty { min-height:180px; padding:20px; }
+  .brq-detail-top { flex-wrap:wrap; gap:9px; }
+  .brq-detail-top > div { flex:1 1 180px; }
+  .brq-command { gap:8px; }
+  .brq-command .btn { min-height:44px; flex:0 0 auto; }
+  .brq-notification .btn { min-height:44px; }
+  #rescheduleModal { align-items:flex-end; padding:0; overflow:hidden; }
+  #rescheduleModal .rs-modal { max-height:calc(100dvh - max(8px,env(safe-area-inset-top))); border-radius:20px 20px 0 0; padding-bottom:0; }
+  #rescheduleModal .m-body { padding:16px; }
+  #rescheduleModal .m-foot { display:grid; grid-template-columns:minmax(0,.36fr) minmax(0,.64fr); }
+  #rescheduleModal .m-foot .btn { width:100%; justify-content:center; }
+  #rescheduleModal .fi, .brq-decision textarea { font-size:16px !important; }
+}
+@media (max-width:360px) {
+  .brq-mark { display:none; }
+  .brq-tabs { flex:1; }
+  .brq-tab { flex:1; padding-inline:8px; }
+  .brq-command .btn { padding-inline:10px; }
+}
+@media (max-width:520px) {
+  #rescheduleModal .rs-time-grid { grid-template-columns:minmax(0,1fr); gap:12px; }
+}
+@media (max-height:500px) and (max-width:960px) {
+  .overlay { align-items:flex-start; padding:8px; }
+  .modal { max-height:calc(100dvh - 16px); }
+  .m-hd { padding-block:10px; }
+  .m-foot { padding-block:10px; }
+  #rescheduleModal .rs-modal { max-height:calc(100dvh - 8px); }
+  #rescheduleModal .m-foot { display:flex; flex-direction:row; }
+  #rescheduleModal .m-foot .btn { flex:1; width:auto; }
+}
 </style>
 </head>
 <body class="admin-booting" data-theme="dark">
@@ -6638,58 +6725,58 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
 </div>
 
 <!-- RESCHEDULE MODAL -->
-<div class="overlay" id="rescheduleModal">
-  <div class="modal" style="max-width:440px">
+<div class="overlay" id="rescheduleModal" aria-hidden="true" onclick="if(event.target===this){event.stopImmediatePropagation();closeRescheduleModal();}">
+  <section class="modal rs-modal" style="max-width:520px" role="dialog" aria-modal="true" aria-labelledby="rsTitle" tabindex="-1" onkeydown="rescheduleModalKeydown(event)">
     <div class="m-hd" style="background:linear-gradient(135deg,rgba(74,154,220,.1),transparent)">
-      <h2 style="color:#5a9ad4">📅 RESCHEDULE BOOKING</h2>
-      <button class="m-x" onclick="closeModal('rescheduleModal')">✕</button>
+      <div class="rs-heading">
+        <span class="rs-eyebrow">Booking schedule</span>
+        <h2 id="rsTitle" style="color:#5a9ad4">Reschedule booking</h2>
+      </div>
+      <button class="m-x" id="rsCloseBtn" type="button" aria-label="Close reschedule booking" onclick="closeRescheduleModal()">✕</button>
     </div>
     <div class="m-body">
-      <!-- Current schedule -->
-      <div style="background:rgba(200,160,96,.07);border:1px solid rgba(200,160,96,.25);border-radius:8px;padding:12px 16px;margin-bottom:18px;">
-        <div style="font-size:.67rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:5px;">Current Schedule</div>
-        <div style="font-size:.9rem;font-weight:700;color:var(--text)" id="rsOldCourt">—</div>
-        <div style="font-size:.84rem;color:var(--yellow);margin-top:2px"><span id="rsOldDate">—</span> · <span id="rsOldTime">—</span></div>
-        <div style="font-size:.78rem;color:var(--muted);margin-top:3px;">👤 <span id="rsName">—</span></div>
+      <div class="rs-current" style="background:rgba(200,160,96,.07);border:1px solid rgba(200,160,96,.25);border-radius:12px;padding:14px 16px;margin-bottom:18px;">
+        <div class="rs-current-label" style="font-size:.67rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:5px;">Current schedule</div>
+        <div class="rs-current-name" style="font-size:.9rem;font-weight:700;color:var(--text)" id="rsOldCourt">—</div>
+        <div class="rs-current-schedule" style="font-size:.84rem;color:var(--yellow);margin-top:2px"><span id="rsOldDate">—</span> · <span id="rsOldTime">—</span></div>
+        <div class="rs-current-guest" style="font-size:.78rem;color:var(--muted);margin-top:3px;"><span id="rsName">—</span></div>
       </div>
 
-      <!-- New date -->
       <div class="fg">
-        <label class="fl">New Date</label>
-        <input type="date" class="fi" id="rsNewDate" />
+        <label class="fl" for="rsNewDate">New date</label>
+        <input type="date" class="fi" id="rsNewDate" required onchange="loadRsAvailability()" aria-describedby="rsAvailabilityStatus" />
       </div>
 
-      <!-- Start time + Duration -->
-      <div class="frow" style="gap:10px;">
-        <div class="fg" style="margin:0;flex:1">
-          <label class="fl">Start Time</label>
-          <select class="fi" id="rsStartTime" onchange="updateRsEndTime()"></select>
-        </div>
-        <div class="fg" style="margin:0;flex:1">
-          <label class="fl">Duration</label>
-          <select class="fi" id="rsDuration" onchange="updateRsEndTime()">
-            <option value="1">1 hour</option>
-            <option value="2" selected>2 hours</option>
-            <option value="3">3 hours</option>
-            <option value="4">4 hours</option>
+      <div class="frow rs-time-grid" style="gap:10px;">
+        <div class="fg" style="margin:0;flex:2;min-width:0">
+          <label class="fl" for="rsStartTime">Available time</label>
+          <select class="fi" id="rsStartTime" disabled onchange="updateRsEndTime()" aria-describedby="rsAvailabilityStatus rsDurationHelp">
+            <option value="">Choose a date first</option>
           </select>
         </div>
+        <div class="fg" style="margin:0;flex:1;min-width:0">
+          <label class="fl" for="rsDuration">Booked duration</label>
+          <input class="fi" id="rsDuration" value="—" readonly aria-describedby="rsDurationHelp" />
+        </div>
       </div>
-      <div style="font-size:.78rem;color:var(--muted);margin-top:6px;margin-bottom:14px;">
+      <p class="rs-duration-help" id="rsDurationHelp" style="font-size:.75rem;color:var(--muted);margin:8px 0;">The original duration stays fixed. Each option is one continuous block on the same court. All times are in Philippine time.</p>
+      <div class="rs-availability-status" id="rsAvailabilityStatus" role="status" aria-live="polite" aria-atomic="true" data-state="idle">Choose a date to check availability.</div>
+      <button class="btn btn-g btn-sm" id="rsRetryBtn" type="button" hidden onclick="loadRsAvailability()">Retry availability</button>
+      <div class="rs-selection-summary" style="font-size:.78rem;color:var(--muted);margin-top:10px;margin-bottom:16px;">
         New end time: <strong id="rsEndTimeDisplay" style="color:#5a9ad4;">—</strong>
       </div>
 
-      <!-- Note to customer -->
-      <div class="fg" style="margin:0">
-        <label class="fl">Note to Customer <span style="color:var(--muted);font-weight:400;text-transform:none;">(sent via email)</span></label>
+      <div class="fg rs-note-field" style="margin:0">
+        <label class="fl" for="rsNote">Note to customer <span style="color:var(--muted);font-weight:400;text-transform:none;">(sent via email)</span></label>
         <textarea class="fi" id="rsNote" rows="3" placeholder="e.g. Heavy rain expected — we moved your slot to keep you safe!" style="resize:none;font-size:.84rem;line-height:1.5;"></textarea>
       </div>
+      <p id="rsSaveError" role="alert" hidden style="color:var(--red);font-size:.82rem;margin:12px 0 0;"></p>
     </div>
     <div class="m-foot">
-      <button class="btn btn-g" onclick="closeModal('rescheduleModal')">Cancel</button>
-      <button class="btn btn-p" onclick="saveReschedule()">📅 Reschedule & Notify</button>
+      <button class="btn btn-g" id="rsCancelBtn" type="button" onclick="closeRescheduleModal()">Cancel</button>
+      <button class="btn btn-p" id="rsSaveBtn" type="button" disabled onclick="saveReschedule()">Reschedule &amp; notify</button>
     </div>
-  </div>
+  </section>
 </div>
 
 <!-- CUSTOMER RESCHEDULE REQUEST REVIEW -->
@@ -12750,92 +12837,241 @@ function fmtHour(h) {
   return `${hh}:00 ${suffix}`;
 }
 
-function populateRsTimePicker(selectedHour) {
-  const sel = $('rsStartTime');
-  sel.innerHTML = '';
-  for (let h = 6; h <= 21; h++) {
-    const opt = document.createElement('option');
-    opt.value = h;
-    opt.textContent = fmtHour(h);
-    if (h === selectedHour) opt.selected = true;
-    sel.appendChild(opt);
+let _rsState = null;
+let _rsOpenSequence = 0;
+
+function rsOriginalSlots(values) {
+  if (!Array.isArray(values) || !values.length || values.length > 24) {
+    throw new Error('This booking has no valid reserved hours. Close this window and review the booking.');
   }
-  updateRsEndTime();
+  const slots = values.map(value => /^\d{1,2}$/.test(String(value)) ? Number(value) : NaN).sort((a, b) => a - b);
+  if (slots.some((hour, index) => !Number.isInteger(hour) || hour < 0 || hour > 23 || (index > 0 && hour !== slots[index - 1] + 1))) {
+    throw new Error('This booking does not have one continuous reserved block. Close this window and review the booking.');
+  }
+  return slots;
+}
+
+function buildRsStartOptions(payload, state) {
+  if (!payload || String(payload.bookingRef) !== state.ref || String(payload.courtId) !== state.courtId ||
+      payload.date !== state.requestedDate || Number(payload.duration) !== state.duration ||
+      payload.oldDate !== state.oldDate || !Array.isArray(payload.starts) ||
+      JSON.stringify(rsOriginalSlots(payload.oldSlots)) !== JSON.stringify(state.oldSlots)) {
+    throw new Error('The booking or its availability changed. Close this window and reopen the booking.');
+  }
+  const starts = payload.starts.map(value => /^\d{1,2}$/.test(String(value)) ? Number(value) : NaN);
+  if (starts.some(hour => !Number.isInteger(hour) || hour < 0 || hour + state.duration > 24)) {
+    throw new Error('Availability could not be verified. Please try again.');
+  }
+  // The server checks every hour in each start's complete, fixed-duration block.
+  return [...new Set(starts)].sort((a, b) => a - b).map(start => ({
+    start,
+    end: start + state.duration,
+    label: `${fmtHour(start)} – ${fmtHour(start + state.duration)}`,
+  }));
+}
+
+function rsDateOffset(date, days) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function rsDateIsValid(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(`${date}T12:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date &&
+    date >= $('rsNewDate').min && date <= $('rsNewDate').max;
+}
+
+function rsSetPlaceholder(label) {
+  const option = document.createElement('option');
+  option.value = '';
+  option.textContent = label;
+  $('rsStartTime').replaceChildren(option);
+  $('rsStartTime').disabled = true;
+  $('rsEndTimeDisplay').textContent = '—';
+  $('rsSaveBtn').disabled = true;
+}
+
+function rsSetAvailabilityStatus(message, status) {
+  $('rsAvailabilityStatus').textContent = message;
+  $('rsAvailabilityStatus').dataset.state = status;
+  $('rsStartTime').setAttribute('aria-busy', String(status === 'loading'));
+}
+
+async function loadRsAvailability(preferredHour = null) {
+  const state = _rsState;
+  if (!state || state.saving) return;
+  const sequence = ++state.requestSequence;
+  const date = $('rsNewDate').value;
+  state.requestedDate = date;
+  state.optionsDate = '';
+  state.options = [];
+  $('rsRetryBtn').hidden = true;
+  $('rsSaveError').hidden = true;
+  if (!rsDateIsValid(date)) {
+    rsSetPlaceholder('Choose a valid date');
+    rsSetAvailabilityStatus('Choose a date within the available booking calendar.', 'empty');
+    return;
+  }
+  rsSetPlaceholder('Checking available times…');
+  rsSetAvailabilityStatus(`Checking continuous ${state.duration}-hour blocks…`, 'loading');
+  try {
+    const payload = await DB.getAdminRescheduleOptions(state.ref, date);
+    if (_rsState !== state || sequence !== state.requestSequence || $('rsNewDate').value !== date) return;
+    const options = buildRsStartOptions(payload, state);
+    state.options = options;
+    state.optionsDate = date;
+    if (!options.length) {
+      rsSetPlaceholder('No available times');
+      rsSetAvailabilityStatus(`No continuous ${state.duration}-hour blocks are available on this court for this date. Choose another date.`, 'empty');
+      return;
+    }
+    const select = $('rsStartTime');
+    select.replaceChildren(...options.map(item => {
+      const option = document.createElement('option');
+      option.value = String(item.start);
+      option.textContent = item.label;
+      return option;
+    }));
+    select.value = String(options.some(item => item.start === preferredHour) ? preferredHour : options[0].start);
+    select.disabled = false;
+    rsSetAvailabilityStatus(`${options.length} available ${state.duration}-hour ${options.length === 1 ? 'block' : 'blocks'}. Availability is checked again when you save.`, 'ready');
+    updateRsEndTime();
+  } catch (error) {
+    if (_rsState !== state || sequence !== state.requestSequence || $('rsNewDate').value !== date) return;
+    rsSetPlaceholder('Availability unavailable');
+    rsSetAvailabilityStatus(error?.message || 'Could not check availability. Please try again.', 'error');
+    $('rsRetryBtn').hidden = false;
+  }
 }
 
 function updateRsEndTime() {
-  const start = parseInt($('rsStartTime').value);
-  const dur = parseInt($('rsDuration').value);
-  $('rsEndTimeDisplay').textContent = fmtHour(start + dur);
+  const state = _rsState;
+  const value = $('rsStartTime').value;
+  const selected = state && value !== '' && state.optionsDate === $('rsNewDate').value &&
+    state.options.find(item => item.start === Number(value));
+  const unchanged = selected && state.oldDate === state.optionsDate && selected.start === state.oldSlots[0];
+  $('rsEndTimeDisplay').textContent = selected ? fmtHour(selected.end) : '—';
+  $('rsSaveBtn').disabled = !selected || !!state?.saving || !!unchanged;
+  if (unchanged) rsSetAvailabilityStatus('This is the current schedule. Choose a different available time or date.', 'ready');
+  else if (selected && !state.saving) rsSetAvailabilityStatus(`${state.options.length} available ${state.duration}-hour ${state.options.length === 1 ? 'block' : 'blocks'}. Availability is checked again when you save.`, 'ready');
+}
+
+function setRsSaving(state, saving) {
+  state.saving = saving;
+  for (const id of ['rsNewDate', 'rsNote', 'rsCancelBtn', 'rsCloseBtn', 'rsRetryBtn']) $(id).disabled = saving;
+  $('rsStartTime').disabled = saving || !state.options.length;
+  $('rsSaveBtn').textContent = saving ? 'Rescheduling…' : 'Reschedule & notify';
+  $('rsSaveBtn').setAttribute('aria-busy', String(saving));
+  updateRsEndTime();
+}
+
+function closeRescheduleModal() {
+  if (_rsState?.saving) return;
+  const trigger = _rsState?.trigger;
+  _rsOpenSequence++;
+  _rsState = null;
+  closeModal('rescheduleModal');
+  $('rescheduleModal').setAttribute('aria-hidden', 'true');
+  if (trigger?.isConnected) trigger.focus();
+}
+
+function rescheduleModalKeydown(event) {
+  if (event.key === 'Escape') { event.preventDefault(); closeRescheduleModal(); return; }
+  if (event.key !== 'Tab') return;
+  const targets = [...$('rescheduleModal').querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])')]
+    .filter(element => !element.hidden && element.getClientRects().length);
+  const first = targets[0];
+  const last = targets[targets.length - 1];
+  if (!first) { event.preventDefault(); return; }
+  if (event.shiftKey && (document.activeElement === first || !targets.includes(document.activeElement))) {
+    event.preventDefault(); last.focus();
+  } else if (!event.shiftKey && (document.activeElement === last || !targets.includes(document.activeElement))) {
+    event.preventDefault(); first.focus();
+  }
 }
 
 async function openRescheduleModal(ref) {
-  const group = await getBookingGroupByRef(ref);
-  if (group?.isGroup) { toast('Grouped bookings must be rescheduled court-by-court from individual booking records.', 'inf'); return; }
-  const b = await DB.getBookingByRef(ref);
-  if (!b) { toast('Booking not found.', 'err'); return; }
-
-  $('rsOldCourt').textContent = b.courtName;
-  $('rsOldDate').textContent = fmtD(b.date);
-  $('rsOldTime').textContent = `${b.startTime} – ${b.endTime}`;
-  $('rsName').textContent = b.fullName;
-
-  // Default to tomorrow
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  $('rsNewDate').value = tomorrow.toISOString().split('T')[0];
-  $('rsNewDate').min = new Date().toISOString().split('T')[0];
-
-  // Match original start hour and duration
-  const startH = b.slots?.length ? Math.min(...b.slots) : 8;
-  const dur = Math.min(Math.max(b.duration || 2, 1), 4);
-  $('rsDuration').value = dur;
-  populateRsTimePicker(startH);
-
-  $('rsNote').value = 'Due to expected heavy rain, we have rescheduled your booking for your safety and convenience. We apologize for the inconvenience!';
-
-  $('rescheduleModal').dataset.ref = ref;
-  $('rescheduleModal').dataset.oldDate = b.date;
-  $('rescheduleModal').dataset.oldStart = b.startTime;
-  $('rescheduleModal').dataset.oldEnd = b.endTime;
-  $('rescheduleModal').classList.add('show');
+  if (_rsState?.saving) return;
+  const sequence = ++_rsOpenSequence;
+  const trigger = document.activeElement;
+  try {
+    const group = await getBookingGroupByRef(ref);
+    if (sequence !== _rsOpenSequence) return;
+    if (group?.isGroup) { toast('Grouped bookings must be rescheduled court-by-court from individual booking records.', 'inf'); return; }
+    const b = await DB.getBookingByRef(ref);
+    if (sequence !== _rsOpenSequence) return;
+    if (!b) { toast('Booking not found.', 'err'); return; }
+    const oldSlots = rsOriginalSlots(b.slots);
+    const state = _rsState = {
+      ref: String(b.ref), courtId: String(b.courtId), oldDate: b.date,
+      oldStartTime: b.startTime, oldEndTime: b.endTime, oldSlots,
+      duration: oldSlots.length, options: [], optionsDate: '', requestSequence: 0, saving: false, trigger,
+    };
+    $('rsOldCourt').textContent = b.courtName;
+    $('rsOldDate').textContent = fmtD(b.date);
+    $('rsOldTime').textContent = `${b.startTime} – ${b.endTime}`;
+    $('rsName').textContent = b.fullName;
+    const today = phDateKeyFromTimestamp(new Date().toISOString());
+    const minimumDate = typeof _pbMinimumPublicBookingDate === 'function' ? _pbMinimumPublicBookingDate() : today;
+    $('rsNewDate').min = minimumDate;
+    $('rsNewDate').max = rsDateOffset(today, 366);
+    $('rsNewDate').value = [rsDateOffset(today, 1), minimumDate].sort().pop();
+    $('rsDuration').value = `${state.duration} ${state.duration === 1 ? 'hour' : 'hours'}`;
+    $('rsNote').value = 'Due to expected heavy rain, we have rescheduled your booking for your safety and convenience. We apologize for the inconvenience!';
+    $('rsSaveError').hidden = true;
+    setRsSaving(state, false);
+    $('rescheduleModal').dataset.ref = state.ref;
+    $('rescheduleModal').classList.add('show');
+    $('rescheduleModal').setAttribute('aria-hidden', 'false');
+    $('rsNewDate').focus();
+    await loadRsAvailability(oldSlots[0]);
+  } catch (error) {
+    if (sequence === _rsOpenSequence) toast(error?.message || 'Could not open the booking schedule.', 'err');
+  }
 }
 
 async function saveReschedule() {
-  const ref = $('rescheduleModal').dataset.ref;
-  if (!ref) return;
-
-  const oldDate = $('rescheduleModal').dataset.oldDate;
-  const oldStartTime = $('rescheduleModal').dataset.oldStart;
-  const oldEndTime = $('rescheduleModal').dataset.oldEnd;
+  const state = _rsState;
+  if (!state || state.saving) return;
   const newDate = $('rsNewDate').value;
-  const startH = parseInt($('rsStartTime').value);
-  const dur = parseInt($('rsDuration').value);
-  const endH = startH + dur;
-  const note = $('rsNote').value.trim();
-
-  if (!newDate) { toast('Please select a new date.', 'err'); return; }
-  if (isNaN(startH) || isNaN(dur)) { toast('Please select a start time and duration.', 'err'); return; }
-
-  const slots = Array.from({ length: dur }, (_, i) => startH + i);
+  const rawStart = $('rsStartTime').value;
+  const startH = rawStart === '' ? NaN : Number(rawStart);
+  if (!rsDateIsValid(newDate) || state.optionsDate !== newDate || !state.options.some(option => option.start === startH)) {
+    $('rsSaveError').textContent = 'Choose one of the available times before rescheduling.';
+    $('rsSaveError').hidden = false;
+    return;
+  }
+  if (newDate === state.oldDate && startH === state.oldSlots[0]) return;
+  const { ref, oldDate, oldStartTime, oldEndTime, duration: dur } = state;
   const newStartTime = fmtHour(startH);
-  const newEndTime = fmtHour(endH);
-
+  const newEndTime = fmtHour(startH + dur);
+  const note = $('rsNote').value.trim();
+  $('rsSaveError').hidden = true;
+  setRsSaving(state, true);
   try {
-    await DB.updateBooking(ref, {
-      date: newDate,
-      startTime: newStartTime,
-      endTime: newEndTime,
-      duration: dur,
-      slots,
+    await DB.rescheduleBookingTransaction(ref, {
+      date: newDate, startHour: startH, expectedDate: oldDate,
+      expectedCourtId: state.courtId, expectedSlots: [...state.oldSlots],
     });
+  } catch (error) {
+    if (_rsState === state) {
+      setRsSaving(state, false);
+      await loadRsAvailability(startH);
+      if (_rsState === state) {
+        $('rsSaveError').textContent = error?.message || 'Could not reschedule the booking. Please try again.';
+        $('rsSaveError').hidden = false;
+      }
+    }
+    return;
+  }
+  setRsSaving(state, false);
+  closeRescheduleModal();
+  toast('Booking rescheduled!');
 
-    closeModal('rescheduleModal');
-    toast('Booking rescheduled!');
-    await renderBookings();
-    renderDash();
-
-    DB.getBookingByRef(ref).then(async bk => {
+  // Only a successful, server-validated move may trigger customer notifications.
+  DB.getBookingByRef(ref).then(async bk => {
       if (!bk) return;
       const payload = {
         bookingRef: bk.ref,
@@ -12859,9 +13095,13 @@ async function saveReschedule() {
         }).catch(() => {}) : Promise.resolve(),
         notifyBookingUpdateSafe(bk, 'booking_rescheduled', note || `Moved from ${oldDate} ${oldStartTime}-${oldEndTime} to ${newDate} ${newStartTime}-${newEndTime}`),
       ]);
-    }).catch(() => {});
-  } catch(e) {
-    toast('Failed to reschedule booking.', 'err');
+  }).catch(() => {});
+  try {
+    await renderBookings();
+    renderDash();
+  } catch (error) {
+    console.error('refresh after rescheduling:', error);
+    toast('Booking rescheduled. Refresh the booking list to see the new schedule.', 'inf');
   }
 }
 
@@ -17764,9 +18004,9 @@ async function checkAgreementGate(session) {
 
 <script src="supabase.min.js"></script>
 <script src="open-play-rating.js?v=20260729-head-to-head-v1"></script>
-<script src="supabase-config.js?v=20260904-reschedule-v1"></script>
+<script src="supabase-config.js?v=20260905-reschedule-slots-v2"></script>
 <script src="qrcode.min.js?v=1.5.4"></script>
-<script src="availability-graphic.js?v=20260902-availability-studio-v5"></script>
+<script src="availability-graphic.js?v=20260905-mobile-fit-v6"></script>
 <script src="play-manager.js?v=20260729-result-footer-v1&amp;rollback=deb2d66"></script>
 <script src="host-balance-admin.js?v=20260831-multi-provider-v1"></script>
 </body>

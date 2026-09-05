@@ -1496,6 +1496,30 @@ window.DB = {
     return data || { ok: true, request: null };
   },
 
+  async getAdminRescheduleOptions(ref, date) {
+    _pbAssertPublicBookingDate(date);
+    const { data, error } = await _sb.rpc('get_admin_reschedule_options', {
+      p_ref: String(ref || '').trim(), p_date: date,
+    });
+    if (error) throw new Error(_extractFnError(error, 'Could not load available time slots.'));
+    if (!data || data.ok === false) throw _pbRpcResultError(data, 'Could not load available time slots.');
+    return data;
+  },
+
+  async rescheduleBookingTransaction(ref, schedule) {
+    _pbAssertPublicBookingDate(schedule?.date);
+    const { data, error } = await _sb.rpc('reschedule_booking_transaction', {
+      p_ref: String(ref || '').trim(), p_date: schedule.date,
+      p_start_hour: schedule.startHour, p_expected_date: schedule.expectedDate,
+      p_expected_slots: schedule.expectedSlots,
+      p_expected_court_id: schedule.expectedCourtId,
+    });
+    if (error) throw new Error(_extractFnError(error, 'Could not reschedule this booking.'));
+    if (!data || data.ok === false) throw _pbRpcResultError(data, 'Could not reschedule this booking.');
+    _pbClearFastCache(['bookings']);
+    return data;
+  },
+
   async getBookingRescheduleOptions(ref, email, itemRefs, date) {
     const bookingRef = String(ref || '').trim().toUpperCase();
     const bookingEmail = String(email || '').trim().toLowerCase();
@@ -3981,6 +4005,45 @@ window.DB = {
     }, requestedDate, requestedCourtIds);
   }
 
+  function buildLocalAdminRescheduleOptions(ref, date) {
+    const session = window.Auth?.getSession?.();
+    if (!session || !['owner','court_owner','staff'].includes(session.role)
+        || (session.status && session.status !== 'active')) {
+      throw new Error('An active dashboard account is required.');
+    }
+    _pbAssertPublicBookingDate(date);
+    const db = readDb();
+    const booking = db.bookings.find(row => String(row.ref) === String(ref));
+    if (!booking) throw new Error('Booking not found.');
+    if (!['confirmed','pending','verifying'].includes(booking.status)) throw new Error('Only an active booking can be rescheduled.');
+    if ((db.bookingRescheduleRequests || []).some(request => request.status === 'pending'
+        && (request.selectedBookingRefs || request.selected_booking_refs || request.itemRefs || [])
+          .map(String).includes(String(ref)))) {
+      throw new Error('Review the pending reschedule request before moving this booking.');
+    }
+    if (!Array.isArray(booking.slots) || booking.slots.some(hour =>
+      !/^(?:[0-9]|1[0-9]|2[0-3])$/.test(String(hour)))) {
+      throw new Error('The original booking has invalid time slots.');
+    }
+    const oldSlots = booking.slots.map(Number).sort((a,b) => a-b);
+    const duration = oldSlots.length;
+    if (!duration || duration > 24 || oldSlots.some((hour,index) => !Number.isInteger(hour)
+        || hour < 0 || hour > 23 || (index && hour !== oldSlots[index-1]+1))
+        || Number(booking.duration ?? duration) !== duration) {
+      throw new Error('The original booking must have a continuous, valid duration.');
+    }
+    const courtId = String(booking.courtId || booking.court_id || '');
+    const snapshot = buildLocalAvailabilityGraphic(date,[courtId],{guestSafe:true,excludeBookingRefs:[String(ref)]});
+    const court = snapshot.courts.find(row => row.id === courtId);
+    const starts = [];
+    for (let hour=snapshot.openHour;hour+duration<=snapshot.closeHour;hour++) {
+      if (date === booking.date && hour === oldSlots[0]) continue;
+      if (Array.from({length:duration},(_,index) => hour+index)
+          .every(slot => court?.slots.some(item => item.hour === slot && item.state === 'free'))) starts.push(hour);
+    }
+    return {bookingRef:String(ref),courtId,date,duration,starts,oldDate:booking.date,oldSlots};
+  }
+
   const localRescheduleNotificationSummary = () => ({
     pending: 0,
     processing: 0,
@@ -4280,6 +4343,25 @@ window.DB = {
       return ref;
     },
     async getBookingByRef(ref) { return readDb().bookings.find(b => String(b.ref) === String(ref)) || null; },
+    async getAdminRescheduleOptions(ref, date) { return buildLocalAdminRescheduleOptions(ref,date); },
+    async rescheduleBookingTransaction(ref, schedule) {
+      const options = buildLocalAdminRescheduleOptions(ref,schedule?.date);
+      const expectedSlots = [...(schedule.expectedSlots || [])].map(Number).sort((a,b) => a-b);
+      if (schedule.expectedDate !== options.oldDate || JSON.stringify(expectedSlots) !== JSON.stringify(options.oldSlots)
+          || schedule.expectedCourtId !== options.courtId) {
+        throw new Error('The original schedule changed. Reopen rescheduling.');
+      }
+      if (!options.starts.includes(schedule.startHour)) throw new Error('That time is no longer available. Choose another slot.');
+      const db = readDb();
+      const booking = db.bookings.find(row => String(row.ref) === String(ref));
+      const result = {bookingRef:String(ref),date:schedule.date,
+        slots:Array.from({length:options.duration},(_,index) => schedule.startHour+index),
+        startTime:_fmtBookingHour(schedule.startHour),endTime:_fmtBookingHour(schedule.startHour+options.duration),
+        duration:options.duration,oldDate:options.oldDate,oldSlots:options.oldSlots};
+      Object.assign(booking,{date:result.date,slots:result.slots,startTime:result.startTime,endTime:result.endTime,duration:result.duration});
+      writeDb(db);
+      return result;
+    },
     async getBookingManagementViewerContext() {
       const session = window.Auth?.getSession?.() || null;
       const active = Boolean(session) && (!session.status || session.status === 'active');
