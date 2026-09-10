@@ -48,6 +48,34 @@ Aug 31, 2026 10:41 AM
 InstaPay
 `;
 
+const GOTYME_LIVE_OCR = `
+GoTyme Bank
+Sent
+₱3,600.00
+instaPay
+Instant
+To
+Paddle Rage
+0••••••7667
+G-Xchange, Inc (GCash)
+From
+J. ARCADIO
+••••••••4792
+GoTyme Bank
+Amount
+₱3,600.00
+Fee
+₱0.00
+Total
+₱3,600.00
+Trace ID
+000018
+Reference No.
+ITO260910112033018
+Date
+10 Sep 2026 at 7:20 PM
+`;
+
 const MARIBANK_OCR = `
 MariBank
 Money sent
@@ -199,6 +227,119 @@ Deno.test("dispatches clean GCash, GoTyme-to-GCash, and MariBank-to-GCash eviden
     assert(
       !("status" in verified),
       `${provider} verifier returns evidence, never a payment status`,
+    );
+  }
+});
+
+Deno.test("parses and verifies the live GoTyme Sent receipt layout", () => {
+  const typedReference = "ITO260910112033018";
+  const parsed = parseProviderReceipt("gotyme", GOTYME_LIVE_OCR, {
+    typedReference,
+  });
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 3600,
+    expectedRecipientName: "PaddleRage",
+    bookingStartedAt: "2026-09-10T11:06:00.000Z",
+    bookingStartedDate: "2026-09-10",
+  });
+  assert(parsed.provider === "gotyme", "GoTyme provider");
+  assertEquals(
+    parsed.receipt.reference.value,
+    typedReference,
+    "GoTyme reference",
+  );
+  assertEquals(parsed.receipt.railReference.value, "000018", "GoTyme trace ID");
+  assertEquals(parsed.receipt.amount.amount, 3600, "GoTyme amount");
+  assertEquals(
+    parsed.receipt.timestamp.instant,
+    "2026-09-10T11:20:00.000Z",
+    "GoTyme Philippine timestamp",
+  );
+  assertEquals(parsed.receipt.recipient.phoneLast4, "7667", "recipient suffix");
+  assertEquals(parsed.receipt.indicators.transferSuccess, true, "Sent status");
+  assertEquals(verified.flags, [], "clean live GoTyme flags");
+  assert(
+    verified.dedupeKeys.some((item) => item.key === `gotyme:${typedReference}`),
+    "GoTyme reference is replay-protected",
+  );
+  assert(
+    verified.dedupeKeys.some((item) => item.key === "instapay:000018"),
+    "GoTyme trace ID is replay-protected",
+  );
+});
+
+Deno.test("GoTyme Sent layout keeps every financial safety gate", () => {
+  const typedReference = "ITO260910112033018";
+  const cases: Array<{
+    label: string;
+    text: string;
+    context: Partial<typeof CONTEXT> & { typedReference?: string };
+    flag: string;
+  }> = [
+    {
+      label: "pending status",
+      text: GOTYME_LIVE_OCR.replace("Sent", "Sent\nPending"),
+      context: {},
+      flag: "TRANSFER_STATUS_UNREADABLE",
+    },
+    {
+      label: "missing trace ID",
+      text: GOTYME_LIVE_OCR.replace("Trace ID\n000018", ""),
+      context: {},
+      flag: "INSTAPAY_REF_UNREADABLE",
+    },
+    {
+      label: "wrong recipient suffix",
+      text: GOTYME_LIVE_OCR.replace("0••••••7667", "0••••••1234"),
+      context: {},
+      flag: "WRONG_GCASH_NUMBER",
+    },
+    {
+      label: "wrong recipient name",
+      text: GOTYME_LIVE_OCR.replace("Paddle Rage", "Another Merchant"),
+      context: {},
+      flag: "RECEIVER_NAME_MISMATCH",
+    },
+    {
+      label: "reference mismatch",
+      text: GOTYME_LIVE_OCR,
+      context: { typedReference: "ITO260910112039999" },
+      flag: "REF_MISMATCH",
+    },
+    {
+      label: "late receipt",
+      text: GOTYME_LIVE_OCR,
+      context: { bookingStartedAt: "2026-09-10T10:00:00.000Z" },
+      flag: "TIME_EXPIRED",
+    },
+    {
+      label: "receipt predates the reported booking",
+      text: GOTYME_LIVE_OCR,
+      context: { bookingStartedAt: "2026-09-10T13:06:00.000Z" },
+      flag: "TIME_FUTURE",
+    },
+  ];
+
+  for (const testCase of cases) {
+    const caseTypedReference = testCase.context.typedReference ||
+      typedReference;
+    const parsed = parseProviderReceipt("gotyme", testCase.text, {
+      typedReference: caseTypedReference,
+    });
+    const verified = verifyProviderReceipt(parsed, {
+      ...CONTEXT,
+      typedReference: caseTypedReference,
+      expectedAmount: 3600,
+      expectedRecipientName: "PaddleRage",
+      bookingStartedAt: "2026-09-10T11:06:00.000Z",
+      bookingStartedDate: "2026-09-10",
+      ...testCase.context,
+    });
+    assert(
+      verified.flags.includes(testCase.flag),
+      `${testCase.label} must produce ${testCase.flag}`,
     );
   }
 });

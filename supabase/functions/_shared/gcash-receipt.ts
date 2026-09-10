@@ -738,8 +738,14 @@ export function compareGcashMaskedName(
 
   const anyMasked = observed.some((token) => token.masked || token.initial);
   if (!anyMasked) {
-    return observed.map((token) => token.pattern).join(" ") ===
-        expected.join(" ")
+    const observedName = observed.map((token) => token.pattern).join(" ");
+    const expectedName = expected.join(" ");
+    // Receipt OCR and banking apps may split or join a merchant brand at a
+    // word boundary (for example, "Paddle Rage" versus "PaddleRage"). This
+    // remains an exact visible-letter comparison; it does not permit missing,
+    // reordered, or substituted characters.
+    return observedName === expectedName ||
+        observedName.replace(/\s/g, "") === expectedName.replace(/\s/g, "")
       ? "exact"
       : "mismatch";
   }

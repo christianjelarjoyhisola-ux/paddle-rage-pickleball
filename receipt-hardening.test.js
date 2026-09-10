@@ -164,6 +164,8 @@ test('GoTyme and MariBank use dedicated source methods with the shared GCash des
   const page = read('index.html');
   const admin = read('admin.html');
   const client = read('supabase-config.js');
+  const bankParser = read('supabase/functions/_shared/receipt-providers/bank-to-gcash.ts');
+  const receiptVerifier = read('supabase/functions/verify-gcash-receipt/index.ts');
 
   assert.match(page, /id="payOptGotyme"[\s\S]*?GoTyme → GCash/);
   assert.match(page, /id="payOptMaribank"[\s\S]*?MariBank → GCash/);
@@ -179,6 +181,11 @@ test('GoTyme and MariBank use dedicated source methods with the shared GCash des
   assert.match(client, /PB_DIGITAL_PAYMENT_METHODS = \['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'\]/);
   assert.match(client, /payment_method_gotyme: '1'/);
   assert.match(client, /payment_method_maribank: '1'/);
+
+  assert.match(receiptVerifier, /provider === "gotyme" \|\| provider === "maribank"[\s\S]*?gcash_qr_receipt_recipient_name[\s\S]*?gcash_merchant_name/);
+  assert.match(bankParser, /const dayMonthName =[\s\S]*?const dayFirst = line\.match\(dayMonthName\)/);
+  assert.match(bankParser, /const gotymeSentStatus = config\.provider === "gotyme"[\s\S]*?\^sent/);
+  assert.match(bankParser, /transferSuccess: !failureStatus[\s\S]*?gotymeSentStatus/);
 });
 
 test('automated uncertainty queues owner review while owners retain both deliberate decisions', () => {

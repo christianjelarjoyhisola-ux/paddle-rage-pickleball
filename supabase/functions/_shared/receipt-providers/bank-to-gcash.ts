@@ -393,6 +393,8 @@ function timestampResult(
 function parseTimestamp(lines: string[]): BankReceiptTimestamp {
   const monthName =
     /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),?\s+(\d{4})(?:\s*(?:,|at)?\s*(\d{1,2}):(\d{2})\s*(AM|PM))?\b/i;
+  const dayMonthName =
+    /\b(\d{1,2})\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{4})(?:\s*(?:,|at)?\s*(\d{1,2}):(\d{2})\s*(AM|PM))?\b/i;
   const iso =
     /\b(\d{4})-(\d{2})-(\d{2})(?:[ T,]+(\d{1,2}):(\d{2})\s*(AM|PM)?)?\b/i;
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
@@ -408,6 +410,19 @@ function parseTimestamp(lines: string[]): BankReceiptTimestamp {
         named[4] ? Number(named[4]) : null,
         named[5] ? Number(named[5]) : null,
         named[6] || "",
+      );
+    }
+    const dayFirst = line.match(dayMonthName);
+    if (dayFirst) {
+      return timestampResult(
+        dayFirst[0],
+        lineIndex,
+        Number(dayFirst[3]),
+        MONTHS[dayFirst[2].toLowerCase()] || 0,
+        Number(dayFirst[1]),
+        dayFirst[4] ? Number(dayFirst[4]) : null,
+        dayFirst[5] ? Number(dayFirst[5]) : null,
+        dayFirst[6] || "",
       );
     }
     const numeric = line.match(iso);
@@ -552,6 +567,18 @@ export function parseBankToGcashReceipt(
   }
   const timestamp = parseTimestamp(lines);
   const recipient = parseRecipient(lines);
+  const failureStatus =
+    /\b(?:failed|unsuccessful|declined|cancelled|canceled|reversed|pending|processing)\b/i
+      .test(text);
+  const explicitTransferSuccess =
+    /\b(?:transfer|transaction)\s+(?:successful|completed?)\b|\bsuccessfully\s+(?:sent|transferred)\b|\bmoney\s+sent\b/i
+      .test(text);
+  // GoTyme's completed transfer detail screen uses a standalone "Sent"
+  // heading. Keep this provider-specific and fail closed if any pending or
+  // failure status is also present; the verifier still requires all other
+  // receipt, recipient, amount, time, reference, and replay checks.
+  const gotymeSentStatus = config.provider === "gotyme" &&
+    lines.some((line) => /^sent[!.]?$/i.test(line));
   const issues: string[] = [];
   if (primary.ambiguous) issues.push("AMBIGUOUS_REFERENCE");
   if (!primary.field.value) issues.push("REFERENCE_MISSING");
@@ -578,9 +605,8 @@ export function parseBankToGcashReceipt(
       competingProviderBrand: config.competingBrandPattern.test(text)
         ? config.competingProvider
         : null,
-      transferSuccess:
-        /\b(?:transfer|transaction)\s+(?:successful|completed?)\b|\bsuccessfully\s+(?:sent|transferred)\b|\bmoney\s+sent\b/i
-          .test(text),
+      transferSuccess: !failureStatus &&
+        (explicitTransferSuccess || gotymeSentStatus),
       destinationGcash: /\bgcash\b|\bg-?xchange\b|\bgxi\b/i.test(text),
       instaPay: /\binsta\s*pay\b/i.test(text),
     },

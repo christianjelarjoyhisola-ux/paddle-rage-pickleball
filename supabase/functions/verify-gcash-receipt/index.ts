@@ -683,10 +683,14 @@ function expectedMerchantForProvider(
   }
   if (provider === "gotyme" || provider === "maribank") {
     // Both bank routes are transfers to the configured GCash destination.
-    // Provider-specific sender settings must never weaken receiver matching.
+    // These receipts show the configured QR recipient label (for example
+    // "Paddle Rage"), which can differ from the personal account-holder name
+    // shown on checkout. Keep the shared receipt identity authoritative;
+    // provider-specific sender settings must never weaken receiver matching.
     return {
       number: settings.gcash_merchant_number || "",
-      name: settings.gcash_merchant_name ||
+      name: settings.gcash_qr_receipt_recipient_name ||
+        settings.gcash_merchant_name ||
         settings.payment_merchant_name || "",
     };
   }
