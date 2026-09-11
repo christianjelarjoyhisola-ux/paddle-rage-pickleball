@@ -7,6 +7,14 @@ export type GoogleVisionOcrResult = {
   text: string;
   confidence: number;
   confidenceSource: "native" | "heuristic" | "none";
+  words: GoogleVisionWord[];
+};
+
+export type GoogleVisionWord = {
+  text: string;
+  confidence: number;
+  minSymbolConfidence: number;
+  minDigitConfidence: number;
 };
 
 export type ReceiptImageDimensions = {
@@ -229,6 +237,76 @@ export function googleVisionConfidenceDetails(
     : { confidence: 0, source: "none" };
 }
 
+export function googleVisionWords(
+  annotation: Record<string, unknown> | null,
+): GoogleVisionWord[] {
+  const pages = annotation && Array.isArray(annotation.pages)
+    ? annotation.pages as Array<Record<string, unknown>>
+    : [];
+  const words: GoogleVisionWord[] = [];
+
+  for (const page of pages) {
+    const blocks = Array.isArray(page.blocks) ? page.blocks : [];
+    for (const blockValue of blocks) {
+      const block = blockValue as Record<string, unknown>;
+      const paragraphs = Array.isArray(block.paragraphs)
+        ? block.paragraphs
+        : [];
+      for (const paragraphValue of paragraphs) {
+        const paragraph = paragraphValue as Record<string, unknown>;
+        const wordValues = Array.isArray(paragraph.words)
+          ? paragraph.words
+          : [];
+        for (const wordValue of wordValues) {
+          const word = wordValue as Record<string, unknown>;
+          const symbols = Array.isArray(word.symbols)
+            ? word.symbols as Array<Record<string, unknown>>
+            : [];
+          const text = symbols.map((symbol) =>
+            typeof symbol.text === "string" ? symbol.text : ""
+          ).join("");
+          const symbolConfidences = symbols
+            .map((symbol) => symbol.confidence)
+            .filter((value): value is number =>
+              typeof value === "number" && value > 0
+            );
+          const confidence = typeof word.confidence === "number" &&
+              word.confidence > 0
+            ? word.confidence
+            : symbolConfidences.length
+            ? symbolConfidences.reduce((sum, value) => sum + value, 0) /
+              symbolConfidences.length
+            : 0;
+          const minSymbolConfidence = symbolConfidences.length
+            ? Math.min(...symbolConfidences)
+            : confidence;
+          const digitConfidences = symbols
+            .filter((symbol) =>
+              typeof symbol.text === "string" && /\d/.test(symbol.text)
+            )
+            .map((symbol) => symbol.confidence)
+            .filter((value): value is number =>
+              typeof value === "number" && value > 0
+            );
+          const minDigitConfidence = digitConfidences.length
+            ? Math.min(...digitConfidences)
+            : confidence;
+          if (text && confidence > 0) {
+            words.push({
+              text,
+              confidence,
+              minSymbolConfidence,
+              minDigitConfidence,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return words;
+}
+
 type GoogleVisionOcrOptions = {
   fetcher?: typeof fetch;
   timeoutMs?: number;
@@ -317,5 +395,6 @@ export async function googleVisionOcr(
     text,
     confidence: confidence.confidence,
     confidenceSource: confidence.source,
+    words: googleVisionWords(fullText),
   };
 }

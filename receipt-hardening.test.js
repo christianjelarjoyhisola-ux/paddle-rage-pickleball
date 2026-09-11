@@ -137,6 +137,10 @@ test('receipt verification preserves authorization, resource, and settlement bou
   assert.match(edge, /const PAYMENT_WINDOW_MINUTES = 15/);
   assert.match(edge, /minimumOcrConfidence = isDedicatedReceiptProvider\(provider\)[\s\S]*?\? 0\.9[\s\S]*?: 0\.55/);
   assert.match(edge, /isDedicatedReceiptProvider\(provider\)[\s\S]*?ocrConfidenceSource !== "native"/);
+  assert.match(edge, /provider === "gcash" && ocrWords\.length[\s\S]*?gcashCriticalOcrQuality\?\.pass === true/);
+  assert.match(edge, /amountMatches\.length >= 2[\s\S]*?match\.numericConfidence >= 0\.92 && match\.minDigitConfidence >= 0\.8/);
+  assert.match(edge, /findOcrFieldMatches\(words, "Sent via GCash"\)[\s\S]*?findOcrFieldMatches\(words, "Total Amount Sent"\)[\s\S]*?findOcrFieldMatches\(words, "Ref No"\)/);
+  assert.match(edge, /ocrConfidenceScope: gcashCriticalOcrQuality\?\.pass[\s\S]*?"critical_fields_v1"[\s\S]*?"whole_page"/);
   assert.match(edge, /const cleanEvidence = !!providerVerification &&[\s\S]*?duplicateClear &&\s*flags\.length === 0/);
   assert.match(edge, /let result: "auto_approved" \| "manual_review" =/);
   assert.match(edge, /bookingCanAutoApprove \|\| hostBalanceCanAutoApprove[\s\S]*?\? "auto_approved"[\s\S]*?: "manual_review"/);

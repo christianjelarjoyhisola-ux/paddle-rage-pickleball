@@ -7507,7 +7507,7 @@ const RECEIPT_FLAG_LABELS = {
   TIME_STALE:'Stale time', TIME_FUTURE:'Receipt before booking', RECEIVER_NAME_MISMATCH:'Receiver name mismatch',
   METHOD_MISMATCH:'Wrong payment method selected', GCASH_RECEIPT_UNREADABLE:'GCash receipt unreadable',
   EDITED_METADATA:'Edited image metadata', SUSPECTED_FAKE:'Not a receipt', REF_FORMAT_INVALID:'Bad reference format',
-  REF_UNREADABLE:'Reference unreadable', INVOICE_UNREADABLE:'Invoice unreadable', LOW_OCR_CONFIDENCE:'Blurry / low OCR', OCR_UNAVAILABLE:'OCR unavailable', AMOUNT_UNREADABLE:'Amount unreadable',
+  REF_UNREADABLE:'Reference unreadable', INVOICE_UNREADABLE:'Invoice unreadable', LOW_OCR_CONFIDENCE:'Payment-field OCR below threshold', OCR_UNAVAILABLE:'OCR unavailable', AMOUNT_UNREADABLE:'Amount unreadable',
   AMOUNT_REVIEW:'Amount needs owner review', AMOUNT_CONFIRMATION_UNREADABLE:'Amount confirmation incomplete',
   REF_MISMATCH:'Reference does not match', INSTAPAY_REF_UNREADABLE:'InstaPay reference unreadable', INSTAPAY_UNREADABLE:'InstaPay unreadable', TRANSFER_STATUS_UNREADABLE:'Transfer status needs review', PROVIDER_REVIEW_REQUIRED:'Payment provider requires owner review',
   TRANSFER_STATUS_INVALID:'Transfer failed or reversed', TRANSFER_PENDING:'Transfer still pending',
@@ -7708,8 +7708,12 @@ function receiptDetailsHtml(b){
       : 'No hard mismatch found — owner confirmation required';
   const ocrConfidenceNumber = Number(ex.ocrConfidence);
   const ocrConfidence = ex.ocrConfidence != null && Number.isFinite(ocrConfidenceNumber)
-    ? `${Math.round(ocrConfidenceNumber * 100)}%`
+    ? `${Math.round(ocrConfidenceNumber * 100)}% whole image`
     : '--';
+  const criticalOcrConfidenceNumber = Number(ex.gcashCriticalOcrQuality?.confidence);
+  const criticalOcrConfidence = Number.isFinite(criticalOcrConfidenceNumber)
+    ? `${Math.round(criticalOcrConfidenceNumber * 100)}% · ${Math.round(Number(ex.gcashCriticalOcrQuality?.coverage || 0) * 100)}% field coverage`
+    : null;
   const amountParse = parserLabel
     ? `${parserLabel} · ${ex.amountReliable === true ? 'reliable' : 'review'}`
     : ex.amountReason === 'legacy_parser'
@@ -7793,6 +7797,7 @@ function receiptDetailsHtml(b){
     ...(ex.amountReliable !== undefined ? [['Amount Parse', receiptDetailValue(amountParse), true]] : []),
     ['Reason', receiptDetailValue(reason), true],
     ['OCR Confidence', receiptDetailValue(ocrConfidence)],
+    ...(criticalOcrConfidence ? [['Payment-field OCR', receiptDetailValue(criticalOcrConfidence)]] : []),
   ];
   return rows.map(([label, value, full]) => `<div class="receipt-detail-item ${full ? 'receipt-detail-full' : ''}">
     <div class="receipt-detail-label">${label}</div>

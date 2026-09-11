@@ -47,6 +47,7 @@ import {
 import {
   detectReceiptImageContentType,
   googleVisionOcr,
+  type GoogleVisionWord,
   type ReceiptImageContentType,
   receiptImageSafeToDecode,
 } from "../_shared/google-vision.ts";
@@ -92,11 +93,26 @@ type OcrResult = {
   text: string;
   confidence: number;
   confidenceSource: "native" | "heuristic" | "none";
+  words?: GoogleVisionWord[];
   provider: OcrProvider;
   primaryProvider?: OcrProvider;
   fallbackProvider?: OcrProvider;
   fallbackReason?: string;
   error?: string;
+};
+
+type OcrFieldMatch = {
+  confidence: number;
+  numericConfidence: number;
+  minDigitConfidence: number;
+};
+
+type GcashCriticalOcrQuality = {
+  pass: boolean;
+  confidence: number | null;
+  coverage: number;
+  amountOccurrences: number;
+  fields: Record<string, number | null>;
 };
 
 type ReceiptCaller = {
@@ -1061,6 +1077,109 @@ function ocrCriticalGaps(
   if (extractAmount(text) == null) gaps.push("amount");
   if (!parseReceiptDateTime(text).date) gaps.push("date");
   return gaps;
+}
+
+function normalizeOcrField(value: string): string {
+  return value.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function findOcrFieldMatches(
+  words: GoogleVisionWord[],
+  expected: string | null | undefined,
+): OcrFieldMatch[] {
+  const target = normalizeOcrField(String(expected || ""));
+  if (!target) return [];
+  const tokens = words.map((word) => ({
+    ...word,
+    normalized: normalizeOcrField(word.text),
+  })).filter((word) => word.normalized);
+  const matches: OcrFieldMatch[] = [];
+
+  for (let start = 0; start < tokens.length; start++) {
+    let combined = "";
+    const confidences: number[] = [];
+    const numericConfidences: number[] = [];
+    const digitConfidences: number[] = [];
+    for (let cursor = start; cursor < tokens.length; cursor++) {
+      combined += tokens[cursor].normalized;
+      confidences.push(tokens[cursor].confidence);
+      if (/\d/.test(tokens[cursor].text)) {
+        numericConfidences.push(tokens[cursor].confidence);
+        digitConfidences.push(tokens[cursor].minDigitConfidence);
+      }
+      if (combined === target) {
+        matches.push({
+          confidence: confidences.reduce((sum, value) => sum + value, 0) /
+            confidences.length,
+          numericConfidence: numericConfidences.length
+            ? numericConfidences.reduce((sum, value) => sum + value, 0) /
+              numericConfidences.length
+            : 0,
+          minDigitConfidence: digitConfidences.length
+            ? Math.min(...digitConfidences)
+            : 0,
+        });
+        break;
+      }
+      if (combined.length >= target.length || !target.startsWith(combined)) {
+        break;
+      }
+    }
+  }
+  return matches;
+}
+
+function evaluateGcashCriticalOcrQuality(
+  words: GoogleVisionWord[],
+  receipt: GcashReceiptParse,
+): GcashCriticalOcrQuality {
+  const reference = findOcrFieldMatches(words, receipt.reference.value)[0];
+  const amountValue = receipt.amount.amount == null
+    ? null
+    : receipt.amount.amount.toFixed(2);
+  const amountMatches = findOcrFieldMatches(words, amountValue);
+  const timestamp = findOcrFieldMatches(words, receipt.timestamp.raw)[0];
+  const phone = findOcrFieldMatches(words, receipt.receiver.phone.raw)[0];
+  const labelMatches = [
+    findOcrFieldMatches(words, "Sent via GCash")[0],
+    findOcrFieldMatches(words, "Total Amount Sent")[0],
+    findOcrFieldMatches(words, "Ref No")[0],
+  ];
+  const requiredFields = [reference, timestamp, phone, ...labelMatches];
+  const coveredFields = requiredFields.filter(Boolean).length +
+    (amountMatches.length >= 2 ? 1 : 0);
+  const coverage = coveredFields / (requiredFields.length + 1);
+  const numericMatches = [reference, timestamp, phone, ...amountMatches]
+    .filter((match): match is OcrFieldMatch => Boolean(match));
+  const numericPass = numericMatches.length >= 5 &&
+    numericMatches.every((match) =>
+      match.numericConfidence >= 0.92 && match.minDigitConfidence >= 0.8
+    );
+  const labelsPass = labelMatches.every((match) =>
+    Boolean(match && match.confidence >= 0.85)
+  );
+  const confidence = numericMatches.length
+    ? Math.min(...numericMatches.map((match) => match.numericConfidence))
+    : null;
+
+  return {
+    pass: coverage === 1 && amountMatches.length >= 2 && numericPass &&
+      labelsPass,
+    confidence,
+    coverage,
+    amountOccurrences: amountMatches.length,
+    fields: {
+      reference: reference?.numericConfidence ?? null,
+      amount: amountMatches.length
+        ? Math.min(...amountMatches.map((match) => match.numericConfidence))
+        : null,
+      timestamp: timestamp?.numericConfidence ?? null,
+      phone: phone?.numericConfidence ?? null,
+      labels: labelMatches.every(Boolean)
+        ? Math.min(...labelMatches.map((match) => match!.confidence))
+        : null,
+    },
+  };
 }
 
 async function runOCR(
@@ -2585,6 +2704,7 @@ Deno.serve(async (req) => {
     );
     let ocrText = "";
     let ocrConfidence = 0;
+    let ocrWords: GoogleVisionWord[] = [];
     let ocrConfidenceSource: OcrResult["confidenceSource"] = "none";
     let ocrProvider: OcrResult["provider"] = "none";
     let ocrPrimaryProvider: OcrResult["primaryProvider"] = "none";
@@ -2595,6 +2715,7 @@ Deno.serve(async (req) => {
       const ocr = await runOCR(visionKey, imageBase64, provider, typedRef);
       ocrText = ocr.text;
       ocrConfidence = ocr.confidence;
+      ocrWords = ocr.words || [];
       ocrConfidenceSource = ocr.confidenceSource;
       ocrProvider = ocr.provider;
       ocrPrimaryProvider = ocr.primaryProvider || ocr.provider;
@@ -2853,15 +2974,28 @@ Deno.serve(async (req) => {
     }
     if (editedBySoftware(bytes)) flags.push("EDITED_METADATA");
 
-    // Every provider-specific auto-approval requires a high-quality native OCR
-    // read. Generic/legacy parsers remain review-only.
+    // GCash screenshots often contain advertisements and footer copy that can
+    // lower whole-page confidence even when every payment field is clear. Use
+    // native word confidence for the fields that drive approval; retain the
+    // established page score as a fallback when structured words are absent.
+    const gcashCriticalOcrQuality = provider === "gcash" && gcashParse &&
+        ocrWords.length
+      ? evaluateGcashCriticalOcrQuality(ocrWords, gcashParse)
+      : null;
     const minimumOcrConfidence = isDedicatedReceiptProvider(provider)
       ? 0.9
       : 0.55;
+    const ocrApprovalConfidence = gcashCriticalOcrQuality?.pass &&
+        gcashCriticalOcrQuality.confidence != null
+      ? gcashCriticalOcrQuality.confidence
+      : ocrConfidence;
+    const ocrQualityPass = provider === "gcash" && ocrWords.length
+      ? gcashCriticalOcrQuality?.pass === true
+      : ocrConfidence >= minimumOcrConfidence;
     if (
       ocrText &&
       (
-        ocrConfidence < minimumOcrConfidence ||
+        !ocrQualityPass ||
         (isDedicatedReceiptProvider(provider) &&
           ocrConfidenceSource !== "native")
       )
@@ -2891,7 +3025,9 @@ Deno.serve(async (req) => {
         duplicateFlag: "DUPLICATE_INVOICE",
       });
     }
-    if (provider === "maya" && extractedInstapayRefNo && !providerVerification) {
+    if (
+      provider === "maya" && extractedInstapayRefNo && !providerVerification
+    ) {
       dedupeKeys.push({
         key: `maya_instapay:${extractedInstapayRefNo}`,
         providerKey: "maya_instapay",
@@ -2989,7 +3125,7 @@ Deno.serve(async (req) => {
         inlineRegistrationCanAutoApprove
         ? "auto_approved"
         : "manual_review";
-    let confidence = result === "auto_approved" ? ocrConfidence : 0.5;
+    let confidence = result === "auto_approved" ? ocrApprovalConfidence : 0.5;
     const route = provider === "gcash"
       ? "gcash"
       : provider === "bdopay" || provider === "maya" || provider === "bpi" ||
@@ -3076,7 +3212,9 @@ Deno.serve(async (req) => {
         ? {
           reference: bankParse.reference,
           invoice: "invoice" in bankParse ? bankParse.invoice : null,
-          transferFee: "transferFee" in bankParse ? bankParse.transferFee : null,
+          transferFee: "transferFee" in bankParse
+            ? bankParse.transferFee
+            : null,
           railReference: "railReference" in bankParse
             ? bankParse.railReference
             : null,
@@ -3111,6 +3249,11 @@ Deno.serve(async (req) => {
       ocrFallbackReason,
       ocrConfidence,
       ocrConfidenceSource,
+      ocrApprovalConfidence,
+      ocrConfidenceScope: gcashCriticalOcrQuality?.pass
+        ? "critical_fields_v1"
+        : "whole_page",
+      gcashCriticalOcrQuality,
       ocrTextLength: ocrText.length,
       expectedReceiverNumber:
         provider === "bdopay" || provider === "maya" || provider === "bpi"

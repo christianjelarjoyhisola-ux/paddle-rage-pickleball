@@ -3,6 +3,7 @@ import {
   googleVisionConfidence,
   googleVisionConfidenceDetails,
   googleVisionOcr,
+  googleVisionWords,
   receiptImageDimensions,
   receiptImageSafeToDecode,
 } from "./google-vision.ts";
@@ -178,4 +179,34 @@ Deno.test("marks text-length confidence as heuristic, never native", () => {
   );
   assertEquals(result.confidence, 0.9, "heuristic confidence");
   assertEquals(result.source, "heuristic", "heuristic provenance");
+});
+
+Deno.test("preserves native word and weakest-symbol confidence", () => {
+  const words = googleVisionWords({
+    pages: [{
+      blocks: [{
+        paragraphs: [{
+          words: [{
+            confidence: 0.96,
+            symbols: [
+              { text: "3", confidence: 0.98 },
+              { text: "6", confidence: 0.81 },
+              { text: "0", confidence: 0.97 },
+              { text: "0", confidence: 0.96 },
+            ],
+          }],
+        }],
+      }],
+    }],
+  });
+
+  assertEquals(words.length, 1, "one Vision word");
+  assertEquals(words[0].text, "3600", "word text");
+  assertEquals(words[0].confidence, 0.96, "word confidence");
+  assertEquals(
+    words[0].minSymbolConfidence,
+    0.81,
+    "weakest digit confidence",
+  );
+  assertEquals(words[0].minDigitConfidence, 0.81, "weakest numeric symbol");
 });
