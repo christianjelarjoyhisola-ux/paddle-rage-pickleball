@@ -699,14 +699,13 @@ function expectedMerchantForProvider(
   }
   if (provider === "gotyme" || provider === "maribank") {
     // Both bank routes are transfers to the configured GCash destination.
-    // These receipts show the configured QR recipient label (for example
-    // "Paddle Rage"), which can differ from the personal account-holder name
-    // shown on checkout. Keep the shared receipt identity authoritative;
-    // provider-specific sender settings must never weaken receiver matching.
+    // Prefer the legal GCash holder name because newer GoTyme receipts can
+    // expose only its initials (for example "J M."). Fall back to the QR alias
+    // for older layouts that display a merchant label such as "Paddle Rage".
     return {
       number: settings.gcash_merchant_number || "",
-      name: settings.gcash_qr_receipt_recipient_name ||
-        settings.gcash_merchant_name ||
+      name: settings.gcash_merchant_name ||
+        settings.gcash_qr_receipt_recipient_name ||
         settings.payment_merchant_name || "",
     };
   }
@@ -2815,6 +2814,12 @@ Deno.serve(async (req) => {
           amountTolerance: 0.01,
           expectedRecipientNumber: expectedNumber,
           expectedRecipientName: expectedName,
+          expectedRecipientNameAliases: provider === "gotyme"
+            ? [
+              settings.gcash_qr_receipt_recipient_name,
+              settings.payment_merchant_name,
+            ].filter(Boolean)
+            : [],
           expectedRecipientAccount: provider === "bdopay" || provider === "bpi"
             ? settings.gcash_qr_receipt_destination_token ||
               settings.bdopay_receipt_destination_token || ""
@@ -3092,7 +3097,9 @@ Deno.serve(async (req) => {
         )
       : providerVerification?.provider === "bdopay"
       ? providerVerification.recipientComparison.name === "exact" &&
-        providerVerification.recipientComparison.account === "exact"
+        ["exact", "suffix_exact"].includes(
+          providerVerification.recipientComparison.account,
+        )
       : providerVerification?.provider === "bpi"
       ? providerVerification.recipientComparison === "exact" &&
         providerVerification.recipientAccountComparison === "exact"

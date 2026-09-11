@@ -186,7 +186,8 @@ test('GoTyme and MariBank use dedicated source methods with the shared GCash des
   assert.match(client, /payment_method_gotyme: '1'/);
   assert.match(client, /payment_method_maribank: '1'/);
 
-  assert.match(receiptVerifier, /provider === "gotyme" \|\| provider === "maribank"[\s\S]*?gcash_qr_receipt_recipient_name[\s\S]*?gcash_merchant_name/);
+  assert.match(receiptVerifier, /provider === "gotyme" \|\| provider === "maribank"[\s\S]*?gcash_merchant_name[\s\S]*?gcash_qr_receipt_recipient_name/);
+  assert.match(receiptVerifier, /expectedRecipientNameAliases: provider === "gotyme"[\s\S]*?gcash_qr_receipt_recipient_name/);
   assert.match(bankParser, /const dayMonthName =[\s\S]*?const dayFirst = line\.match\(dayMonthName\)/);
   assert.match(bankParser, /const gotymeSentStatus = config\.provider === "gotyme"[\s\S]*?\^sent/);
   assert.match(bankParser, /transferSuccess: !failureStatus[\s\S]*?gotymeSentStatus/);

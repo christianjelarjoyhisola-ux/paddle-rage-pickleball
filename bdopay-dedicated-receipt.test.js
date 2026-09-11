@@ -39,6 +39,7 @@ test('BDO Pay has its own parser/verifier and dedicated route', () => {
   assert.match(registry, /case "bdopay"[\s\S]*?verifyBdoPayToGcashReceipt/);
   assert.match(provider, /parserVersion: "bdopay_to_gcash_v1"/);
   assert.match(edge, /provider === "bdopay"[\s\S]*?`\$\{provider\}_to_gcash`/);
+  assert.match(edge, /providerVerification\?\.provider === "bdopay"[\s\S]*?\["exact", "suffix_exact"\]/);
   assert.match(
     edge,
     /name:\s*settings\.gcash_qr_receipt_recipient_name\s*\|\|[\s\S]*?settings\.bdopay_receipt_recipient_name/,

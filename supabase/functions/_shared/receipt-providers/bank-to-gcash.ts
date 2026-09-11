@@ -91,6 +91,7 @@ export type ReceiptVerificationContext = {
   amountTolerance: number;
   expectedRecipientNumber?: string;
   expectedRecipientName?: string;
+  expectedRecipientNameAliases?: string[];
   expectedRecipientAccount?: string;
   bookingStartedAt?: string | null;
   bookingStartedDate?: string | null;
@@ -212,15 +213,19 @@ function cleanCandidate(raw: string): string {
     .trim();
 }
 
-function valueAfterLabel(
+function valuesAfterLabel(
   lines: string[],
   index: number,
   inline: string,
-): string {
-  const cleaned = cleanCandidate(inline);
-  if (validReference(cleaned)) return cleaned;
-  const next = cleanCandidate(lines[index + 1] || "");
-  return validReference(next) ? next : "";
+  validator: (value: string) => boolean = validReference,
+): string[] {
+  // Vision can insert a short OCR line between a label and its value. Keep
+  // this window deliberately small: values farther away are not sufficiently
+  // tied to the label to become payment evidence.
+  const candidate = [inline, lines[index + 1] || "", lines[index + 2] || ""]
+    .map(cleanCandidate)
+    .find(validator);
+  return candidate ? [candidate] : [];
 }
 
 function typedReferenceMatch(
@@ -249,9 +254,9 @@ function parsePrimaryReference(
     for (const definition of PRIMARY_LABELS) {
       const match = line.match(definition.pattern);
       if (!match) continue;
-      const raw = valueAfterLabel(lines, lineIndex, match[1] || "");
-      const value = normalizeBankReference(raw);
-      if (validReference(value)) {
+      const raws = valuesAfterLabel(lines, lineIndex, match[1] || "");
+      for (const raw of raws) {
+        const value = normalizeBankReference(raw);
         candidates.push({
           value,
           raw,
@@ -291,9 +296,19 @@ function parseRailReference(lines: string[]): {
     for (const pattern of RAIL_LABELS) {
       const match = line.match(pattern);
       if (!match) continue;
-      const raw = valueAfterLabel(lines, lineIndex, match[1] || "");
-      const value = normalizeBankReference(raw);
-      if (validReference(value)) candidates.push({ value, raw, lineIndex });
+      const raws = valuesAfterLabel(
+        lines,
+        lineIndex,
+        match[1] || "",
+        (raw) => /^\d{6,20}$/.test(normalizeBankReference(raw)),
+      );
+      for (const raw of raws) {
+        candidates.push({
+          value: normalizeBankReference(raw),
+          raw,
+          lineIndex,
+        });
+      }
       break;
     }
   });
@@ -392,15 +407,19 @@ function timestampResult(
 
 function parseTimestamp(lines: string[]): BankReceiptTimestamp {
   const monthName =
-    /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),?\s+(\d{4})(?:\s*(?:,|at)?\s*(\d{1,2}):(\d{2})\s*(AM|PM))?\b/i;
+    /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),?\s+(\d{4})(?:\s*(?:,|at)?\s*(\d{1,2}):(\d{2})\s*(AM|PM)?)?\b/i;
   const dayMonthName =
-    /\b(\d{1,2})\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{4})(?:\s*(?:,|at)?\s*(\d{1,2}):(\d{2})\s*(AM|PM))?\b/i;
+    /\b(\d{1,2})\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{4})(?:\s*(?:,|at)?\s*(\d{1,2}):(\d{2})\s*(AM|PM)?)?\b/i;
   const iso =
     /\b(\d{4})-(\d{2})-(\d{2})(?:[ T,]+(\d{1,2}):(\d{2})\s*(AM|PM)?)?\b/i;
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
     const line = lines[lineIndex];
     const named = line.match(monthName);
     if (named) {
+      const has24HourTime = Boolean(named[4] && !named[6]);
+      const dateAnchored = /^(?:date|created\s+on)\b/i.test(line) ||
+        /^(?:date|created\s+on)$/i.test(lines[lineIndex - 1] || "");
+      if (has24HourTime && !dateAnchored) continue;
       return timestampResult(
         named[0],
         lineIndex,
@@ -414,6 +433,10 @@ function parseTimestamp(lines: string[]): BankReceiptTimestamp {
     }
     const dayFirst = line.match(dayMonthName);
     if (dayFirst) {
+      const has24HourTime = Boolean(dayFirst[4] && !dayFirst[6]);
+      const dateAnchored = /^(?:date|created\s+on)\b/i.test(line) ||
+        /^(?:date|created\s+on)$/i.test(lines[lineIndex - 1] || "");
+      if (has24HourTime && !dateAnchored) continue;
       return timestampResult(
         dayFirst[0],
         lineIndex,
@@ -470,7 +493,7 @@ function parseRecipient(lines: string[]): BankReceiptRecipient {
   )?.[0] || null;
   const phoneNormalized = fullPhone ? normalizeGcashMobile(fullPhone) : null;
   const maskedPhone = blockText.match(
-    /(?:\+?63|0)?9?[\d\s-]{0,4}[•*xX]{2,}[•*xX\d\s-]*?(\d{4})\b/,
+    /(?:\+?63|0)?9?[\d\s-]{0,4}[•‣●◦∙·*xX#.]{2,}[•‣●◦∙·*xX#.\d\s-]*?(\d{4})\b/,
   );
   const labeledLast4 = blockText.match(
     /(?:mobile|account|number|no\.?)\D{0,20}(\d{4})\b/i,
@@ -511,6 +534,8 @@ function compareRecipient(
   recipient: BankReceiptRecipient,
   expectedNumber: string,
   expectedName: string,
+  expectedNameAliases: string[],
+  provider: BankToGcashProvider,
 ): BankRecipientComparison {
   const expectedPhone = normalizeGcashMobile(expectedNumber);
   let phone: BankRecipientComparison["phone"] = "not_configured";
@@ -527,9 +552,54 @@ function compareRecipient(
       phone = "missing";
     }
   }
+  const configuredNames = [
+    ...new Set(
+      [expectedName, ...expectedNameAliases]
+        .map((value) => String(value || "").trim()).filter(Boolean),
+    ),
+  ];
+  const comparisons = configuredNames.map((configuredName) => {
+    let comparison = compareGcashMaskedName(recipient.nameRaw, configuredName);
+    if (
+      provider === "gotyme" &&
+      (phone === "exact" || phone === "last4_only") &&
+      comparison === "inconclusive"
+    ) {
+      const observed = String(recipient.nameRaw || "").trim().match(
+        /^([A-Za-z])\.?\s+([A-Za-z])\.?$/,
+      );
+      const expectedTokens = configuredName
+        .normalize("NFKD")
+        .replace(/\p{M}/gu, "")
+        .toUpperCase()
+        .split(/[^A-Z]+/)
+        .filter(Boolean);
+      // GoTyme may expose only the legal holder's first/last initials. This is
+      // accepted only for that provider, only against a multi-token configured
+      // legal name, and only when the independently checked phone suffix agrees.
+      if (
+        observed && expectedTokens.length >= 2 &&
+        observed[1].toUpperCase() === expectedTokens[0][0] &&
+        observed[2].toUpperCase() === expectedTokens.at(-1)![0]
+      ) {
+        comparison = "masked_compatible";
+      }
+    }
+    return comparison;
+  });
+  const name = ([
+    "exact",
+    "masked_compatible",
+    "inconclusive",
+    "mismatch",
+    "missing",
+    "not_configured",
+  ] as GcashNameComparison[]).find((candidate) =>
+    comparisons.includes(candidate)
+  ) || "not_configured";
   return {
     phone,
-    name: compareGcashMaskedName(recipient.nameRaw, expectedName),
+    name,
   };
 }
 
@@ -624,6 +694,8 @@ export function verifyBankToGcashReceipt(
     parsed.recipient,
     context.expectedRecipientNumber || "",
     context.expectedRecipientName || "",
+    context.expectedRecipientNameAliases || [],
+    parsed.provider,
   );
   if (!parsed.indicators.providerBrand) addUnique(flags, unreadableFlag);
   if (parsed.indicators.competingProviderBrand) {
@@ -717,7 +789,11 @@ export function verifyBankToGcashReceipt(
       duplicateFlag: "DUPLICATE_REF",
     });
   }
-  if (parsed.railReference.value) {
+  // Short GoTyme Trace IDs (for example 000001) are structural receipt
+  // evidence, not globally unique InstaPay identifiers. Keep the primary bank
+  // reference replay-protected and only create a cross-provider rail key for
+  // sufficiently long references.
+  if (parsed.railReference.value && parsed.railReference.value.length >= 10) {
     dedupeKeys.push({
       key: `instapay:${parsed.railReference.value}`,
       providerKey: "instapay",

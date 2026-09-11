@@ -1102,6 +1102,8 @@ test('receipt review displays missing amounts and parser diagnostics honestly', 
   );
 
   const receiptDetails = functionSource(admin, 'receiptDetailsHtml');
+  assert.match(receiptDetails, /\['OCR Ref',\s*receiptDetailValue\(ex\.ref\)\]/);
+  assert.doesNotMatch(receiptDetails, /receiptDetailValue\(ex\.ref\s*\|\|\s*b\.gcashRef\)/);
   assert.match(
     receiptDetails,
     /ocrFallbackProvider\s*\?\s*'OCR Fallback'\s*:\s*'Parser Diagnostic'/,

@@ -42,6 +42,40 @@ const CONTEXT = {
   earlyToleranceMinutes: 2,
 };
 
+const COMPACT_RECEIPT = `
+Change in Send Money status
+Hello! Your Send Money worth PHP 9,999.00 to PaddleRage was successful.
+Sent!
+PHP 3,200.00
+Service Fee
+PHP 0.00
+Total Amount
+PHP 3,200.00
+Send Money via
+To
+PaddleRage...0NS8
+From
+REGULAR SA-INDIVIDUAL
+••••••••2615
+Created on
+Sep 11, 2026 04:17 PM
+Reference no.
+BN-20260911-80487993
+Invoice no.
+367094
+BDO 50 Years
+Save Image Share
+`;
+
+const COMPACT_CONTEXT = {
+  ...CONTEXT,
+  typedReference: "BN2026091180487993",
+  expectedAmount: 3200,
+  expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
+  bookingStartedAt: "2026-09-11T08:16:00.000Z",
+  bookingStartedDate: "2026-09-11",
+};
+
 function flagsFor(
   receipt: string,
   context: Partial<typeof CONTEXT> = {},
@@ -93,6 +127,70 @@ Deno.test("BDO Pay parser verifies the supplied live receipt layout", () => {
     evidence.dedupeKeys.some((item) => item.key === "bdopay_invoice:961119"),
     "invoice replay key",
   );
+});
+
+Deno.test("BDO Pay verifies the compact masked-recipient receipt body", () => {
+  const parsed = parseBdoPayToGcashReceipt(COMPACT_RECEIPT, {
+    typedReference: COMPACT_CONTEXT.typedReference,
+  });
+  const evidence = verifyBdoPayToGcashReceipt(parsed, COMPACT_CONTEXT);
+  assert(parsed.amount.amount === 3200, "banner amount must be ignored");
+  assert(
+    parsed.amount.candidates.every((item) => item.amount !== 9999),
+    "banner excluded",
+  );
+  assert(parsed.recipient.nameNormalized === "PADDLERAGE", "masked alias");
+  assert(parsed.recipient.accountNormalized === "0NS8", "masked suffix");
+  assert(parsed.recipient.accountMasked, "masked account marker");
+  assert(
+    evidence.recipientComparison.account === "suffix_exact",
+    "configured token suffix",
+  );
+  assert(evidence.flags.length === 0, JSON.stringify(evidence.flags));
+  assert(
+    flagsFor(COMPACT_RECEIPT.replace("Sent!", "Sent"), COMPACT_CONTEXT)
+      .length === 0,
+    "OCR may omit the Sent punctuation without exposing banner evidence",
+  );
+});
+
+Deno.test("BDO Pay notification banner cannot supply receipt evidence", () => {
+  const withoutBodyLabel = COMPACT_RECEIPT.replace("Send Money via\n", "");
+  assertFlag(withoutBodyLabel, "TRANSFER_STATUS_UNREADABLE", COMPACT_CONTEXT);
+
+  const wrongRecipient = COMPACT_RECEIPT.replace(
+    "PaddleRage...0NS8\nFrom",
+    "Other Merchant...0NS8\nFrom",
+  );
+  assertFlag(wrongRecipient, "RECEIVER_NAME_MISMATCH", COMPACT_CONTEXT);
+
+  const withoutBodyAnchor = COMPACT_RECEIPT.replace("Sent!\n", "");
+  assertFlag(withoutBodyAnchor, "REF_UNREADABLE", COMPACT_CONTEXT);
+  assertFlag(withoutBodyAnchor, "TRANSFER_STATUS_UNREADABLE", COMPACT_CONTEXT);
+});
+
+Deno.test("BDO Pay compact inference fails closed on identity or structure", () => {
+  assertFlag(
+    COMPACT_RECEIPT.replace("Sent!", "Sent!\nPending"),
+    "TRANSFER_STATUS_UNREADABLE",
+    COMPACT_CONTEXT,
+  );
+
+  const wrongSuffix = COMPACT_RECEIPT.replace("0NS8\nFrom", "9ZZ9\nFrom");
+  assertFlag(wrongSuffix, "RECEIVER_ACCOUNT_MISMATCH", COMPACT_CONTEXT);
+  assertFlag(wrongSuffix, "GXI_DESTINATION_UNREADABLE", COMPACT_CONTEXT);
+  assertFlag(wrongSuffix, "INSTAPAY_QRPH_UNREADABLE", COMPACT_CONTEXT);
+
+  const missingInvoice = COMPACT_RECEIPT.replace("Invoice no.\n367094\n", "");
+  assertFlag(missingInvoice, "INVOICE_UNREADABLE", COMPACT_CONTEXT);
+  assertFlag(missingInvoice, "INSTAPAY_QRPH_UNREADABLE", COMPACT_CONTEXT);
+
+  const mismatchedReference = {
+    ...COMPACT_CONTEXT,
+    typedReference: "BN2026091180487999",
+  };
+  assertFlag(COMPACT_RECEIPT, "REF_MISMATCH", mismatchedReference);
+  assertFlag(COMPACT_RECEIPT, "INSTAPAY_QRPH_UNREADABLE", mismatchedReference);
 });
 
 Deno.test("BDO Pay typed reference is comparison-only", () => {

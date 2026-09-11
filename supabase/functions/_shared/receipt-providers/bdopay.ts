@@ -31,6 +31,7 @@ export type BdoPayRecipientField = {
   destinationRaw: string | null;
   accountRaw: string | null;
   accountNormalized: string | null;
+  accountMasked: boolean;
   lineIndex: number | null;
 };
 
@@ -61,6 +62,7 @@ export type BdoPayRecipientComparison = {
   name: "exact" | "mismatch" | "missing" | "not_configured";
   account:
     | "exact"
+    | "suffix_exact"
     | "mismatch"
     | "missing"
     | "not_configured";
@@ -113,6 +115,12 @@ function linesOf(rawText: string): string[] {
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter(Boolean);
+}
+
+function receiptBodyLines(rawText: string): string[] {
+  const lines = linesOf(rawText);
+  const bodyStart = lines.findIndex((line) => /^sent\s*!?$/i.test(line));
+  return bodyStart >= 0 ? lines.slice(bodyStart) : [];
 }
 
 export function normalizeBdoPayReference(value: string): string {
@@ -317,6 +325,7 @@ function parseRecipient(lines: string[]): BdoPayRecipientField {
       destinationRaw: null,
       accountRaw: null,
       accountNormalized: null,
+      accountMasked: false,
       lineIndex: null,
     };
   }
@@ -331,24 +340,59 @@ function parseRecipient(lines: string[]): BdoPayRecipientField {
   const destinationOffset = block.findIndex((line) =>
     /\bg-?xchange\b/i.test(line) && /\bgcash\b/i.test(line)
   );
-  const nameRaw = inlineName ||
+  let nameRaw: string | null = inlineName ||
     (destinationOffset > 0 ? String(block[destinationOffset - 1] || "") : "") ||
     null;
-  const destinationRaw = destinationOffset >= 0
-    ? block[destinationOffset]
-    : null;
-  const accountRaw = destinationOffset >= 0
+  let destinationRaw = destinationOffset >= 0 ? block[destinationOffset] : null;
+  let accountRaw = destinationOffset >= 0
     ? block.slice(destinationOffset + 1).find((line) => {
       const normalized = normalizeBdoPayRecipient(line);
       return validDestinationAccount(normalized);
     }) || null
     : null;
+  let accountMasked = false;
+
+  if (destinationOffset < 0) {
+    const compactCandidates = [inlineName, ...block]
+      .map((raw) => {
+        const match = String(raw || "").match(
+          /^(.+?)\s*(?:\.{2,}|…+|[•·]{2,})\s*([a-z0-9]{4})$/i,
+        );
+        if (!match) return null;
+        const name = String(match[1] || "").trim();
+        const suffix = String(match[2] || "").toUpperCase();
+        return normalizeBdoPayRecipient(name) && suffix
+          ? { raw: String(raw), name, suffix }
+          : null;
+      })
+      .filter((candidate): candidate is {
+        raw: string;
+        name: string;
+        suffix: string;
+      } => !!candidate);
+    const uniqueCompact = [
+      ...new Map(
+        compactCandidates.map((candidate) => [
+          `${normalizeBdoPayRecipient(candidate.name)}:${candidate.suffix}`,
+          candidate,
+        ]),
+      ).values(),
+    ];
+    const compact = uniqueCompact.length === 1 ? uniqueCompact[0] : null;
+    if (compact) {
+      nameRaw = compact.name;
+      destinationRaw = compact.raw;
+      accountRaw = compact.suffix;
+      accountMasked = true;
+    }
+  }
   return {
     nameRaw,
     nameNormalized: nameRaw ? normalizeBdoPayRecipient(nameRaw) : null,
     destinationRaw,
     accountRaw,
     accountNormalized: accountRaw ? normalizeBdoPayRecipient(accountRaw) : null,
+    accountMasked,
     lineIndex: nameRaw ? toIndex : null,
   };
 }
@@ -392,6 +436,10 @@ function compareRecipient(
       ? "not_configured"
       : !parsed.accountNormalized
       ? "missing"
+      : parsed.accountMasked && parsed.accountNormalized.length === 4 &&
+          validDestinationAccount(expectedAccount) &&
+          expectedAccount.endsWith(parsed.accountNormalized)
+      ? "suffix_exact"
       : parsed.accountNormalized === expectedAccount
       ? "exact"
       : "mismatch",
@@ -406,7 +454,7 @@ export function parseBdoPayToGcashReceipt(
   rawText: string,
   options: { typedReference?: string } = {},
 ): BdoPayReceiptParse {
-  const lines = linesOf(rawText);
+  const lines = receiptBodyLines(rawText);
   const text = lines.join("\n");
   const referenceResult = parseReference(lines, options.typedReference || "");
   const invoiceResult = parseInvoice(lines);
@@ -431,6 +479,9 @@ export function parseBdoPayToGcashReceipt(
   const providerBrand = /\bbdo\s*pay\b/i.test(text) ||
     /\bthank\s+you\s+for\s+using\s+bdo\b/i.test(text) ||
     (!!referenceResult.field.value && referenceLabel && invoiceLabel);
+  const failureStatus =
+    /\b(?:failed|unsuccessful|declined|cancelled|canceled|reversed|pending|processing)\b/i
+      .test(text);
   const issues: string[] = [];
   if (referenceResult.ambiguous) issues.push("AMBIGUOUS_REFERENCE");
   if (!referenceResult.field.value) issues.push("REFERENCE_MISSING");
@@ -457,7 +508,8 @@ export function parseBdoPayToGcashReceipt(
       competingProviderBrand:
         /\bsent\s+via\s+(?:gcash|bpi|maya|gotyme|go\s*tyme|maribank|mari\s*bank)\b/i
           .test(text) || /\btransfer\s+successful!?\b/i.test(text),
-      transferSuccess: lines.some((line) => /^sent\s*!?$/i.test(line)),
+      transferSuccess: !failureStatus &&
+        lines.some((line) => /^sent\s*!?$/i.test(line)),
       sendMoney: /\bsend\s+money\b/i.test(text),
       destinationGcash: /\bg-?xchange\b/i.test(text) && /\bgcash\b/i.test(text),
       instaPay: /\binsta\s*pay\b/i.test(text),
@@ -479,6 +531,44 @@ export function verifyBdoPayToGcashReceipt(
     context.expectedRecipientName || "",
     context.expectedRecipientAccount || "",
   );
+  const bookingStartedAt = context.bookingStartedAt
+    ? new Date(context.bookingStartedAt)
+    : null;
+  const receiptInstant = parsed.timestamp.instant
+    ? new Date(parsed.timestamp.instant)
+    : null;
+  const receiptAgeMinutes = bookingStartedAt && receiptInstant &&
+      !Number.isNaN(bookingStartedAt.getTime()) &&
+      !Number.isNaN(receiptInstant.getTime())
+    ? (receiptInstant.getTime() - bookingStartedAt.getTime()) / 60000
+    : null;
+  const amountMatches = context.pricingAvailable &&
+    context.expectedAmount != null && parsed.amount.amount != null &&
+    parsed.amount.reliable && !parsed.amount.ambiguous &&
+    parsed.indicators.matchingAmountDisplays &&
+    Math.abs(parsed.amount.amount - context.expectedAmount) <=
+      context.amountTolerance;
+  const timestampMatches = parsed.timestamp.completeness === "date_time" &&
+    !!parsed.timestamp.date &&
+    (!context.bookingStartedDate ||
+      parsed.timestamp.date === context.bookingStartedDate) &&
+    (!parsed.reference.receiptDate ||
+      parsed.reference.receiptDate === parsed.timestamp.date) &&
+    receiptAgeMinutes != null &&
+    receiptAgeMinutes >= -context.earlyToleranceMinutes &&
+    receiptAgeMinutes <= context.paymentWindowMinutes;
+  const compactStructuralEvidence = recipientComparison.name === "exact" &&
+    recipientComparison.account === "suffix_exact" &&
+    parsed.indicators.providerBrand &&
+    !parsed.indicators.competingProviderBrand &&
+    parsed.indicators.transferSuccess &&
+    parsed.indicators.sendMoney &&
+    parsed.indicators.referenceLabel &&
+    parsed.reference.confidence === "high" &&
+    parsed.reference.typedMatch === "match" &&
+    parsed.indicators.invoiceLabel &&
+    parsed.invoice.confidence === "high" &&
+    amountMatches && timestampMatches && parsed.issues.length === 0;
   if (!parsed.indicators.providerBrand) addUnique(flags, "BDO_PAY_UNREADABLE");
   if (parsed.indicators.competingProviderBrand) {
     addUnique(flags, "METHOD_MISMATCH");
@@ -486,10 +576,12 @@ export function verifyBdoPayToGcashReceipt(
   if (!parsed.indicators.transferSuccess || !parsed.indicators.sendMoney) {
     addUnique(flags, "TRANSFER_STATUS_UNREADABLE");
   }
-  if (!parsed.indicators.destinationGcash) {
+  if (!parsed.indicators.destinationGcash && !compactStructuralEvidence) {
     addUnique(flags, "GXI_DESTINATION_UNREADABLE");
   }
-  if (!parsed.indicators.instaPay) addUnique(flags, "INSTAPAY_QRPH_UNREADABLE");
+  if (!parsed.indicators.instaPay && !compactStructuralEvidence) {
+    addUnique(flags, "INSTAPAY_QRPH_UNREADABLE");
+  }
   if (!parsed.indicators.referenceLabel) {
     addUnique(flags, "REF_LABEL_UNREADABLE");
   }
@@ -532,12 +624,6 @@ export function verifyBdoPayToGcashReceipt(
       parsed.reference.receiptDate !== parsed.timestamp.date
     ) addUnique(flags, "REF_DATE_MISMATCH");
   }
-  const bookingStartedAt = context.bookingStartedAt
-    ? new Date(context.bookingStartedAt)
-    : null;
-  const receiptInstant = parsed.timestamp.instant
-    ? new Date(parsed.timestamp.instant)
-    : null;
   if (
     !bookingStartedAt || Number.isNaN(bookingStartedAt.getTime()) ||
     !receiptInstant || Number.isNaN(receiptInstant.getTime())

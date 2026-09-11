@@ -7727,7 +7727,7 @@ function receiptDetailsHtml(b){
           : '--';
   const ocrDiagnosticLabel = ex.ocrFallbackProvider ? 'OCR Fallback' : 'Parser Diagnostic';
   const rows = [
-    ['OCR Ref', receiptDetailValue(ex.ref || b.gcashRef)],
+    ['OCR Ref', receiptDetailValue(ex.ref)],
     ['Amount Read', receiptAmountValue(ex.amount)],
     ['Receipt Time', receiptTimeValue(ex)],
     ['Receipt Date', receiptDetailValue(ex.date)],

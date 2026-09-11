@@ -76,6 +76,36 @@ Date
 10 Sep 2026 at 7:20 PM
 `;
 
+const GOTYME_REPORTED_24H_OCR = `
+GoTyme Bank
+Sent
+₱2,200.00
+instaPay
+Instant
+To
+J M.
+0······7667
+G-Xchange, Inc (GCash)
+From
+R. VITOR
+••••••••3022
+GoTyme Bank
+Amount
+₱2,200.00
+Fee
+₱0.00
+Total
+₱2,200.00
+Trace ID
+OCR spacer
+000001
+Reference No.
+OCR spacer
+ITO260911114957001
+Date
+11 Sep 2026 at 19:49
+`;
+
 const MARIBANK_OCR = `
 MariBank
 Money sent
@@ -240,7 +270,8 @@ Deno.test("parses and verifies the live GoTyme Sent receipt layout", () => {
     ...CONTEXT,
     typedReference,
     expectedAmount: 3600,
-    expectedRecipientName: "PaddleRage",
+    expectedRecipientName: "Jan Kennith Magallano",
+    expectedRecipientNameAliases: ["Paddle Rage"],
     bookingStartedAt: "2026-09-10T11:06:00.000Z",
     bookingStartedDate: "2026-09-10",
   });
@@ -265,9 +296,84 @@ Deno.test("parses and verifies the live GoTyme Sent receipt layout", () => {
     "GoTyme reference is replay-protected",
   );
   assert(
-    verified.dedupeKeys.some((item) => item.key === "instapay:000018"),
-    "GoTyme trace ID is replay-protected",
+    !verified.dedupeKeys.some((item) => item.key === "instapay:000018"),
+    "short GoTyme trace ID must not become a global replay key",
   );
+});
+
+Deno.test("verifies the reported GoTyme 24-hour receipt with OCR line splits", () => {
+  const typedReference = "ITO260911114957001";
+  const parsed = parseProviderReceipt("gotyme", GOTYME_REPORTED_24H_OCR, {
+    typedReference,
+  });
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 2200,
+    expectedRecipientName: "Jan Kennith Magallano",
+    bookingStartedAt: "2026-09-11T11:44:00.000Z",
+    bookingStartedDate: "2026-09-11",
+  });
+
+  assert(parsed.provider === "gotyme", "GoTyme provider");
+  assert(verified.provider === "gotyme", "GoTyme verification");
+  assertEquals(parsed.receipt.reference.value, typedReference, "reference");
+  assertEquals(parsed.receipt.railReference.value, "000001", "trace ID");
+  assertEquals(parsed.receipt.recipient.phoneLast4, "7667", "phone suffix");
+  assertEquals(
+    parsed.receipt.timestamp.instant,
+    "2026-09-11T11:49:00.000Z",
+    "anchored GoTyme 24-hour timestamp",
+  );
+  assertEquals(
+    verified.recipientComparison.name,
+    "masked_compatible",
+    "configured legal-name initials",
+  );
+  assertEquals(verified.flags, [], "reported receipt clean flags");
+});
+
+Deno.test("GoTyme 24-hour and initial handling stays fail closed", () => {
+  const typedReference = "ITO260911114957001";
+  const context = {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 2200,
+    expectedRecipientName: "Jan Kennith Magallano",
+    bookingStartedAt: "2026-09-11T11:44:00.000Z",
+    bookingStartedDate: "2026-09-11",
+  };
+  const cases = [
+    {
+      label: "wrong legal-name initials",
+      text: GOTYME_REPORTED_24H_OCR.replace("J M.", "J X."),
+      flag: "RECEIVER_NAME_UNREADABLE",
+    },
+    {
+      label: "wrong destination suffix",
+      text: GOTYME_REPORTED_24H_OCR.replace("0······7667", "0······1234"),
+      flag: "WRONG_GCASH_NUMBER",
+    },
+    {
+      label: "unanchored 24-hour date",
+      text: GOTYME_REPORTED_24H_OCR.replace(
+        "Date\n11 Sep 2026 at 19:49",
+        "Advertisement\n11 Sep 2026 at 19:49",
+      ),
+      flag: "TIME_UNREADABLE",
+    },
+  ];
+
+  for (const testCase of cases) {
+    const parsed = parseProviderReceipt("gotyme", testCase.text, {
+      typedReference,
+    });
+    const verified = verifyProviderReceipt(parsed, context);
+    assert(
+      verified.flags.includes(testCase.flag),
+      `${testCase.label} must produce ${testCase.flag}`,
+    );
+  }
 });
 
 Deno.test("GoTyme Sent layout keeps every financial safety gate", () => {
