@@ -29,6 +29,8 @@ test('puts every pending host balance receipt in the main Payment Review queue',
   assert.match(admin, /paymentReviewTypeLabel\(type\)[\s\S]*?Host Balance Payment/);
   assert.match(hostBalanceAdmin, /function pendingPayments\(\)[\s\S]*?paymentStatus\(payment\) === 'pending_review'[\s\S]*?unique\.set/);
   assert.match(hostBalanceAdmin, /function reviewPending\(id, trigger\)[\s\S]*?await openModal\(payment, trigger\)/);
+  assert.match(hostBalanceAdmin, /function notifyPending\(id, trigger\)[\s\S]*?apiCall\('notify_pending', \{ paymentId: cleanId \}\)/);
+  assert.match(admin, /HostBalanceAdmin\?\.notifyPending\('\$\{jsArg\(item\.id\)\}',this\)[\s\S]*?Send Telegram/);
   assert.match(
     hostBalanceAdmin,
     /wrappedPaymentReview\(\)[\s\S]*?await render\(false\);[\s\S]*?state\.originalRenderPaymentReview/,
@@ -54,6 +56,10 @@ test('sends one server-claimed Telegram alert when Payment 2 needs review', () =
   assert.match(
     balanceEdge,
     /if \(action === "submit"\)[\s\S]*?notifyHostBalanceReview\(db, payment\)[\s\S]*?notification,/,
+  );
+  assert.match(
+    balanceEdge,
+    /if \(action === "notify_pending"\)[\s\S]*?requireReviewer\(actor\)[\s\S]*?\.eq\("status", "pending_review"\)[\s\S]*?notifyHostBalanceReview\(db, payment\)/,
   );
 });
 

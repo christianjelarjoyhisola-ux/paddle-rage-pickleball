@@ -1334,6 +1334,39 @@
     return true;
   }
 
+  async function notifyPending(id, trigger) {
+    if (!canDecide()) {
+      notify('Only the System Owner or Court Owner can send payment-review alerts.', 'err');
+      return false;
+    }
+    const cleanId = String(id || '').trim();
+    const payment = pendingPayments().find(item => paymentId(item) === cleanId);
+    if (!payment) {
+      notify('This pending balance payment is no longer in the review queue.', 'err');
+      return false;
+    }
+    const wasDisabled = !!trigger?.disabled;
+    if (trigger) {
+      trigger.disabled = true;
+      trigger.setAttribute('aria-busy', 'true');
+    }
+    try {
+      const result = await apiCall('notify_pending', { paymentId: cleanId });
+      const delivery = result?.notification || {};
+      if (!result?.ok || !delivery.ok) throw new Error(delivery.reason || 'Telegram alert was not sent.');
+      notify(delivery.skipped ? (delivery.reason || 'Telegram alert was already sent.') : 'Telegram payment-review alert sent.', 'ok');
+      return true;
+    } catch (error) {
+      notify(error?.message || 'Could not send the Telegram payment-review alert.', 'err');
+      return false;
+    } finally {
+      if (trigger) {
+        trigger.disabled = wasDisabled;
+        trigger.removeAttribute('aria-busy');
+      }
+    }
+  }
+
   function invalidate() {
     state.generation += 1;
     state.loadedAt = 0;
@@ -1370,6 +1403,7 @@
     approvedForBooking,
     reviewForBooking,
     reviewPending,
+    notifyPending,
     openHistoryForBooking,
     open: openModal,
     close: closeModal,

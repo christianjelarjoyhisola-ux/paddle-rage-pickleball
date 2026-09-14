@@ -772,6 +772,31 @@ export async function handleHostBookingBalancePayment(
       });
     }
 
+    if (action === "notify_pending") {
+      const denied = requireReviewer(actor);
+      if (denied) return denied;
+      const paymentId = cleanUuid(
+        body.paymentId ?? body.payment_id,
+        "Payment id",
+      );
+      const { data, error } = await db
+        .from("host_booking_balance_payments")
+        .select("*")
+        .eq("id", paymentId)
+        .eq("status", "pending_review")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        return json({
+          ok: false,
+          error: "Pending balance payment not found",
+        }, 404);
+      }
+      const payment = normalizePaymentRow(data);
+      const notification = await notifyHostBalanceReview(db, payment);
+      return json({ ok: notification.ok, action, payment, notification });
+    }
+
     if (action === "review") {
       const denied = requireReviewer(actor);
       if (denied) return denied;

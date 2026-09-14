@@ -10065,7 +10065,7 @@ function paymentReviewWhenText(v) {
 
 function paymentReviewAction(item) {
   if (item.type === 'host_balance') {
-    return `<button class="btn btn-sm" style="background:rgba(200,160,96,.15);color:var(--yellow);border:1px solid rgba(200,160,96,.35);font-weight:700" onclick="window.HostBalanceAdmin?.reviewPending('${jsArg(item.id)}',this)">Review</button>`;
+    return `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm" style="background:rgba(200,160,96,.15);color:var(--yellow);border:1px solid rgba(200,160,96,.35);font-weight:700" onclick="window.HostBalanceAdmin?.reviewPending('${jsArg(item.id)}',this)">Review</button><button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.35);font-weight:700" onclick="window.HostBalanceAdmin?.notifyPending('${jsArg(item.id)}',this)">Send Telegram</button></div>`;
   }
   if (item.type === 'booking') {
     if (item.status === 'retained') {
