@@ -12,7 +12,7 @@ function bookingQuickFilterHelpers() {
   const end = adminSource.indexOf('function setBookingQuickCount', start);
   assert.ok(placeholderStart >= 0 && placeholderEnd > placeholderStart, 'placeholder helpers must exist');
   assert.ok(start >= 0 && end > start, 'booking quick-filter helpers must exist');
-  return new Function(`${adminSource.slice(placeholderStart, placeholderEnd)}; ${adminSource.slice(start, end)}; return {
+  return new Function('hostBalancePendingPayment', `${adminSource.slice(placeholderStart, placeholderEnd)}; ${adminSource.slice(start, end)}; return {
     isPlaceholderHold,
     bookingQuickGroupItems,
     bookingGroupIsHost,
@@ -20,7 +20,7 @@ function bookingQuickFilterHelpers() {
     bookingMatchesQuickStatus,
     bookingMatchesQuickType,
     bookingGroupMatchesFormFilters,
-  };`)();
+  };`)(booking => booking?.pendingHostBalance ? { status: 'pending_review' } : null);
 }
 
 const helpers = bookingQuickFilterHelpers();
@@ -39,6 +39,7 @@ test('reservation status chips classify every supported lifecycle without auto-r
     ['pending', grouped({ status: 'pending', paymentStatus: 'unpaid' }), 'pending'],
     ['processing', grouped({ status: 'verifying', paymentStatus: 'for_verification' }), 'pending'],
     ['confirmed', grouped({ status: 'confirmed', paymentStatus: 'downpayment_paid' }), 'confirmed'],
+    ['confirmed host balance awaiting review', grouped({ status: 'confirmed', paymentStatus: 'downpayment_paid', hostBooking: true, pendingHostBalance: true }), 'pending'],
     ['completed', grouped({ status: 'completed', paymentStatus: 'paid' }), 'completed'],
     ['cancelled', grouped({ status: 'cancelled', paymentStatus: 'unpaid' }), 'closed'],
     ['forfeited', grouped({ status: 'forfeited', paymentStatus: 'deposit_retained' }), 'closed'],

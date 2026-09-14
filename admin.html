@@ -5280,7 +5280,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
             <button type="button" class="booking-filter-chip booking-status-tab active" data-booking-status="all" aria-pressed="true" onclick="setBookingStatusView('all')" onkeydown="bookingQuickFilterKeydown(event)">
               <span class="booking-filter-dot" aria-hidden="true"></span><span class="booking-filter-text">Any Status</span><span class="booking-filter-count" id="bookingStatusCountAll">0</span>
             </button>
-            <button type="button" class="booking-filter-chip booking-status-tab" data-booking-status="pending" aria-pressed="false" title="Includes Pending and Processing bookings" onclick="setBookingStatusView('pending')" onkeydown="bookingQuickFilterKeydown(event)">
+            <button type="button" class="booking-filter-chip booking-status-tab" data-booking-status="pending" aria-pressed="false" title="Includes pending reservations, processing payments, and host balance receipts awaiting review" onclick="setBookingStatusView('pending')" onkeydown="bookingQuickFilterKeydown(event)">
               <span class="booking-filter-dot" aria-hidden="true"></span><span class="booking-filter-text">Pending</span><span class="booking-filter-count" id="bookingStatusCountPending">0</span>
             </button>
             <button type="button" class="booking-filter-chip booking-status-tab" data-booking-status="confirmed" aria-pressed="false" onclick="setBookingStatusView('confirmed')" onkeydown="bookingQuickFilterKeydown(event)">
@@ -9592,6 +9592,10 @@ function bookingQuickStatusKey(group = {}) {
   const isClosed = reservationStates.some(status => ['cancelled','forfeited','rejected'].includes(status))
     || paymentStates.some(status => ['failed','rejected','deposit_retained'].includes(status));
   if (isClosed) return 'closed';
+  // Keep the courts reserved, but surface a confirmed host booking in Pending
+  // while its newly submitted balance receipt still needs an owner decision.
+  const hasPendingHostBalance = [group, ...items].some(item => !!hostBalancePendingPayment(item));
+  if (hasPendingHostBalance) return 'pending';
   if (reservationStates.some(status => ['pending','verifying'].includes(status))) return 'pending';
   if (reservationStates.length && reservationStates.every(status => status === 'completed')) return 'completed';
   if (reservationStates.some(status => status === 'confirmed')) return 'confirmed';
