@@ -4362,7 +4362,10 @@ body[data-theme="light"] :is(.cal-wrapper, .cal-day-panel, .cal-slot-card, .cal-
 }
 body[data-theme="light"] :is(.cal-header, .cal-court-head, .cal-time-head, .cal-day-panel-head) { background: #eef3e9; border-color: var(--admin-line); }
 body[data-theme="light"] :is(.cal-other, .cal-cell:disabled) { color: #9ba59a; background: #f2f5ef; }
-body[data-theme="light"] :is(.cal-today, .cal-cell:hover, .cal-slot-card:hover) { background: rgba(145, 187, 48, .1); border-color: rgba(90, 125, 27, .28); }
+body[data-theme="light"] .cal-today { background: rgba(145, 187, 48, .1); border-color: rgba(90, 125, 27, .28); }
+@media (hover: hover) and (pointer: fine) {
+  body[data-theme="light"] :is(.cal-cell:hover, button.cal-slot-card.available:hover) { background: rgba(145, 187, 48, .1); border-color: rgba(90, 125, 27, .28); }
+}
 
 /* Every workspace inherits one calm daylight surface system. */
 body[data-theme="light"] .adm-sec:not(#sec-dash) {
@@ -5417,6 +5420,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
             <select id="prType" onchange="renderPaymentReview()">
               <option value="">All Types</option>
               <option value="booking">Court Bookings</option>
+              <option value="host_balance">Host Balance Payments</option>
               <option value="open_play">Open Play Reservations</option>
               <option value="host_session">Hosted Open Play Signups</option>
             </select>
@@ -10056,6 +10060,9 @@ function paymentReviewWhenText(v) {
 }
 
 function paymentReviewAction(item) {
+  if (item.type === 'host_balance') {
+    return `<button class="btn btn-sm" style="background:rgba(200,160,96,.15);color:var(--yellow);border:1px solid rgba(200,160,96,.35);font-weight:700" onclick="window.HostBalanceAdmin?.reviewPending('${jsArg(item.id)}',this)">Review</button>`;
+  }
   if (item.type === 'booking') {
     if (item.status === 'retained') {
       return '<span style="color:var(--muted);font-size:.78rem;font-weight:800">Resolved</span>';
@@ -10073,8 +10080,8 @@ function paymentReviewAction(item) {
 }
 
 function paymentReviewRow(item) {
-  const typeLabel = item.type === 'booking' ? 'Court Booking' : item.type === 'host_session' ? 'Hosted Open Play Signup' : 'Open Play Reservation';
-  const typeClass = item.type === 'booking' ? 'pr-type-booking' : 'pr-type-open';
+  const typeLabel = paymentReviewTypeLabel(item.type);
+  const typeClass = ['booking', 'host_balance'].includes(item.type) ? 'pr-type-booking' : 'pr-type-open';
   const flags = item.flags?.length
     ? receiptFlagChips(item.flags, item.paymentTransferResolved)
     : '<span style="color:var(--text3);font-size:.72rem;font-weight:800">No flags</span>';
@@ -10134,6 +10141,13 @@ function syncPaymentReviewPendingCount() {
   }
   if (note) { note.textContent = message; note.hidden = !message; }
   if (link) link.hidden = !(baseReady && balanceReady && summary.count > 0);
+}
+
+function paymentReviewTypeLabel(type) {
+  if (type === 'booking') return 'Court Booking';
+  if (type === 'host_balance') return 'Host Balance Payment';
+  if (type === 'host_session') return 'Hosted Open Play Signup';
+  return 'Open Play Reservation';
 }
 
 function refreshPaymentReview() {
@@ -10215,7 +10229,22 @@ async function renderPaymentReview() {
         createdAt: r.receiptVerifiedAt || r.createdAt,
       };
     });
-  const items = [...bookingItems, ...opItems, ...hostItems].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const baseItems = [...bookingItems, ...opItems, ...hostItems];
+  const hostBalanceItems = (window.HostBalanceAdmin?.pendingPayments?.() || []).map(payment => ({
+    type: 'host_balance',
+    id: String(payment.paymentId || payment.payment_id || payment.id || ''),
+    ref: payment.paymentReference || payment.payment_reference || payment.bookingGroupRef || payment.booking_group_ref || payment.bookingRef || payment.booking_ref || '--',
+    name: payment.customerName || payment.customer_name || 'Host booking',
+    courtName: payment.courtLabel || payment.court_label || 'Host booking',
+    dateLabel: payment.bookingDate || payment.booking_date ? fmtD(payment.bookingDate || payment.booking_date) : '--',
+    timeLabel: payment.scheduleLabel || payment.schedule_label || '--',
+    method: payment.paymentProvider || payment.payment_provider || '--',
+    amount: Number(payment.balanceAmount ?? payment.expected_amount ?? 0) || 0,
+    status: 'pending',
+    flags: payment.receiptFlags || payment.receipt_flags || [],
+    createdAt: payment.submittedAt || payment.submitted_at || payment.createdAt || payment.created_at,
+  })).filter(item => item.id);
+  const items = [...baseItems, ...hostBalanceItems].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   const counts = {
     needsReview: items.filter(i => i.status === 'manual_review').length,
     pending: items.filter(i => i.status === 'pending').length,
@@ -10223,7 +10252,7 @@ async function renderPaymentReview() {
     rejected: items.filter(i => i.status === 'rejected').length,
   };
   if ($('prNeedsReview')) $('prNeedsReview').textContent = counts.needsReview;
-  _paymentReviewBasePending = counts.pending;
+  _paymentReviewBasePending = baseItems.filter(item => item.status === 'pending').length;
   syncPaymentReviewPendingCount();
   if ($('prAuto')) $('prAuto').textContent = counts.auto;
   if ($('prRejected')) $('prRejected').textContent = counts.rejected;
@@ -10249,7 +10278,7 @@ async function renderPaymentReview() {
   $('prLogBody').innerHTML = recent.length ? recent.map(i => `<article class="pr-log-item">
     <div>
       <div class="pr-log-name">${esc(i.name)}</div>
-      <div class="pr-log-meta">${esc(paymentReviewWhenText(i.createdAt))} · ${esc(i.type === 'booking' ? 'Court Booking' : i.type === 'host_session' ? 'Hosted Open Play Signup' : 'Open Play')} · <code>${esc(i.ref)}</code></div>
+      <div class="pr-log-meta">${esc(paymentReviewWhenText(i.createdAt))} · ${esc(paymentReviewTypeLabel(i.type))} · <code>${esc(i.ref)}</code></div>
       <div class="pr-log-meta">${esc(i.dateLabel || '--')} · ${esc(i.timeLabel || '--')}</div>
     </div>
     <div class="pr-log-pay">

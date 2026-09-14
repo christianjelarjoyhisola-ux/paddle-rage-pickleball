@@ -119,6 +119,13 @@ test('mobile WebKit uses a low-compositing admin shell while scrolling', () => {
   assert.match(adminSource, /\.sidebar\.open\s*\{[\s\S]*?100svh/i);
 });
 
+test('touch devices never apply the light hover highlight to booked calendar slots', () => {
+  const light = styleBlock('admin-premium-light-theme').source;
+  assert.match(light, /@media\s*\(hover:\s*hover\)\s*and\s*\(pointer:\s*fine\)/i);
+  assert.match(light, /button\.cal-slot-card\.available:hover/i);
+  assert.doesNotMatch(light, /\.cal-slot-card:hover/i);
+});
+
 test('live dashboard refreshes are serialized and mobile charts reuse capped canvases', () => {
   const realtime = sourceBetween('let _admRtDebounce=null;', '   PADDLE RAGE INSIGHTS');
   const charts = sourceBetween('function renderDashCharts(', '   BOOKINGS');

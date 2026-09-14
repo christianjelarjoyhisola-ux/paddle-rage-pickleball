@@ -14,6 +14,46 @@ const paymentExpansion = fs.readFileSync(
   'supabase/migrations/20260901090000_receipt_review_maribank.sql',
   'utf8',
 );
+const admin = fs.readFileSync('admin.html', 'utf8');
+const hostBalanceAdmin = fs.readFileSync('host-balance-admin.js', 'utf8');
+const balanceEdge = fs.readFileSync(
+  'supabase/functions/host-booking-balance-payment/index.ts',
+  'utf8',
+);
+
+test('puts every pending host balance receipt in the main Payment Review queue', () => {
+  assert.match(admin, /<option value="host_balance">Host Balance Payments<\/option>/);
+  assert.match(admin, /HostBalanceAdmin\?\.pendingPayments\?\.\(\)/);
+  assert.match(admin, /type: 'host_balance'[\s\S]*?status: 'pending'/);
+  assert.match(admin, /HostBalanceAdmin\?\.reviewPending\('\$\{jsArg\(item\.id\)\}',this\)/);
+  assert.match(admin, /paymentReviewTypeLabel\(type\)[\s\S]*?Host Balance Payment/);
+  assert.match(hostBalanceAdmin, /function pendingPayments\(\)[\s\S]*?paymentStatus\(payment\) === 'pending_review'[\s\S]*?unique\.set/);
+  assert.match(hostBalanceAdmin, /function reviewPending\(id, trigger\)[\s\S]*?await openModal\(payment, trigger\)/);
+  assert.match(
+    hostBalanceAdmin,
+    /wrappedPaymentReview\(\)[\s\S]*?await render\(false\);[\s\S]*?state\.originalRenderPaymentReview/,
+  );
+});
+
+test('sends one server-claimed Telegram alert when Payment 2 needs review', () => {
+  assert.match(balanceEdge, /import \{ sendTelegramHtml \} from "\.\.\/_shared\/telegram\.ts"/);
+  assert.match(balanceEdge, /payment\.status[\s\S]*?!== "pending_review"/);
+  assert.match(balanceEdge, /telegram:host_balance_review:\$\{id\}/);
+  assert.match(balanceEdge, /event_type: "host_balance_payment_review_needed"/);
+  assert.match(balanceEdge, /subject_type: "host_balance_payment"/);
+  assert.match(balanceEdge, /String\(claimError\.code \|\| ""\) === "23505"/);
+  assert.match(balanceEdge, /sendTelegramHtml\(hostBalanceReviewMessage\(payment\)\)/);
+  const messageBuilder = balanceEdge.slice(
+    balanceEdge.indexOf('function hostBalanceReviewMessage'),
+    balanceEdge.indexOf('async function notifyHostBalanceReview'),
+  );
+  assert.doesNotMatch(messageBuilder, /customerEmail|customer_name|customerName|phone|contact/i);
+  assert.match(balanceEdge, /if \(!delivery\.ok && Number\(delivery\.sent \|\| 0\) === 0\)[\s\S]*?delete\(\)/);
+  assert.match(
+    balanceEdge,
+    /if \(action === "submit"\)[\s\S]*?notifyHostBalanceReview\(db, payment\)[\s\S]*?notification,/,
+  );
+});
 
 test('routes reviewable host balance verification failures to owner review', () => {
   assert.match(

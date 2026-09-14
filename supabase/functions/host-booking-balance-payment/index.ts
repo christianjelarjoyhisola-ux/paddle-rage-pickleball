@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any no-import-prefix no-control-regex
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendTelegramHtml } from "../_shared/telegram.ts";
 
 type AccountRole = "host" | "owner" | "court_owner" | "system";
 type Actor = {
@@ -189,6 +190,79 @@ function normalizeRpcPayment(value: any): Record<string, unknown> {
   const payment = { ...value } as Record<string, unknown>;
   if (payment.id && !payment.paymentId) payment.paymentId = payment.id;
   return payment;
+}
+
+function telegramEscape(value: unknown): string {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character] || character);
+}
+
+function phpAmount(value: unknown): string {
+  const amount = Number(value);
+  return `PHP ${Number.isFinite(amount) ? amount.toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }) : "0.00"}`;
+}
+
+function hostBalanceReviewMessage(payment: Record<string, unknown>): string {
+  const adminUrl = Deno.env.get("APP_ADMIN_URL") ||
+    "https://paddleragecdo.ph/admin.html#payreview";
+  const bookingRef = payment.bookingGroupRef || payment.bookingRef || "—";
+  const paymentRef = payment.paymentReference || "—";
+  const provider = String(payment.paymentProvider || "Payment").toUpperCase();
+  const schedule = payment.scheduleLabel || payment.bookingDate || "—";
+  return `<b>PAYMENT REVIEW NEEDED</b>\n------------------\n` +
+    `<b>Host balance payment</b>\n` +
+    `Booking: <code>${telegramEscape(bookingRef)}</code>\n` +
+    `Schedule: ${telegramEscape(schedule)}\n\n` +
+    `Provider: <b>${telegramEscape(provider)}</b>\n` +
+    `Amount: <b>${telegramEscape(phpAmount(payment.balanceAmount))}</b>\n` +
+    `Reference: <code>${telegramEscape(paymentRef)}</code>\n` +
+    `------------------\n<a href="${telegramEscape(adminUrl)}">Review this payment in the dashboard.</a>`;
+}
+
+async function notifyHostBalanceReview(
+  db: any,
+  payment: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (String(payment.status || "").toLowerCase() !== "pending_review") {
+    return { ok: true, skipped: true, reason: "Payment does not need review" };
+  }
+  const id = String(payment.paymentId || payment.id || "").trim();
+  if (!id) return { ok: false, skipped: true, reason: "Missing payment id" };
+
+  const eventKey = `telegram:host_balance_review:${id}`;
+  const { error: claimError } = await db.from("notification_event_claims")
+    .insert({
+      event_key: eventKey,
+      event_type: "host_balance_payment_review_needed",
+      subject_type: "host_balance_payment",
+      subject_id: id,
+    });
+  if (claimError) {
+    if (String(claimError.code || "") === "23505") {
+      return { ok: true, skipped: true, reason: "Notification already sent" };
+    }
+    return { ok: false, skipped: true, reason: "Notification claim failed" };
+  }
+
+  const delivery = await sendTelegramHtml(hostBalanceReviewMessage(payment));
+  if (!delivery.ok && Number(delivery.sent || 0) === 0) {
+    await db.from("notification_event_claims").delete().eq("event_key", eventKey);
+  }
+  return {
+    ok: delivery.ok,
+    skipped: Boolean(delivery.skipped),
+    reason: delivery.reason,
+    sent: delivery.sent,
+    failed: delivery.failed,
+  };
 }
 
 async function authenticate(
@@ -481,10 +555,18 @@ export async function handleHostBookingBalancePayment(
           payment,
         }, 409);
       }
+      let notification: Record<string, unknown>;
+      try {
+        notification = await notifyHostBalanceReview(db, payment);
+      } catch (notificationError) {
+        console.error("Host balance review notification failed", notificationError);
+        notification = { ok: false, reason: "Notification delivery failed" };
+      }
       return json({
         ok: true,
         action,
         payment,
+        notification,
       });
     }
 

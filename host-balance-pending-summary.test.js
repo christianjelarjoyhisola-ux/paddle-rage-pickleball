@@ -69,6 +69,10 @@ test('counts pending payment IDs once across booking groups and paginated respon
   assert.deepEqual(h.summary(), { status: 'idle', count: null });
   await h.api.load(false);
   assert.deepEqual(h.summary(), { status: 'ready', count: 3 });
+  assert.deepEqual(
+    Array.from(h.api.pendingPayments(), payment => String(payment.paymentId || payment.payment_id || payment.id || '').trim()),
+    ['p1', 'p2', 'p3'],
+  );
   assert.deepEqual(h.calls.map(call => call.offset), [0, 7]);
   assert.deepEqual(h.events, [{ status: 'loading', count: null }, { status: 'ready', count: 3 }]);
   await h.api.load(false);
@@ -97,6 +101,7 @@ test('publishes unknown after load failure and a real zero after recovery', asyn
 test('inaccessible and local queues publish the appropriate summary without network access', async () => {
   const denied = harness({ role: 'staff' });
   assert.deepEqual(denied.summary(), { status: 'forbidden', count: null });
+  assert.deepEqual(Array.from(denied.api.pendingPayments()), []);
   await denied.api.render(true);
   assert.deepEqual(denied.events, [{ status: 'forbidden', count: null }]);
   assert.equal(denied.calls.length, 0);

@@ -91,6 +91,16 @@
     return { status: 'ready', count: ids.size };
   }
 
+  function pendingPayments() {
+    if (!canDecide() || state.loadState !== 'ready') return [];
+    const unique = new Map();
+    state.payments.forEach(payment => {
+      const id = paymentId(payment);
+      if (id && paymentStatus(payment) === 'pending_review' && !unique.has(id)) unique.set(id, payment);
+    });
+    return [...unique.values()];
+  }
+
   function syncPendingSummary() {
     global.syncPaymentReviewPendingCount?.();
   }
@@ -1309,6 +1319,21 @@
     }
   }
 
+  async function reviewPending(id, trigger) {
+    if (!canDecide()) {
+      notify('Only the System Owner or Court Owner can review host balance payments.', 'err');
+      return false;
+    }
+    const cleanId = String(id || '').trim();
+    const payment = pendingPayments().find(item => paymentId(item) === cleanId);
+    if (!payment) {
+      notify('This pending balance payment is no longer in the review queue. Refresh and try again.', 'err');
+      return false;
+    }
+    await openModal(payment, trigger);
+    return true;
+  }
+
   function invalidate() {
     state.generation += 1;
     state.loadedAt = 0;
@@ -1326,9 +1351,8 @@
     if (typeof global.renderPaymentReview === 'function' && !state.originalRenderPaymentReview) {
       state.originalRenderPaymentReview = global.renderPaymentReview;
       global.renderPaymentReview = async function wrappedPaymentReview() {
-        const result = await state.originalRenderPaymentReview.apply(this, arguments);
         await render(false);
-        return result;
+        return state.originalRenderPaymentReview.apply(this, arguments);
       };
     }
   }
@@ -1339,11 +1363,13 @@
     render,
     invalidate,
     pendingSummary,
+    pendingPayments,
     pendingForBooking,
     statusForBooking,
     paymentEvidenceForBooking,
     approvedForBooking,
     reviewForBooking,
+    reviewPending,
     openHistoryForBooking,
     open: openModal,
     close: closeModal,
