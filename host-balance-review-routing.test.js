@@ -36,7 +36,9 @@ test('puts every pending host balance receipt in the main Payment Review queue',
 });
 
 test('sends one server-claimed Telegram alert when Payment 2 needs review', () => {
-  assert.match(balanceEdge, /import \{ sendTelegramHtml \} from "\.\.\/_shared\/telegram\.ts"/);
+  assert.match(balanceEdge, /async function sendTelegramHtml\(message: string\)/);
+  assert.match(balanceEdge, /Deno\.env\.get\("TELEGRAM_BOT_TOKEN"\)/);
+  assert.match(balanceEdge, /Deno\.env\.get\("TELEGRAM_CHAT_ID"\)/);
   assert.match(balanceEdge, /payment\.status[\s\S]*?!== "pending_review"/);
   assert.match(balanceEdge, /telegram:host_balance_review:\$\{id\}/);
   assert.match(balanceEdge, /event_type: "host_balance_payment_review_needed"/);

@@ -1,7 +1,6 @@
 // deno-lint-ignore-file no-explicit-any no-import-prefix no-control-regex
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sendTelegramHtml } from "../_shared/telegram.ts";
 
 type AccountRole = "host" | "owner" | "court_owner" | "system";
 type Actor = {
@@ -200,6 +199,59 @@ function telegramEscape(value: unknown): string {
     '"': "&quot;",
     "'": "&#39;",
   })[character] || character);
+}
+
+async function sendTelegramHtml(message: string): Promise<{
+  ok: boolean;
+  skipped?: boolean;
+  reason?: string;
+  sent: number;
+  failed: number;
+}> {
+  const botToken = String(Deno.env.get("TELEGRAM_BOT_TOKEN") || "").trim();
+  const chatIds = [...new Set(
+    String(Deno.env.get("TELEGRAM_CHAT_ID") || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
+  )];
+  if (!botToken || !chatIds.length) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "Telegram not configured",
+      sent: 0,
+      failed: 0,
+    };
+  }
+
+  const results = await Promise.all(chatIds.map(async (chatId) => {
+    try {
+      const response = await fetch(
+        `https://api.telegram.org/bot${botToken}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+            parse_mode: "HTML",
+            disable_web_page_preview: true,
+          }),
+        },
+      );
+      if (!response.ok) throw new Error(`Telegram HTTP ${response.status}`);
+      return true;
+    } catch (error) {
+      console.error(
+        "Host balance Telegram delivery failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+      return false;
+    }
+  }));
+  const sent = results.filter(Boolean).length;
+  return { ok: sent === results.length, sent, failed: results.length - sent };
 }
 
 function phpAmount(value: unknown): string {
