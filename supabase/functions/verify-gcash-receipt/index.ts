@@ -109,6 +109,7 @@ type OcrFieldMatch = {
 
 type GcashCriticalOcrQuality = {
   pass: boolean;
+  amountTokenizationFallbackEligible: boolean;
   confidence: number | null;
   coverage: number;
   amountOccurrences: number;
@@ -1150,7 +1151,10 @@ function evaluateGcashCriticalOcrQuality(
   const coverage = coveredFields / (requiredFields.length + 1);
   const numericMatches = [reference, timestamp, phone, ...amountMatches]
     .filter((match): match is OcrFieldMatch => Boolean(match));
-  const numericPass = numericMatches.length >= 5 &&
+  const requiredNumericFieldsPresent = Boolean(
+    reference && timestamp && phone && amountMatches.length >= 1,
+  );
+  const numericPass = requiredNumericFieldsPresent &&
     numericMatches.every((match) =>
       match.numericConfidence >= 0.92 && match.minDigitConfidence >= 0.8
     );
@@ -1164,6 +1168,13 @@ function evaluateGcashCriticalOcrQuality(
   return {
     pass: coverage === 1 && amountMatches.length >= 2 && numericPass &&
       labelsPass,
+    // Vision can merge a peso symbol with one amount token (for example,
+    // `₱2400.00`), making an exact word-token lookup see only one of the two
+    // identical amount displays. The parser still proves both displays agree.
+    amountTokenizationFallbackEligible: amountMatches.length === 1 &&
+      numericPass && labelsPass &&
+      receipt.amount.matchingPrimaryAmountDisplays &&
+      !receipt.amount.conflictingPrimaryAmounts,
     confidence,
     coverage,
     amountOccurrences: amountMatches.length,
@@ -2981,8 +2992,9 @@ Deno.serve(async (req) => {
 
     // GCash screenshots often contain advertisements and footer copy that can
     // lower whole-page confidence even when every payment field is clear. Use
-    // native word confidence for the fields that drive approval; retain the
-    // established page score as a fallback when structured words are absent.
+    // native word confidence for the fields that drive approval. Vision can
+    // occasionally merge a peso symbol with one otherwise valid amount token;
+    // allow only that narrow parser-confirmed tokenization fallback.
     const gcashCriticalOcrQuality = provider === "gcash" && gcashParse &&
         ocrWords.length
       ? evaluateGcashCriticalOcrQuality(ocrWords, gcashParse)
@@ -2994,8 +3006,16 @@ Deno.serve(async (req) => {
         gcashCriticalOcrQuality.confidence != null
       ? gcashCriticalOcrQuality.confidence
       : ocrConfidence;
+    const nativeWholePageOcrPass =
+      ocrConfidenceSource === "native" &&
+      ocrConfidence >= minimumOcrConfidence;
+    const gcashAmountTokenizationFallbackPass =
+      gcashCriticalOcrQuality?.amountTokenizationFallbackEligible === true &&
+      nativeWholePageOcrPass;
+    const gcashCriticalOcrPass = gcashCriticalOcrQuality?.pass === true ||
+      gcashAmountTokenizationFallbackPass;
     const ocrQualityPass = provider === "gcash" && ocrWords.length
-      ? gcashCriticalOcrQuality?.pass === true
+      ? gcashCriticalOcrPass
       : ocrConfidence >= minimumOcrConfidence;
     if (
       ocrText &&
@@ -3259,6 +3279,8 @@ Deno.serve(async (req) => {
       ocrApprovalConfidence,
       ocrConfidenceScope: gcashCriticalOcrQuality?.pass
         ? "critical_fields_v1"
+        : gcashAmountTokenizationFallbackPass
+        ? "critical_fields_amount_tokenization_fallback_v1"
         : "whole_page",
       gcashCriticalOcrQuality,
       ocrTextLength: ocrText.length,
