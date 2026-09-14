@@ -126,6 +126,41 @@ Deno.test("parses the supplied masked-name GCash receipt", () => {
   );
 });
 
+Deno.test("confirms both amounts when Vision moves Amount before same-line total", () => {
+  const parsed = parseGcashReceipt(
+    `
+Amount
+J.. KE...H M.
++63 945 510 7667
+Sent via GCash
+1,850.00
+Total Amount Sent P1,850.00
+Ref No. 0045 031 746196
+Sep 14, 2026 1:04 PM
+279g (gCO2e)
+By going digital, you reduce your carbon footprint
+from transportation, paper, and plastic.
+`,
+    { typedReference: "0045031746196" },
+  );
+
+  assertEquals(parsed.amount.amount, 1850, "amount");
+  assertEquals(parsed.amount.reliable, true, "amount reliability");
+  assertEquals(
+    parsed.amount.matchingPrimaryAmountDisplays,
+    true,
+    "amount display confirmation",
+  );
+  assertEquals(
+    parsed.amount.conflictingPrimaryAmounts,
+    false,
+    "amount conflict",
+  );
+  assertEquals(parsed.reference.value, "0045031746196", "reference");
+  assertEquals(parsed.timestamp.date, "2026-09-14", "date");
+  assertEquals(parsed.timestamp.time24, "13:04", "time");
+});
+
 Deno.test("matches bullet dot and collapsed GCash name masks", () => {
   for (
     const observed of [

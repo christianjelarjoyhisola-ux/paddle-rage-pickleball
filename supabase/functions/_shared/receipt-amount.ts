@@ -119,13 +119,17 @@ const AMOUNT_LABEL_RE = /\bamount(?:\s+(?:sent|paid|transferred))?\b/i;
 const TOTAL_LABEL_RE = /\b(?:grand\s+total|total(?:\s+amount)?)\b/i;
 const MAYA_ANCHOR_RE = /\bsent\s+money\s+via\b/i;
 const GCASH_SENT_VIA_RE = /\bsent\s+via\s+gcash\b/i;
-const GCASH_TOTAL_AMOUNT_SENT_RE = /^\s*total\s+amount\s+sent\s*[:=\-–—]?\s*$/i;
+const GCASH_TOTAL_AMOUNT_SENT_RE = new RegExp(
+  String
+    .raw`^\s*total\s+amount\s+sent(?:\s*[:=\-–—]?\s*(?:${CURRENCY_SOURCE})?\s*${MONEY_SOURCE})?\s*$`,
+  "iu",
+);
 const GCASH_REFERENCE_BOUNDARY_RE =
   /\b(?:ref(?:erence)?)(?:\s*(?:no|number|#))?\.?/i;
 const GCASH_REORDERED_BLOCK_MAX_NON_EMPTY_LINES = 6;
 const GCASH_AMOUNT_DISPLAY_LINE_RE = new RegExp(
   String
-    .raw`^\s*(?<marker>${CURRENCY_SOURCE})?\s*[+\-–—−]?\s*(?<amount>${MONEY_SOURCE})\s*$`,
+    .raw`^\s*(?:total\s+amount\s+sent\s*[:=\-–—]?\s*)?(?<marker>${CURRENCY_SOURCE})?\s*[+\-–—−]?\s*(?<amount>${MONEY_SOURCE})\s*$`,
   "iu",
 );
 
@@ -419,17 +423,41 @@ function collectCandidates(
   //   Ref No. 4044666766999
   //
   // The normal same/previous-line rules deliberately reject that currency-only
-  // read. Recover it only for GCash, only inside the short Total Amount Sent to
-  // Ref block, and only when two distinct decimal displays agree and at least
-  // one retains a currency marker. The expected booking amount is never used.
-  const gcashTotalAmountAnchors = options.provider === "gcash" &&
-      GCASH_SENT_VIA_RE.test(text)
+  // read. Vision can also move the bare Amount value immediately before a
+  // same-line "Total Amount Sent P..." display. Recover either ordering only
+  // for GCash, only inside the short Sent via GCash to Ref block, and only when
+  // two distinct decimal displays agree and at least one retains a currency
+  // marker. The expected booking amount is never used.
+  const gcashSentViaAnchors = options.provider === "gcash"
+    ? lines.map((line, index) => GCASH_SENT_VIA_RE.test(line) ? index : -1)
+      .filter((index) => index >= 0)
+    : [];
+  const gcashTotalAmountAnchors = gcashSentViaAnchors.length
     ? lines.map((line, index) =>
       GCASH_TOTAL_AMOUNT_SENT_RE.test(line) ? index : -1
     ).filter((index) => index >= 0)
     : [];
   if (gcashTotalAmountAnchors.length) {
     for (const anchorIndex of gcashTotalAmountAnchors) {
+      const sentViaAnchorIndex = [...gcashSentViaAnchors]
+        .reverse()
+        .find((index) => index < anchorIndex);
+      if (sentViaAnchorIndex == null) continue;
+      let blockStartIndex = anchorIndex;
+      if (
+        gcashSentViaAnchors.length === 1 &&
+        gcashTotalAmountAnchors.length === 1
+      ) {
+        const sentToTotalDistance = lines.slice(
+          sentViaAnchorIndex + 1,
+          anchorIndex + 1,
+        ).filter((line) => line.trim()).length;
+        if (sentToTotalDistance > GCASH_REORDERED_BLOCK_MAX_NON_EMPTY_LINES) {
+          continue;
+        }
+        blockStartIndex = sentViaAnchorIndex + 1;
+      }
+
       let boundaryIndex = -1;
       let nonEmptyLines = 0;
       for (let index = anchorIndex + 1; index < lines.length; index++) {
@@ -455,7 +483,7 @@ function collectCandidates(
         }
       >();
       for (
-        let lineIndex = anchorIndex + 1;
+        let lineIndex = blockStartIndex;
         lineIndex < boundaryIndex;
         lineIndex++
       ) {
@@ -493,6 +521,7 @@ function collectCandidates(
         displays.map((display) => display.lineIndex),
       );
       if (
+        gcashSentViaAnchors.length !== 1 ||
         gcashTotalAmountAnchors.length !== 1 || displayLines.size < 2 ||
         amounts.size !== 1 ||
         !displays.some((display) => display.currencyMarked)

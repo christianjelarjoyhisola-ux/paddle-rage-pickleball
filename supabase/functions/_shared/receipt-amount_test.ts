@@ -256,6 +256,43 @@ Sep 4, 2026 1:36 AM
   );
 });
 
+Deno.test("recovers GCash amount moved before a same-line total display", () => {
+  const result = extractReceiptAmount(
+    `
+Amount
+J.. KE...H M.
++63 945 510 7667
+Sent via GCash
+1,850.00
+Total Amount Sent P1,850.00
+Ref No. 0045 031 746196
+Sep 14, 2026 1:04 PM
+279g (gCO2e)
+`,
+    { provider: "gcash" },
+  );
+
+  assertEquals(result.amount, 1850, "same-line total GCash amount");
+  assertEquals(result.reliable, true, "same-line total reliability");
+  assertEquals(result.ambiguous, false, "same-line total ambiguity");
+  assert(
+    result.evidence.includes("gcash_concordant_amount_block"),
+    "matching displays must receive concordant block evidence",
+  );
+  assertEquals(
+    new Set(
+      result.candidates
+        .filter((candidate) =>
+          candidate.amount === 1850 &&
+          candidate.evidence.includes("gcash_concordant_amount_block")
+        )
+        .map((candidate) => candidate.lineIndex),
+    ).size,
+    2,
+    "both matching displays must remain independently located",
+  );
+});
+
 Deno.test("GCash reordered block fails closed on conflicting displays", () => {
   const result = extractReceiptAmount(
     `
