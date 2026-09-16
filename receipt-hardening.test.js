@@ -18,6 +18,22 @@ test('dedicated Maya review keeps recipient and reference failures visible to st
   assert.deepEqual(Array.from(result), failures);
 });
 
+test('masked GCash receipts use composite recipient evidence and honest OCR wording', () => {
+  const verifier = read('supabase/functions/verify-gcash-receipt/index.ts');
+  const providerVerifier = read('supabase/functions/_shared/receipt-providers/index.ts');
+  const parser = read('supabase/functions/_shared/gcash-receipt.ts');
+  const admin = read('admin.html');
+  const customer = read('index.html');
+
+  assert.match(parser, /parseSplitMaskedPhone/);
+  assert.match(parser, /TOTAL_AMOUNT_SENT_RE\.test\(line\)/);
+  assert.match(providerVerifier, /phone === "last4_only"[\s\S]*?\["exact", "masked_compatible"\]/);
+  assert.match(verifier, /phone\.visibility === "masked"[\s\S]*?phone\.last4/);
+  assert.match(verifier, /recipientComparison\.phone === "last4_only"[\s\S]*?"masked_compatible"/);
+  assert.match(admin, /LOW_OCR_CONFIDENCE:'Required payment fields unconfirmed'/);
+  assert.match(customer, /LOW_OCR_CONFIDENCE: 'Required payment fields unconfirmed'/);
+});
+
 test('admin releases decoded receipt images when review modals close', () => {
   const admin = read('admin.html');
   const previewCleanup = admin.slice(

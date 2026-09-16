@@ -259,9 +259,14 @@ function verifyGcashReceipt(
   ) {
     addUnique(flags, "GCASH_RECEIPT_UNREADABLE");
   }
+  const maskedRecipientCompatible =
+    recipientComparison.phone === "last4_only" &&
+    ["exact", "masked_compatible"].includes(recipientComparison.name);
   if (recipientComparison.phone === "mismatch") {
     addUnique(flags, "WRONG_GCASH_NUMBER");
-  } else if (recipientComparison.phone !== "exact") {
+  } else if (
+    recipientComparison.phone !== "exact" && !maskedRecipientCompatible
+  ) {
     addUnique(flags, "NUMBER_UNREADABLE");
   }
   if (recipientComparison.name === "mismatch") {

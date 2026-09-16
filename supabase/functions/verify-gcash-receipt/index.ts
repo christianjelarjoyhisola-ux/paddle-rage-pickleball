@@ -1139,7 +1139,10 @@ function evaluateGcashCriticalOcrQuality(
     : receipt.amount.amount.toFixed(2);
   const amountMatches = findOcrFieldMatches(words, amountValue);
   const timestamp = findOcrFieldMatches(words, receipt.timestamp.raw)[0];
-  const phone = findOcrFieldMatches(words, receipt.receiver.phone.raw)[0];
+  const phone = findOcrFieldMatches(words, receipt.receiver.phone.raw)[0] ||
+    (receipt.receiver.phone.visibility === "masked"
+      ? findOcrFieldMatches(words, receipt.receiver.phone.last4)[0]
+      : undefined);
   const labelMatches = [
     findOcrFieldMatches(words, "Sent via GCash")[0],
     findOcrFieldMatches(words, "Total Amount Sent")[0],
@@ -3108,8 +3111,12 @@ Deno.serve(async (req) => {
         ].includes(flag)
       );
     const recipientMatch = providerVerification?.provider === "gcash"
-      ? providerVerification.recipientComparison.phone === "exact" &&
-        providerVerification.recipientComparison.name !== "mismatch"
+      ? (providerVerification.recipientComparison.phone === "exact" &&
+          providerVerification.recipientComparison.name !== "mismatch") ||
+        (providerVerification.recipientComparison.phone === "last4_only" &&
+          ["exact", "masked_compatible"].includes(
+            providerVerification.recipientComparison.name,
+          ))
       : providerVerification?.provider === "maya"
       ? providerVerification.recipientComparison.phone === "exact" &&
         ["exact", "masked_compatible"].includes(

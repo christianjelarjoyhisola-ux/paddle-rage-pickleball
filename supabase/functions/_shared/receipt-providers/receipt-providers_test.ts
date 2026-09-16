@@ -132,18 +132,18 @@ Ref No. 2043350406766 Aug 31, 2026 10:41 AM
 `;
 
 const REORDERED_GCASH_OCR = `
-1:36 1
+1:01 1
 Amount
 Express Send
-J•• KE••••H M.
-+63 945 510 7667
-Sent via GCash
+J.. KE...HM.
++63 9..
 Total Amount Sent
-55
+7667
+Sent via GCash
 3,600.00
 P3600.00
-Ref No. 4044666766999
-Sep 4, 2026 1:36 AM
+Ref No. 5045095386043
+Sep 16, 2026 1:00 AM
 279g (gCO2e)
 By going digital, you reduce your carbon footprint.
 `;
@@ -451,7 +451,7 @@ Deno.test("GoTyme Sent layout keeps every financial safety gate", () => {
 });
 
 Deno.test("verifies the reported reordered GCash Express Send OCR layout", () => {
-  const typedReference = "4044666766999";
+  const typedReference = "5045095386043";
   const parsed = parseProviderReceipt("gcash", REORDERED_GCASH_OCR, {
     typedReference,
   });
@@ -460,11 +460,12 @@ Deno.test("verifies the reported reordered GCash Express Send OCR layout", () =>
     typedReference,
     expectedAmount: 3600,
     expectedRecipientName: "Jan Kennith Magallano",
-    bookingStartedAt: "2026-09-03T17:35:00.000Z",
-    bookingStartedDate: "2026-09-04",
+    bookingStartedAt: "2026-09-15T16:58:36.646Z",
+    bookingStartedDate: "2026-09-16",
   });
 
   assert(parsed.provider === "gcash", "reordered GCash provider");
+  assert(verified.provider === "gcash", "reordered GCash verification");
   assertEquals(parsed.parserVersion, "gcash_v1", "GCash parser version");
   assertEquals(parsed.receipt.amount.amount, 3600, "GCash amount");
   assertEquals(
@@ -482,7 +483,57 @@ Deno.test("verifies the reported reordered GCash Express Send OCR layout", () =>
     true,
     "GCash amount display confirmation",
   );
+  assertEquals(parsed.receipt.receiver.phone.last4, "7667", "phone suffix");
+  assertEquals(
+    verified.recipientComparison.phone,
+    "last4_only",
+    "masked phone comparison",
+  );
+  assertEquals(
+    verified.recipientComparison.name,
+    "masked_compatible",
+    "flattened masked name comparison",
+  );
   assertEquals(verified.flags, [], "clean reordered GCash flags");
+});
+
+Deno.test("flattened masked GCash recipient evidence remains fail closed", () => {
+  const typedReference = "5045095386043";
+  const context = {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 3600,
+    expectedRecipientName: "Jan Kennith Magallano",
+    bookingStartedAt: "2026-09-15T16:58:36.646Z",
+    bookingStartedDate: "2026-09-16",
+  };
+  const cases = [
+    {
+      label: "wrong phone suffix",
+      text: REORDERED_GCASH_OCR.replace("7667", "1234"),
+      flag: "WRONG_GCASH_NUMBER",
+    },
+    {
+      label: "wrong merged final initial",
+      text: REORDERED_GCASH_OCR.replace("KE...HM.", "KE...HX."),
+      flag: "RECEIVER_NAME_MISMATCH",
+    },
+    {
+      label: "missing second amount display",
+      text: REORDERED_GCASH_OCR.replace("P3600.00\n", ""),
+      flag: "AMOUNT_UNREADABLE",
+    },
+  ];
+  for (const testCase of cases) {
+    const parsed = parseProviderReceipt("gcash", testCase.text, {
+      typedReference,
+    });
+    const verified = verifyProviderReceipt(parsed, context);
+    assert(
+      verified.flags.includes(testCase.flag),
+      `${testCase.label} must produce ${testCase.flag}`,
+    );
+  }
 });
 
 Deno.test("GCash verifier keeps a single amount display in review", () => {

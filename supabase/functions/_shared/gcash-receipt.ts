@@ -477,6 +477,47 @@ function parsePhoneLine(
   return null;
 }
 
+function parseSplitMaskedPhone(
+  lines: string[],
+  candidateIndexes: number[],
+): GcashPhoneField | null {
+  const ordered = [...candidateIndexes].sort((a, b) => a - b);
+  for (let prefixOffset = 0; prefixOffset < ordered.length; prefixOffset++) {
+    const prefixIndex = ordered[prefixOffset];
+    const prefix = lines[prefixIndex];
+    if (!/(?<!\d)(?:\+?\s*63|0)\s*9[\s\-•‣●◦∙·*xX#._]*$/i.test(prefix)) {
+      continue;
+    }
+    if (!NAME_MASK_RE.test(prefix)) continue;
+
+    for (
+      let suffixOffset = prefixOffset + 1;
+      suffixOffset < ordered.length;
+      suffixOffset++
+    ) {
+      const suffixIndex = ordered[suffixOffset];
+      if (suffixIndex - prefixIndex > 3) break;
+      const suffix = lines[suffixIndex];
+      if (!/^\d{4}$/.test(suffix)) continue;
+      const intervening = lines.slice(prefixIndex + 1, suffixIndex)
+        .filter((line) => line.trim());
+      if (
+        intervening.some((line) => !TOTAL_AMOUNT_SENT_RE.test(line))
+      ) continue;
+      return {
+        raw: `${prefix} ${suffix}`,
+        normalized: null,
+        last4: suffix,
+        visibility: "masked",
+        source: "recipient_block",
+        lineIndex: prefixIndex,
+        confidence: "medium",
+      };
+    }
+  }
+  return null;
+}
+
 function nameTokens(raw: string): string[] {
   return raw.split(/\s+/).map((token) => token.trim()).filter(Boolean);
 }
@@ -537,6 +578,13 @@ function parseReceiver(lines: string[]): GcashReceiver {
       phone = parsePhoneLine(lines[lineIndex], lineIndex);
       if (phone) break;
     }
+    // Vision can flatten GCash's two-column layout by placing the total label
+    // between the masked phone prefix and its visible four-digit suffix:
+    //   +63 9..
+    //   Total Amount Sent
+    //   7667
+    // Recombine only this tightly bounded, label-separated receipt pattern.
+    if (!phone) phone = parseSplitMaskedPhone(lines, preceding);
     if (!phone || phone.lineIndex == null) continue;
 
     let name = missingName();
@@ -721,6 +769,33 @@ function orderedTokenMapping(
   return false;
 }
 
+function splitMergedTrailingInitial(
+  observed: ObservedNameToken[],
+): ObservedNameToken[][] {
+  const alternatives: ObservedNameToken[][] = [observed];
+  observed.forEach((token, index) => {
+    const trailingLetters = token.pattern.match(/[A-Z]+$/)?.[0] || "";
+    if (!token.masked || trailingLetters.length < 2) return;
+    const initial = trailingLetters.slice(-1);
+    alternatives.push([
+      ...observed.slice(0, index),
+      {
+        ...token,
+        pattern: token.pattern.slice(0, -1),
+        visibleLetters: token.visibleLetters - 1,
+      },
+      {
+        pattern: initial,
+        initial: true,
+        masked: false,
+        visibleLetters: 1,
+      },
+      ...observed.slice(index + 1),
+    ]);
+  });
+  return alternatives;
+}
+
 export function compareGcashMaskedName(
   observedRaw: string | null | undefined,
   expectedRaw: string | null | undefined,
@@ -750,9 +825,14 @@ export function compareGcashMaskedName(
       : "mismatch";
   }
 
-  const compatible = observed.length === expected.length
-    ? observed.every((token, index) => tokenCompatible(token, expected[index]))
-    : orderedTokenMapping(observed, expected);
+  // Vision sometimes removes the space before the final initial in a masked
+  // GCash name (for example `KE...H M.` becomes `KE...HM.`). Try that single,
+  // conservative split while still checking every visible letter in order.
+  const compatible = splitMergedTrailingInitial(observed).some((candidate) =>
+    candidate.length === expected.length
+      ? candidate.every((token, index) => tokenCompatible(token, expected[index]))
+      : orderedTokenMapping(candidate, expected)
+  );
   const visibleLetters = observed.reduce(
     (sum, token) => sum + token.visibleLetters,
     0,

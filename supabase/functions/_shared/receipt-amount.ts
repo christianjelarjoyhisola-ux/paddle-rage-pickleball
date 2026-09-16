@@ -440,22 +440,28 @@ function collectCandidates(
   if (gcashTotalAmountAnchors.length) {
     for (const anchorIndex of gcashTotalAmountAnchors) {
       const sentViaAnchorIndex = [...gcashSentViaAnchors]
-        .reverse()
-        .find((index) => index < anchorIndex);
+        .sort((left, right) =>
+          Math.abs(left - anchorIndex) - Math.abs(right - anchorIndex)
+        )
+        .find((index) => {
+          if (index < anchorIndex) return true;
+          const distance = lines.slice(anchorIndex, index + 1)
+            .filter((line) => line.trim()).length;
+          return distance <= GCASH_REORDERED_BLOCK_MAX_NON_EMPTY_LINES;
+        });
       if (sentViaAnchorIndex == null) continue;
-      let blockStartIndex = anchorIndex;
+      const blockStartIndex = sentViaAnchorIndex + 1;
       if (
         gcashSentViaAnchors.length === 1 &&
         gcashTotalAmountAnchors.length === 1
       ) {
-        const sentToTotalDistance = lines.slice(
-          sentViaAnchorIndex + 1,
-          anchorIndex + 1,
+        const labelDistance = lines.slice(
+          Math.min(sentViaAnchorIndex, anchorIndex),
+          Math.max(sentViaAnchorIndex, anchorIndex) + 1,
         ).filter((line) => line.trim()).length;
-        if (sentToTotalDistance > GCASH_REORDERED_BLOCK_MAX_NON_EMPTY_LINES) {
+        if (labelDistance > GCASH_REORDERED_BLOCK_MAX_NON_EMPTY_LINES) {
           continue;
         }
-        blockStartIndex = sentViaAnchorIndex + 1;
       }
 
       let boundaryIndex = -1;
