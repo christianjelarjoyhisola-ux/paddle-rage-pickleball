@@ -64,6 +64,7 @@ export type BankReceiptIndicators = {
   transferSuccess: boolean;
   destinationGcash: boolean;
   instaPay: boolean;
+  officialTransactionReceipt: boolean;
 };
 
 export type BankToGcashReceiptParse = {
@@ -82,6 +83,12 @@ export type BankToGcashReceiptParse = {
 export type BankRecipientComparison = {
   phone: "exact" | "last4_only" | "mismatch" | "missing" | "not_configured";
   name: GcashNameComparison;
+  account:
+    | "exact"
+    | "ocr_compatible"
+    | "mismatch"
+    | "missing"
+    | "not_configured";
 };
 
 export type ReceiptVerificationContext = {
@@ -530,11 +537,40 @@ function parseRecipient(lines: string[]): BankReceiptRecipient {
   };
 }
 
+function normalizeDestinationAccount(value: string): string {
+  return String(value || "").normalize("NFKC").toUpperCase().replace(
+    /[^A-Z0-9]/g,
+    "",
+  );
+}
+
+function compareDestinationAccount(
+  observedRaw: string | null,
+  expectedRaw: string,
+): BankRecipientComparison["account"] {
+  const expected = normalizeDestinationAccount(expectedRaw);
+  if (!expected) return "not_configured";
+  const observed = normalizeDestinationAccount(observedRaw || "");
+  if (!observed) return "missing";
+  if (observed === expected) return "exact";
+  if (observed.length !== expected.length) return "mismatch";
+
+  // Vision commonly confuses O and 0 inside high-entropy QR account tokens.
+  // Accept only that glyph ambiguity; every other character must be exact.
+  const compatible = [...observed].every((character, index) =>
+    character === expected[index] ||
+    ((character === "O" || character === "0") &&
+      (expected[index] === "O" || expected[index] === "0"))
+  );
+  return compatible ? "ocr_compatible" : "mismatch";
+}
+
 function compareRecipient(
   recipient: BankReceiptRecipient,
   expectedNumber: string,
   expectedName: string,
   expectedNameAliases: string[],
+  expectedAccount: string,
   provider: BankToGcashProvider,
 ): BankRecipientComparison {
   const expectedPhone = normalizeGcashMobile(expectedNumber);
@@ -600,6 +636,118 @@ function compareRecipient(
   return {
     phone,
     name,
+    account: compareDestinationAccount(recipient.accountRaw, expectedAccount),
+  };
+}
+
+function parseOfficialMaribankLayout(
+  lines: string[],
+  typedReference: string,
+): {
+  reference: BankReferenceField;
+  amount: number;
+  timestamp: BankReceiptTimestamp;
+  recipient: BankReceiptRecipient;
+} | null {
+  const hasRequiredLabels = [
+    /^from$/i,
+    /^to$/i,
+    /^transfer amount$/i,
+    /^transfer fee$/i,
+    /^total amount$/i,
+    /^reference number$/i,
+    /^transfer method$/i,
+    /^processing time$/i,
+    /^transaction date\s*&\s*time$/i,
+  ].every((pattern) => lines.some((line) => pattern.test(line)));
+  const officialReceipt = hasRequiredLabels &&
+    lines.some((line) => /^transaction receipt$/i.test(line)) &&
+    lines.some((line) =>
+      /^receipt generated from mari\s*bank app$/i.test(line)
+    );
+  if (!officialReceipt) return null;
+
+  const instaPayIndex = lines.findIndex((line) => /^insta\s*pay$/i.test(line));
+  if (instaPayIndex < 1) return null;
+  const referenceCandidates = lines
+    .slice(Math.max(0, instaPayIndex - 4), instaPayIndex)
+    .map((raw, offset) => ({
+      raw,
+      lineIndex: Math.max(0, instaPayIndex - 4) + offset,
+      value: normalizeBankReference(raw),
+    }))
+    .filter((candidate) =>
+      /^\d{6,20}$/.test(candidate.value) && validReference(candidate.value)
+    );
+  const uniqueReferences = [
+    ...new Map(referenceCandidates.map((item) => [item.value, item])).values(),
+  ];
+  if (uniqueReferences.length !== 1) return null;
+  const selectedReference = uniqueReferences[0];
+
+  const amountObservations = lines.flatMap((line, lineIndex) => {
+    const match = line.match(/^PHP\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})$/i);
+    return match
+      ? [{ value: Number(match[1].replace(/,/g, "")), lineIndex }]
+      : [];
+  });
+  const uniqueAmounts = new Set(amountObservations.map((item) => item.value));
+  if (amountObservations.length < 2 || uniqueAmounts.size !== 1) return null;
+  const amount = amountObservations[0].value;
+
+  const dateLineIndex = lines.findIndex((line) =>
+    /^\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4},?\s+\d{1,2}:\d{2}$/i.test(line)
+  );
+  if (dateLineIndex < 0) return null;
+  const dateMatch = lines[dateLineIndex].match(
+    /^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4}),?\s+(\d{1,2}):(\d{2})$/i,
+  );
+  if (!dateMatch) return null;
+  const month = MONTHS[dateMatch[2].toLowerCase()] || 0;
+  const timestamp = timestampResult(
+    dateMatch[0],
+    dateLineIndex,
+    Number(dateMatch[3]),
+    month,
+    Number(dateMatch[1]),
+    Number(dateMatch[4]),
+    Number(dateMatch[5]),
+    "",
+  );
+  if (timestamp.completeness !== "date_time") return null;
+
+  const destinationIndex = lines.findIndex((line) =>
+    /^(?:g-?xchange\s*\/\s*gcash|gcash\s*\/\s*g-?xchange)$/i.test(line)
+  );
+  if (destinationIndex < 1) return null;
+  const accountIndex = lines.findIndex((line, index) =>
+    index > destinationIndex && /^acct\s+no\.?:\s*[A-Z0-9]{12,40}$/i.test(line)
+  );
+  if (accountIndex < 0) return null;
+  const accountRaw = lines[accountIndex].replace(/^acct\s+no\.?:\s*/i, "");
+  const nameRaw = lines[destinationIndex - 1];
+  if (!nameRaw || !/[A-Za-z]/.test(nameRaw)) return null;
+
+  return {
+    reference: {
+      value: selectedReference.value,
+      raw: selectedReference.raw,
+      source: "reference_label",
+      label: "reference_no",
+      lineIndex: selectedReference.lineIndex,
+      confidence: "high",
+      typedMatch: typedReferenceMatch(selectedReference.value, typedReference),
+    },
+    amount,
+    timestamp,
+    recipient: {
+      nameRaw,
+      accountRaw,
+      phoneNormalized: null,
+      phoneLast4: null,
+      phoneVisibility: "missing",
+      lineIndex: destinationIndex - 1,
+    },
   };
 }
 
@@ -614,6 +762,9 @@ export function parseBankToGcashReceipt(
 ): BankToGcashReceiptParse {
   const lines = linesOf(rawText);
   const text = lines.join("\n");
+  const officialMaribank = config.provider === "maribank"
+    ? parseOfficialMaribankLayout(lines, options.typedReference || "")
+    : null;
   const primary = parsePrimaryReference(lines, options.typedReference || "");
   const rail = parseRailReference(lines);
   let amount = extractReceiptAmount(text, { provider: config.provider });
@@ -635,10 +786,28 @@ export function parseBankToGcashReceipt(
       if (focused.amount != null) amount = focused;
     }
   }
-  const timestamp = parseTimestamp(lines);
-  const recipient = parseRecipient(lines);
-  const failureStatus =
-    /\b(?:failed|unsuccessful|declined|cancelled|canceled|reversed|pending|processing)\b/i
+  if (officialMaribank) {
+    amount = {
+      ...amount,
+      amount: officialMaribank.amount,
+      reliable: true,
+      ambiguous: false,
+      reason: "selected",
+      evidence: [
+        ...new Set([
+          ...amount.evidence,
+          "amount_label" as const,
+          "total_label" as const,
+        ]),
+      ],
+    };
+  }
+  const timestamp = officialMaribank?.timestamp || parseTimestamp(lines);
+  const recipient = officialMaribank?.recipient || parseRecipient(lines);
+  const failureStatus = officialMaribank
+    ? /\b(?:failed|unsuccessful|declined|cancelled|canceled|reversed|pending)\b/i
+      .test(text)
+    : /\b(?:failed|unsuccessful|declined|cancelled|canceled|reversed|pending|processing)\b/i
       .test(text);
   const explicitTransferSuccess =
     /\b(?:transfer|transaction)\s+(?:successful|completed?)\b|\bsuccessfully\s+(?:sent|transferred)\b|\bmoney\s+sent\b/i
@@ -650,22 +819,26 @@ export function parseBankToGcashReceipt(
   const gotymeSentStatus = config.provider === "gotyme" &&
     lines.some((line) => /^sent[!.]?$/i.test(line));
   const issues: string[] = [];
-  if (primary.ambiguous) issues.push("AMBIGUOUS_REFERENCE");
-  if (!primary.field.value) issues.push("REFERENCE_MISSING");
+  if (!officialMaribank && primary.ambiguous) {
+    issues.push("AMBIGUOUS_REFERENCE");
+  }
+  if (!(officialMaribank?.reference.value || primary.field.value)) {
+    issues.push("REFERENCE_MISSING");
+  }
   if (rail.ambiguous) issues.push("AMBIGUOUS_INSTAPAY_REFERENCE");
   if (amount.amount == null) issues.push("AMOUNT_MISSING");
   if (amount.ambiguous) issues.push("AMBIGUOUS_AMOUNT");
   if (timestamp.completeness === "missing") issues.push("TIMESTAMP_MISSING");
   if (timestamp.completeness === "invalid") issues.push("TIMESTAMP_INVALID");
   if (!recipient.nameRaw) issues.push("RECIPIENT_NAME_MISSING");
-  if (recipient.phoneVisibility === "missing") {
+  if (recipient.phoneVisibility === "missing" && !recipient.accountRaw) {
     issues.push("RECIPIENT_PHONE_MISSING");
   }
   return {
     provider: config.provider,
     destinationProvider: "gcash",
     parserVersion: config.parserVersion,
-    reference: primary.field,
+    reference: officialMaribank?.reference || primary.field,
     railReference: rail.field,
     amount,
     timestamp,
@@ -676,9 +849,10 @@ export function parseBankToGcashReceipt(
         ? config.competingProvider
         : null,
       transferSuccess: !failureStatus &&
-        (explicitTransferSuccess || gotymeSentStatus),
+        (explicitTransferSuccess || gotymeSentStatus || !!officialMaribank),
       destinationGcash: /\bgcash\b|\bg-?xchange\b|\bgxi\b/i.test(text),
       instaPay: /\binsta\s*pay\b/i.test(text),
+      officialTransactionReceipt: !!officialMaribank,
     },
     issues,
   };
@@ -695,6 +869,7 @@ export function verifyBankToGcashReceipt(
     context.expectedRecipientNumber || "",
     context.expectedRecipientName || "",
     context.expectedRecipientNameAliases || [],
+    context.expectedRecipientAccount || "",
     parsed.provider,
   );
   if (!parsed.indicators.providerBrand) addUnique(flags, unreadableFlag);
@@ -708,7 +883,9 @@ export function verifyBankToGcashReceipt(
     addUnique(flags, "GXI_DESTINATION_UNREADABLE");
   }
   if (!parsed.indicators.instaPay) addUnique(flags, "INSTAPAY_UNREADABLE");
-  if (!parsed.railReference.value) {
+  if (
+    !parsed.railReference.value && !parsed.indicators.officialTransactionReceipt
+  ) {
     addUnique(flags, "INSTAPAY_REF_UNREADABLE");
   }
 
@@ -762,11 +939,17 @@ export function verifyBankToGcashReceipt(
     }
   }
 
+  const destinationAccountMatches = parsed.provider === "maribank" &&
+    ["exact", "ocr_compatible"].includes(recipientComparison.account);
+  if (recipientComparison.account === "mismatch") {
+    addUnique(flags, "WRONG_GCASH_ACCOUNT");
+  }
   if (recipientComparison.phone === "mismatch") {
     addUnique(flags, "WRONG_GCASH_NUMBER");
   } else if (
-    recipientComparison.phone === "missing" ||
-    recipientComparison.phone === "not_configured"
+    !destinationAccountMatches &&
+    (recipientComparison.phone === "missing" ||
+      recipientComparison.phone === "not_configured")
   ) {
     addUnique(flags, "NUMBER_UNREADABLE");
   }

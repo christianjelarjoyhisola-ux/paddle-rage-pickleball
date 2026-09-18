@@ -120,6 +120,34 @@ InstaPay Reference No 987654321234
 via InstaPay
 `;
 
+const MARIBANK_TRANSACTION_RECEIPT_OCR = `
+From
+To
+Transfer Amount
+Transfer Fee
+Total Amount
+Reference Number
+Transfer Method
+Processing Time
+M MariBank
+Transaction Receipt
+PHP 800.00
+Transaction Date & Time
+• ALTHEA MIDGE E.
+MariBank: *******5730
+Paddlerage
+G-Xchange / GCash
+Acct No.: DWQM4TK3JDO900NS8
+PHP 800.00
+FREE
+PHP 800.00
+664744
+instaPay
+Realtime
+19 Sep 2026, 00:12
+Receipt generated from MariBank app
+`;
+
 const GCASH_OCR = `
 PADDLE RAGE PICKLEBALL
 +63 945 510 7667
@@ -257,6 +285,98 @@ Deno.test("dispatches clean GCash, GoTyme-to-GCash, and MariBank-to-GCash eviden
     assert(
       !("status" in verified),
       `${provider} verifier returns evidence, never a payment status`,
+    );
+  }
+});
+
+Deno.test("verifies the live flattened MariBank Transaction Receipt layout", () => {
+  const typedReference = "664744";
+  const parsed = parseProviderReceipt(
+    "maribank",
+    MARIBANK_TRANSACTION_RECEIPT_OCR,
+    { typedReference },
+  );
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 800,
+    expectedRecipientName: "Jan Kennith Magallano",
+    expectedRecipientNameAliases: ["PaddleRage"],
+    expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
+    bookingStartedAt: "2026-09-18T16:10:49.158Z",
+    bookingStartedDate: "2026-09-19",
+  });
+
+  assert(parsed.provider === "maribank", "MariBank provider");
+  assert(verified.provider === "maribank", "MariBank verification");
+  assertEquals(parsed.receipt.reference.value, typedReference, "reference");
+  assertEquals(parsed.receipt.amount.amount, 800, "amount");
+  assertEquals(parsed.receipt.amount.reliable, true, "reliable amount");
+  assertEquals(
+    parsed.receipt.timestamp.instant,
+    "2026-09-18T16:12:00.000Z",
+    "Philippine timestamp",
+  );
+  assertEquals(parsed.receipt.recipient.nameRaw, "Paddlerage", "recipient");
+  assertEquals(
+    verified.recipientComparison.account,
+    "ocr_compatible",
+    "O/0-safe QR destination token",
+  );
+  assertEquals(verified.flags, [], "clean live MariBank flags");
+});
+
+Deno.test("flattened MariBank auto-verification remains fail closed", () => {
+  const typedReference = "664744";
+  const context = {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 800,
+    expectedRecipientName: "Jan Kennith Magallano",
+    expectedRecipientNameAliases: ["PaddleRage"],
+    expectedRecipientAccount: "DWQM4TK3JDO9O0NS8",
+    bookingStartedAt: "2026-09-18T16:10:49.158Z",
+    bookingStartedDate: "2026-09-19",
+  };
+  const cases = [
+    {
+      label: "wrong destination account",
+      text: MARIBANK_TRANSACTION_RECEIPT_OCR.replace(
+        "DWQM4TK3JDO900NS8",
+        "DWQM4TK3JDO900BAD",
+      ),
+      flag: "WRONG_GCASH_ACCOUNT",
+    },
+    {
+      label: "wrong recipient",
+      text: MARIBANK_TRANSACTION_RECEIPT_OCR.replace(
+        "Paddlerage",
+        "Other Merchant",
+      ),
+      flag: "RECEIVER_NAME_MISMATCH",
+    },
+    {
+      label: "typed reference mismatch",
+      text: MARIBANK_TRANSACTION_RECEIPT_OCR.replace("664744", "664745"),
+      flag: "REF_MISMATCH",
+    },
+    {
+      label: "missing official footer",
+      text: MARIBANK_TRANSACTION_RECEIPT_OCR.replace(
+        "Receipt generated from MariBank app",
+        "",
+      ),
+      flag: "TRANSFER_STATUS_UNREADABLE",
+    },
+  ];
+  for (const testCase of cases) {
+    const parsed = parseProviderReceipt("maribank", testCase.text, {
+      typedReference,
+    });
+    const verified = verifyProviderReceipt(parsed, context);
+    assert(
+      verified.flags.includes(testCase.flag),
+      `${testCase.label} must produce ${testCase.flag}: ${verified.flags}`,
     );
   }
 });
@@ -499,7 +619,9 @@ Deno.test("verifies the reported reordered GCash Express Send OCR layout", () =>
 
 Deno.test("exact GCash phone survives OCR-dropped recipient mask glyphs", () => {
   const typedReference = "0045177399378";
-  const parsed = parseProviderReceipt("gcash", `
+  const parsed = parseProviderReceipt(
+    "gcash",
+    `
 Express Send
 J.. KEH M.
 +63 945 510 7667
@@ -510,7 +632,9 @@ Total Amount Sent
 P1,050.00
 Ref No. 0045 177 399378
 Sep 18, 2026 11:02 AM
-`, { typedReference });
+`,
+    { typedReference },
+  );
   const verified = verifyProviderReceipt(parsed, {
     ...CONTEXT,
     typedReference,

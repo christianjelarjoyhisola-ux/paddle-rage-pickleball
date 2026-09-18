@@ -2828,13 +2828,15 @@ Deno.serve(async (req) => {
           amountTolerance: 0.01,
           expectedRecipientNumber: expectedNumber,
           expectedRecipientName: expectedName,
-          expectedRecipientNameAliases: provider === "gotyme"
+          expectedRecipientNameAliases: provider === "gotyme" ||
+              provider === "maribank"
             ? [
               settings.gcash_qr_receipt_recipient_name,
               settings.payment_merchant_name,
             ].filter(Boolean)
             : [],
-          expectedRecipientAccount: provider === "bdopay" || provider === "bpi"
+          expectedRecipientAccount: provider === "bdopay" || provider === "bpi" ||
+              provider === "maribank"
             ? settings.gcash_qr_receipt_destination_token ||
               settings.bdopay_receipt_destination_token || ""
             : "",
@@ -3130,11 +3132,18 @@ Deno.serve(async (req) => {
       : providerVerification?.provider === "bpi"
       ? providerVerification.recipientComparison === "exact" &&
         providerVerification.recipientAccountComparison === "exact"
+      : providerVerification?.provider === "maribank"
+      ? (["exact", "last4_only"].includes(
+          providerVerification.recipientComparison.phone,
+        ) || ["exact", "ocr_compatible"].includes(
+          providerVerification.recipientComparison.account,
+        )) && ["exact", "masked_compatible"].includes(
+          providerVerification.recipientComparison.name,
+        )
       : providerVerification
       ? ["exact", "last4_only"].includes(
-        providerVerification.recipientComparison.phone,
-      ) &&
-        ["exact", "masked_compatible"].includes(
+          providerVerification.recipientComparison.phone,
+        ) && ["exact", "masked_compatible"].includes(
           providerVerification.recipientComparison.name,
         )
       : false;
@@ -3296,7 +3305,8 @@ Deno.serve(async (req) => {
           ? null
           : expectedNumber || null,
       expectedReceiverName: expectedName || null,
-      expectedReceiverAccount: provider === "bdopay" || provider === "bpi"
+      expectedReceiverAccount: provider === "bdopay" || provider === "bpi" ||
+          provider === "maribank"
         ? settings.gcash_qr_receipt_destination_token ||
           settings.bdopay_receipt_destination_token || null
         : null,
