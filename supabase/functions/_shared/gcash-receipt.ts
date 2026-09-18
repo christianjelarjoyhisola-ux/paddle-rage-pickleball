@@ -748,6 +748,30 @@ function tokenCompatible(
   return new RegExp(`^${regexSource}$`).test(expected);
 }
 
+function tokenCouldHaveLostMaskGlyphs(
+  observed: ObservedNameToken,
+  expected: string,
+): boolean {
+  if (
+    observed.initial || observed.masked || observed.pattern.length < 2 ||
+    expected.length - observed.pattern.length < 2 ||
+    observed.pattern[0] !== expected[0] ||
+    observed.pattern.at(-1) !== expected.at(-1)
+  ) return false;
+
+  // Vision occasionally omits every dot/bullet in the middle of a masked
+  // GCash token: `KE••••H` becomes `KEH`.  Only classify that as uncertain
+  // when the remaining letters are still an anchored, ordered subsequence of
+  // the configured token.  A visible substitution remains a hard mismatch.
+  let expectedIndex = 0;
+  for (const letter of observed.pattern) {
+    expectedIndex = expected.indexOf(letter, expectedIndex);
+    if (expectedIndex < 0) return false;
+    expectedIndex++;
+  }
+  return true;
+}
+
 function orderedTokenMapping(
   observed: ObservedNameToken[],
   expected: string[],
@@ -838,6 +862,16 @@ export function compareGcashMaskedName(
     0,
   );
   if (!compatible) {
+    const collapsedMaskIsPlausible = observed.length === expected.length &&
+      observed.some((token) => token.masked || token.initial) &&
+      observed.some((token, index) =>
+        tokenCouldHaveLostMaskGlyphs(token, expected[index])
+      ) &&
+      observed.every((token, index) =>
+        tokenCompatible(token, expected[index]) ||
+        tokenCouldHaveLostMaskGlyphs(token, expected[index])
+      );
+    if (collapsedMaskIsPlausible) return "inconclusive";
     return visibleLetters >= 3 ? "mismatch" : "inconclusive";
   }
   return visibleLetters >= 3 && observed.length >= 2

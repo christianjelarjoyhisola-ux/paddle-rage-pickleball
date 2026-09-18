@@ -177,6 +177,14 @@ Deno.test("matches bullet dot and collapsed GCash name masks", () => {
   }
 });
 
+Deno.test("does not reject a GCash name when Vision drops internal mask glyphs", () => {
+  assertEquals(
+    compareGcashMaskedName("J.. KEH M.", "Jan Kennith Magallano"),
+    "inconclusive",
+    "the exact phone can remain primary when KE••••H is OCRed as KEH",
+  );
+});
+
 Deno.test("matches a fully visible receiver name exactly", () => {
   assertEquals(
     compareGcashMaskedName(
@@ -198,6 +206,11 @@ Deno.test("rejects visible contradictions in a masked receiver name", () => {
     compareGcashMaskedName("J•• KE••••H R.", "Jan Kennith Magallano"),
     "mismatch",
     "surname initial conflict",
+  );
+  assertEquals(
+    compareGcashMaskedName("J.. KAH M.", "Jan Kennith Magallano"),
+    "mismatch",
+    "collapsed token still rejects a visible contradictory letter",
   );
 });
 

@@ -497,6 +497,40 @@ Deno.test("verifies the reported reordered GCash Express Send OCR layout", () =>
   assertEquals(verified.flags, [], "clean reordered GCash flags");
 });
 
+Deno.test("exact GCash phone survives OCR-dropped recipient mask glyphs", () => {
+  const typedReference = "0045177399378";
+  const parsed = parseProviderReceipt("gcash", `
+Express Send
+J.. KEH M.
++63 945 510 7667
+Sent via GCash
+Amount
+1,050.00
+Total Amount Sent
+P1,050.00
+Ref No. 0045 177 399378
+Sep 18, 2026 11:02 AM
+`, { typedReference });
+  const verified = verifyProviderReceipt(parsed, {
+    ...CONTEXT,
+    typedReference,
+    expectedAmount: 1050,
+    expectedRecipientName: "Jan Kennith Magallano",
+    bookingStartedAt: "2026-09-18T02:56:00.000Z",
+    bookingStartedDate: "2026-09-18",
+  });
+
+  assert(parsed.provider === "gcash", "GCash provider");
+  assert(verified.provider === "gcash", "GCash verification");
+  assertEquals(verified.recipientComparison.phone, "exact", "exact phone");
+  assertEquals(
+    verified.recipientComparison.name,
+    "inconclusive",
+    "OCR-dropped name mask remains supporting-only",
+  );
+  assertEquals(verified.flags, [], "clean receipt can auto-verify");
+});
+
 Deno.test("flattened masked GCash recipient evidence remains fail closed", () => {
   const typedReference = "5045095386043";
   const context = {
