@@ -52,6 +52,7 @@ $publicFiles = @(
   "assets/payment-methods/bpi.png",
   "assets/payment-methods/gotyme.png",
   "assets/payment-methods/maribank.png",
+  "assets/payment-methods/unionbank.svg",
   "assets/payment-methods/pnb.png",
   "assets/payment-methods/cash.svg",
   "booking-balance.js",

@@ -3927,6 +3927,11 @@ try {
                 <div class="pay-lb">MariBank → GCash</div>
                 <div class="pay-sub">Pay from MariBank</div>
               </div>
+              <div class="pay-opt" id="payOptUnionbank" data-m="unionbank" onclick="pickPay('unionbank')">
+                <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--unionbank" data-payment-method="unionbank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/unionbank.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
+                <div class="pay-lb">UnionBank → GCash</div>
+                <div class="pay-sub">Pay from UnionBank</div>
+              </div>
               <div class="pay-opt" id="payOptPnb" data-m="pnb" onclick="pickPay('pnb')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">PNB</div>
@@ -4748,7 +4753,7 @@ function hostSessionPaymentHtml(session) {
     </div>
     <div class="fg">
       <label class="fl" for="hsPaymentRef">${_hostSessionPayMethod === 'bpi' ? 'BPI Confirmation No.' : `${label} Reference Number`}</label>
-      <input type="text" class="fi" id="hsPaymentRef" placeholder="${_hostSessionPayMethod === 'gcash' ? 'e.g. 1234567890123' : _hostSessionPayMethod === 'bdopay' ? 'e.g. BN-20260627-91811670' : _hostSessionPayMethod === 'maya' ? 'e.g. B6DC F633 F08C' : _hostSessionPayMethod === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" maxlength="${paymentRefMaxLength(_hostSessionPayMethod)}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'pnb'].includes(_hostSessionPayMethod) ? 'text' : 'numeric'}" oninput="syncHostSessionRef()" />
+      <input type="text" class="fi" id="hsPaymentRef" placeholder="${_hostSessionPayMethod === 'gcash' ? 'e.g. 1234567890123' : _hostSessionPayMethod === 'bdopay' ? 'e.g. BN-20260627-91811670' : _hostSessionPayMethod === 'maya' ? 'e.g. B6DC F633 F08C' : _hostSessionPayMethod === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" maxlength="${paymentRefMaxLength(_hostSessionPayMethod)}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'unionbank', 'pnb'].includes(_hostSessionPayMethod) ? 'text' : 'numeric'}" oninput="syncHostSessionRef()" />
       <div id="hsRefHelp" style="font-size:.7rem;color:var(--muted);margin-top:4px">${paymentRefHelpText(_hostSessionPayMethod)}</div>
     </div>
     <div class="fg">
@@ -4880,6 +4885,7 @@ async function submitHostSessionJoin() {
     if (_hostSessionPayMethod === 'gcash' && !isGcashRefValid(paymentRef)) { toast('GCash reference number must be exactly 13 digits.', 'err'); refInput?.focus(); return; }
     if (_hostSessionPayMethod === 'bdopay' && !isBdoPayRefValid(paymentRef)) { toast('BDO Pay reference must look like BN-YYYYMMDD-########. Do not enter the invoice number.', 'err'); refInput?.focus(); return; }
     if (_hostSessionPayMethod === 'maya' && !isMayaRefValid(paymentRef)) { toast('Maya Reference ID must look like B6DC F633 F08C. Do not enter the InstaPay Ref. No.', 'err'); refInput?.focus(); return; }
+    if (_hostSessionPayMethod === 'unionbank' && !isUnionbankRefValid(paymentRef)) { toast('Enter the UnionBank UB reference.', 'err'); refInput?.focus(); return; }
     if (_hostSessionPayMethod === 'bpi' && !isBpiConfirmationValid(paymentRef)) { toast('Enter the BPI Confirmation No. from the receipt, not the Transaction Ref. No.', 'err'); refInput?.focus(); return; }
     if (!_hostSessionReceiptFile) { toast('Please upload your payment receipt screenshot.', 'err'); return; }
     if (!$('hsOcrConsent')?.checked) { toast('Please consent to secure receipt processing before joining.', 'err'); $('hsOcrConsent')?.focus(); return; }
@@ -5575,10 +5581,11 @@ let paymentReceiverSettings = {
   bpi: { number: '09XX XXX XXXX', name: 'Paddle Rage Pickleball', qrImage: '' },
   gotyme: { number: '09XX XXX XXXX', name: 'Paddle Rage Pickleball', qrImage: '' },
   maribank: { number: '09XX XXX XXXX', name: 'Paddle Rage Pickleball', qrImage: '' },
+  unionbank: { number: '09XX XXX XXXX', name: 'Paddle Rage Pickleball', qrImage: '' },
   pnb: { number: '', name: 'Paddle Rage Pickleball', qrImage: '' },
 };
-let paymentMethods = { cash: true, gcash: true, bdopay: true, maya: true, bpi: true, gotyme: true, maribank: true, pnb: true };
-const DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'];
+let paymentMethods = { cash: true, gcash: true, bdopay: true, maya: true, bpi: true, gotyme: true, maribank: true, unionbank: true, pnb: true };
+const DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb'];
 const ALL_PAYMENT_METHODS = [...DIGITAL_PAYMENT_METHODS, 'cash'];
 
 function isDigitalPayMethod(method) {
@@ -5586,7 +5593,7 @@ function isDigitalPayMethod(method) {
 }
 
 function paymentMethodName(method) {
-  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', cash: 'Cash' }[String(method || '').toLowerCase()] || 'Payment');
+  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', unionbank: 'UnionBank → GCash', pnb: 'PNB', cash: 'Cash' }[String(method || '').toLowerCase()] || 'Payment');
 }
 
 function paymentMethodBrandMarkHtml(method, modifier = 'pm-brand-mark--inline') {
@@ -5609,7 +5616,7 @@ function renderPaymentMethodBrandLabel(element, method, label = paymentMethodNam
 }
 
 function paymentReceiverKey(method) {
-  return ['bdopay', 'maya', 'bpi', 'gotyme', 'maribank'].includes(String(method || '').toLowerCase()) ? 'gcash' : method;
+  return ['bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank'].includes(String(method || '').toLowerCase()) ? 'gcash' : method;
 }
 let paymentWatch = { ref: null, timer: null, tries: 0 };
 
@@ -5970,6 +5977,11 @@ function applyPaymentSettings(settings) {
       name: settings.gcash_merchant_name || sharedMerchantName,
       qrImage: settings.gcash_qr_image || '',
     },
+    unionbank: {
+      number: settings.gcash_merchant_number || '',
+      name: settings.gcash_merchant_name || sharedMerchantName,
+      qrImage: settings.gcash_qr_image || '',
+    },
     pnb: {
       number: settings.pnb_merchant_number || '',
       name: settings.pnb_merchant_name || '',
@@ -6006,6 +6018,7 @@ function applyPaymentSettings(settings) {
   paymentMethods.bpi = settings.payment_method_bpi === '1' && receiverReady('bpi');
   paymentMethods.gotyme = settings.payment_method_gotyme === '1' && receiverReady('gotyme');
   paymentMethods.maribank = settings.payment_method_maribank === '1' && receiverReady('maribank');
+  paymentMethods.unionbank = settings.payment_method_unionbank === '1' && receiverReady('unionbank');
   paymentMethods.pnb = settings.payment_method_pnb === '1' && receiverReady('pnb');
   paymentAcceptanceMode = 'full_payment_only';
 
@@ -6040,6 +6053,7 @@ function applyPaymentMethodVisibility() {
   if ($('payOptBpi')) $('payOptBpi').style.display = paymentMethods.bpi ? '' : 'none';
   if ($('payOptGotyme')) $('payOptGotyme').style.display = paymentMethods.gotyme ? '' : 'none';
   if ($('payOptMaribank')) $('payOptMaribank').style.display = paymentMethods.maribank ? '' : 'none';
+  if ($('payOptUnionbank')) $('payOptUnionbank').style.display = paymentMethods.unionbank ? '' : 'none';
   if ($('payOptPnb')) $('payOptPnb').style.display = paymentMethods.pnb ? '' : 'none';
 
   const hasAny = ALL_PAYMENT_METHODS.some(m => paymentMethods[m]);
@@ -8040,6 +8054,7 @@ function pickPay(m) {
       ],
       gotyme: 'Pay from GoTyme to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       maribank: 'Pay from MariBank to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+      unionbank: 'Pay from UnionBank to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       pnb: 'Use the configured PNB payment details. Your receipt stays pending for court-owner review.',
       cash: 'Cash bookings are paid at the front desk and confirmed by staff.',
     };
@@ -8054,7 +8069,7 @@ function pickPay(m) {
   ['gcPat100','pnPat100'].forEach(id => $(id)?.classList.toggle('on', payFull));
 
   syncGcashSharedPanel(m);
-  $('gcashBox').classList.toggle('show',  ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank'].includes(m));
+  $('gcashBox').classList.toggle('show',  ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank'].includes(m));
   $('pnbBox').classList.toggle('show',    m === 'pnb');
   const refWrap = $('gcashRefWrap');
   if (refWrap) refWrap.style.display = digitalPay ? '' : 'none';
@@ -8113,6 +8128,12 @@ function syncGcashSharedPanel(method) {
       guide: ['Open the QR in MariBank.', 'Pay the exact amount.', 'Save the transaction reference.', 'Upload the MariBank receipt.'],
       help: 'MariBank → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
     },
+    unionbank: {
+      header: 'UnionBank → GCash',
+      title: 'Send from UnionBank to this GCash account',
+      guide: ['Open the QR in UnionBank.', 'Pay the exact amount.', 'Enter the UB reference.', 'Upload the full successful receipt.'],
+      help: 'UnionBank → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+    },
   };
   const profile = profiles[method] || profiles.gcash;
   const header = $('gcashBox')?.querySelector('.gc-header-lbl');
@@ -8133,6 +8154,7 @@ function copyPaymentNumber(method = 'gcash') {
     bpi: { id: 'gcMerchantNumber', label: 'BPI' },
     gotyme: { id: 'gcMerchantNumber', label: 'GCash recipient for GoTyme' },
     maribank: { id: 'gcMerchantNumber', label: 'GCash recipient for MariBank' },
+    unionbank: { id: 'gcMerchantNumber', label: 'GCash recipient for UnionBank' },
     pnb: { id: 'pnMerchantNumber', label: 'PNB' },
   };
   const meta = map[method] || map.gcash;
@@ -8171,7 +8193,7 @@ function normalizePaymentRef(value, method) {
     return compact.match(/.{1,4}/g)?.join(' ') || '';
   }
   if (method === 'bpi') return raw.replace(/\D/g, '').slice(0, paymentRefMaxLength(method));
-  if (['gotyme', 'maribank', 'pnb'].includes(method)) {
+  if (['gotyme', 'maribank', 'unionbank', 'pnb'].includes(method)) {
     return raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, paymentRefMaxLength(method));
   }
   return raw.replace(/\D/g, '').slice(0, paymentRefMaxLength(method));
@@ -8189,6 +8211,10 @@ function isMayaRefValid(ref) {
   return /^[A-Z0-9]{12}$/.test(String(ref || '').toUpperCase().replace(/[^A-Z0-9]/g, ''));
 }
 
+function isUnionbankRefValid(ref) {
+  return /^UB\d{6,20}$/.test(String(ref || '').toUpperCase().replace(/[^A-Z0-9]/g, ''));
+}
+
 function isBpiConfirmationValid(ref) {
   return /^\d{10,20}$/.test(String(ref || '').replace(/\D/g, ''));
 }
@@ -8199,6 +8225,7 @@ function paymentRefHelpText(method) {
   if (method === 'maya') return 'Enter the Maya Reference ID, e.g. B6DC F633 F08C. Do not enter the InstaPay Ref. No.';
   if (method === 'bpi') return 'Enter the BPI Confirmation No., e.g. 1783397488347. Do not enter the Transaction Ref. No.';
   if (method === 'gotyme') return 'Enter the complete GoTyme transaction reference exactly as shown on the successful receipt.';
+  if (method === 'unionbank') return 'Enter the UB reference, e.g. UB678039, not the InstaPay reference. Upload the complete successful UnionBank receipt.';
   if (method === 'maribank') return 'Enter the complete MariBank transaction reference exactly as shown on the successful receipt.';
   return 'Must match the reference number on the uploaded receipt.';
 }
@@ -8207,8 +8234,8 @@ function syncBookingRefUi(method = $('bPay')?.value || 'gcash') {
   const input = $('bGcashRef');
   if (input) {
     input.maxLength = paymentRefMaxLength(method);
-    input.placeholder = method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : `Enter ${method === 'gotyme' ? 'GoTyme' : method === 'maribank' ? 'MariBank' : 'payment'} reference`;
-    input.inputMode = ['bdopay', 'maya', 'gotyme', 'maribank', 'pnb'].includes(method) ? 'text' : 'numeric';
+    input.placeholder = method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : `Enter ${method === 'gotyme' ? 'GoTyme' : method === 'unionbank' ? 'UnionBank' : method === 'maribank' ? 'MariBank' : 'payment'} reference`;
+    input.inputMode = ['bdopay', 'maya', 'gotyme', 'maribank', 'unionbank', 'pnb'].includes(method) ? 'text' : 'numeric';
     const clean = normalizePaymentRef(input.value, method);
     if (input.value !== clean) input.value = clean;
   }
@@ -8370,6 +8397,7 @@ async function submitBookingLegacy(e) {
     [payMethod === 'gcash' && !isGcashRefValid(gcashRef), 'GCash reference number must be exactly 13 digits.', 'bGcashRef', 5],
     [payMethod === 'bdopay' && !isBdoPayRefValid(gcashRef), 'BDO Pay reference must look like BN-YYYYMMDD-########. Do not enter the invoice number.', 'bGcashRef', 5],
     [payMethod === 'maya' && !isMayaRefValid(gcashRef), 'Maya Reference ID must look like B6DC F633 F08C. Do not enter the InstaPay Ref. No.', 'bGcashRef', 5],
+    [payMethod === 'unionbank' && !isUnionbankRefValid(gcashRef), 'Enter the UnionBank UB reference, not the InstaPay trace.', 'bGcashRef', 5],
     [payMethod === 'bpi' && !isBpiConfirmationValid(gcashRef), 'Enter the BPI Confirmation No. from the receipt, not the Transaction Ref. No.', 'bGcashRef', 5],
     [digitalPay && !_receiptFile, () => {
       // Scroll to and flash the upload zone so the user knows exactly what's missing.
@@ -8621,6 +8649,7 @@ async function submitBooking(e) {
     [payMethod === 'gcash' && !isGcashRefValid(gcashRef), 'GCash reference number must be exactly 13 digits.', 'bGcashRef', 5],
     [payMethod === 'bdopay' && !isBdoPayRefValid(gcashRef), 'BDO Pay reference must look like BN-YYYYMMDD-########. Do not enter the invoice number.', 'bGcashRef', 5],
     [payMethod === 'maya' && !isMayaRefValid(gcashRef), 'Maya Reference ID must look like B6DC F633 F08C. Do not enter the InstaPay Ref. No.', 'bGcashRef', 5],
+    [payMethod === 'unionbank' && !isUnionbankRefValid(gcashRef), 'Enter the UnionBank UB reference, not the InstaPay trace.', 'bGcashRef', 5],
     [payMethod === 'bpi' && !isBpiConfirmationValid(gcashRef), 'Enter the BPI Confirmation No. from the receipt, not the Transaction Ref. No.', 'bGcashRef', 5],
     [digitalPay && !_receiptFile, () => {
       const drop = $('bReceiptDrop');
@@ -10041,7 +10070,7 @@ function hostBalancePaymentEnabledMethods() {
 }
 
 function hostBalancePaymentMethodIcon(method) {
-  return ({ gcash: 'GC', bdopay: 'BDO', maya: 'M', bpi: 'BPI', gotyme: 'GT', maribank: 'MB', pnb: 'PNB' }[method] || 'Pay');
+  return ({ gcash: 'GC', bdopay: 'BDO', maya: 'M', bpi: 'BPI', gotyme: 'GT', maribank: 'MB', unionbank: 'UB', pnb: 'PNB' }[method] || 'Pay');
 }
 
 function hostBalancePaymentReferencePlaceholder(method) {
@@ -10050,6 +10079,7 @@ function hostBalancePaymentReferencePlaceholder(method) {
     : method === 'maya' ? 'e.g. B6DC F633 F08C'
     : method === 'bpi' ? 'e.g. 1783397488347'
     : method === 'gotyme' ? 'Enter the full GoTyme reference'
+    : method === 'unionbank' ? 'Enter the UB reference, e.g. UB678039'
     : method === 'maribank' ? 'Enter the full MariBank reference'
     : 'Enter the new transaction reference';
 }
@@ -10062,6 +10092,7 @@ function hostBalancePaymentMethodNote(method) {
     bpi: 'Use BPI and enter the Confirmation No., not the Transaction Ref. No.',
     gotyme: 'Pay from GoTyme to the GCash recipient and enter the complete transaction reference.',
     maribank: 'Pay from MariBank to the GCash recipient and enter the complete transaction reference.',
+    unionbank: 'Pay from UnionBank to the GCash recipient and enter the complete transaction reference.',
     pnb: 'Use the configured PNB payment details and upload the complete successful receipt.',
   })[method] || 'Use a new transaction and upload its complete successful receipt.';
 }
@@ -10071,6 +10102,7 @@ function hostBalancePaymentReferenceValid(method, reference) {
   if (method === 'gcash') return isGcashRefValid(reference);
   if (method === 'bdopay') return isBdoPayRefValid(reference);
   if (method === 'maya') return isMayaRefValid(reference);
+  if (method === 'unionbank') return isUnionbankRefValid(reference);
   if (method === 'bpi') return isBpiConfirmationValid(reference);
   return reference.length >= 4;
 }
@@ -11217,6 +11249,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
     paymentMethods.maya    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maya' ? 'on' : ''}" data-m="maya"    onclick="opPickPay('maya')">${paymentMethodBrandMarkHtml('maya', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Maya</span><span class="po-sub">QRPh to GCash</span></div>` : '',
     paymentMethods.gotyme  ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'gotyme' ? 'on' : ''}" data-m="gotyme"  onclick="opPickPay('gotyme')">${paymentMethodBrandMarkHtml('gotyme', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">GT</span>'}<span class="po-lbl">GoTyme → GCash</span><span class="po-sub">Pay from GoTyme</span></div>` : '',
     paymentMethods.maribank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maribank' ? 'on' : ''}" data-m="maribank" onclick="opPickPay('maribank')">${paymentMethodBrandMarkHtml('maribank', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">MB</span>'}<span class="po-lbl">MariBank → GCash</span><span class="po-sub">Pay from MariBank</span></div>` : '',
+    paymentMethods.unionbank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'unionbank' ? 'on' : ''}" data-m="unionbank" onclick="opPickPay('unionbank')">${paymentMethodBrandMarkHtml('unionbank', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">UB</span>'}<span class="po-lbl">UnionBank → GCash</span><span class="po-sub">Pay from UnionBank</span></div>` : '',
     paymentMethods.pnb     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'pnb' ? 'on' : ''}" data-m="pnb"     onclick="opPickPay('pnb')">${paymentMethodBrandMarkHtml('pnb', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">PNB</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
     paymentMethods.cash    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'cash' ? 'on' : ''}" data-m="cash"    onclick="opPickPay('cash')">${paymentMethodBrandMarkHtml('cash', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Cash</span><span class="po-sub">Pay at front desk</span></div>` : '',
   ].filter(Boolean);
@@ -11321,7 +11354,7 @@ function opPickPay(method) {
         <label>${method === 'bpi' ? 'BPI Confirmation No. *' : 'Reference # (after sending) *'}</label>
         <span id="opRefCount" style="font-size:.65rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap">${refCountText}</span>
       </div>
-      <input type="text" class="fi" id="opGcashRef" placeholder="${method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'pnb'].includes(method) ? 'text' : 'numeric'}"
+      <input type="text" class="fi" id="opGcashRef" placeholder="${method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'unionbank', 'pnb'].includes(method) ? 'text' : 'numeric'}"
         maxlength="${paymentRefMaxLength(method)}"
         style="margin:0;font-family:monospace;letter-spacing:1px"
         oninput="syncOpenPlayRefInput('${method}')"
@@ -11336,6 +11369,7 @@ function opPickPay(method) {
       bpi: { icon: paymentMethodBrandMarkHtml('bpi', 'pm-brand-mark--small'), label: 'BPI', receiver: paymentReceiverSettings.gcash },
       gotyme: { icon: paymentMethodBrandMarkHtml('gotyme', 'pm-brand-mark--small') || 'GT', label: 'GoTyme → GCash', receiver: paymentReceiverSettings.gcash },
       maribank: { icon: paymentMethodBrandMarkHtml('maribank', 'pm-brand-mark--small') || 'MB', label: 'MariBank → GCash', receiver: paymentReceiverSettings.gcash },
+      unionbank: { icon: paymentMethodBrandMarkHtml('unionbank', 'pm-brand-mark--small') || 'UB', label: 'UnionBank → GCash', receiver: paymentReceiverSettings.gcash },
       pnb: { icon: paymentMethodBrandMarkHtml('pnb', 'pm-brand-mark--small'), label: 'PNB', receiver: paymentReceiverSettings.pnb },
     }[method];
     const receiver = meta.receiver;
@@ -11590,6 +11624,7 @@ async function submitOpenPlay() {
     refEl?.focus();
     return;
   }
+  if (payMethod === 'unionbank' && !isUnionbankRefValid(_opSignupData.gcashRef)) { toast('Enter the UnionBank UB reference.', 'err'); return; }
   if (payMethod === 'bpi' && !isBpiConfirmationValid(_opSignupData.gcashRef)) {
     if (refEl) refEl.style.borderColor = 'var(--red)';
     toast('Enter the BPI Confirmation No. from the receipt, not the Transaction Ref. No.', 'err');

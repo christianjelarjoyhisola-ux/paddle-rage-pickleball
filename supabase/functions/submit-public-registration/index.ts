@@ -14,6 +14,7 @@ const DIGITAL_METHODS = new Set([
   "bpi",
   "gotyme",
   "maribank",
+  "unionbank",
   "pnb",
 ]);
 

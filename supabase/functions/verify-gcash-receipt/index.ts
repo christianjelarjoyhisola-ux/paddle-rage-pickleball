@@ -86,6 +86,7 @@ type PaymentProvider =
   | "maya"
   | "bpi"
   | "gotyme"
+  | "unionbank"
   | "maribank"
   | "pnb";
 type OcrProvider = "google_vision" | "none";
@@ -535,6 +536,9 @@ function selectedMethodMismatch(
   provider: PaymentProvider,
   text: string,
 ): boolean {
+  const unionbankReceipt = /\bUnionBank Online\b/i.test(text);
+  if (provider === "unionbank") return isBdoPayReceipt(text) || isMayaReceipt(text) || isBpiReceipt(text) || isGotymeReceipt(text) || isMaribankReceipt(text) || isGcashToGcashReceipt(text);
+  if (unionbankReceipt) return true;
   const bdoReceipt = isBdoPayReceipt(text);
   const mayaReceipt = isMayaReceipt(text);
   const bpiReceipt = isBpiReceipt(text);
@@ -640,7 +644,7 @@ function paymentMethodProvider(raw: unknown): PaymentProvider | null {
   if (
     method === "gcash" || method === "bdopay" || method === "maya" ||
     method === "bpi" || method === "gotyme" || method === "maribank" ||
-    method === "pnb"
+    method === "unionbank" || method === "pnb"
   ) {
     return method as PaymentProvider;
   }
@@ -651,6 +655,9 @@ function expectedMerchantForProvider(
   settings: Record<string, string>,
   provider: PaymentProvider,
 ): { number: string; name: string } {
+  if (provider === "unionbank") {
+    return { number: "", name: settings.gcash_qr_receipt_recipient_name || "" };
+  }
   if (provider === "bdopay") {
     return {
       number: settings.bdopay_merchant_number ||
@@ -2998,6 +3005,8 @@ Deno.serve(async (req) => {
         ["exact", "suffix_exact", "suffix_ocr_compatible"].includes(
           providerVerification.recipientComparison.account,
         )
+      : providerVerification?.provider === "unionbank"
+      ? providerVerification.recipientComparison.name === "exact"
       : providerVerification?.provider === "bpi"
       ? providerVerification.recipientComparison === "exact" &&
         providerVerification.recipientAccountComparison === "exact"
@@ -3045,7 +3054,7 @@ Deno.serve(async (req) => {
       ? "gcash"
       : provider === "bdopay" || provider === "maya" || provider === "bpi" ||
           provider === "gotyme" ||
-          provider === "maribank"
+          provider === "maribank" || provider === "unionbank"
       ? `${provider}_to_gcash`
       : provider;
     const verification = {
@@ -3149,7 +3158,7 @@ Deno.serve(async (req) => {
               providerVerification?.provider === "maya" ||
               providerVerification?.provider === "bdopay" ||
               providerVerification?.provider === "gotyme" ||
-              providerVerification?.provider === "maribank"
+              providerVerification?.provider === "maribank" || providerVerification?.provider === "unionbank"
             ? providerVerification.recipientComparison
             : null,
           recipientAccountComparison: providerVerification?.provider === "bpi"

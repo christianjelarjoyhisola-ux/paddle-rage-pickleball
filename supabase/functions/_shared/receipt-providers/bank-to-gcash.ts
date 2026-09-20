@@ -8,7 +8,7 @@ import {
   type ReceiptAmountExtraction,
 } from "../receipt-amount.ts";
 
-export type BankToGcashProvider = "gotyme" | "maribank";
+export type BankToGcashProvider = "gotyme" | "maribank" | "unionbank";
 
 export type TypedReferenceMatch =
   | "match"
@@ -70,7 +70,7 @@ export type BankReceiptIndicators = {
 export type BankToGcashReceiptParse = {
   provider: BankToGcashProvider;
   destinationProvider: "gcash";
-  parserVersion: "gotyme_to_gcash_v1" | "maribank_to_gcash_v1";
+  parserVersion: "gotyme_to_gcash_v1" | "maribank_to_gcash_v1" | "unionbank_to_gcash_v1";
   reference: BankReferenceField;
   railReference: BankRailReferenceField;
   amount: ReceiptAmountExtraction;
@@ -413,7 +413,7 @@ function timestampResult(
   };
 }
 
-function parseTimestamp(lines: string[]): BankReceiptTimestamp {
+export function parseTimestamp(lines: string[]): BankReceiptTimestamp {
   const monthName =
     /\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2}),?\s+(\d{4})(?:\s*(?:,|at)?\s*(\d{1,2}):(\d{2})\s*(AM|PM)?)?\b/i;
   const dayMonthName =

@@ -190,6 +190,7 @@
       bpi: "BPI",
       gotyme: "GoTyme",
       maribank: "MariBank",
+      unionbank: "UnionBank",
       pnb: "PNB",
       cash: "Cash",
     };

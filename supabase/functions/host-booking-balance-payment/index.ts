@@ -47,6 +47,7 @@ const ALLOWED_PROVIDERS = new Set([
   "bpi",
   "gotyme",
   "maribank",
+  "unionbank",
   "pnb",
 ]);
 

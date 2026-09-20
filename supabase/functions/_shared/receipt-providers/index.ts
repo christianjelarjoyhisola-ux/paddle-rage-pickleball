@@ -1,3 +1,4 @@
+import { parseUnionbankToGcashReceipt, verifyUnionbankToGcashReceipt } from "./unionbank.ts";
 import {
   type BdoPayReceiptParse,
   type BdoPayReceiptVerificationEvidence,
@@ -43,7 +44,7 @@ export type DedicatedReceiptProvider =
   | "maya"
   | "bpi"
   | "gotyme"
-  | "maribank";
+  | "maribank" | "unionbank";
 
 export type GcashProviderReceiptParse = {
   provider: "gcash";
@@ -53,9 +54,9 @@ export type GcashProviderReceiptParse = {
 };
 
 export type BankProviderReceiptParse = {
-  provider: "gotyme" | "maribank";
+  provider: "gotyme" | "maribank" | "unionbank";
   destinationProvider: "gcash";
-  parserVersion: "gotyme_to_gcash_v1" | "maribank_to_gcash_v1";
+  parserVersion: "gotyme_to_gcash_v1" | "maribank_to_gcash_v1" | "unionbank_to_gcash_v1";
   receipt: BankToGcashReceiptParse;
 };
 
@@ -117,7 +118,7 @@ export function isDedicatedReceiptProvider(
 ): provider is DedicatedReceiptProvider {
   return provider === "gcash" || provider === "bdopay" ||
     provider === "maya" || provider === "gotyme" || provider === "maribank" ||
-    provider === "bpi";
+    provider === "bpi" || provider === "unionbank";
 }
 
 export function parseProviderReceipt(
@@ -126,6 +127,8 @@ export function parseProviderReceipt(
   options: { typedReference?: string } = {},
 ): ProviderReceiptParse {
   switch (provider) {
+    case "unionbank":
+      return { provider, destinationProvider: "gcash", parserVersion: "unionbank_to_gcash_v1", receipt: parseUnionbankToGcashReceipt(rawText, options) };
     case "gcash":
       return {
         provider,
@@ -302,6 +305,8 @@ export function verifyProviderReceipt(
   context: ReceiptVerificationContext,
 ): ProviderReceiptVerificationEvidence {
   switch (parsed.provider) {
+    case "unionbank":
+      return verifyUnionbankToGcashReceipt(parsed.receipt as BankToGcashReceiptParse & { provider: "unionbank" }, context);
     case "gcash":
       return verifyGcashReceipt(parsed, context);
     case "bdopay":

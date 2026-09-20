@@ -8,6 +8,7 @@
     bpi: 'assets/payment-methods/bpi.png',
     gotyme: 'assets/payment-methods/gotyme.png',
     maribank: 'assets/payment-methods/maribank.png',
+    unionbank: 'assets/payment-methods/unionbank.svg',
     pnb: 'assets/payment-methods/pnb.png',
     cash: 'assets/payment-methods/cash.svg',
   });

@@ -6332,6 +6332,9 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
               <input type="checkbox" id="payMethodMaribankOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--maribank" data-payment-method="maribank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maribank.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>MariBank → GCash</span></span>
             </label>
             <label class="pm-toggle">
+              <input type="checkbox" id="payMethodUnionbankOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--unionbank" data-payment-method="unionbank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/unionbank.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>UnionBank → GCash</span></span>
+            </label>
+            <label class="pm-toggle">
               <input type="checkbox" id="payMethodPnbOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>PNB</span></span>
             </label>
           </div>
@@ -6390,6 +6393,10 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
         <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
           <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:7px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--maribank" data-payment-method="maribank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/maribank.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>MariBank → GCash</span></div>
           <div style="font-size:.78rem;color:var(--muted);line-height:1.55">Players pay from MariBank to the shared GCash number/QR above. Its receipt parser validates MariBank-specific references and receipt fields.</div>
+        </div>
+        <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
+          <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--yellow);margin-bottom:7px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--unionbank" data-payment-method="unionbank" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/unionbank.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>UnionBank → GCash</span></div>
+          <div style="font-size:.78rem;color:var(--muted);line-height:1.55">Players pay from UnionBank to the shared GCash number/QR above. Its receipt parser validates UnionBank-specific references and receipt fields.</div>
         </div>
 
         <!-- PNB Section -->
@@ -7178,7 +7185,7 @@ function bookingGroupKey(b) {
 }
 function normalizedPaymentRefKey(b) {
   const method = String(b?.paymentMethod || '').toLowerCase();
-  if (!['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'].includes(method)) return '';
+  if (!['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb'].includes(method)) return '';
   const ref = String(b?.gcashRef || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   return ref ? `${method}:${ref}` : '';
 }
@@ -7718,6 +7725,7 @@ function receiptDetailsHtml(b){
     bpi_to_gcash_v1: 'Dedicated BPI to GCash v1',
     gotyme_to_gcash_v1: 'Dedicated GoTyme → GCash v1',
     maribank_to_gcash_v1: 'Dedicated MariBank → GCash v1',
+    unionbank_to_gcash_v1: 'Dedicated UnionBank → GCash v1',
   })[String(ex.parserVersion || '').toLowerCase()] || '';
   const displayFlags = receiptFlagsForDisplay(b);
   const paymentState = String(b.paymentStatus || '').toLowerCase();
@@ -7816,6 +7824,12 @@ function receiptDetailsHtml(b){
         bankTransfer.indicators?.instaPay ? 'InstaPay' : 'InstaPay unreadable',
         bankTransfer.indicators?.qrCodeRecipient ? 'QR recipient' : 'QR recipient unreadable',
       ].join(' / ')), true],
+    ] : []),
+    ...(bankTransfer && ex.parserVersion === 'unionbank_to_gcash_v1' ? [
+      ['UnionBank Reference', receiptDetailValue(bankTransfer.reference?.value), true],
+      ['InstaPay Trace', receiptDetailValue(bankTransfer.railReference?.value), true],
+      ['UnionBank Recipient', receiptDetailValue(bankTransfer.recipient?.nameRaw), true],
+      ['Recipient Check', receiptDetailValue(`Name: ${bankTransfer.recipientComparison?.name || 'review'} / Account number not shown on receipt`), true],
     ] : []),
     ['Configured Recipient', receiptReceiverValue(ex), true],
     ...(ex.ocrFallbackReason ? [[ocrDiagnosticLabel, receiptDetailValue(ex.ocrFallbackReason), true]] : []),
@@ -10007,7 +10021,7 @@ async function restoreDeletedBooking(id, ref) {
 
 /* ── CALENDAR VIEW ── */
 function paymentMethodLabel(m) {
-  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', pnb: 'PNB', cash: 'Cash' }[String(m || '').toLowerCase()] || (m || 'Cash'));
+  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', unionbank: 'UnionBank → GCash', pnb: 'PNB', cash: 'Cash' }[String(m || '').toLowerCase()] || (m || 'Cash'));
 }
 
 function paymentMethodBrandMarkHtml(method, modifier = 'pm-brand-mark--inline') {
@@ -10030,7 +10044,7 @@ function renderPaymentMethodBrandLabel(element, method, label = paymentMethodLab
 }
 
 function isDigitalPayment(m) {
-  return ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'pnb'].includes(String(m || '').toLowerCase());
+  return ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb'].includes(String(m || '').toLowerCase());
 }
 
 function receivedAccountKey(b) {
@@ -14308,6 +14322,7 @@ async function renderPaymentSettings() {
   const bpiOn = settings.payment_method_bpi === '1';
   const gotymeOn = settings.payment_method_gotyme === '1';
   const maribankOn = settings.payment_method_maribank === '1';
+  const unionbankOn = settings.payment_method_unionbank === '1';
   const pnbOn = settings.payment_method_pnb === '1';
   const paymentAcceptanceMode = 'full_payment_only';
 
@@ -14319,6 +14334,7 @@ async function renderPaymentSettings() {
   if ($('payMethodBpiOn')) $('payMethodBpiOn').checked = bpiOn;
   $('payMethodGotymeOn').checked = gotymeOn;
   if ($('payMethodMaribankOn')) $('payMethodMaribankOn').checked = maribankOn;
+  if ($('payMethodUnionbankOn')) $('payMethodUnionbankOn').checked = unionbankOn;
   $('payMethodPnbOn').checked = pnbOn;
 
   if ($('gcashNumInput')) $('gcashNumInput').value = settings.gcash_merchant_number || '';
@@ -14346,7 +14362,7 @@ async function renderPaymentSettings() {
     $('pnbQrPreviewWrap').style.display = '';
   }
 
-  const summaryParts = [`Methods: ${(cashOn?'Cash ':'')}${(gcashOn?'GCash ':'')}${(bdopayOn?'BDO Pay ':'')}${(mayaOn?'Maya ':'')}${(bpiOn?'BPI ':'')}${(gotymeOn?'GoTyme→GCash ':'')}${(maribankOn?'MariBank→GCash ':'')}${(pnbOn?'PNB':'')}`.trim() || 'none'];
+  const summaryParts = [`Methods: ${(cashOn?'Cash ':'')}${(gcashOn?'GCash ':'')}${(bdopayOn?'BDO Pay ':'')}${(mayaOn?'Maya ':'')}${(bpiOn?'BPI ':'')}${(gotymeOn?'GoTyme→GCash ':'')}${(maribankOn?'MariBank→GCash ':'')}${(unionbankOn?'UnionBank→GCash ':'')}${(pnbOn?'PNB':'')}`.trim() || 'none'];
   $('paySettingsSummary').textContent = summaryParts.join(' • ');
 
   // Platform remittance summary
@@ -15478,6 +15494,7 @@ async function savePaymentSettings() {
   const bpiOn = $('payMethodBpiOn')?.checked || false;
   const gotymeOn = $('payMethodGotymeOn').checked;
   const maribankOn = $('payMethodMaribankOn')?.checked || false;
+  const unionbankOn = $('payMethodUnionbankOn')?.checked || false;
   const pnbOn = $('payMethodPnbOn').checked;
   const gcashNum = $('gcashNumInput')?.value.trim() || '';
   const gcashName = $('gcashNameInput')?.value.trim() || '';
@@ -15488,11 +15505,11 @@ async function savePaymentSettings() {
   const gcashQrSrc = $('gcashQrPreview')?.src || '';
   const pnbQrSrc = $('pnbQrPreview')?.src || '';
 
-  if (!cashOn && !gcashOn && !bdopayOn && !mayaOn && !bpiOn && !gotymeOn && !maribankOn && !pnbOn) {
+  if (!cashOn && !gcashOn && !bdopayOn && !mayaOn && !bpiOn && !gotymeOn && !maribankOn && !unionbankOn && !pnbOn) {
     toast('Enable at least one payment method.', 'err');
     return;
   }
-  if ((gcashOn || bdopayOn || mayaOn || bpiOn || gotymeOn || maribankOn) && (!gcashName || (!gcashNum && !gcashQrSrc))) {
+  if ((gcashOn || bdopayOn || mayaOn || bpiOn || gotymeOn || maribankOn || unionbankOn) && (!gcashName || (!gcashNum && !gcashQrSrc))) {
     toast('Add the shared GCash recipient name and number or QR before enabling a GCash-routed method.', 'err');
     return;
   }
@@ -15515,6 +15532,7 @@ async function savePaymentSettings() {
     await DB.saveSetting('payment_method_bpi', bpiOn ? '1' : '0');
     await DB.saveSetting('payment_method_gotyme', gotymeOn ? '1' : '0');
     await DB.saveSetting('payment_method_maribank', maribankOn ? '1' : '0');
+    await DB.saveSetting('payment_method_unionbank', unionbankOn ? '1' : '0');
     await DB.saveSetting('payment_method_pnb', pnbOn ? '1' : '0');
     await DB.saveSetting('payment_acceptance_mode', paymentAcceptanceMode);
 
