@@ -1,3 +1,4 @@
+import { evaluateGcashCriticalOcrQuality } from "../_shared/gcash-ocr-quality.ts";
 // verify-gcash-receipt
 // ----------------------------------------------------------------------------
 // Server-side digital-payment receipt verification + fraud detection.
@@ -99,21 +100,6 @@ type OcrResult = {
   fallbackProvider?: OcrProvider;
   fallbackReason?: string;
   error?: string;
-};
-
-type OcrFieldMatch = {
-  confidence: number;
-  numericConfidence: number;
-  minDigitConfidence: number;
-};
-
-type GcashCriticalOcrQuality = {
-  pass: boolean;
-  amountTokenizationFallbackEligible: boolean;
-  confidence: number | null;
-  coverage: number;
-  amountOccurrences: number;
-  fields: Record<string, number | null>;
 };
 
 type ReceiptCaller = {
@@ -1077,122 +1063,6 @@ function ocrCriticalGaps(
   if (extractAmount(text) == null) gaps.push("amount");
   if (!parseReceiptDateTime(text).date) gaps.push("date");
   return gaps;
-}
-
-function normalizeOcrField(value: string): string {
-  return value.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function findOcrFieldMatches(
-  words: GoogleVisionWord[],
-  expected: string | null | undefined,
-): OcrFieldMatch[] {
-  const target = normalizeOcrField(String(expected || ""));
-  if (!target) return [];
-  const tokens = words.map((word) => ({
-    ...word,
-    normalized: normalizeOcrField(word.text),
-  })).filter((word) => word.normalized);
-  const matches: OcrFieldMatch[] = [];
-
-  for (let start = 0; start < tokens.length; start++) {
-    let combined = "";
-    const confidences: number[] = [];
-    const numericConfidences: number[] = [];
-    const digitConfidences: number[] = [];
-    for (let cursor = start; cursor < tokens.length; cursor++) {
-      combined += tokens[cursor].normalized;
-      confidences.push(tokens[cursor].confidence);
-      if (/\d/.test(tokens[cursor].text)) {
-        numericConfidences.push(tokens[cursor].confidence);
-        digitConfidences.push(tokens[cursor].minDigitConfidence);
-      }
-      if (combined === target) {
-        matches.push({
-          confidence: confidences.reduce((sum, value) => sum + value, 0) /
-            confidences.length,
-          numericConfidence: numericConfidences.length
-            ? numericConfidences.reduce((sum, value) => sum + value, 0) /
-              numericConfidences.length
-            : 0,
-          minDigitConfidence: digitConfidences.length
-            ? Math.min(...digitConfidences)
-            : 0,
-        });
-        break;
-      }
-      if (combined.length >= target.length || !target.startsWith(combined)) {
-        break;
-      }
-    }
-  }
-  return matches;
-}
-
-function evaluateGcashCriticalOcrQuality(
-  words: GoogleVisionWord[],
-  receipt: GcashReceiptParse,
-): GcashCriticalOcrQuality {
-  const reference = findOcrFieldMatches(words, receipt.reference.value)[0];
-  const amountValue = receipt.amount.amount == null
-    ? null
-    : receipt.amount.amount.toFixed(2);
-  const amountMatches = findOcrFieldMatches(words, amountValue);
-  const timestamp = findOcrFieldMatches(words, receipt.timestamp.raw)[0];
-  const phone = findOcrFieldMatches(words, receipt.receiver.phone.raw)[0] ||
-    (receipt.receiver.phone.visibility === "masked"
-      ? findOcrFieldMatches(words, receipt.receiver.phone.last4)[0]
-      : undefined);
-  const labelMatches = [
-    findOcrFieldMatches(words, "Sent via GCash")[0],
-    findOcrFieldMatches(words, "Total Amount Sent")[0],
-    findOcrFieldMatches(words, "Ref No")[0],
-  ];
-  const requiredFields = [reference, timestamp, phone, ...labelMatches];
-  const coveredFields = requiredFields.filter(Boolean).length +
-    (amountMatches.length >= 2 ? 1 : 0);
-  const coverage = coveredFields / (requiredFields.length + 1);
-  const numericMatches = [reference, timestamp, phone, ...amountMatches]
-    .filter((match): match is OcrFieldMatch => Boolean(match));
-  const requiredNumericFieldsPresent = Boolean(
-    reference && timestamp && phone && amountMatches.length >= 1,
-  );
-  const numericPass = requiredNumericFieldsPresent &&
-    numericMatches.every((match) =>
-      match.numericConfidence >= 0.92 && match.minDigitConfidence >= 0.8
-    );
-  const labelsPass = labelMatches.every((match) =>
-    Boolean(match && match.confidence >= 0.85)
-  );
-  const confidence = numericMatches.length
-    ? Math.min(...numericMatches.map((match) => match.numericConfidence))
-    : null;
-
-  return {
-    pass: coverage === 1 && amountMatches.length >= 2 && numericPass &&
-      labelsPass,
-    // Vision can merge a peso symbol with one amount token (for example,
-    // `₱2400.00`), making an exact word-token lookup see only one of the two
-    // identical amount displays. The parser still proves both displays agree.
-    amountTokenizationFallbackEligible: amountMatches.length === 1 &&
-      numericPass && labelsPass &&
-      receipt.amount.matchingPrimaryAmountDisplays &&
-      !receipt.amount.conflictingPrimaryAmounts,
-    confidence,
-    coverage,
-    amountOccurrences: amountMatches.length,
-    fields: {
-      reference: reference?.numericConfidence ?? null,
-      amount: amountMatches.length
-        ? Math.min(...amountMatches.map((match) => match.numericConfidence))
-        : null,
-      timestamp: timestamp?.numericConfidence ?? null,
-      phone: phone?.numericConfidence ?? null,
-      labels: labelMatches.every(Boolean)
-        ? Math.min(...labelMatches.map((match) => match!.confidence))
-        : null,
-    },
-  };
 }
 
 async function runOCR(
@@ -2997,9 +2867,8 @@ Deno.serve(async (req) => {
 
     // GCash screenshots often contain advertisements and footer copy that can
     // lower whole-page confidence even when every payment field is clear. Use
-    // native word confidence for the fields that drive approval. Vision can
-    // occasionally merge a peso symbol with one otherwise valid amount token;
-    // allow only that narrow parser-confirmed tokenization fallback.
+    // native word confidence with 80% coverage and mandatory numeric fields.
+    // The parser must still confirm both displayed amounts agree.
     const gcashCriticalOcrQuality = provider === "gcash" && gcashParse &&
         ocrWords.length
       ? evaluateGcashCriticalOcrQuality(ocrWords, gcashParse)
@@ -3126,7 +2995,7 @@ Deno.serve(async (req) => {
         )
       : providerVerification?.provider === "bdopay"
       ? providerVerification.recipientComparison.name === "exact" &&
-        ["exact", "suffix_exact"].includes(
+        ["exact", "suffix_exact", "suffix_ocr_compatible"].includes(
           providerVerification.recipientComparison.account,
         )
       : providerVerification?.provider === "bpi"

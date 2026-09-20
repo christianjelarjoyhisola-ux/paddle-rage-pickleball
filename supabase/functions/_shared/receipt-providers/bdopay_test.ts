@@ -76,6 +76,55 @@ const COMPACT_CONTEXT = {
   bookingStartedDate: "2026-09-11",
 };
 
+const REORDERED_RECEIPT = COMPACT_RECEIPT
+  .replaceAll("3,200.00", "2,000.00")
+  .replace("Send Money via\nTo\nPaddleRage...0NS8\nFrom", "Send Money\ninstaFay\nvia\nTo\nFrom\nPaddleRage...ONS8")
+  .replace("Sep 11, 2026 04:17 PM", "Sep 20, 2026 09:49 PM")
+  .replace("BN-20260911-80487993", "BN-20260920-92375558")
+  .replace("367094", "361314");
+const REORDERED_CONTEXT = {
+  ...COMPACT_CONTEXT,
+  expectedAmount: 2000,
+  typedReference: "BN2026092092375558",
+  bookingStartedAt: "2026-09-20T13:47:33.333Z",
+  bookingStartedDate: "2026-09-20",
+};
+
+Deno.test("BDO September 20 OCR label ordering and O/0 suffix are verified together", () => {
+  const parsed = parseBdoPayToGcashReceipt(REORDERED_RECEIPT, {
+    typedReference: REORDERED_CONTEXT.typedReference,
+  });
+  const result = verifyBdoPayToGcashReceipt(parsed, REORDERED_CONTEXT);
+  assert(result.flags.length === 0, JSON.stringify(result.flags));
+  assert(parsed.recipient.accountNormalized === "ONS8", "preserve raw OCR suffix");
+  assert(result.recipientComparison.account === "suffix_ocr_compatible", "honest OCR evidence");
+});
+
+Deno.test("BDO reordered suffix recovery cannot waive identity or structural checks", () => {
+  for (const [before, after] of [
+    ["PaddleRage...ONS8", "Other Merchant...ONS8"],
+    ["PaddleRage...ONS8", "PaddleRage...ON58"],
+    ["REGULAR SA-INDIVIDUAL", "PaddleRage...0NS8"],
+    ["From\nPaddleRage", "From Someone\nPaddleRage"],
+    ["To\nFrom", "From"],
+    ["Sent!", "Pending"],
+    ["Invoice no.\n361314", ""],
+    ["Send Money", "Transfer"],
+  ]) {
+    assert(flagsFor(REORDERED_RECEIPT.replaceAll(before, after), REORDERED_CONTEXT).length > 0,
+      `must review ${before}`);
+  }
+  for (const context of [
+    { expectedAmount: 3000 },
+    { typedReference: "BN2026092092375559" },
+    { bookingStartedAt: "2026-09-20T12:00:00.000Z" },
+    { expectedRecipientAccount: "DWQM4TK3JDO9O9NS8" },
+  ]) {
+    assert(flagsFor(REORDERED_RECEIPT, { ...REORDERED_CONTEXT, ...context }).length > 0,
+      "context mismatch must review");
+  }
+});
+
 function flagsFor(
   receipt: string,
   context: Partial<typeof CONTEXT> = {},

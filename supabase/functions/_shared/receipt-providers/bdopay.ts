@@ -63,6 +63,7 @@ export type BdoPayRecipientComparison = {
   account:
     | "exact"
     | "suffix_exact"
+    | "suffix_ocr_compatible"
     | "mismatch"
     | "missing"
     | "not_configured";
@@ -337,6 +338,14 @@ function parseRecipient(lines: string[]): BdoPayRecipientField {
     toIndex + 1,
     endIndex > toIndex ? endIndex : toIndex + 7,
   );
+  // Vision may emit both column labels before either value: To / From / recipient.
+  // Only consume the first value after a bare adjacent From label, and only when
+  // followed by the BDO sender account-type row; never search the sender block.
+  const reorderedCompact = endIndex === toIndex + 1 &&
+      /^from\s*:?$/i.test(lines[endIndex]) &&
+      /^REGULAR SA-INDIVIDUAL$/i.test(lines[endIndex + 2] || "")
+    ? [lines[endIndex + 1] || ""]
+    : [];
   const destinationOffset = block.findIndex((line) =>
     /\bg-?xchange\b/i.test(line) && /\bgcash\b/i.test(line)
   );
@@ -353,7 +362,7 @@ function parseRecipient(lines: string[]): BdoPayRecipientField {
   let accountMasked = false;
 
   if (destinationOffset < 0) {
-    const compactCandidates = [inlineName, ...block]
+    const compactCandidates = [inlineName, ...block, ...reorderedCompact]
       .map((raw) => {
         const match = String(raw || "").match(
           /^(.+?)\s*(?:\.{2,}|…+|[•·]{2,})\s*([a-z0-9]{4})$/i,
@@ -424,6 +433,16 @@ function compareRecipient(
 ): BdoPayRecipientComparison {
   const expectedName = normalizeBdoPayRecipient(expectedNameRaw);
   const expectedAccount = normalizeBdoPayRecipient(expectedAccountRaw);
+  const observedSuffix = parsed.accountNormalized || "";
+  const expectedSuffix = expectedAccount.slice(-4);
+  const suffixDifferences = [...observedSuffix].filter((char, i) =>
+    char !== expectedSuffix[i]
+  ).length;
+  const suffixOcrCompatible = parsed.accountMasked && observedSuffix.length === 4 &&
+    validDestinationAccount(expectedAccount) &&
+    !!expectedName && parsed.nameNormalized === expectedName &&
+    suffixDifferences === 1 &&
+    observedSuffix.replace(/O/g, "0") === expectedSuffix.replace(/O/g, "0");
   return {
     name: !expectedName
       ? "not_configured"
@@ -440,6 +459,8 @@ function compareRecipient(
           validDestinationAccount(expectedAccount) &&
           expectedAccount.endsWith(parsed.accountNormalized)
       ? "suffix_exact"
+      : suffixOcrCompatible
+      ? "suffix_ocr_compatible"
       : parsed.accountNormalized === expectedAccount
       ? "exact"
       : "mismatch",
@@ -558,7 +579,7 @@ export function verifyBdoPayToGcashReceipt(
     receiptAgeMinutes >= -context.earlyToleranceMinutes &&
     receiptAgeMinutes <= context.paymentWindowMinutes;
   const compactStructuralEvidence = recipientComparison.name === "exact" &&
-    recipientComparison.account === "suffix_exact" &&
+    ["suffix_exact", "suffix_ocr_compatible"].includes(recipientComparison.account) &&
     parsed.indicators.providerBrand &&
     !parsed.indicators.competingProviderBrand &&
     parsed.indicators.transferSuccess &&
@@ -569,6 +590,9 @@ export function verifyBdoPayToGcashReceipt(
     parsed.indicators.invoiceLabel &&
     parsed.invoice.confidence === "high" &&
     amountMatches && timestampMatches && parsed.issues.length === 0;
+  if (recipientComparison.account === "suffix_ocr_compatible" && !compactStructuralEvidence) {
+    addUnique(flags, "RECEIVER_ACCOUNT_UNREADABLE");
+  }
   if (!parsed.indicators.providerBrand) addUnique(flags, "BDO_PAY_UNREADABLE");
   if (parsed.indicators.competingProviderBrand) {
     addUnique(flags, "METHOD_MISMATCH");

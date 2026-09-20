@@ -19,7 +19,7 @@ test('dedicated Maya review keeps recipient and reference failures visible to st
 });
 
 test('masked GCash receipts use composite recipient evidence and honest OCR wording', () => {
-  const verifier = read('supabase/functions/verify-gcash-receipt/index.ts');
+  const verifier = read('supabase/functions/_shared/gcash-ocr-quality.ts') + read('supabase/functions/verify-gcash-receipt/index.ts');
   const providerVerifier = read('supabase/functions/_shared/receipt-providers/index.ts');
   const parser = read('supabase/functions/_shared/gcash-receipt.ts');
   const admin = read('admin.html');
@@ -96,7 +96,7 @@ test('public receipt OCR flows share the canonical client verifier', () => {
 });
 
 test('receipt verification preserves authorization, resource, and settlement boundaries', () => {
-  const edge = read('supabase/functions/verify-gcash-receipt/index.ts');
+  const edge = read('supabase/functions/_shared/gcash-ocr-quality.ts') + read('supabase/functions/verify-gcash-receipt/index.ts');
   const parser = read('supabase/functions/_shared/gcash-receipt.ts');
   const providerRegistry = read('supabase/functions/_shared/receipt-providers/index.ts');
   const gotymeParser = read('supabase/functions/_shared/receipt-providers/gotyme.ts');
@@ -155,7 +155,7 @@ test('receipt verification preserves authorization, resource, and settlement bou
   assert.match(edge, /isDedicatedReceiptProvider\(provider\)[\s\S]*?ocrConfidenceSource !== "native"/);
   assert.match(edge, /nativeWholePageOcrPass =\s*ocrConfidenceSource === "native" &&\s*ocrConfidence >= minimumOcrConfidence/);
   assert.match(edge, /requiredNumericFieldsPresent = Boolean\([\s\S]*?reference && timestamp && phone && amountMatches\.length >= 1/);
-  assert.match(edge, /amountTokenizationFallbackEligible: amountMatches\.length === 1 &&\s*numericPass && labelsPass &&\s*receipt\.amount\.matchingPrimaryAmountDisplays &&\s*!receipt\.amount\.conflictingPrimaryAmounts/);
+  assert.match(edge, /amountTokenizationFallbackEligible: coverage >= 0\.8 && amountMatches\.length === 1 &&\s*numericPass && labelsPass &&\s*receipt\.amount\.matchingPrimaryAmountDisplays &&\s*!receipt\.amount\.conflictingPrimaryAmounts/);
   assert.match(edge, /gcashAmountTokenizationFallbackPass =\s*gcashCriticalOcrQuality\?\.amountTokenizationFallbackEligible === true &&\s*nativeWholePageOcrPass/);
   assert.match(edge, /provider === "gcash" && ocrWords\.length[\s\S]*?\? gcashCriticalOcrPass/);
   assert.match(edge, /amountMatches\.length >= 2[\s\S]*?match\.numericConfidence >= 0\.92 && match\.minDigitConfidence >= 0\.8/);
