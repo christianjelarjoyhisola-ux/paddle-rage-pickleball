@@ -4,6 +4,17 @@ const test = require('node:test');
 
 const read = file => fs.readFileSync(file, 'utf8');
 
+test('payment review pairs receipt and OCR on desktop and stacks on mobile', () => {
+  const admin = read('admin.html');
+  assert.match(admin, /\.verify-payment-modal\s*\{[^}]*max-width:1120px[^}]*overflow:hidden/);
+  assert.match(admin, /\.vm-receipt-layout\s*\{[^}]*grid-template-columns:minmax\(0,1fr\) minmax\(0,1fr\)/);
+  assert.match(admin, /@media \(max-width:800px\)\s*\{\s*\.vm-receipt-layout\s*\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
+  assert.match(admin, /\.mb-book-quick-confirm\s*\{[^}]*grid-column:1 \/ -1/);
+  const modal = admin.slice(admin.indexOf('<!-- VERIFY PAYMENT MODAL -->'), admin.indexOf('<!-- BOOKING PAYMENT REJECTION REASON -->'));
+  assert.match(modal, /class="vm-receipt-checks"[\s\S]*id="vmReceiptDetails"[\s\S]*class="vm-receipt-preview"[\s\S]*id="vmReceiptImg"/);
+  assert.match(modal, /aria-label="Open uploaded receipt full size in a new tab"/);
+});
+
 function functionSource(source, name, { required = true } = {}) {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const matches = [...source.matchAll(new RegExp(`^(?:async\\s+)?function\\s+${escaped}\\s*\\(`, 'gm'))];

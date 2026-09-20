@@ -800,7 +800,7 @@ tr:hover td { background: var(--bg2); }
 .booking-quick-confirm:disabled { opacity:.68; cursor:wait; transform:none; }
 .payment-loading-spinner { display:inline-block; width:14px; height:14px; flex:none; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:pb-spin .75s linear infinite; vertical-align:middle; margin-right:7px; }
 @media (prefers-reduced-motion:reduce) { .payment-loading-spinner { animation:none; } }
-.mb-book-quick-confirm { width:100%; min-height:44px; margin-top:10px; justify-content:center; }
+.mb-book-quick-confirm { grid-column:1 / -1; width:100%; min-height:44px; margin-top:10px; justify-content:center; }
 .booking-section-toolbar { margin-bottom: 12px; }
 .booking-quick-nav {
   display:grid; grid-template-columns:auto 1px minmax(0,1fr); gap:14px; align-items:end;
@@ -1063,10 +1063,22 @@ tr:hover td { background: var(--bg2); }
   display: flex; gap: 10px; justify-content: flex-end;
   position: sticky; bottom: 0; background: var(--surface);
 }
-.verify-payment-modal { max-width: 720px; }
+.verify-payment-modal { max-width:1120px; display:flex; flex-direction:column; overflow:hidden; }
+.verify-payment-modal .m-hd, .verify-payment-modal .m-foot { flex:0 0 auto; }
+.vm-receipt-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; align-items:start; }
+.vm-receipt-checks, .vm-receipt-preview { min-width:0; overflow-wrap:anywhere; }
+.vm-receipt-checks { position:sticky; top:0; }
+.vm-receipt-caption { font-size:.72rem; color:var(--muted); margin:0 0 10px; }
+#vmReceiptLink { display:block; border-radius:8px; }
+#vmReceiptLink:focus-visible { outline:2px solid var(--green); outline-offset:4px; }
+#vmReceiptImg { display:block; width:100%; height:auto; border-radius:8px; border:1px solid var(--border); background:#fff; }
+@media (max-width:800px) {
+  .vm-receipt-layout { grid-template-columns:minmax(0,1fr); gap:18px; }
+  .vm-receipt-checks { position:static; }
+}
 .verify-payment-modal .m-hd { z-index: 2; }
 .verify-payment-modal .m-hd h2 { line-height: 1.15; margin: 0; }
-.verify-payment-modal .m-body { overflow-x: hidden; }
+.verify-payment-modal .m-body { min-height:0; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; }
 .verify-payment-modal .receipt-detail-grid { max-width: 100%; }
 .booking-payment-reject-overlay { z-index: 560; }
 .booking-payment-reject-modal { max-width: 560px; display: flex; flex-direction: column; overflow: hidden; }
@@ -6575,14 +6587,21 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
       </div>
       <div id="vmGroupBreakdown" style="display:none;margin-top:8px;font-size:.76rem;color:var(--muted)"></div>
       <div id="vmReceiptWrap" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+        <div class="vm-receipt-layout">
+        <div class="vm-receipt-checks">
         <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Automated receipt checks</div>
         <div id="vmReceiptStatus" style="font-size:.82rem;font-weight:700;border-radius:8px;padding:8px 10px;margin-bottom:8px"></div>
         <div id="vmReceiptFlags" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px"></div>
         <div id="vmReceiptDetails" class="receipt-detail-grid" style="display:none"></div>
-        <a id="vmReceiptLink" href="#" target="_blank" rel="noopener" style="display:none">
-          <img id="vmReceiptImg" alt="Receipt" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px;border:1px solid var(--border);background:#fff"/>
+        </div>
+        <div class="vm-receipt-preview">
+        <p class="vm-receipt-caption">Uploaded receipt · select image to open full size</p>
+        <a id="vmReceiptLink" href="#" target="_blank" rel="noopener" aria-label="Open uploaded receipt full size in a new tab" style="display:none">
+          <img id="vmReceiptImg" alt="Uploaded payment receipt"/>
         </a>
         <div id="vmReceiptNoImg" style="display:none;font-size:.76rem;color:var(--muted)">No receipt image was uploaded for this booking.</div>
+        </div>
+        </div>
       </div>
       <p id="vmReviewHint" style="font-size:.78rem;color:var(--muted);text-align:center;margin-top:12px;line-height:1.6">
         Open your GCash inbox and match the reference above, then mark as received to confirm the booking and send an email to the customer.
