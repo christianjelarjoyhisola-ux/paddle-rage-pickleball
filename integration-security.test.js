@@ -843,6 +843,23 @@ test('booking quick confirm is a dedicated responsive row action using the canon
   );
 });
 
+test('pending digital bookings open receipt review without confirming payment', () => {
+  const render = new Function('isDigitalPayment', 'esc', 'jsArg', 'bookingQuickConfirmIssue',
+    `${functionSource(read('admin.html'), 'bookingQuickConfirmButton')}; return bookingQuickConfirmButton;`
+  )(() => true, String, String, () => 'not eligible');
+  const booking = { ref: 'child', primaryRef: 'primary', status: 'pending', paymentMethod: 'gcash', receiptImageUrl: 'receipt.png' };
+  for (const mobile of [false, true]) {
+    const html = render(booking, mobile);
+    assert.match(html, />View Payment</);
+    assert.match(html, /openVerifyModal\('primary'\)/);
+    assert.doesNotMatch(html, /quickConfirmBooking|confirmBookingTransaction/);
+  }
+  assert.match(render({ ...booking, receiptImageUrl: null }), /Awaiting Receipt/);
+  assert.match(render({ ...booking, duplicatePaymentRef: true, receiptStatus: 'rejected' }), /View Payment/);
+  assert.match(render({ ...booking, receiptImageUrl: null, items: [{ receiptImageUrl: 'group.png' }] }), /View Payment/);
+  assert.equal(render({ ...booking, status: 'cancelled' }), '');
+});
+
 test('booking confirmation adapter is not served behind the obsolete receipt-stage asset token', () => {
   const client = read('supabase-config.js');
   assert.match(

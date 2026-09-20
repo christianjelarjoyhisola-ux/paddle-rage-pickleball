@@ -6587,9 +6587,9 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
       </p>
     </div>
     <div class="m-foot">
-      <button class="btn btn-d" id="vmRejectBtn" onclick="rejectPayment()">❌ Not Received</button>
+      <button class="btn btn-d" id="vmRejectBtn" onclick="rejectPayment()">Payment Not Received</button>
       <button class="btn booking-duplicate-transfer" id="vmResolveDuplicateBtn" style="display:none" onclick="openDuplicatePaymentTransferFromVerify()">Resolve duplicate</button>
-      <button class="btn btn-p" id="vmConfirmBtn" onclick="verifyAndConfirm()">✅ Received — Confirm</button>
+      <button class="btn btn-p" id="vmConfirmBtn" onclick="verifyAndConfirm()">Confirm Payment</button>
       <button class="btn btn-g" id="vmResolvedClose" style="display:none" onclick="closeVerifyModal()">Close</button>
     </div>
   </div>
@@ -8244,6 +8244,14 @@ function bookingQuickConfirmIssue(b) {
   return '';
 }
 function bookingQuickConfirmButton(b, mobile = false) {
+  if (b && ['pending','verifying'].includes(String(b.status || '').toLowerCase()) && isDigitalPayment(b.paymentMethod)) {
+    const actionRef = b.primaryRef || b.ref;
+    const items = b.allItems?.length ? b.allItems : b.items?.length ? b.items : [b];
+    if (!items.some(item => !!item.receiptImageUrl)) {
+      return '<span class="booking-review-wait">Awaiting Receipt</span>';
+    }
+    return `<button type="button" class="btn btn-sm booking-quick-confirm${mobile?' mb-book-quick-confirm':''}" aria-label="${esc(`View payment for ${b.displayRef || actionRef}`)}" onclick="openVerifyModal('${jsArg(actionRef)}')">View Payment</button>`;
+  }
   if (bookingQuickConfirmIssue(b)) return '';
   const actionRef = b.primaryRef || b.ref;
   const courtCount = Array.isArray(b.items) ? b.items.length : 1;
