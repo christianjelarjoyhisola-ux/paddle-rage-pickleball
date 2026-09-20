@@ -578,6 +578,7 @@ function _bookingEmailPayload(b) {
     downpayment: b.paymentStatus === 'paid' ? Number(b.total || 0) : (b.downpayment || Math.round((b.total || 0) * 0.5)),
     hostBooking: !!b.hostBooking,
     balanceDueAt: b.balanceDueAt || null,
+    balanceGraceGrantedAt: b.balanceGraceGrantedAt || null,
     remainingBalance: b.paymentStatus === 'paid' ? 0 : Math.max(0, Number(b.total || 0) - Number(b.downpayment || 0)),
     contactNumber: b.contactNumber,
     bookingItems: items.map(item => ({
@@ -682,6 +683,7 @@ function rowToBooking(r) {
     bookingFeeLedgerEligibleSnapshot: !!r.booking_fee_ledger_eligible_snapshot,
     bookingFeeEarnedAt: r.booking_fee_earned_at || null,
     balanceDueAt:  r.balance_due_at || null,
+    balanceGraceGrantedAt: r.balance_grace_granted_at || null,
     forfeitedAt:   r.forfeited_at || null,
     forfeitureReason: r.forfeiture_reason || null,
     hostBooking:   !!r.host_booking,
@@ -1285,6 +1287,17 @@ window.DB = {
     return data || {};
   },
 
+  async reopenForfeitedHostBooking(bookingRef, reason) {
+    const { data, error } = await _sb.rpc('reopen_forfeited_host_booking', { p_booking_ref: bookingRef, p_reason: reason });
+    if (error) throw error;
+    _pbClearFastCache(['bookings']);
+    return data;
+  },
+  async getHostBookingGraceAudit(ref) {
+    const { data, error } = await _sb.from('host_booking_grace_audit').select('*').contains('booking_refs', [ref]).maybeSingle();
+    if (error) throw error;
+    return data;
+  },
   async restoreForfeitedHostBookingAsFullyPaid(bookingRef, reason) {
     const ref = String(bookingRef || '').trim();
     const note = String(reason || '').trim();
@@ -4334,6 +4347,8 @@ window.DB = {
       writeDb(db);
       return { status: 'confirmed', paymentStatus: 'paid', paidAt, refs: [...refs] };
     },
+    async reopenForfeitedHostBooking() { throw new Error('Reopening requires a connected owner account.'); },
+    async getHostBookingGraceAudit() { return null; },
     async restoreForfeitedHostBookingAsFullyPaid(bookingRef, reason) {
       if (String(reason || '').trim().length < 10) throw new Error('Enter a correction reason of at least 10 characters.');
       const db = readDb();

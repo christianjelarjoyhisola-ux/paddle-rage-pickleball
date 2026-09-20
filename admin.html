@@ -8208,6 +8208,8 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true, includeD
     ${b.email && (forfeited || (hasBalance && balanceReviewState === 'clear'))?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Notice':'Balance Reminder'}</button>`:''}
     ${b.status==='confirmed' && b.email && !hasBalance?`<button class="btn btn-sm" style="background:rgba(var(--green-rgb),.12);color:var(--green);border:1px solid rgba(var(--green-rgb),.3)" onclick="resendConfirmationEmail('${jsArg(actionRef)}')">Resend Email</button>`:''}
     ${canRecordManualPayment?`<button class="btn btn-p btn-sm" onclick="updatePaymentStatus('${jsArg(actionRef)}','paid')">Record Fully Paid</button>`:''}
+    ${canCorrectForfeiture && !transferRows.some(row => row.balanceGraceGrantedAt) ? `<button class="btn btn-sm" onclick="reopenForfeitedHostBooking('${jsArg(actionRef)}')">Reopen — Give 24 Hours</button>` : ''}
+    ${transferRows.some(row => row.balanceGraceGrantedAt) && ['owner','court_owner'].includes(String(sess?.role || '')) ? `<button class="btn btn-sm" onclick="showHostGraceRecord('${jsArg(actionRef)}')">Reopening Record</button>` : ''}
     ${canCorrectForfeiture?`<button class="btn btn-p btn-sm" onclick="restoreForfeitedHostBooking('${jsArg(actionRef)}')">Restore Fully Paid</button>`:''}
     ${transferredOut ? '<span class="bdg bdg-x" title="Payment-transfer source records stay cancelled permanently">CANCELLED · AUDIT LOCKED</span>' : balanceReviewState === 'pending' ? '' : `<select class="fi" style="padding:4px 7px;font-size:.76rem;width:auto" ${forfeited?'disabled title="Forfeited records are permanent"':balanceReviewLocked?'disabled title="Balance review status is unavailable"':''} onchange="updateStatus('${jsArg(actionRef)}',this.value)">
       ${b.status==='mixed'?'<option value="mixed" selected disabled>Mixed</option>':''}
@@ -8315,7 +8317,8 @@ function bookingAmountSummaryHtml(b) {
       : b.hostBooking && b.paymentStatus === 'downpayment_paid'
         ? `<div class="amount-down">${fmt(paid)} paid · ${fmt(balance)} balance</div>`
         : `<div class="amount-down">${fmt(Number(b.downpayment || 0))} payment requested</div>`;
-  return `<div class="amount-stack"><div class="amount-main">${fmt(total)}</div>${detail}
+  const reopened = (b.items || [b]).some(row => row.balanceGraceGrantedAt) && !forfeited && b.paymentStatus === 'downpayment_paid';
+  return `<div class="amount-stack">${reopened ? '<div class="amount-down">Reopened · Balance Due</div>' : ''}<div class="amount-main">${fmt(total)}</div>${detail}
     ${pendingBalance ? '<div class="booking-review-wait">Awaiting owner verification</div>' : deadline && balance > 0 ? `<div class="amount-deadline ${esc(state.code || '')}">${forfeited?'Forfeited':'Due'} ${esc(window.BookingBalance.formatDeadline(deadline))}${state.label && !forfeited ? ` · ${esc(state.label)}` : ''}</div>` : ''}
     ${b.hostBooking ? `<div style="font-size:.7rem;color:var(--muted);font-weight:700">Host: ${esc(b.hostName || b.hostEmail || 'Open Play Host')}</div>` : ''}
     ${b.gcashRef ? `<div class="amount-ref">Ref: <code>${esc(b.gcashRef)}</code></div>` : ''}${duplicatePaymentRefBadge(b)}</div>`;
@@ -10786,6 +10789,28 @@ async function updatePaymentStatus(ref, status) {
   }
   await renderBookings();
   renderDash();
+}
+
+async function reopenForfeitedHostBooking(ref) {
+  if (!['owner','court_owner'].includes(String(sess?.role || ''))) { toast('Only owners can reopen a forfeited booking.', 'err'); return; }
+  const reason = prompt('Internal record only: why are you giving this booking another chance? (At least 10 characters)');
+  if (reason === null) return;
+  if (reason.trim().length < 10) { toast('Enter an internal reason of at least 10 characters.', 'err'); return; }
+  if (!confirm('Reopen every court in this booking for up to 24 hours from now, ending sooner if play starts?\n\nThe deposit stays credited and the balance remains due. This is allowed once, only if all original slots are available. The reason stays internal.')) return;
+  try {
+    const result = await DB.reopenForfeitedHostBooking(ref, reason.trim());
+    toast('Booking reopened. Balance due ' + window.BookingBalance.formatDeadline(new Date(result.balanceDueAt)));
+    await renderBookings(); renderDash();
+  } catch (error) { toast(error?.message || 'Could not reopen booking.', 'err'); }
+}
+async function showHostGraceRecord(ref) {
+  try {
+    const record = await DB.getHostBookingGraceAudit(ref);
+    if (!record) { toast('No reopening record found.', 'err'); return; }
+    const formatDate = value => value ? window.BookingBalance.formatDeadline(new Date(value)) : 'Not recorded';
+    const history = (record.prior_state || []).map(row => row.ref + '\nPrevious deadline: ' + formatDate(row.deadline) + '\nForfeited: ' + formatDate(row.forfeitedAt) + '\nReason: ' + (row.reason || 'Not recorded')).join('\n\n');
+    alert('Internal reopening record\n\nReason: ' + record.reason + '\nGranted by: ' + record.actor_role + ' (' + record.actor_user_id + ')\nGranted: ' + formatDate(record.granted_at) + '\nNew deadline: ' + formatDate(record.deadline_at) + '\n\nOriginal forfeiture:\n' + history);
+  } catch (error) { toast(error?.message || 'Could not load internal record.', 'err'); }
 }
 
 async function restoreForfeitedHostBooking(ref) {
