@@ -19,7 +19,30 @@ export function parseGotymeToGcashReceipt(
   rawText: string,
   options: { typedReference?: string } = {},
 ): BankToGcashReceiptParse & { provider: "gotyme" } {
-  return parseBankToGcashReceipt(rawText, options, GOTYME_CONFIG) as
+  // Repair only the bounded GoTyme details block. Customer input never
+  // supplies missing OCR evidence.
+  let text = rawText;
+  const lines = rawText.split(/\r?\n/).map((line) => line.trim());
+  const start = lines.findIndex((line) => /^Trace ID$/i.test(line));
+  const date = lines.findIndex((line, index) =>
+    index > start &&
+    /^\d{1,2} [A-Za-z]+ \d{4} at \d{1,2}:\d{2}(?: [AP]M)?$/i.test(line)
+  );
+  if (start >= 0 && date > start && date - start <= 12) {
+    const block = lines.slice(start, date + 1);
+    const refs = block.filter((line) => /^ITO\d{15}$/i.test(line));
+    const traces = block.filter((line) => /^\d{6}$/.test(line));
+    if (
+      refs.length === 1 && traces.length === 1 &&
+      refs[0].endsWith(traces[0]) &&
+      block.some((line) => /^Reference No\.$/i.test(line))
+    ) {
+      text = text.replace(/^Reference No\.\s*$/im, `Reference No. ${refs[0]}`)
+        .replace(/^Trace ID\s*$/im, `Trace ID ${traces[0]}`);
+    }
+  }
+  text = text.replace(/^instaFay$/im, "instaPay");
+  return parseBankToGcashReceipt(text, options, GOTYME_CONFIG) as
     & BankToGcashReceiptParse
     & { provider: "gotyme" };
 }

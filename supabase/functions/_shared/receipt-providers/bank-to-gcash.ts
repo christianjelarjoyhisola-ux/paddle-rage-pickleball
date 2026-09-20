@@ -85,6 +85,7 @@ export type BankRecipientComparison = {
   name: GcashNameComparison;
   account:
     | "exact"
+    | "suffix_exact"
     | "ocr_compatible"
     | "mismatch"
     | "missing"
@@ -493,7 +494,13 @@ function parseRecipient(lines: string[]): BankReceiptRecipient {
     break;
   }
   const start = lineIndex ?? 0;
-  const block = lines.slice(start, Math.min(lines.length, start + 5));
+  const end = lines.findIndex((line, index) =>
+    index > start && /^from\b/i.test(line)
+  );
+  const block = lines.slice(
+    start,
+    Math.min(end < 0 ? lines.length : end, start + 5),
+  );
   const blockText = block.join("\n");
   const fullPhone = blockText.match(
     /(?:\+?63|0)?9(?:[\s-]*\d){9}\b/,
@@ -508,6 +515,9 @@ function parseRecipient(lines: string[]): BankReceiptRecipient {
   const phoneLast4 = phoneNormalized?.slice(-4) || maskedPhone?.[1] ||
     labeledLast4?.[1] || null;
   const accountRaw =
+    block.find((line) =>
+      /^[*•.]{3,}[A-Z0-9]{4,}$/i.test(line) && /[A-WYZ]/i.test(line)
+    ) ||
     block.find((line) =>
       /\b(?:mobile|account)\s*(?:number|no\.?|#)?\b/i.test(line)
     ) || fullPhone || null;
@@ -636,7 +646,18 @@ function compareRecipient(
   return {
     phone,
     name,
-    account: compareDestinationAccount(recipient.accountRaw, expectedAccount),
+    account: provider === "gotyme" &&
+        /^\*{3,}[A-Z0-9]{4,}$/i.test(recipient.accountRaw || "") &&
+        normalizeDestinationAccount(expectedAccount).length >= 12 &&
+        normalizeDestinationAccount(expectedAccount).replace(/O/g, "0")
+          .endsWith(
+            normalizeDestinationAccount(recipient.accountRaw || "").replace(
+              /O/g,
+              "0",
+            ),
+          )
+      ? "suffix_exact"
+      : compareDestinationAccount(recipient.accountRaw, expectedAccount),
   };
 }
 
@@ -817,7 +838,9 @@ export function parseBankToGcashReceipt(
   // failure status is also present; the verifier still requires all other
   // receipt, recipient, amount, time, reference, and replay checks.
   const gotymeSentStatus = config.provider === "gotyme" &&
-    lines.some((line) => /^sent[!.]?$/i.test(line));
+    lines.some((line) =>
+      /^sent[!.]?$/i.test(line) || /^transferred[!.]?$/i.test(line)
+    );
   const issues: string[] = [];
   if (!officialMaribank && primary.ambiguous) {
     issues.push("AMBIGUOUS_REFERENCE");
@@ -939,9 +962,16 @@ export function verifyBankToGcashReceipt(
     }
   }
 
-  const destinationAccountMatches = parsed.provider === "maribank" &&
-    ["exact", "ocr_compatible"].includes(recipientComparison.account);
-  if (recipientComparison.account === "mismatch") {
+  const destinationAccountMatches = (parsed.provider === "maribank" &&
+    ["exact", "ocr_compatible"].includes(recipientComparison.account)) ||
+    (parsed.provider === "gotyme" &&
+      recipientComparison.account === "suffix_exact" &&
+      recipientComparison.name === "exact");
+  if (
+    recipientComparison.account === "mismatch" &&
+    (parsed.indicators.officialTransactionReceipt ||
+      /^\*{3,}[A-Z0-9]{4,}$/i.test(parsed.recipient.accountRaw || ""))
+  ) {
     addUnique(flags, "WRONG_GCASH_ACCOUNT");
   }
   if (recipientComparison.phone === "mismatch") {

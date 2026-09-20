@@ -2836,7 +2836,7 @@ Deno.serve(async (req) => {
             ].filter(Boolean)
             : [],
           expectedRecipientAccount: provider === "bdopay" || provider === "bpi" ||
-              provider === "maribank"
+              provider === "maribank" || provider === "gotyme"
             ? settings.gcash_qr_receipt_destination_token ||
               settings.bdopay_receipt_destination_token || ""
             : "",
@@ -3132,6 +3132,9 @@ Deno.serve(async (req) => {
       : providerVerification?.provider === "bpi"
       ? providerVerification.recipientComparison === "exact" &&
         providerVerification.recipientAccountComparison === "exact"
+      : providerVerification?.provider === "gotyme" &&
+          providerVerification.recipientComparison.account === "suffix_exact"
+      ? providerVerification.recipientComparison.name === "exact"
       : providerVerification?.provider === "maribank"
       ? (["exact", "last4_only"].includes(
           providerVerification.recipientComparison.phone,
@@ -3306,7 +3309,7 @@ Deno.serve(async (req) => {
           : expectedNumber || null,
       expectedReceiverName: expectedName || null,
       expectedReceiverAccount: provider === "bdopay" || provider === "bpi" ||
-          provider === "maribank"
+          provider === "maribank" || provider === "gotyme"
         ? settings.gcash_qr_receipt_destination_token ||
           settings.bdopay_receipt_destination_token || null
         : null,

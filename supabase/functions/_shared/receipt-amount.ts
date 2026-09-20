@@ -478,6 +478,21 @@ function collectCandidates(
       }
       if (boundaryIndex < 0) continue;
 
+      // Vision may emit the left-column reference before the right-column
+      // amounts. Accept only the short tail ending at the receipt timestamp;
+      // advertisements below that timestamp cannot become payment evidence.
+      const tail = lines.slice(boundaryIndex + 1, boundaryIndex + 9);
+      const timestampOffset = tail.findIndex((line) =>
+        /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}\s+\d{1,2}:\d{2}\s*[AP]M$/i
+          .test(line.trim())
+      );
+      if (
+        timestampOffset >= 0 && gcashSentViaAnchors.length === 1 &&
+        gcashTotalAmountAnchors.length === 1
+      ) {
+        boundaryIndex += timestampOffset + 1;
+      }
+
       const blockDisplays = new Map<
         string,
         {
