@@ -3,6 +3,7 @@ import {
   type BankToGcashReceiptParse,
   type BankReceiptVerificationEvidence,
   type ReceiptVerificationContext,
+  type ReceiptDedupeKey,
   parseTimestamp,
 } from "./bank-to-gcash.ts";
 
@@ -107,12 +108,23 @@ export function verifyUnionbankToGcashReceipt(
   if (!Number.isFinite(age) || receipt.timestamp.completeness !== "date_time") flags.push("TIME_UNREADABLE");
   else if (age < -context.earlyToleranceMinutes || age > context.paymentWindowMinutes) flags.push("TIME_EXPIRED");
   if (!receipt.timestamp.date || receipt.timestamp.date !== context.bookingStartedDate) flags.push("DATE_NOT_TODAY");
-  // The six-digit InstaPay trace is not globally unique. Replay protection uses
-  // the bank reference; retain the trace as corroborating/audit evidence only.
+  // Keep the UB reference as the primary identity. A short InstaPay trace can
+  // repeat across dates/providers, so check it independently within this bank
+  // and receipt date. A collision queues review through the shared replay guard.
+  const dedupeKeys: ReceiptDedupeKey[] = receipt.reference.value ? [{
+    key: `unionbank:${receipt.reference.value}`,
+    providerKey: "unionbank", duplicateFlag: "DUPLICATE_REF",
+  }] : [];
+  if (receipt.railReference.value && receipt.timestamp.date &&
+      receipt.timestamp.completeness === "date_time") {
+    dedupeKeys.push({
+      key: `unionbank_instapay:${receipt.timestamp.date}:${receipt.railReference.value}`,
+      providerKey: "unionbank_instapay", duplicateFlag: "DUPLICATE_INSTAPAY_REF",
+    });
+  }
   return {
     provider: "unionbank", destinationProvider: "gcash", parserVersion: "unionbank_to_gcash_v1",
     flags: [...new Set(flags)], recipientComparison: { name, phone: "missing", account: "missing" },
-    dedupeKeys: receipt.reference.value ? [{ key: `unionbank:${receipt.reference.value}`,
-      providerKey: "unionbank", duplicateFlag: "DUPLICATE_REF" }] : [],
+    dedupeKeys,
   };
 }

@@ -37,8 +37,30 @@ Deno.test("UnionBank supplied layout uses dedicated parser and verifier", () => 
   assert(parsed.receipt.timestamp.instant === "2026-09-20T13:53:00.000Z", "Manila time");
   const result = verify();
   assert(result.flags.length === 0, JSON.stringify(result.flags));
-  assert(result.dedupeKeys.length === 1 && result.dedupeKeys[0].key === "unionbank:UB678039", "bank replay protection, no short global trace");
+  assert(result.dedupeKeys.length === 2 && result.dedupeKeys[0].key === "unionbank:UB678039", "UB remains the primary replay identity");
+  assert(result.dedupeKeys[1].key === "unionbank_instapay:2026-09-20:748809", "independent date-scoped trace");
   assert(result.provider === "unionbank" && result.recipientComparison.account === "missing", "never claim account match");
+});
+Deno.test("UnionBank duplicate trace is detected even with a different UB reference", () => {
+  const original = verify();
+  const other = verify(RECEIPT.replace("UB678039", "UB678040"), { typedReference: "UB678040" });
+  const claimed = new Set(original.dedupeKeys.map(k => k.key));
+  const duplicateFlags = other.dedupeKeys.filter(k => claimed.has(k.key)).map(k => k.duplicateFlag);
+  assert(other.flags.length === 0, "otherwise clean evidence");
+  assert(duplicateFlags.length === 1 && duplicateFlags[0] === "DUPLICATE_INSTAPAY_REF", "trace duplicate alone queues review");
+  const sameUb = verify(RECEIPT.replace("748809", "748810"));
+  assert(sameUb.dedupeKeys.filter(k => claimed.has(k.key))[0]?.duplicateFlag === "DUPLICATE_REF", "UB duplicates remain protected");
+});
+Deno.test("UnionBank trace keys preserve date boundaries and require a readable timestamp", () => {
+  const nextDay = verify(RECEIPT.replace("Sep 20", "Sep 21"), {
+    bookingStartedAt: "2026-09-21T13:50:00Z", bookingStartedDate: "2026-09-21",
+  });
+  assert(nextDay.dedupeKeys[1].key === "unionbank_instapay:2026-09-21:748809", "trace date scope");
+  for (const text of [RECEIPT.replace("748809", ""), RECEIPT.replace("09:53 PM", "09:53")]) {
+    const result = verify(text);
+    assert(result.dedupeKeys.every(k => k.providerKey !== "unionbank_instapay"), "no fabricated trace key");
+    assert(result.flags.length > 0, "incomplete evidence stays in review");
+  }
 });
 Deno.test("UnionBank supports inline labels and split timestamps", () => {
   for (const text of [RECEIPT.replace("Reference Number\nUB", "Reference Number: UB"),
