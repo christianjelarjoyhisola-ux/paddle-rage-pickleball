@@ -158,6 +158,60 @@ Deno.test("BPI verifier rejects stale, premature, and wrong-date evidence", () =
   );
 });
 
+Deno.test("BPI September receipt accepts semicolon date separator and preserves seconds", () => {
+  const receipt = RECEIPT
+    .replace(
+      "Wednesday, Sep 02, 2026, 07:08:34 AM",
+      "Saturday, Sep 19 2026; 12:48:47 PM",
+    )
+    .replace("1624507073805", "1626212570530")
+    .replace("099408", "480849")
+    .replace("3,600.00", "1,600.00");
+  const context = {
+    ...CONTEXT,
+    typedReference: "1626212570530",
+    expectedAmount: 1600,
+    bookingStartedAt: "2026-09-19T04:46:00.000Z",
+    bookingStartedDate: "2026-09-19",
+  };
+  const parsed = parseBpiToGcashReceipt(receipt, {
+    typedReference: context.typedReference,
+  });
+  assert(
+    parsed.timestamp.instant === "2026-09-19T04:48:47.000Z",
+    "correct noon timestamp including seconds",
+  );
+  assert(
+    flagsFor(receipt, context).length === 0,
+    "reported receipt passes evidence checks",
+  );
+  for (
+    const invalid of [
+      "Sep 31 2026; 12:48:47 PM",
+      "Sep 19 2026; 13:48:47 PM",
+      "Sep 19 2026; 12:60:47 PM",
+      "Sep 19 2026; 12:48:99 PM",
+    ]
+  ) {
+    assertFlag(
+      receipt.replace("Sep 19 2026; 12:48:47 PM", invalid),
+      "TIME_UNREADABLE",
+      context,
+    );
+  }
+  assertFlag(
+    receipt.replace("12:48:47 PM", "01:05:47 PM"),
+    "TIME_EXPIRED",
+    context,
+  );
+  assertFlag(
+    receipt.replace("Sep 19 2026;", "Sep 18 2026;"),
+    "DATE_NOT_TODAY",
+    context,
+  );
+  assertFlag(receipt.replace("(GMT +8)", ""), "TIMEZONE_UNREADABLE", context);
+});
+
 Deno.test("BPI verifier requires successful BPI and InstaPay evidence only", () => {
   assertFlag(
     RECEIPT.replace("Transfer successful!", "Transfer processing"),
