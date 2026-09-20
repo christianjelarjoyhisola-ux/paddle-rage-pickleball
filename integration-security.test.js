@@ -860,6 +860,36 @@ test('pending digital bookings open receipt review without confirming payment', 
   assert.equal(render({ ...booking, status: 'cancelled' }), '');
 });
 
+test('payment review shows loading, blocks repeated clicks, and restores the button after failure', async () => {
+  let release;
+  let calls = 0;
+  const attrs = new Map([['aria-label', 'View payment for booking']]);
+  const trigger = { innerHTML: 'View Payment', disabled: false,
+    closest: () => trigger,
+    getAttribute: key => attrs.get(key) ?? null,
+    setAttribute: (key, value) => attrs.set(key, value),
+    removeAttribute: key => attrs.delete(key),
+  };
+  const notices = [];
+  const open = new Function('document', 'getBookingGroupByRef', 'toast',
+    `let _verifyModalOpening = false, _vmOpenToken = 0, _verifyModalLastFocus;
+    ${functionSource(read('admin.html'), 'openVerifyModal')}; return openVerifyModal;`
+  )({ activeElement: trigger }, () => { calls++; return new Promise((_, reject) => { release = reject; }); }, message => notices.push(message));
+  const pending = open('booking');
+  assert.equal(trigger.disabled, true);
+  assert.equal(attrs.get('aria-busy'), 'true');
+  assert.match(trigger.innerHTML, /payment-loading-spinner/);
+  await open('booking');
+  assert.equal(calls, 1);
+  release(new Error('Network unavailable'));
+  await pending;
+  assert.equal(trigger.disabled, false);
+  assert.equal(trigger.innerHTML, 'View Payment');
+  assert.equal(attrs.has('aria-busy'), false);
+  assert.equal(attrs.get('aria-label'), 'View payment for booking');
+  assert.match(notices[0], /Please try again/);
+});
+
 test('booking confirmation adapter is not served behind the obsolete receipt-stage asset token', () => {
   const client = read('supabase-config.js');
   assert.match(

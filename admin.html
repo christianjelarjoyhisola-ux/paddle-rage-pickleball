@@ -798,6 +798,8 @@ tr:hover td { background: var(--bg2); }
 }
 .booking-quick-confirm:hover { transform:translateY(-1px); box-shadow:0 9px 22px rgba(var(--green-rgb),.2); }
 .booking-quick-confirm:disabled { opacity:.68; cursor:wait; transform:none; }
+.payment-loading-spinner { display:inline-block; width:14px; height:14px; flex:none; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:pb-spin .75s linear infinite; vertical-align:middle; margin-right:7px; }
+@media (prefers-reduced-motion:reduce) { .payment-loading-spinner { animation:none; } }
 .mb-book-quick-confirm { width:100%; min-height:44px; margin-top:10px; justify-content:center; }
 .booking-section-toolbar { margin-bottom: 12px; }
 .booking-quick-nav {
@@ -10950,6 +10952,7 @@ async function updateStatus(ref, status) {
 }
 
 let _verifyModalLastFocus = null;
+let _verifyModalOpening = false;
 
 function bookingPaymentIsResolved(b) {
   const paymentState = String(b?.paymentStatus || '').toLowerCase();
@@ -10963,6 +10966,20 @@ function canManuallyResolvePayment() {
 }
 
 async function openVerifyModal(ref, { returnFocus = null } = {}) {
+  if (_verifyModalOpening) return;
+  _verifyModalOpening = true;
+  const trigger = (returnFocus || document.activeElement)?.closest?.('button');
+  const idleHtml = trigger?.innerHTML;
+  const idleDisabled = trigger?.disabled;
+  const idleBusy = trigger?.getAttribute('aria-busy');
+  const idleLabel = trigger?.getAttribute('aria-label');
+  if (trigger) {
+    trigger.disabled = true;
+    trigger.setAttribute('aria-busy', 'true');
+    trigger.setAttribute('aria-label', 'Loading payment…');
+    trigger.innerHTML = '<span class="payment-loading-spinner" aria-hidden="true"></span><span role="status">Loading payment…</span>';
+  }
+  try {
   const openToken = ++_vmOpenToken;
   _verifyModalLastFocus = returnFocus || document.activeElement;
   const b = await getBookingGroupByRef(ref);
@@ -11009,6 +11026,19 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   overlay.setAttribute('aria-hidden', 'false');
   overlay.classList.add('show');
   requestAnimationFrame(() => overlay.querySelector('.verify-payment-modal')?.focus());
+  } catch (error) {
+    toast('Could not open payment. Please try again.', 'err');
+  } finally {
+    _verifyModalOpening = false;
+    if (trigger) {
+      trigger.innerHTML = idleHtml;
+      trigger.disabled = idleDisabled;
+      if (idleBusy == null) trigger.removeAttribute('aria-busy');
+      else trigger.setAttribute('aria-busy', idleBusy);
+      if (idleLabel == null) trigger.removeAttribute('aria-label');
+      else trigger.setAttribute('aria-label', idleLabel);
+    }
+  }
 }
 
 function closeVerifyModal({ restoreFocus = true } = {}) {
