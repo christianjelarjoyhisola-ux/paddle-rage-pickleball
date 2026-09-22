@@ -23,6 +23,7 @@ async function fail(sql, args, pattern) {
       const sql = fs.readFileSync('supabase/migrations/20260922020000_premium_vouchers.sql', 'utf8').replace(/^begin;\s*/, '').replace(/commit;\s*$/, '');
       await db.query(sql);
       await db.query(fs.readFileSync('supabase/migrations/20260922021000_voucher_campaign_list.sql', 'utf8').replace(/^begin;\s*/, '').replace(/commit;\s*$/, ''));
+      await db.query(fs.readFileSync('supabase/migrations/20260922022000_voucher_dashboard_booking_access.sql', 'utf8').replace(/^begin;\s*/, '').replace(/commit;\s*$/, ''));
     }
     await db.query("select set_config('request.jwt.claim.role','service_role',true)");
     await db.query("update public.settings set value='1' where key='vouchers_enabled'");
@@ -40,6 +41,18 @@ async function fail(sql, args, pattern) {
       return (await db.query("select public.voucher_admin($1,'create',$2) v", [owner, data])).rows[0].v;
     };
     const checkout = async (action, ref, code, identity = contact) => (await db.query('select public.voucher_checkout($1,$2,$3,$4,null,$5) v', [action, ref, code, token, identity])).rows[0].v;
+    await hold('VOUCHER-OPERATOR-HOLD', ['5']);
+    await db.query("update public.bookings set customer_access_token_hash=null where ref='VOUCHER-OPERATOR-HOLD'");
+    if(process.argv.includes('--verify-access-fix')) {
+      await fail("select public.voucher_checkout('status','VOUCHER-OPERATOR-HOLD',null,null,$1,'{}')", [owner], /access denied/);
+      console.log('REPRODUCED: signed-in owner normal court checkout rejected by voucher status check.');
+      await db.query(fs.readFileSync('supabase/migrations/20260922022000_voucher_dashboard_booking_access.sql', 'utf8').replace(/^begin;\s*/, '').replace(/commit;\s*$/, ''));
+    }
+    const operatorQuote=(await db.query("select public.voucher_checkout('status','VOUCHER-OPERATOR-HOLD',null,null,$1,'{}') v",[owner])).rows[0].v;
+    assert.equal(operatorQuote.total,1200);
+    assert.equal(operatorQuote.code,null);
+    await fail("select public.voucher_checkout('status','VOUCHER-OPERATOR-HOLD',null,null,null,'{}')",[],/access denied/);
+    await fail("select public.voucher_checkout('status','VOUCHER-OPERATOR-HOLD',null,null,'00000000-0000-0000-0000-000000000001','{}')",[],/access denied/);
     await campaign('TEST-FREE', 'percent', 100, { maxUses: 1 });
     await hold('VOUCHER-TEST-A', ['6']);
     let q = await checkout('apply', 'VOUCHER-TEST-A', 'TEST-FREE');
