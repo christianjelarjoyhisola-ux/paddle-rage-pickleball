@@ -358,8 +358,8 @@ test('player summary and confirmation show the fee-free all-in price only', () =
   const stepThree = sourceBetween('<!-- ── STEP 3: YOUR DETAILS ── -->', '<!-- ── STEP 5: PAYMENT ── -->');
   assert.match(stepThree, /class="wiz-summary wiz-summary--booking"/, 'Step 3 must use one scoped booking summary card');
   assert.match(page, /\.wiz-summary--booking \.pbs-price-card\s*\{[^}]*border\s*:\s*0;[^}]*background\s*:\s*transparent;/s, 'the nested price shell must be visually flattened');
-  assert.match(summaries, /No additional booking fees/);
-  assert.match(summaries, /pbs-free-badge">Included/);
+  assert.match(summaries, /Booking fee/);
+  assert.match(summaries, /pbs-free-badge">Free/);
   assert.match(summaries, /Booking total/);
   assert.match(summaries, />Total</);
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
@@ -371,8 +371,8 @@ test('player summary and confirmation show the fee-free all-in price only', () =
 
   const confirmation = sourceBetween('<section class="inv-payment-card', '</section>');
   assert.match(confirmation, /inv-fee-free/);
-  assert.match(confirmation, /No additional booking fees/);
-  assert.match(confirmation, />Included</);
+  assert.match(confirmation, /Booking fee/);
+  assert.match(confirmation, />Free</);
   assert.match(confirmation, /id="iRentalBreakdown"/);
 
   const submission = sourceBetween('async function submitBooking(e)', 'function resetForm');
@@ -404,6 +404,6 @@ test('pricing surfaces never present the internal allocation as an add-on', () =
   const summaries = sourceBetween('function hostBookingItemsSummaryHtml', 'async function refreshBookingItemViews');
   assert.doesNotMatch(slotPricing, /Final Prices|Live Total|csl-final/i);
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
-  assert.match(summaries, /No additional booking fees/);
-  assert.match(summaries, /pbs-free-badge">Included/);
+  assert.match(summaries, /Booking fee/);
+  assert.match(summaries, /pbs-free-badge">Free/);
 });

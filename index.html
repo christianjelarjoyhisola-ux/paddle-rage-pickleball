@@ -4266,7 +4266,7 @@ try {
               <div class="inv-amt-total" id="iAmountLabel">Booking Total</div>
               <div class="inv-amt-val" id="iTot">₱0.00</div>
             </div>
-            <div class="inv-fee-free"><span>No additional booking fees</span><strong>Included</strong></div>
+            <div class="inv-fee-free"><span>Booking fee</span><strong>Free</strong></div>
           </div>
           <div class="inv-rental-breakdown" id="iRentalBreakdown" aria-label="Court rental calculation"></div>
           <div class="inv-payment-meta">
@@ -5513,7 +5513,7 @@ function hostBookingItemsSummaryHtml(items = uniqueBookingSelections(activeBooki
     <div class="premium-booking-summary">
       <div class="pbs-price-card">
         ${bookingRentalBreakdownHtml(items, { itemizeSchedule: true, dateFormatter: fmtDc })}
-        <div class="pbs-price-row fee-free"><span>No additional booking fees</span><strong class="pbs-free-badge">Included</strong></div>
+        <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
         ${window.VoucherCheckout?.summary() || ''}<div class="pbs-price-row total"><span>Booking total</span><strong>${fmt(total)}</strong></div>
         <div class="pbs-price-row due"><span>Reservation payment today</span><strong>${fmt(dueToday)}</strong></div>
         <div class="pbs-price-row balance"><span>Remaining balance</span><strong>${fmt(balance)}</strong></div>
@@ -5529,7 +5529,7 @@ function bookingItemsSummaryHtml(items = uniqueBookingSelections(activeBookingIt
     <div class="premium-booking-summary">
       <div class="pbs-price-card">
         ${bookingRentalBreakdownHtml(items, { itemizeSchedule: true, dateFormatter: fmtD })}
-        <div class="pbs-price-row fee-free"><span>No additional booking fees</span><strong class="pbs-free-badge">Included</strong></div>
+        <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
         ${window.VoucherCheckout?.summary() || ''}<div class="pbs-price-row total"><span>Total</span><strong>${fmt(total)}</strong></div>
       </div>
     </div>
@@ -7974,7 +7974,7 @@ function updatePriceLegacy() {
   if ($('pRate')) $('pRate').textContent = rateLabel;
   if ($('pCourtFee')) $('pCourtFee').textContent = fmt(total);
   if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = '';
-  if ($('pSvcFee'))    $('pSvcFee').textContent = 'Included';
+  if ($('pSvcFee'))    $('pSvcFee').textContent = 'FREE';
   if ($('pTot')) $('pTot').textContent  = fmt(total);
   if ($('pDown')) $('pDown').textContent = fmt(payAmt);
 
@@ -8013,7 +8013,7 @@ function updatePrice() {
   if ($('pRate')) $('pRate').textContent = bookingItemsRateLabel(items);
   if ($('pCourtFee')) $('pCourtFee').textContent = fmt(total);
   if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = '';
-  if ($('pSvcFee'))    $('pSvcFee').textContent = 'Included';
+  if ($('pSvcFee'))    $('pSvcFee').textContent = 'FREE';
   if ($('pTot')) $('pTot').textContent  = fmt(total);
   if ($('pDown')) $('pDown').textContent = fmt(payAmt);
 

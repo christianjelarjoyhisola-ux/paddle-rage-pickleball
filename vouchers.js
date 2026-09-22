@@ -21,13 +21,29 @@
   }
   $('weekdays').innerHTML = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d,i)=>`<label><input type="checkbox" name="weekdays" value="${i}" checked>${d}</label>`).join('');
   const phDate = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date()).replace(' ','T');
-  $('campaignForm').elements.startsAt.value = phDate;
+  const fields = $('campaignForm').elements;
+  const hourLabel = hour => hour === 24 ? 'Midnight · next day' : (hour % 12 || 12) + (hour < 12 ? ' AM' : ' PM');
+  function hourOptions(start, end) { return Array.from({length:end-start+1},(_,i)=>{const hour=start+i;return '<option value="'+hour+'">'+hourLabel(hour)+'</option>';}).join(''); }
+  for (const name of ['startHour','endHour','hourFrom']) fields[name].innerHTML = hourOptions(0,23);
+  fields.hourTo.innerHTML = hourOptions(1,24);
+  fields.startsAt.value = phDate.slice(0,10);
+  fields.startHour.value = String(Number(phDate.slice(11,13)));
+  fields.endHour.value = '23';
+  fields.hourTo.value = '24';
+  fields.mode.addEventListener('change',()=>{
+    const single=fields.mode.value==='single';
+    $('batchSizeField').hidden=!single;
+    $('customCodeField').hidden=single;
+    if(single) fields.code.value='';
+  });
   $('campaignForm').addEventListener('submit', async event => {
     event.preventDefault(); const form=event.currentTarget; const button=form.querySelector('button[type=submit]'); button.disabled=true;
     try {
       const fd=new FormData(form), data=Object.fromEntries(fd);
       data.courtIds=fd.getAll('courtIds'); data.bookingTypes=fd.getAll('bookingTypes'); data.weekdays=fd.getAll('weekdays').map(Number);
-      data.startsAt += ':00+08:00'; data.endsAt += ':00+08:00';
+      data.startsAt += 'T'+String(data.startHour).padStart(2,'0')+':00:00+08:00';
+      data.endsAt += 'T'+String(data.endHour).padStart(2,'0')+':00:00+08:00';
+      if(data.endsAt<=data.startsAt) throw new Error('End date and time must be after the start.');
       data.acceptOwnerFees=fd.has('acceptOwnerFees'); data.singleUse=data.mode==='single';
       if (!data.singleUse) data.batchSize=1;
       if (data.kind==='percent' && Number(data.value)>100) throw new Error('Percentage discounts cannot exceed 100%.');
