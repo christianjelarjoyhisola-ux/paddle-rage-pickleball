@@ -6,6 +6,72 @@ const admin = fs.readFileSync('admin.html', 'utf8');
 const hostBalanceAdmin = fs.readFileSync('host-balance-admin.js', 'utf8');
 const balanceEdge = fs.readFileSync('supabase/functions/host-booking-balance-payment/index.ts', 'utf8');
 const deadlineEdge = fs.readFileSync('supabase/functions/process-host-balance-deadlines/index.ts', 'utf8');
+
+function initialPaymentHarness(booking, role = 'owner') {
+  const calls = [];
+  const helpers = admin.slice(admin.indexOf('function canReviewHostInitialPayment('), admin.indexOf('function hostPaymentHistoryButton('));
+  const opener = admin.slice(admin.indexOf('async function openHostPaymentHistory('), admin.indexOf('async function openHostPaymentHistoryFromDetails('));
+  const functions = new Function('canManuallyResolvePayment', 'bookingGroupRowsForPaymentGuard', 'isDigitalPayment', 'jsArg', 'getBookingGroupByRef', 'openVerifyModal', 'window', 'toast',
+    `${helpers}\n${opener}\nreturn { button: hostInitialPaymentReviewButton, open: openHostPaymentHistory };`
+  )(
+    () => ['owner', 'court_owner'].includes(role),
+    b => b.allItems || b.items || [b],
+    method => ['bpi', 'gcash', 'unionbank'].includes(method),
+    String,
+    async () => booking,
+    async (ref, options) => calls.push({ kind: 'initial', ref, options }),
+    { HostBalanceAdmin: { openHistoryForBooking: async ref => calls.push({ kind: 'history', ref }) } },
+    message => calls.push({ kind: 'error', message }),
+  );
+  return { ...functions, calls };
+}
+
+const pendingHostDeposit = {
+  hostBooking: true, ref: 'HOST-ROW', primaryRef: 'HOST-PRIMARY',
+  status: 'pending', paymentStatus: 'for_verification', paymentMethod: 'bpi',
+  total: 1200, downpayment: 322.5, receiptImageUrl: 'private/receipt.jpg',
+  receiptStatus: 'manual_review', receiptFlags: ['RECEIVER_NAME_UNREADABLE'],
+};
+
+test('pending host deposits have an initial-payment review action on desktop and mobile', () => {
+  for (const role of ['owner', 'court_owner']) {
+    const h = initialPaymentHarness(pendingHostDeposit, role);
+    for (const mobile of [false, true]) {
+      const html = h.button(pendingHostDeposit, mobile);
+      assert.match(html, /Review &amp; Confirm/);
+      assert.match(html, /openVerifyModal\('HOST-PRIMARY'/);
+      assert.doesNotMatch(html, /quickConfirmBooking|updatePaymentStatus/);
+    }
+  }
+  assert.match(admin, /includePrimaryActions \? hostInitialPaymentReviewButton\(b\)/);
+  assert.match(admin, /mb-book-primary-actions">\$\{hostInitialPaymentReviewButton\(b, true\)\}/);
+});
+
+test('initial-payment review excludes settled, missing-receipt and unauthorized bookings', () => {
+  assert.equal(initialPaymentHarness(pendingHostDeposit, 'staff').button(pendingHostDeposit), '');
+  for (const patch of [
+    { hostBooking: false }, { receiptImageUrl: null }, { status: 'cancelled' },
+    { status: 'confirmed', paymentStatus: 'downpayment_paid' },
+    { paymentStatus: 'paid' }, { paymentStatus: 'rejected' }, { paymentMethod: 'cash' },
+    { allItems: [pendingHostDeposit, { ...pendingHostDeposit, status: 'forfeited' }] },
+  ]) {
+    const b = { ...pendingHostDeposit, ...patch };
+    assert.equal(initialPaymentHarness(b).button(b), '');
+  }
+});
+
+test('Payment History routes an unaccepted host deposit to initial review and preserves focus', async () => {
+  const h = initialPaymentHarness(pendingHostDeposit);
+  const trigger = {};
+  await h.open('HOST-ROW', trigger);
+  assert.deepEqual(h.calls, [{ kind: 'initial', ref: 'HOST-PRIMARY', options: { returnFocus: trigger } }]);
+});
+
+test('accepted host deposits retain the separate balance history and review flow', async () => {
+  const h = initialPaymentHarness({ ...pendingHostDeposit, status: 'confirmed', paymentStatus: 'downpayment_paid' });
+  await h.open('HOST-ROW', {});
+  assert.deepEqual(h.calls, [{ kind: 'history', ref: 'HOST-ROW' }]);
+});
 const visibilityMigration = fs.readFileSync(
   'supabase/migrations/20260831100000_host_balance_admin_visibility.sql',
   'utf8',
@@ -83,7 +149,7 @@ test('separates reservation state from pending balance review on desktop and mob
   assert.match(admin, /balanceReviewState === 'pending' \? '' : `<select/);
   assert.match(admin, /deposit accepted · \$\{fmt\(pendingAmount\)\} submitted/);
   assert.match(admin, /Awaiting owner verification/);
-  assert.match(admin, /<div class="mb-book-primary-actions">\$\{hostBalanceReviewButton\(b, true\)\}\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}\$\{hostInitialPaymentRejectButton\(b, true\)\}\$\{bookingRejectionEmailButton\(b, true\)\}<\/div>/);
+  assert.match(admin, /<div class="mb-book-primary-actions">\$\{hostInitialPaymentReviewButton\(b, true\)\}\$\{hostBalanceReviewButton\(b, true\)\}\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}\$\{hostInitialPaymentRejectButton\(b, true\)\}\$\{bookingRejectionEmailButton\(b, true\)\}<\/div>/);
   assert.match(admin, /b\.hostBooking \? hostPaymentEvidenceHtml\(b\) : receiptBadge\(b\)/);
   assert.match(admin, /<span>Payment status<\/span><span>\$\{bookingPayStateSelect\(b\)\}<\/span>/);
   assert.match(admin, /<span>Payments<\/span><span>\$\{hostPaymentEvidenceHtml\(b\) \|\| 'Not recorded'\}<\/span>/);
@@ -143,7 +209,7 @@ test('retrieves reviewer-only historical host payments without exposing receipt 
 
 test('keeps permanent Payment History and adds Review & Confirm only for pending Payment 2', () => {
   assert.match(admin, /includePrimaryActions \? `\$\{bookingDetailsButton\(b\)\} \$\{hostInitialPaymentRejectButton\(b\)\} \$\{bookingRejectionEmailButton\(b\)\} \$\{hostBalanceReviewButton\(b\)\} \$\{hostPaymentHistoryButton\(b\)\}`/);
-  assert.match(admin, /b\.hostBooking[\s\S]{0,100}<div class="mb-book-primary-actions">\$\{hostBalanceReviewButton\(b, true\)\}\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}\$\{hostInitialPaymentRejectButton\(b, true\)\}\$\{bookingRejectionEmailButton\(b, true\)\}<\/div>/);
+  assert.match(admin, /b\.hostBooking[\s\S]{0,100}<div class="mb-book-primary-actions">\$\{hostInitialPaymentReviewButton\(b, true\)\}\$\{hostBalanceReviewButton\(b, true\)\}\$\{bookingDetailsButton\(b\)\}\$\{hostPaymentHistoryButton\(b, true\)\}\$\{hostInitialPaymentRejectButton\(b, true\)\}\$\{bookingRejectionEmailButton\(b, true\)\}<\/div>/);
   assert.match(admin, /function hostBalanceReviewButton\(b, mobile = false\)[\s\S]*?if \([^\n]*!hostBalancePendingPayment\(b\)\) return ''/);
   assert.match(admin, /host-balance-review-button[\s\S]{0,240}>Review & Confirm<\/button>/);
   assert.match(admin, /function openHostPaymentHistoryFromDetails\(ref\)/);

@@ -645,6 +645,7 @@ tr:hover td { background: var(--bg2); }
 }
 .host-balance-review-button::before { content: '✓'; font-weight: 950; }
 .host-balance-review-button.host-balance-review-mobile { grid-column: 1 / -1; min-height: 44px; }
+.host-initial-payment-review.host-initial-payment-review-mobile { grid-column: 1 / -1; min-height: 44px; }
 .booking-reject-payment { font-weight: 900; }
 .booking-reject-payment::before { content: '×'; font-size: 1rem; font-weight: 950; line-height: 1; }
 .booking-reject-payment.booking-reject-payment-mobile { grid-column: 1 / -1; min-height: 44px; }
@@ -7928,6 +7929,21 @@ function hostBalanceBookingStatus(b){
 function canViewHostPaymentHistory(){
   return ['owner','court_owner'].includes(String(sess?.role || '').toLowerCase());
 }
+function canReviewHostInitialPayment(b){
+  if (!b?.hostBooking || !canManuallyResolvePayment()) return false;
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  return rows.length > 0
+    && rows.every(row => ['pending','verifying'].includes(String(row?.status || '').toLowerCase()))
+    && rows.every(row => ['unpaid','pending','for_verification'].includes(String(row?.paymentStatus || '').toLowerCase()))
+    && rows.every(row => isDigitalPayment(row?.paymentMethod))
+    && rows.some(row => Boolean(row?.receiptImageUrl));
+}
+function hostInitialPaymentReviewButton(b, mobile = false){
+  if (!canReviewHostInitialPayment(b)) return '';
+  const actionRef = b.primaryRef || b.ref;
+  if (!actionRef) return '';
+  return `<button type="button" class="btn btn-p btn-sm host-initial-payment-review${mobile?' host-initial-payment-review-mobile':''}" aria-label="Review and confirm initial host payment" onclick="openVerifyModal('${jsArg(actionRef)}',{returnFocus:this})">Review &amp; Confirm</button>`;
+}
 function hostPaymentHistoryButton(b, mobile = false){
   if (!b?.hostBooking) return '';
   if (!canViewHostPaymentHistory()) return '';
@@ -8167,6 +8183,14 @@ function bookingPaymentTransferEmailButton(b, mobile = false){
 }
 async function openHostPaymentHistory(ref, trigger){
   try {
+    // An unaccepted deposit needs the initial-payment decision screen. The
+    // balance history screen treats Payment 1 as an already accepted deposit.
+    const booking = await getBookingGroupByRef(ref);
+    if (!booking) throw new Error('Booking not found.');
+    if (canReviewHostInitialPayment(booking)) {
+      await openVerifyModal(booking.primaryRef || ref, { returnFocus: trigger });
+      return;
+    }
     if (!window.HostBalanceAdmin?.openHistoryForBooking) throw new Error('Payment history is unavailable. Refresh and try again.');
     await window.HostBalanceAdmin.openHistoryForBooking(ref, trigger);
   } catch (error) {
@@ -8201,6 +8225,7 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true, includeD
       ${canDelete && !transferLocked ? `<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>` : ''}`;
   }
   return `${includePrimaryActions ? `${bookingDetailsButton(b)} ${hostInitialPaymentRejectButton(b)} ${bookingRejectionEmailButton(b)} ${hostBalanceReviewButton(b)} ${hostPaymentHistoryButton(b)}` : ''}
+    ${includePrimaryActions ? hostInitialPaymentReviewButton(b) : ''}
     ${includePrimaryActions && includePaymentTransferActions ? bookingPaymentTransferEmailButton(b) : ''}
     ${includePaymentTransferActions ? bookingDuplicateTransferButton(b) : ''}
     ${includePrimaryActions ? bookingRescheduleRequestAction(b) : ''}
@@ -8371,7 +8396,7 @@ function mobileBookingCard(b, canDelete){
       ${duplicatePaymentRefBadge(b)}
     </div>
     ${b.hostBooking
-      ? `<div class="mb-book-primary-actions">${hostBalanceReviewButton(b, true)}${bookingDetailsButton(b)}${hostPaymentHistoryButton(b, true)}${hostInitialPaymentRejectButton(b, true)}${bookingRejectionEmailButton(b, true)}</div><div class="mb-book-primary-actions">${bookingPaymentTransferEmailButton(b, true)}${bookingDuplicateTransferButton(b, true)}</div>`
+      ? `<div class="mb-book-primary-actions">${hostInitialPaymentReviewButton(b, true)}${hostBalanceReviewButton(b, true)}${bookingDetailsButton(b)}${hostPaymentHistoryButton(b, true)}${hostInitialPaymentRejectButton(b, true)}${bookingRejectionEmailButton(b, true)}</div><div class="mb-book-primary-actions">${bookingPaymentTransferEmailButton(b, true)}${bookingDuplicateTransferButton(b, true)}</div>`
       : `<div class="mb-book-primary-actions">${bookingQuickConfirmButton(b, true)}${bookingPaymentTransferEmailButton(b, true)}${bookingDuplicateTransferButton(b, true)}</div>`}
     <details class="mb-book-pay">
       <summary>Actions</summary>
