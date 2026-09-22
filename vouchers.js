@@ -81,12 +81,16 @@
     $('offerPresets').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===button)));
     if(custom)fields.value.focus();
   });
-  fields.mode.addEventListener('change',()=>{
+  function syncCodeFields() {
     const single=fields.mode.value==='single';
+    const batch=single && Number(fields.batchSize.value)>1;
     $('batchSizeField').hidden=!single;
-    $('customCodeField').hidden=single;
-    if(single) fields.code.value='';
-  });
+    $('customCodeField').hidden=batch;
+    fields.code.disabled=batch;
+  }
+  fields.mode.addEventListener('change',syncCodeFields);
+  fields.batchSize.addEventListener('input',syncCodeFields);
+  syncCodeFields();
   $('campaignForm').addEventListener('submit', async event => {
     event.preventDefault(); const form=event.currentTarget; const button=form.querySelector('button[type=submit]'); button.disabled=true;
     try {
