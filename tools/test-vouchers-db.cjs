@@ -22,10 +22,13 @@ async function fail(sql, args, pattern) {
     if (!process.argv.includes('--deployed')) {
       const sql = fs.readFileSync('supabase/migrations/20260922020000_premium_vouchers.sql', 'utf8').replace(/^begin;\s*/, '').replace(/commit;\s*$/, '');
       await db.query(sql);
+      await db.query(fs.readFileSync('supabase/migrations/20260922021000_voucher_campaign_list.sql', 'utf8').replace(/^begin;\s*/, '').replace(/commit;\s*$/, ''));
     }
     await db.query("select set_config('request.jwt.claim.role','service_role',true)");
     await db.query("update public.settings set value='1' where key='vouchers_enabled'");
     const owner = (await db.query("select id from public.accounts where role='owner' and status='active' limit 1")).rows[0].id;
+    const ownerList = (await db.query("select public.voucher_admin($1,'list','{}') v", [owner])).rows[0].v;
+    assert.ok(Array.isArray(ownerList.campaigns));
     const court = 'VOUCHER-ROLLBACK-TEST';
     await db.query("insert into public.courts(id,name,rate,blocked,rate_schedule) values($1,'Voucher rollback court',1200,false,'[{\"from\":0,\"to\":24,\"rate\":1200}]')", [court]);
     const date = (await db.query("select (current_date+100)::text d")).rows[0].d;
@@ -103,6 +106,9 @@ async function fail(sql, args, pattern) {
       await fail("select public.voucher_admin($1,'create',$2)",[courtOwner,denied],/assigned courts/);
       await db.query("select public.voucher_admin($1,'assign',$2)",[owner,{userId:courtOwner,courtIds:[court]}]);
       const assigned=(await db.query("select public.voucher_admin($1,'create',$2) v",[courtOwner,denied])).rows[0].v;
+      const scopedList=(await db.query("select public.voucher_admin($1,'list','{}') v",[courtOwner])).rows[0].v;
+      assert.ok(scopedList.campaigns.some(c=>c.id===assigned.id));
+      assert.ok(scopedList.courts.every(c=>c.id===court));
       assert.equal(assigned.codes.length,1);
     }
     await db.query("select public.voucher_checkout('remove','VOUCHER-TEST-HOST',null,null,$1,'{}')",[host]);

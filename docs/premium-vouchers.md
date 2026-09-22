@@ -10,7 +10,7 @@ The original booking fee is earned once on first confirmation. Complimentary boo
 
 ## Rollout and verification
 
-1. Apply `20260922020000_premium_vouchers.sql`, initially disabled by `settings.vouchers_enabled = 0`.
+1. Apply `20260922020000_premium_vouchers.sql` and `20260922021000_voucher_campaign_list.sql`, initially disabled by `settings.vouchers_enabled = 0`.
 2. Deploy `booking-vouchers` and `send-confirmation-email` Edge Functions.
 3. Run `npm test`, `npm run check`, and `node tools/test-vouchers-db.cjs --deployed`. The database harness always rolls back its bookings, campaigns, and remittance statements.
 4. Deploy the frontend using `deploy-cloudflare-pages.ps1`; verify owner access and mobile checkout.
