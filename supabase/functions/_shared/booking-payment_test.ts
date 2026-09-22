@@ -3,6 +3,13 @@ import {
   classifyStoredSessionPayment,
 } from "./booking-payment.ts";
 
+Deno.test('voucher host deposits use discounted court portion and covered fee only', () => {
+  for (const [total, due] of [[1080,292.5],[20,20],[0,0]]) {
+    const result = calculateCourtPayment({slots:[6],courtRate:1200,storedTotal:total,storedServiceFee:30,storedDownpayment:due,hostBooking:true});
+    if (result.due !== due || result.total !== total) throw new Error('Incorrect voucher host amount');
+  }
+});
+
 function assertEquals(
   actual: unknown,
   expected: unknown,

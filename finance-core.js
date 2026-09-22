@@ -7,6 +7,7 @@
 
   const PAYMENT_LABELS = {
     paid: 'Fully paid',
+    complimentary: 'Complimentary',
     downpayment_paid: 'Downpayment received',
     for_verification: 'For verification',
     pending: 'Payment pending',
@@ -167,18 +168,25 @@
   function bookingMetrics(transaction, settings = {}) {
     const total = positive(transaction?.total);
     const paid = Math.min(total, paidAmount(transaction));
-    const feeCharged = Math.min(total, bookingFeeCharged(transaction, settings));
-    const feeEarned = Math.min(paid, bookingFeeEarned(transaction, settings));
+    const voucher = itemsOf(transaction).some(item => valueOf(item, 'voucherCode', 'voucher_code'));
+    const originalTotal = itemsOf(transaction).reduce((sum,item) => sum + positive(valueOf(item,'voucherOriginalTotal','voucher_original_total') ?? item.total),0);
+    const discount = itemsOf(transaction).reduce((sum,item) => sum + positive(valueOf(item,'voucherDiscount','voucher_discount')),0);
+    const feeCharged = voucher ? bookingFeeCharged(transaction, settings) : Math.min(total, bookingFeeCharged(transaction, settings));
+    const feeEarned = voucher ? bookingFeeEarned(transaction, settings) : Math.min(paid, bookingFeeEarned(transaction, settings));
     const feeCollected = Math.min(paid, feeCharged);
     const status = String(transaction?.status || '').toLowerCase();
     const forfeited = status === 'forfeited';
     return {
+      originalTotal, discount,
+      ownerFundedFee: voucher ? Math.max(0, feeEarned - total) : 0,
+      feeCollected,
+      netAfterFeeObligation: paid - feeEarned,
       total: forfeited ? paid : total,
       paid,
       outstanding: forfeited ? 0 : Math.max(0, total - paid),
       courtRental: forfeited ? Math.max(0, paid - feeCollected) : Math.max(0, total - feeCharged),
       courtCollected: Math.max(0, paid - feeCollected),
-      feeCharged: forfeited ? feeCollected : feeCharged,
+      feeCharged: forfeited && !voucher ? feeCollected : feeCharged,
       feeEarned,
       forfeited,
     };
@@ -208,6 +216,10 @@
     const trendMap = new Map();
     const rows = [];
     const summary = {
+      originalBookingValue: 0,
+      voucherDiscounts: 0,
+      ownerFundedFees: 0,
+      platformFeesCollected: 0,
       customerCharges: 0,
       collected: 0,
       outstanding: 0,
@@ -232,6 +244,10 @@
       if (!inRange(reportDate, range)) return;
       const metrics = bookingMetrics(transaction, settings);
       const paymentStatus = String(valueOf(transaction, 'paymentStatus', 'payment_status') || 'unpaid').toLowerCase();
+      summary.originalBookingValue += metrics.originalTotal;
+      summary.voucherDiscounts += metrics.discount;
+      summary.ownerFundedFees += metrics.ownerFundedFee;
+      summary.platformFeesCollected += metrics.feeCollected;
       summary.customerCharges += metrics.total;
       summary.collected += metrics.paid;
       summary.outstanding += metrics.outstanding;
@@ -305,7 +321,7 @@
       breakdowns: {
         stream: [
           { label: 'Court rental', charges: summary.courtRental, collected: summary.courtCollected },
-          { label: 'Platform booking fees', charges: summary.platformFeesCharged, collected: summary.platformFeesEarned },
+          { label: 'Platform booking fees', charges: summary.platformFeesCharged, collected: summary.platformFeesCollected },
           { label: 'Open Play', charges: summary.openPlayCharges, collected: summary.openPlayCollected },
         ],
         court: sortedRows(courtMap),

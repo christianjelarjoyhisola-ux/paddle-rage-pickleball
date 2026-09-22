@@ -41,6 +41,9 @@ $publicFiles = @(
   "_headers",
   "_worker.js",
   "admin.html",
+  "vouchers.html",
+  "vouchers.js",
+  "voucher-checkout.js",
   "availability-graphic.css",
   "availability-graphic.js",
   "brand-theme.css",
@@ -88,7 +91,15 @@ $publicFiles = @(
 )
 
 $stagingDir = Join-Path $repoRoot ".cf-pages-deploy"
+$expectedStagingDir = [IO.Path]::GetFullPath((Join-Path $repoRoot ".cf-pages-deploy"))
+if ([IO.Path]::GetFullPath($stagingDir) -ne $expectedStagingDir) {
+  throw "Unexpected deployment staging directory."
+}
 if (Test-Path -LiteralPath $stagingDir) {
+  $stagingItem = Get-Item -LiteralPath $stagingDir -Force
+  if ($stagingItem.FullName -ne $expectedStagingDir -or ($stagingItem.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+    throw "Refusing to clear an unexpected or linked staging directory."
+  }
   Remove-Item -LiteralPath $stagingDir -Recurse -Force
 }
 New-Item -ItemType Directory -Path $stagingDir | Out-Null

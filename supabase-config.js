@@ -682,6 +682,10 @@ function rowToBooking(r) {
     bookingFeeSnapshotSource: r.booking_fee_snapshot_source || null,
     bookingFeeLedgerEligibleSnapshot: !!r.booking_fee_ledger_eligible_snapshot,
     bookingFeeEarnedAt: r.booking_fee_earned_at || null,
+    voucherOriginalTotal: r.voucher_original_total == null ? null : Number(r.voucher_original_total),
+    voucherDiscount: Number(r.voucher_discount || 0),
+    voucherCode: r.voucher_code || null,
+    voucherRedemptionId: r.voucher_redemption_id || null,
     balanceDueAt:  r.balance_due_at || null,
     balanceGraceGrantedAt: r.balance_grace_granted_at || null,
     forfeitedAt:   r.forfeited_at || null,
@@ -1139,6 +1143,17 @@ function rowToOpenPlayHostSessionRegistration(r) {
 // DB — Async Data Layer (replaces localStorage)
 // =============================================
 window.DB = {
+  async bookingVoucher(action, ref, code = '', contact = {}) {
+    const data = await _invokeEdgeFunction('booking-vouchers', { action, ref, code, contact, accessToken: _pbBookingAccessToken(ref, false) || null }, { preferDirect: true, retryDirect: false });
+    if (data?.error) throw new Error(data.error);
+    _pbClearFastCache(['bookings']);
+    return data;
+  },
+  async manageVouchers(action = 'list', data = {}) {
+    const result = await _invokeEdgeFunction('booking-vouchers', { admin: true, action, data }, { preferDirect: true, retryDirect: false });
+    if (result?.error) throw new Error(result.error);
+    return result;
+  },
 
   // ---- COURTS ----
   async getCourts() {

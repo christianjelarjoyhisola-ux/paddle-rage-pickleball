@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vouchers · Paddle Rage</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#10170f;color:#edf3e8}*{box-sizing:border-box}body{margin:0}main{max-width:1150px;margin:auto;padding:28px 20px 70px}a{color:#c2f36b}header{display:flex;align-items:center;justify-content:space-between;gap:20px}h1{font-size:clamp(28px,5vw,44px);margin:22px 0 8px}h2{font-size:22px}p{color:#bdcbb5;line-height:1.6}section,article{border:1px solid #34432e;border-radius:18px;padding:22px;margin:22px 0;background:#182116}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}label{display:block;font-size:14px;color:#d0dcc9}input,select,button{font:inherit;border:1px solid #45583b;border-radius:9px;padding:11px;background:#10170f;color:inherit}input:not([type=checkbox]),select{display:block;width:100%;margin-top:7px}button{cursor:pointer;background:#c2f36b;color:#15220a;font-weight:700}button.secondary{background:transparent;color:#edf3e8}button:disabled{opacity:.5;cursor:wait}.checks{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0}.checks label{display:flex;align-items:center;gap:7px}.wide{grid-column:1/-1}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.muted{font-size:13px;color:#bdcbb5}#notice{position:sticky;top:0;background:#23321b;padding:14px;border-radius:10px;z-index:2}#notice:empty{display:none}code{overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;font-size:14px}td,th{text-align:left;padding:10px;border-bottom:1px solid #34432e}.scroll{overflow:auto}summary{cursor:pointer;margin:12px 0}fieldset{border:0;padding:0;margin:16px 0}legend{font-weight:700}textarea{width:100%;min-height:90px;background:#10170f;color:inherit;border:1px solid #45583b;padding:12px}@media(max-width:700px){.grid{grid-template-columns:1fr}header{align-items:flex-start}section,article{padding:16px}main{padding:16px}}
+</style></head><body><main>
+<header><a href="admin.html">← Dashboard</a><span>PADDLE RAGE · OWNER TOOLS</span></header>
+<h1>Vouchers</h1><p>Reward players. Fill your courts. Keep every discount and booking fee accounted for.</p>
+<div id="notice" role="status" aria-live="polite">Loading owner access…</div>
+<div id="workspace" hidden>
+<section><h2>Create a campaign</h2><p>Players pay the discounted all-in price. Your original booking fee remains payable through remittance—even when the player pays ₱0.</p>
+<form id="campaignForm"><div class="grid">
+<label>Campaign name<input name="name" required maxlength="100" placeholder="Weekday rewards"></label>
+<label>Discount type<select name="kind"><option value="percent">Percentage</option><option value="fixed">Fixed pesos</option></select></label>
+<label>Discount value<input name="value" type="number" min="0.01" step="0.01" required placeholder="10"></label>
+<label>Starts (Philippine time)<input name="startsAt" type="datetime-local" required></label>
+<label>Ends (Philippine time)<input name="endsAt" type="datetime-local" required></label>
+<label>Maximum redemptions<input name="maxUses" type="number" min="1" max="100000" value="50" required></label>
+<label>Minimum spend (₱)<input name="minSpend" type="number" min="0" step="0.01" value="0"></label>
+<label>Maximum discount (₱, optional)<input name="maxDiscount" type="number" min="0.01" step="0.01"></label>
+<label>Per-customer limit (optional)<input name="customerLimit" type="number" min="1"></label>
+<label>Code mode<select name="mode"><option value="reusable">Reusable campaign code</option><option value="single">Unique single-use codes</option></select></label>
+<label>Custom code (optional)<input name="code" pattern="[A-Za-z0-9-]{6,40}" maxlength="40" placeholder="WEEKDAY10"></label>
+<label>Number of unique codes<input name="batchSize" type="number" min="1" max="500" value="1"></label>
+<label>Play from (optional)<input name="playFrom" type="date"></label><label>Play until (optional)<input name="playTo" type="date"></label>
+<label>Start hour (0–23)<input name="hourFrom" type="number" min="0" max="23" value="0" required></label>
+<label>End hour (1–24)<input name="hourTo" type="number" min="1" max="24" value="24" required></label>
+</div>
+<fieldset><legend>Eligible courts</legend><div class="checks" id="courtOptions"></div></fieldset>
+<fieldset><legend>Booking types</legend><div class="checks"><label><input type="checkbox" name="bookingTypes" value="guest" checked>Guest court bookings</label><label><input type="checkbox" name="bookingTypes" value="host" checked>Host court bookings</label></div></fieldset>
+<fieldset><legend>Eligible weekdays</legend><div class="checks" id="weekdays"></div></fieldset>
+<p class="muted">Guest email and phone limits are basic controls, not verified identity. Unique single-use codes are recommended for 100% offers. Codes cannot be stacked or applied after payment submission.</p>
+<label><input type="checkbox" name="acceptOwnerFees" required> I accept that the court owner funds the discount and owes the original booking fee, including for complimentary bookings.</label>
+<div class="actions"><button type="submit">Create campaign</button></div></form>
+</section>
+<section id="authority" hidden><h2>Court-owner funding permissions</h2><p>Assign the courts each court owner may include in voucher campaigns.</p><form id="authorityForm"><label>Court owner<select id="authorityOwner" required></select></label><div id="authorityCourts" class="checks"></div><button type="submit">Save court assignments</button></form></section>
+<header><h2>Your campaigns</h2><button id="refresh" class="secondary" type="button">Refresh</button></header><div id="campaigns"></div>
+</div></main><script src="supabase.min.js"></script><script src="supabase-config.js"></script><script src="vouchers.js"></script></body></html>

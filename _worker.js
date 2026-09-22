@@ -13,6 +13,9 @@ export default {
     // canonical /host.html -> /host redirect and creates a redirect loop.
     const response = await env.ASSETS.fetch(request);
     const releaseCoupledRuntime = new Set([
+      '/voucher-checkout.js',
+      '/vouchers.js',
+      '/finance-core.js',
       '/booking-balance.js',
       '/host-balance-payment.js',
       '/host-balance-admin.js',
@@ -25,7 +28,7 @@ export default {
       releaseCoupledRuntime.has(url.pathname);
     const isHtmlEntry = url.pathname === '/' ||
       url.pathname.endsWith('.html') ||
-      ['/admin', '/host', '/login', '/manage-booking', '/player-live'].includes(url.pathname);
+      ['/admin', '/host', '/login', '/manage-booking', '/player-live', '/vouchers'].includes(url.pathname);
     if (!isSharedRuntime && !isHtmlEntry) return response;
 
     // Pages' advanced-mode asset binding can attach a four-hour cache policy

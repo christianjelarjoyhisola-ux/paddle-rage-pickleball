@@ -102,6 +102,7 @@ test('leaving receipt upload restores the shared Next button on earlier wizard s
   );
 
   const runRegression = new Function(`
+    const window = {};
     const nextButton = {
       disabled: false,
       textContent: '',

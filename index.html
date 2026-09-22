@@ -3470,6 +3470,7 @@ body.host-mode .courts { padding-bottom:140px; }
 }
 @media(prefers-reduced-motion:reduce) { .host-balance-progress::after { animation:none; width:100%; background:var(--lime); } }
 
+#voucherRemove[hidden], #voucherFreeNotice[hidden] { display:none !important; }
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260903-manage-booking-v1">
 </head>
@@ -3574,7 +3575,7 @@ try {
       </div>
       <div class="late-ext-courts" id="lateExtCourts"></div>
       <div class="late-ext-price">
-        <span class="late-ext-price-copy"><strong>Added price</strong><span>Booking fee · FREE</span></span>
+        <span class="late-ext-price-copy"><strong>Added price</strong><span>No additional booking fees</span></span>
         <strong class="late-ext-price-value" id="lateExtPrice">—</strong>
       </div>
       <div class="late-ext-note">This will be added as a separate next-day booking item in the same reservation.</div>
@@ -3614,7 +3615,7 @@ try {
       <span class="pr-splash-enter-label">Book Now</span>
       <span class="pr-splash-enter-arrow" aria-hidden="true">&rarr;</span>
     </button>
-    <p class="pr-splash-offer" role="note">NO BOOKING FEES</p>
+    <p class="pr-splash-offer" role="note">NO ADDITIONAL BOOKING FEES</p>
     <a class="pr-splash-manage" href="manage-booking.html" onclick="event.stopPropagation()">Already booked? <strong>Manage booking</strong> <span aria-hidden="true">&rarr;</span></a>
   </div>
   <div class="pr-splash-footer">Court booking &nbsp;&middot;&nbsp; Open play &nbsp;&middot;&nbsp; Community</div>
@@ -3966,6 +3967,11 @@ try {
             <label class="fl" for="bEmail">Email Address</label>
             <input type="email" class="fi" id="bEmail" placeholder="youremail@gmail.com" autocomplete="off" />
           </div>
+          <div class="fg" style="padding:16px;border:1px solid var(--border);border-radius:14px;margin-top:18px">
+            <label class="fl" for="voucherCode">Have a voucher?</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="voucherCode" class="fi" maxlength="40" autocomplete="off" placeholder="Enter voucher code" style="flex:1;min-width:150px;text-transform:uppercase"><button id="voucherApply" class="btn" type="button">Apply</button><button id="voucherRemove" class="btn" type="button" hidden>Remove</button></div>
+            <p id="voucherMessage" role="status" aria-live="polite" style="font-size:.85rem;margin:10px 0 0">One voucher per booking. No additional booking fees.</p>
+          </div>
           <div class="wiz-summary wiz-summary--booking">
             <div class="wiz-summary-lbl">Booking Summary</div>
             <div id="wiz3Summary" style="font-size:.84rem;line-height:1.55"></div>
@@ -3973,7 +3979,7 @@ try {
         </div>
 
         <!-- ── STEP 5: PAYMENT ── -->
-        <div class="wiz-panel" id="wizPanel5">
+        <div class="wiz-panel" id="wizPanel5"><p id="voucherFreeNotice" class="wiz-summary" hidden><strong>Complimentary booking · ₱0</strong><br>No payment or receipt required. Confirm below to reserve your court.</p>
           <div class="wiz-sec-title bpay-title">
             <span>💳 Payment</span>
             <span class="bpay-title-amount"><span>Amount to pay</span><strong id="bStepPayAmt">--</strong></span>
@@ -4260,7 +4266,7 @@ try {
               <div class="inv-amt-total" id="iAmountLabel">Booking Total</div>
               <div class="inv-amt-val" id="iTot">₱0.00</div>
             </div>
-            <div class="inv-fee-free"><span>Booking fee</span><strong>Free</strong></div>
+            <div class="inv-fee-free"><span>No additional booking fees</span><strong>Included</strong></div>
           </div>
           <div class="inv-rental-breakdown" id="iRentalBreakdown" aria-label="Court rental calculation"></div>
           <div class="inv-payment-meta">
@@ -4423,7 +4429,7 @@ function allInSlotPriceHtml(baseRate) {
   return `<div class="csl-price">${compactPeso(allInSlotRate(baseRate))}</div>`;
 }
 function allInSlotAriaLabel(baseRate) {
-  return `${compactPeso(allInSlotRate(baseRate))} per hour, zero booking fee`;
+  return `${compactPeso(allInSlotRate(baseRate))} per hour, no additional booking fees`;
 }
 function activeHostSession() {
   const sess = window.Auth?.getSession?.();
@@ -5326,9 +5332,9 @@ function makeBookingItemFromCurrentForm() {
 }
 
 function activeBookingItems() {
-  if (bookingItems.length > 0) return bookingItems;
+  if (bookingItems.length > 0) return window.VoucherCheckout?.priceItems(bookingItems) || bookingItems;
   const item = makeBookingItemFromCurrentForm();
-  return item ? [item] : [];
+  return item ? (window.VoucherCheckout?.priceItems([item]) || [item]) : [];
 }
 
 function bookingItemsCourtFee(items = activeBookingItems()) {
@@ -5341,6 +5347,10 @@ function bookingItemsServiceFee(items = activeBookingItems()) {
 
 function bookingItemsTotal(items = activeBookingItems()) {
   return items.reduce((sum, item) => sum + Number(item.total || 0), 0);
+}
+
+function bookingItemsAmountDue(items = activeBookingItems()) {
+  return Math.round(items.reduce((sum,item) => sum + downpaymentAmount(item.total,item.courtFee,item.serviceFee),0)*100)/100;
 }
 
 function bookingItemsDuration(items = activeBookingItems()) {
@@ -5497,14 +5507,14 @@ function hostBookingItemsSummaryHtml(items = uniqueBookingSelections(activeBooki
   const courtFee = bookingItemsCourtFee(items);
   const svcFee = bookingItemsServiceFee(items);
   const total = bookingItemsTotal(items);
-  const dueToday = downpaymentAmount(total, courtFee, svcFee);
+  const dueToday = bookingItemsAmountDue(items);
   const balance = Math.max(0, total - dueToday);
   return `
     <div class="premium-booking-summary">
       <div class="pbs-price-card">
         ${bookingRentalBreakdownHtml(items, { itemizeSchedule: true, dateFormatter: fmtDc })}
-        <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
-        <div class="pbs-price-row total"><span>Booking total</span><strong>${fmt(total)}</strong></div>
+        <div class="pbs-price-row fee-free"><span>No additional booking fees</span><strong class="pbs-free-badge">Included</strong></div>
+        ${window.VoucherCheckout?.summary() || ''}<div class="pbs-price-row total"><span>Booking total</span><strong>${fmt(total)}</strong></div>
         <div class="pbs-price-row due"><span>Reservation payment today</span><strong>${fmt(dueToday)}</strong></div>
         <div class="pbs-price-row balance"><span>Remaining balance</span><strong>${fmt(balance)}</strong></div>
       </div>
@@ -5519,8 +5529,8 @@ function bookingItemsSummaryHtml(items = uniqueBookingSelections(activeBookingIt
     <div class="premium-booking-summary">
       <div class="pbs-price-card">
         ${bookingRentalBreakdownHtml(items, { itemizeSchedule: true, dateFormatter: fmtD })}
-        <div class="pbs-price-row fee-free"><span>Booking fee</span><strong class="pbs-free-badge">Free</strong></div>
-        <div class="pbs-price-row total"><span>Total</span><strong>${fmt(total)}</strong></div>
+        <div class="pbs-price-row fee-free"><span>No additional booking fees</span><strong class="pbs-free-badge">Included</strong></div>
+        ${window.VoucherCheckout?.summary() || ''}<div class="pbs-price-row total"><span>Total</span><strong>${fmt(total)}</strong></div>
       </div>
     </div>
   `;
@@ -6080,6 +6090,8 @@ function applyPaymentMethodVisibility() {
 }
 
 function preparePaymentStep() {
+  if (window.VoucherCheckout?.payment()) return;
+  if ($('voucherFreeNotice')) $('voucherFreeNotice').hidden = true;
   applyPaymentMethodVisibility();
   const enabledMethods = ALL_PAYMENT_METHODS.filter(m => paymentMethods[m]);
   const selected = $('bPay')?.value || '';
@@ -6695,6 +6707,7 @@ async function maybeResumeGuestBooking() {
 
   await refreshBookingItemViews(bookingItems);
   restoreGuestResumeDraft(resume.form || {});
+  try { await window.VoucherCheckout?.sync(); } catch (error) { toast(error.message, 'err'); return; }
   updatePrice();
   wizStartStep = 3;
   $('bookModal')?.classList.add('active');
@@ -7392,7 +7405,8 @@ async function wizNext() {
     if (!phone) { bookingValidationError('Please enter your contact number.', 'bPhone', 3); return; }
     if (!/^(09|\+639)\d{9}$/.test(phone.replace(/\s|-/g,''))) { bookingValidationError('Enter a valid PH number (e.g. 09XX XXX XXXX).', 'bPhone', 3); return; }
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { bookingValidationError('Please enter a valid email address.', 'bEmail', 3); return; }
-    wizGoTo(4);
+    try { await window.VoucherCheckout?.sync(); } catch (error) { toast(error.message, 'err'); return; }
+    wizGoTo(window.VoucherCheckout?.free() ? 5 : 4);
   } else if (wizStep === 4) {
     const payMethod = $('bPay')?.value || '';
     if (!ALL_PAYMENT_METHODS.some(m => paymentMethods[m])) { bookingValidationError('No payment method is enabled right now. Please contact admin.', 'payMethodBlock', 4); return; }
@@ -7400,6 +7414,7 @@ async function wizNext() {
     if (!paymentMethods[payMethod]) { bookingValidationError('Selected payment method is no longer available.', 'payMethodBlock', 4); return; }
     wizGoTo(5);
   } else if (wizStep === 5) {
+    if (window.VoucherCheckout?.free()) { await window.VoucherCheckout.confirm(); return; }
     const payMethod = $('bPay')?.value || '';
     const retryableUpload = isDigitalPayMethod(payMethod) &&
       _receiptUploadState?.status === 'failed' &&
@@ -7425,6 +7440,7 @@ function wizBack() {
     return;
   }
   if (wizStep <= wizStartStep) { closeBookModal(); return; }
+  if (wizStep === 5 && window.VoucherCheckout?.free()) { wizGoTo(3); return; }
   wizGoTo(wizStep - 1);
 }
 
@@ -7652,7 +7668,7 @@ async function renderCourts() {
       <div class="cc-mobile-hd">
         <div class="cc-mobile-title">
           <span class="cc-mobile-name">${courtTimesHeading}</span>
-          <span class="cc-mobile-meta"><span class="cc-rate-line"><span>${esc(rateRange)}</span><span class="cc-rate-promise">NO BOOKING FEES</span></span></span>
+          <span class="cc-mobile-meta"><span class="cc-rate-line"><span>${esc(rateRange)}</span><span class="cc-rate-promise">NO ADDITIONAL BOOKING FEES</span></span></span>
         </div>
         <div class="cc-mobile-side">
           <span class="cc-mobile-status ${availBadgeCls}" id="cMobAvail_${esc(c.id)}">${esc(availBadgeTxt)}</span>
@@ -7665,7 +7681,7 @@ async function renderCourts() {
         <div class="cc-photo-avail ${availBadgeCls}" id="cAvail_${esc(c.id)}">${esc(availBadgeTxt)}</div>
         <div class="cc-photo-bar">
           <span class="cc-photo-name">${esc(c.name)}</span>
-          <div class="cc-photo-rate"><span class="cc-rate-line"><span>${esc(rateRange)}</span><span class="cc-rate-promise">NO BOOKING FEES</span></span></div>
+          <div class="cc-photo-rate"><span class="cc-rate-line"><span>${esc(rateRange)}</span><span class="cc-rate-promise">NO ADDITIONAL BOOKING FEES</span></span></div>
         </div>
       </div>
 
@@ -7958,7 +7974,7 @@ function updatePriceLegacy() {
   if ($('pRate')) $('pRate').textContent = rateLabel;
   if ($('pCourtFee')) $('pCourtFee').textContent = fmt(total);
   if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = '';
-  if ($('pSvcFee'))    $('pSvcFee').textContent = 'FREE';
+  if ($('pSvcFee'))    $('pSvcFee').textContent = 'Included';
   if ($('pTot')) $('pTot').textContent  = fmt(total);
   if ($('pDown')) $('pDown').textContent = fmt(payAmt);
 
@@ -7990,14 +8006,14 @@ function updatePrice() {
   const courtTotal = bookingItemsCourtFee(items);
   const svcFee = bookingItemsServiceFee(items);
   const total = bookingItemsTotal(items);
-  const dpAmt = downpaymentAmount(total, courtTotal, svcFee);
+  const dpAmt = bookingItemsAmountDue(items);
   const payAmt = payFull ? total : dpAmt;
 
   if ($('pHrs')) $('pHrs').textContent  = `${hrs} hr${hrs !== 1 ? 's' : ''}`;
   if ($('pRate')) $('pRate').textContent = bookingItemsRateLabel(items);
   if ($('pCourtFee')) $('pCourtFee').textContent = fmt(total);
   if ($('pSvcFeeRow')) $('pSvcFeeRow').style.display = '';
-  if ($('pSvcFee'))    $('pSvcFee').textContent = 'FREE';
+  if ($('pSvcFee'))    $('pSvcFee').textContent = 'Included';
   if ($('pTot')) $('pTot').textContent  = fmt(total);
   if ($('pDown')) $('pDown').textContent = fmt(payAmt);
 
@@ -8610,6 +8626,7 @@ async function submitBookingLegacy(e) {
 }
 
 async function submitBooking(e) {
+  if (window.VoucherCheckout?.free()) { if (e) e.preventDefault(); return window.VoucherCheckout.confirm(); }
   if (e) e.preventDefault();
   const submitBtn = $('wizNextBtn');
   if (_bookingSubmissionInFlight || submitBtn?.disabled) return;
@@ -8693,7 +8710,7 @@ async function submitBooking(e) {
 
   const createdAt = _reservationStartedAt || new Date().toISOString();
   const groupTotal = bookingItemsTotal(items);
-  const groupDownpayment = downpaymentAmount(groupTotal, bookingItemsCourtFee(items), bookingItemsServiceFee(items));
+  const groupDownpayment = items.reduce((sum,item) => sum + downpaymentAmount(item.total,item.courtFee,item.serviceFee),0);
   const sharedGroupRef = items.length > 1 ? (items[0].groupRef || genRef() + '-G') : null;
   const heldRefs = new Set(reservedRefs());
   const status = digitalPay ? 'verifying' : 'pending';
@@ -8718,6 +8735,9 @@ async function submitBooking(e) {
     rate: item.rate,
     slotRates: Array.isArray(item.slotRates) ? [...item.slotRates] : [],
     total: item.total,
+    voucherCode: item.voucherCode,
+    voucherOriginalTotal: item.voucherOriginalTotal,
+    voucherDiscount: item.voucherDiscount,
     paymentMethod: payMethod,
     gcashRef: gcashRef || null,
     paymentFlow: payMethod,
@@ -8738,6 +8758,8 @@ async function submitBooking(e) {
     timeLabel: bookingItemsTimeLabel(itemBookings),
     duration: bookingItemsDuration(itemBookings),
     total: groupTotal,
+    voucherOriginalTotal: itemBookings.reduce((sum,b) => sum + Number(b.voucherOriginalTotal ?? b.total),0),
+    voucherDiscount: itemBookings.reduce((sum,b) => sum + Number(b.voucherDiscount || 0),0),
     downpayment: groupDownpayment,
   };
 
@@ -9020,6 +9042,11 @@ function invalidateBookingReceiptUpload(options = {}) {
 function setBookingReceiptContinueState(kind = 'idle') {
   const button = $('wizNextBtn');
   if (!button) return;
+  if (window.VoucherCheckout?.free()) {
+    button.disabled = _bookingSubmissionInFlight;
+    button.textContent = 'Confirm Complimentary Booking';
+    return;
+  }
   if (wizStep !== 5) {
     button.disabled = false;
     button.classList.remove('is-receipt-uploading');
@@ -9352,6 +9379,7 @@ function sendCustomerConfirmationEmail(booking) {
 }
 
 function resetForm(options = {}) {
+  window.VoucherCheckout?.reset();
   clearAllBookingInvalids();
   $('bookForm').reset();
   clearReceipt({
@@ -9629,16 +9657,17 @@ function showInvoice(b) {
   const isConfirmed = !isRejected && b.status === 'confirmed';
   const isDigitalPay = isDigitalPayMethod(b.paymentMethod);
   const isFullPay = b.downpayment >= b.total;
+  const isComplimentary = paymentStatus === 'complimentary';
   const isPaid = paymentStatus === 'paid';
   const isDepositPaid = paymentStatus === 'downpayment_paid';
   const isReceiptVerified = receiptStatus === 'auto_approved';
   const hostDeadline = b.hostBooking && !isFullPay
     ? (b.balanceDueAt ? new Date(b.balanceDueAt) : window.BookingBalance?.balanceDeadline?.(b))
     : null;
-  const payLabel = paymentMethodName(b.paymentMethod === 'gotyme' ? 'gotyme' : b.paymentMethod || 'cash');
+  const payLabel = isComplimentary ? 'Complimentary voucher' : paymentMethodName(b.paymentMethod === 'gotyme' ? 'gotyme' : b.paymentMethod || 'cash');
   const invoiceState = isRejected ? 'rejected' : isConfirmed ? 'confirmed' : 'pending';
   const paymentState = isRejected ? 'rejected'
-    : isPaid || isDepositPaid ? 'paid'
+    : isComplimentary ? 'complimentary' : isPaid || isDepositPaid ? 'paid'
     : isReceiptVerified ? 'verified'
     : isDigitalPay ? 'review'
     : 'due';
@@ -9657,6 +9686,7 @@ function showInvoice(b) {
   const ticketModel = renderBookingTicketSessions(b);
   const rentalBreakdown = $('iRentalBreakdown');
   if (rentalBreakdown) rentalBreakdown.innerHTML = bookingRentalBreakdownHtml(bookingTicketPricingItems(b, ticketModel));
+  if (rentalBreakdown && Number(b.voucherDiscount || 0)>0) rentalBreakdown.innerHTML += `<p>Original price ${fmt(b.voucherOriginalTotal)} · Voucher savings −${fmt(b.voucherDiscount)}</p>`;
   set('iPay', payLabel);
   set('iTot', fmt(b.total));
   set('iDown', fmt(b.downpayment));
@@ -9676,7 +9706,7 @@ function showInvoice(b) {
     : isDigitalPay && b.gcashRef ? 'Payment Submitted'
     : b.paymentMethod === 'cash' ? 'Amount Due at Venue'
     : 'Booking Total';
-  set('iAmountLabel', amountLabel);
+  set('iAmountLabel', isComplimentary ? 'Complimentary · No payment required' : amountLabel);
   set('iDownLabel', isDepositPaid ? 'Deposit Verified'
     : b.hostBooking && !isFullPay ? 'Deposit Submitted'
     : 'Payment Amount');
@@ -9718,7 +9748,7 @@ function showInvoice(b) {
     subtitle = 'Your court is secured. See you on the court!';
     badge = 'Confirmed';
     badgeClass = 'inv-status-confirmed';
-    timelineSteps = [['Submitted', 'done'], ['Verified', 'done'], ['Confirmed', 'done']];
+    timelineSteps = [['Submitted', 'done'], [isComplimentary ? 'Voucher redeemed' : 'Verified', 'done'], ['Confirmed', 'done']];
     statusSummary = 'Your court is secured. Show your PB booking reference at check-in.';
     if (isPaid) {
       amountNote = '';
@@ -10570,6 +10600,7 @@ function groupHostBookingRows(bookings = []) {
     const paymentStatus = paymentStatuses.includes('deposit_retained') ? 'deposit_retained'
       : paymentStatuses.includes('for_verification') ? 'for_verification'
       : paymentStatuses.includes('unpaid') ? 'unpaid'
+      : paymentStatuses.every(s => s === 'complimentary') ? 'complimentary'
       : paymentStatuses.every(s => s === 'paid') ? 'paid'
       : 'downpayment_paid';
     const status = statuses.includes('forfeited') ? 'forfeited'
@@ -11763,5 +11794,6 @@ async function submitOpenPlay() {
     <span>Logout</span>
   </button>
 </nav>
+<script src="voucher-checkout.js"></script>
 </body>
 </html>

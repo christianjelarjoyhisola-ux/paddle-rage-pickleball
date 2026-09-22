@@ -14,6 +14,15 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+Deno.test('complimentary confirmation never claims a payment was received', () => {
+  const result = renderConfirmationEmail({bookingRef:'PB-VOUCHER-TEST',email:'voucher@example.invalid',fullName:'Test',courtName:'Court 1',date:'2026-10-01',startTime:'6:00 AM',endTime:'7:00 AM',duration:1,total:0,downpayment:0,complimentary:true,originalTotal:1200,voucherDiscount:1200});
+  assert(result.html.includes('Complimentary'), 'Ticket must label complimentary payment');
+  assert(result.html.includes('Voucher savings'), 'Ticket must disclose voucher savings');
+  assert(result.plain.includes('no payment collected'), 'Plain text must identify no collection');
+  assert(!result.html.includes('received your full payment'), 'Free booking cannot claim payment was received');
+  assert(!result.plain.includes('received your full payment'), 'Plain text cannot claim payment was received');
+});
+
 Deno.test("Maileroo transport sends the documented API shape without exposing its key", async () => {
   Deno.env.set("MAILEROO_API_KEY", "test-secret-key");
   Deno.env.set("MAILEROO_FROM_ADDRESS", "bookings@paddleragecdo.ph");

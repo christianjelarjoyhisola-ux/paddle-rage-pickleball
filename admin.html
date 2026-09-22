@@ -5008,6 +5008,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
     <div class="sb-section" data-perm="host_accounts_view">
       <div class="nav-grp">People &amp; Finance</div>
       <div class="nav-item" data-s="accounts" data-perm="host_accounts_view" onclick="goto('accounts')"><span>&#128101;</span> Host Accounts</div>
+      <a class="nav-item" data-perm="remittances" href="vouchers.html" style="text-decoration:none"><span>🎟</span> Vouchers</a>
       <div class="nav-item" data-s="remittances" data-perm="remittances" onclick="goto('remittances')"><span>&#129534;</span> Remittances</div>
     </div>
     <div class="sb-section" data-perm="owner_only">
@@ -7506,12 +7507,13 @@ function renderBillingCourtBreakdown(statement, bookings = [], courts = [], feeC
 function statusBdg(s){const m={pending:'bdg-p',confirmed:'bdg-c',completed:'bdg-d',verifying:'bdg-v',cancelled:'bdg-x',forfeited:'bdg-f',deleted:'bdg-x',restored:'bdg-c'};const label=s==='forfeited'?'Forfeited':s;return`<span class="bdg ${m[s]||''}">${esc(label)}</span>`;}
 function payStatusBdg(s){
   const v = (s || 'unpaid').toLowerCase();
-  const label = v === 'paid' ? 'Fully Paid' : v === 'downpayment_paid' ? 'Balance Due' : v === 'deposit_retained' ? 'Deposit Retained' : v === 'for_verification' ? 'For Verification' : v === 'pending' ? 'Pending' : v === 'rejected' ? 'Rejected' : v === 'failed' ? 'Failed' : 'Unpaid';
-  const cls = v === 'paid' ? 'bdg-c' : v === 'downpayment_paid' ? 'bdg-p' : v === 'deposit_retained' ? 'bdg-f' : v === 'for_verification' ? 'bdg-p' : (v === 'failed' || v === 'rejected') ? 'bdg-x' : 'bdg-d';
+  const label = v === 'complimentary' ? 'Complimentary' : v === 'paid' ? 'Fully Paid' : v === 'downpayment_paid' ? 'Balance Due' : v === 'deposit_retained' ? 'Deposit Retained' : v === 'for_verification' ? 'For Verification' : v === 'pending' ? 'Pending' : v === 'rejected' ? 'Rejected' : v === 'failed' ? 'Failed' : 'Unpaid';
+  const cls = v === 'complimentary' ? 'bdg-c' : v === 'paid' ? 'bdg-c' : v === 'downpayment_paid' ? 'bdg-p' : v === 'deposit_retained' ? 'bdg-f' : v === 'for_verification' ? 'bdg-p' : (v === 'failed' || v === 'rejected') ? 'bdg-x' : 'bdg-d';
   return `<span class="bdg ${cls}">${label}</span>`;
 }
 function payStatusText(s){
   const v = (s || 'unpaid').toLowerCase();
+  if (v === 'complimentary') return 'Complimentary';
   return v === 'paid' ? 'Paid'
     : v === 'downpayment_paid' ? 'Balance Due'
     : v === 'deposit_retained' ? 'Deposit Retained'
@@ -8249,6 +8251,7 @@ function bookingActionsHtml(b, canDelete, includePrimaryActions = true, includeD
     ${canDelete && !forfeited && !balanceReviewLocked && !transferLocked?`<button class="btn btn-d btn-sm" onclick="delBooking('${jsArg(actionRef)}')">Delete</button>`:''}`;
 }
 function bookingPayStateSelect(b){
+  if (b.paymentStatus === 'complimentary') return payStatusBdg('complimentary');
   if (isPlaceholderHold(b)) return '<span class="bdg bdg-x">NO PAYMENT EVIDENCE</span>';
   const actionRef = b.primaryRef || b.ref;
   if (b.paymentTransferId || bookingGroupRowsForPaymentGuard(b).some(row => Boolean(row?.paymentTransferId))) {
@@ -8466,6 +8469,7 @@ async function openBookingDetails(ref) {
     const balanceReviewState = hostBalanceReviewState(b);
     const pendingBalance = hostBalancePendingPayment(b);
     const currentDue = forfeited ? 0 : historicalBalance;
+    const voucherMetrics = b.voucherCode && window.RevenueReport ? window.RevenueReport.bookingMetrics(b) : null;
     const deadlineState = window.BookingBalance?.deadlineState?.(b) || {};
     const deadline = b.balanceDueAt ? new Date(b.balanceDueAt) : deadlineState.deadline;
     const deadlineLabel = deadline ? window.BookingBalance.formatDeadline(deadline) : '--';
@@ -8482,6 +8486,7 @@ async function openBookingDetails(ref) {
         ${forfeited ? `<div class="booking-detail-card"><span>Current collectible</span><strong>${fmt(0)}</strong></div><div class="booking-detail-card"><span>Refund issued</span><strong>${fmt(0)}</strong></div>` : ''}
         ${b.hostBooking ? `<div class="booking-detail-card ${deadlineState.code==='final'||deadlineState.code==='overdue'?'danger':''}"><span>Balance deadline</span><strong>${esc(deadlineLabel)}</strong></div>` : ''}
       </div>
+      ${voucherMetrics ? `<div class="booking-detail-section"><h3>Voucher · ${esc(b.voucherCode)}</h3><div class="booking-detail-row"><span>Original price</span><strong>${fmt(voucherMetrics.originalTotal)}</strong></div><div class="booking-detail-row"><span>Discount</span><strong>−${fmt(voucherMetrics.discount)}</strong></div>${['owner','court_owner'].includes(sess?.role) ? `<div class="booking-detail-row"><span>Original booking fee payable on confirmation</span><strong>${fmt(voucherMetrics.feeCharged)}</strong></div><div class="booking-detail-row"><span>Owner-funded fee shortfall</span><strong>${fmt(voucherMetrics.ownerFundedFee)}</strong></div>` : ''}</div>` : ''}
       <div class="booking-detail-section"><h3>Reservation</h3>
         <div class="booking-detail-row"><span>Host / source</span><strong>${esc(b.hostName || b.hostEmail || bookingSourceMeta(b))}</strong></div>
         <div class="booking-detail-row"><span>Court</span><strong>${esc(b.courtName || '--')}</strong></div>
@@ -10050,6 +10055,7 @@ async function restoreDeletedBooking(id, ref) {
 
 /* ── CALENDAR VIEW ── */
 function paymentMethodLabel(m) {
+  if (String(m || '').toLowerCase() === 'voucher') return 'Complimentary voucher';
   return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', unionbank: 'UnionBank → GCash', pnb: 'PNB', cash: 'Cash' }[String(m || '').toLowerCase()] || (m || 'Cash'));
 }
 
@@ -13717,7 +13723,7 @@ async function exportCSV(){
   if(fd) bks=bks.filter(b=>b.date===fd);
   if(fs) bks=bks.filter(b=>b.status===fs);
   bks = groupBookings(bks.filter(b=>b.email!=='reserve@hold.internal'));
-  const h=['Transaction Ref','Name','Email','Contact','Court(s)','Schedule','Hrs','Total','Paid Using','Money Received To','Payment Status','Booking Status','Created','Child Refs'];
+  const h=['Transaction Ref','Name','Email','Contact','Court(s)','Schedule','Hrs','Total','Paid Using','Money Received To','Payment Status','Booking Status','Created','Child Refs','Original Booking Value','Voucher Discount','Owner-funded Booking Fee','Net After Fee Obligation'];
   const rows=bks.map(b=>[b.displayRef||b.ref,b.fullName,b.email,b.contactNumber,b.courtName,b.scheduleLabel||`${fmtD(b.date)} ${b.startTime}-${b.endTime}`,b.duration,b.total,paymentMethodLabel(b.paymentMethod),receivedAccountLabel(b),b.paymentStatus||'unpaid',b.status,b.createdAt,(b.refs||[b.ref]).join(' ')]);
   const csv=[h,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');
@@ -13955,7 +13961,7 @@ async function renderReportRemittance(){
   $('rpRemitTitle').textContent=role==='owner'?'System-owner fee ledger':'Booking fees held for the system owner';
   $('rpRemitCopy').textContent=role==='owner'
     ? 'All-time earned-fee collection and settlement position, independent of the selected report period.'
-    : 'These customer-paid fees are not court revenue and remain payable through the remittance ledger.';
+    : 'Booking fees remain payable through remittance, including court-owner-funded fees on complimentary bookings.';
   try{
     if(!_rpRemittanceCache.data||Date.now()-_rpRemittanceCache.at>30000){
       _rpRemittanceCache={data:await DB.getBookingFeeRemittanceDashboard(),at:Date.now()};
@@ -13995,6 +14001,8 @@ async function renderReport(){
     $('rpCourtRevenue').textContent=fmtReportMoney(Number(s.courtCollected||0)+Number(s.openPlayCollected||0));
     $('rpOutstanding').textContent=fmtReportMoney(s.outstanding);
     $('rpPlatformFees').textContent=fmtReportMoney(s.platformFeesEarned);
+    if (!$('rpVoucherSummary')) { const p=document.createElement('p'); p.id='rpVoucherSummary'; $('rpRemittancePanel').before(p); }
+    $('rpVoucherSummary').textContent='Original booking value: '+fmtReportMoney(s.originalBookingValue)+' · Voucher discounts: '+fmtReportMoney(s.voucherDiscounts)+' · Owner-funded booking fees: '+fmtReportMoney(s.ownerFundedFees);
     const isOwner=sess?.role==='owner';
     $('rpPlatformLabel').textContent=isOwner?'Platform fees':'Platform fees held';
     $('rpPlatformNote').textContent=isOwner?'System-owner booking fees earned':'Fees payable to the system owner';
@@ -14020,12 +14028,12 @@ async function exportReportCSV(){
   const rows=reportRows.map(row=>{
     if(row.registration){
       const r=row.registration;
-      return['Open Play',row.reportDate,`OP-${r.id||''}`,r.full_name||r.fullName||'',r.email||'',r.contact_number||r.contactNumber||'',r.court_name||r.courtName||'Open Play',r.date||'',0,row.courtRental.toFixed(2),'0.00',row.total.toFixed(2),row.paid.toFixed(2),row.outstanding.toFixed(2),paymentMethodLabel(r.payment_method||r.paymentMethod),receivedAccountLabel({receivedAccount:r.received_account||r.receivedAccount,paymentMethod:r.payment_method||r.paymentMethod}),r.payment_status||r.paymentStatus||'pending','registration',r.created_at||r.createdAt||'','',r.id||''];
+      return['Open Play',row.reportDate,`OP-${r.id||''}`,r.full_name||r.fullName||'',r.email||'',r.contact_number||r.contactNumber||'',r.court_name||r.courtName||'Open Play',r.date||'',0,row.courtRental.toFixed(2),'0.00',row.total.toFixed(2),row.paid.toFixed(2),row.outstanding.toFixed(2),paymentMethodLabel(r.payment_method||r.paymentMethod),receivedAccountLabel({receivedAccount:r.received_account||r.receivedAccount,paymentMethod:r.payment_method||r.paymentMethod}),r.payment_status||r.paymentStatus||'pending','registration',r.created_at||r.createdAt||'','',r.id||'',row.total.toFixed(2),'0.00','0.00',row.paid.toFixed(2)];
     }
     const b=row.transaction||{};
     const children=Array.isArray(b.items)&&b.items.length?b.items:[b];
     const earnedAt=children.map(item=>item.bookingFeeEarnedAt||item.booking_fee_earned_at).filter(Boolean).sort()[0]||'';
-    return[row.source,row.reportDate,b.displayRef||b.ref,b.fullName,b.email,b.contactNumber,b.courtName,b.date,row.forfeited?0:b.duration,row.courtRental.toFixed(2),row.feeCharged.toFixed(2),row.total.toFixed(2),row.paid.toFixed(2),row.outstanding.toFixed(2),paymentMethodLabel(b.paymentMethod),receivedAccountLabel(b),b.paymentStatus||'unpaid',b.status,b.createdAt||'',earnedAt,(b.refs||[b.ref]).join(' ')];
+    return[row.source,row.reportDate,b.displayRef||b.ref,b.fullName,b.email,b.contactNumber,b.courtName,b.date,row.forfeited?0:b.duration,row.courtRental.toFixed(2),row.feeCharged.toFixed(2),row.total.toFixed(2),row.paid.toFixed(2),row.outstanding.toFixed(2),paymentMethodLabel(b.paymentMethod),receivedAccountLabel(b),b.paymentStatus||'unpaid',b.status,b.createdAt||'',earnedAt,(b.refs||[b.ref]).join(' '),row.originalTotal.toFixed(2),row.discount.toFixed(2),row.ownerFundedFee.toFixed(2),row.netAfterFeeObligation.toFixed(2)];
   });
   const csv=[h,...rows].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');

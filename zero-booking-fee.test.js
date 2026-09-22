@@ -117,11 +117,11 @@ function hostDepositHarness() {
 
 test('premium price promise sits beside each court rate without exposing the private rate', () => {
   const courtCards = sourceBetween('async function renderCourts()', 'async function selectCourt(id)');
-  assert.equal((courtCards.match(/class="cc-rate-promise">NO BOOKING FEES/g) || []).length, 2);
+  assert.equal((courtCards.match(/class="cc-rate-promise">NO ADDITIONAL BOOKING FEES/g) || []).length, 2);
   assert.match(courtCards, /cc-mobile-meta[^\n]*cc-rate-line[^\n]*\$\{esc\(rateRange\)\}[^\n]*cc-rate-promise/);
   assert.match(courtCards, /cc-photo-rate[^\n]*cc-rate-line[^\n]*\$\{esc\(rateRange\)\}[^\n]*cc-rate-promise/);
   assert.doesNotMatch(courtCards, /₱\s*10|\/hr\s*[×x]/i);
-  assert.doesNotMatch(sourceBetween('<!-- COURTS -->', '<div class="find-time-entry">'), /NO BOOKING FEES/);
+  assert.doesNotMatch(sourceBetween('<!-- COURTS -->', '<div class="find-time-entry">'), /NO ADDITIONAL BOOKING FEES/);
 
   assert.match(page, /\.cc-rate-promise\s*\{[^}]*animation:courtRatePromiseIn\s+\.38s[^}]*\}/s);
   assert.match(page, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.cc-rate-promise\s*\{[^}]*animation:none;[^}]*\}\s*\}/s);
@@ -132,7 +132,7 @@ test('premium price promise sits beside each court rate without exposing the pri
 
   const splashOffer = sourceBetween('<p class="pr-splash-offer"', '</p>');
   assert.match(splashOffer, /role="note"/);
-  assert.equal(splashOffer.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(), 'NO BOOKING FEES');
+  assert.equal(splashOffer.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(), 'NO ADDITIONAL BOOKING FEES');
   assert.doesNotMatch(splashOffer, /aria-live|₱\s*10|\/hr\s*[×x]/i);
   assert.match(brandTheme, /\.pr-splash-offer\s*\{[^}]*animation:\s*pr-offer-in\s+0\.55s/s);
   assert.doesNotMatch(brandTheme, /\.pr-splash-offer\s*\{[^}]*(?:border|background|box-shadow):/s);
@@ -145,7 +145,7 @@ test('per-hour configuration creates exact all-in slot prices', () => {
   assert.equal(quote.rate, 350);
   assert.match(quote.html, /₱350/);
   assert.doesNotMatch(quote.html, /Final|Live total|csl-final/i);
-  assert.match(quote.aria, /₱350 per hour, zero booking fee/);
+  assert.match(quote.aria, /₱350 per hour, no additional booking fees/);
 });
 
 test('flat configuration never repeats the flat share on every slot', () => {
@@ -155,7 +155,7 @@ test('flat configuration never repeats the flat share on every slot', () => {
   assert.match(quote.html, /₱350/);
   assert.doesNotMatch(quote.html, /Live total|Final|csl-final/i);
   assert.doesNotMatch(quote.html, /₱360/);
-  assert.match(quote.aria, /₱350 per hour, zero booking fee/);
+  assert.match(quote.aria, /₱350 per hour, no additional booking fees/);
 
 });
 
@@ -358,8 +358,8 @@ test('player summary and confirmation show the fee-free all-in price only', () =
   const stepThree = sourceBetween('<!-- ── STEP 3: YOUR DETAILS ── -->', '<!-- ── STEP 5: PAYMENT ── -->');
   assert.match(stepThree, /class="wiz-summary wiz-summary--booking"/, 'Step 3 must use one scoped booking summary card');
   assert.match(page, /\.wiz-summary--booking \.pbs-price-card\s*\{[^}]*border\s*:\s*0;[^}]*background\s*:\s*transparent;/s, 'the nested price shell must be visually flattened');
-  assert.match(summaries, /Booking fee/);
-  assert.match(summaries, /pbs-free-badge">Free/);
+  assert.match(summaries, /No additional booking fees/);
+  assert.match(summaries, /pbs-free-badge">Included/);
   assert.match(summaries, /Booking total/);
   assert.match(summaries, />Total</);
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
@@ -371,8 +371,8 @@ test('player summary and confirmation show the fee-free all-in price only', () =
 
   const confirmation = sourceBetween('<section class="inv-payment-card', '</section>');
   assert.match(confirmation, /inv-fee-free/);
-  assert.match(confirmation, /Booking fee/);
-  assert.match(confirmation, />Free</);
+  assert.match(confirmation, /No additional booking fees/);
+  assert.match(confirmation, />Included</);
   assert.match(confirmation, /id="iRentalBreakdown"/);
 
   const submission = sourceBetween('async function submitBooking(e)', 'function resetForm');
@@ -404,6 +404,6 @@ test('pricing surfaces never present the internal allocation as an add-on', () =
   const summaries = sourceBetween('function hostBookingItemsSummaryHtml', 'async function refreshBookingItemViews');
   assert.doesNotMatch(slotPricing, /Final Prices|Live Total|csl-final/i);
   assert.doesNotMatch(summaries, /Final booking total|Final total|Live total/i);
-  assert.match(summaries, /Booking fee/);
-  assert.match(summaries, /pbs-free-badge">Free/);
+  assert.match(summaries, /No additional booking fees/);
+  assert.match(summaries, /pbs-free-badge">Included/);
 });

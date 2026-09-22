@@ -50,6 +50,7 @@
   };
 
   const paymentStatusMeta = {
+    complimentary: { label: "Complimentary — no payment required", tone: "success" },
     paid: { label: "Paid in full", tone: "success" },
     downpayment_paid: { label: "Deposit recorded", tone: "success" },
     for_verification: { label: "Payment under review", tone: "warning" },

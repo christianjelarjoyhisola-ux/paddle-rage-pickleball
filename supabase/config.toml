@@ -44,5 +44,8 @@ verify_jwt = true
 [functions.submit-public-booking]
 verify_jwt = true
 
+[functions.booking-vouchers]
+verify_jwt = true
+
 [functions.integration-status]
 verify_jwt = true

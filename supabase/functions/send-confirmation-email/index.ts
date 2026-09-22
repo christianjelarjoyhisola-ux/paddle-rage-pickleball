@@ -22,6 +22,9 @@ type BookingRow = {
   start_time: string | null;
   end_time: string | null;
   duration: number | null;
+  voucher_original_total: number | null;
+  voucher_discount: number | null;
+  voucher_code: string | null;
   total: number | null;
   downpayment: number | null;
   payment_status: string;
@@ -42,6 +45,7 @@ const BOOKING_COLUMNS = [
   "start_time",
   "end_time",
   "duration",
+  "voucher_original_total", "voucher_discount", "voucher_code",
   "total",
   "downpayment",
   "payment_status",
@@ -107,7 +111,7 @@ function verifiedPayload(
   const isHostBooking = rows.every((row) => row.host_booking === true);
   if (
     !isHostBooking &&
-    rows.some((row) => String(row.payment_status || "") !== "paid")
+    rows.some((row) => !["paid", "complimentary"].includes(String(row.payment_status || "")))
   ) {
     throw new Error("Regular bookings require verified full payment");
   }
@@ -139,6 +143,9 @@ function verifiedPayload(
     endTime: first.end_time || "",
     duration: rows.reduce((sum, row) => sum + Number(row.duration || 0), 0),
     total,
+    complimentary: rows.every(row => row.payment_status === "complimentary" && Number(row.total) === 0),
+    voucherDiscount: rows.reduce((sum,row) => sum + Number(row.voucher_discount || 0),0),
+    originalTotal: rows.reduce((sum,row) => sum + Number(row.voucher_original_total ?? row.total ?? 0),0),
     downpayment: paid,
     remainingBalance: Math.max(0, total - paid),
     hostBooking: isHostBooking,

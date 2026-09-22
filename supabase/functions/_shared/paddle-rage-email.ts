@@ -17,6 +17,9 @@ const BRAND = {
 } as const;
 
 export type ConfirmationPayload = {
+  complimentary?: boolean;
+  voucherDiscount?: number;
+  originalTotal?: number;
   bookingRef: string;
   email: string;
   fullName: string;
@@ -361,12 +364,13 @@ export function renderConfirmationEmail(
     )
     : 0;
   const paidInFull = remaining < 1;
-  const confirmationIntro = paidInFull
+  const complimentary = payload.complimentary === true && total === 0;
+  const confirmationIntro = complimentary ? "your complimentary booking is confirmed. No payment is required." : paidInFull
     ? "we received your full payment, and your Paddle Rage booking is confirmed. Everything you need is below."
     : paid > 0
     ? "we received your downpayment, and your Paddle Rage booking is confirmed. Everything you need is below."
     : "your Paddle Rage booking is confirmed. No payment has been recorded yet, so please review the payment details below.";
-  const confirmationPlain = paidInFull
+  const confirmationPlain = complimentary ? "Your complimentary booking is confirmed. No payment is required." : paidInFull
     ? "We received your full payment, and your booking is confirmed."
     : paid > 0
     ? "We received your downpayment, and your booking is confirmed."
@@ -397,7 +401,7 @@ export function renderConfirmationEmail(
   const deadline = hostBooking && !paidInFull
     ? formatDeadline(payload.balanceDueAt)
     : "";
-  const paymentCopy = paidInFull
+  const paymentCopy = complimentary ? "Your voucher covers the full booking. No payment is required." : paidInFull
     ? "Your payment is complete. There is no remaining balance."
     : deadline
     ? `Your remaining balance of <strong style="color:${BRAND.text};">${
@@ -408,6 +412,7 @@ export function renderConfirmationEmail(
     }</strong> is due on the day of play.`;
 
   const bodyHtml = `
+    ${Number(payload.voucherDiscount || 0) > 0 ? `<p style="color:${BRAND.text};">Original price: ${formatPhp(Number(payload.originalTotal || 0))} · Voucher savings: ${formatPhp(Number(payload.voucherDiscount))}</p>` : ""}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:20px;background:${BRAND.surfaceRaised};border:1px solid ${BRAND.border};border-radius:13px;">
       <tr><td style="padding:18px 20px;">
         <div style="font-size:11px;line-height:1.3;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:${BRAND.muted};">Paddle Rage booking reference</div>
@@ -460,7 +465,7 @@ export function renderConfirmationEmail(
             <div style="font-size:10px;line-height:1.3;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:${BRAND.muted};">Balance</div>
             <div style="margin-top:4px;font-size:16px;line-height:1.4;font-weight:900;color:${
     paidInFull ? BRAND.neon : BRAND.danger
-  };">${paidInFull ? "Paid in full" : formatPhp(remaining)}</div>
+  };">${complimentary ? "Complimentary" : paidInFull ? "Paid in full" : formatPhp(remaining)}</div>
           </td>
         </tr></table>
       </td></tr>
@@ -486,7 +491,7 @@ export function renderConfirmationEmail(
       plain(item.startTime)
     } - ${plain(item.endTime)} | ${formatPhpPlain(Number(item.total || 0))}`
   ).join("\n");
-  const plainPayment = paidInFull
+  const plainPayment = complimentary ? "Payment status: Complimentary (no payment collected)" : paidInFull
     ? "Payment status: Paid in full"
     : `Remaining balance: ${formatPhpPlain(remaining)}${
       deadline ? `\nBalance due: ${deadline}` : " (due on the day of play)"
