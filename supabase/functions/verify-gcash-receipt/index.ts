@@ -1,4 +1,5 @@
 import { evaluateGcashCriticalOcrQuality } from "../_shared/gcash-ocr-quality.ts";
+import { configuredBpiMobileAliases } from "../_shared/receipt-providers/bpi.ts";
 // verify-gcash-receipt
 // ----------------------------------------------------------------------------
 // Server-side digital-payment receipt verification + fraud detection.
@@ -1051,10 +1052,9 @@ function ocrCriticalGaps(
     });
     const receipt = parsed.receipt;
     const gaps: string[] = [];
-    if (
-      !receipt.reference.value ||
-      receipt.reference.typedMatch !== "match"
-    ) gaps.push("reference");
+    // A readable reference that differs from user input is a validation
+    // mismatch, not an OCR failure. The verifier still blocks auto-approval.
+    if (!receipt.reference.value) gaps.push("reference");
     if (
       receipt.amount.amount == null || !receipt.amount.reliable ||
       receipt.amount.ambiguous ||
@@ -2711,6 +2711,8 @@ Deno.serve(async (req) => {
               settings.gcash_qr_receipt_recipient_name,
               settings.payment_merchant_name,
             ].filter(Boolean)
+            : provider === "bpi"
+            ? configuredBpiMobileAliases(settings.bpi_receipt_mobile_recipient_aliases || "", expectedNumber)
             : [],
           expectedRecipientAccount: provider === "bdopay" || provider === "bpi" ||
               provider === "maribank" || provider === "gotyme"
@@ -3182,7 +3184,7 @@ Deno.serve(async (req) => {
       gcashCriticalOcrQuality,
       ocrTextLength: ocrText.length,
       expectedReceiverNumber:
-        provider === "bdopay" || provider === "maya" || provider === "bpi"
+        provider === "bdopay" || provider === "maya"
           ? null
           : expectedNumber || null,
       expectedReceiverName: expectedName || null,

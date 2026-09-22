@@ -29,6 +29,7 @@ export type BpiRecipientField = {
   labelNormalized: string | null;
   accountRaw: string | null;
   accountSuffix: string | null;
+  accountNumber: string | null;
   lineIndex: number | null;
 };
 
@@ -255,28 +256,75 @@ function parseRecipient(lines: string[]): BpiRecipientField {
       labelNormalized: null,
       accountRaw: null,
       accountSuffix: null,
+      accountNumber: null,
       lineIndex: null,
     };
   }
-  const block = lines.slice(transferIndex + 1, transferIndex + 6);
+  // Read only the destination section. Never use the sender account or a
+  // reference elsewhere in the receipt as recipient evidence.
+  const following = lines.slice(transferIndex + 1);
+  const end = following.findIndex((line) =>
+    /^(?:add to favorites|transfer amount|fee|transfer from|transfer service|new transfer|go to accounts|[\^⌃]?\s*hide other details)\b/i
+      .test(line)
+  );
+  const block = following.slice(0, end < 0 ? 5 : end);
   const destinationOffset = block.findIndex((line) =>
     /\bgcash\s*\/\s*g-?xchange\b/i.test(line)
   );
   const labelIndex = destinationOffset >= 0 ? destinationOffset + 1 : 0;
   const labelRaw = String(block[labelIndex] || "").trim() || null;
-  const accountRaw =
-    block.slice(labelIndex + 1).find((line) =>
-      /(?:[*xX]{3,}|X{3,})[A-Z0-9]{2,6}$/i.test(line.replace(/\s/g, ""))
-    ) || null;
+  const candidates = [...new Map(
+    block.slice(labelIndex + 1)
+      .filter((line) =>
+        /^[*xX]{3,}[A-Z0-9]{2,6}$/i.test(line.replace(/\s/g, "")) ||
+        normalizeMobileNumber(line) !== null
+      ).map(
+        (line) => [
+          normalizeMobileNumber(line) || line.replace(/\s/g, "").toUpperCase(),
+          line,
+        ],
+      ),
+  ).values()];
+  const accountRaw = candidates.length === 1 ? candidates[0] : null;
   const compactAccount = accountRaw?.replace(/\s/g, "") || "";
-  const suffix = compactAccount.replace(/^[*xX]+/, "").toUpperCase() || null;
+  const accountNumber = normalizeMobileNumber(accountRaw || "");
+  const suffix = accountNumber
+    ? null
+    : compactAccount.replace(/^[*xX]+/, "").toUpperCase() || null;
   return {
     labelRaw,
     labelNormalized: labelRaw ? normalizeBpiRecipientLabel(labelRaw) : null,
     accountRaw,
     accountSuffix: suffix,
+    accountNumber,
     lineIndex: labelRaw ? transferIndex + 1 + labelIndex : null,
   };
+}
+
+function normalizeMobileNumber(raw: string): string | null {
+  if (!/^\+?[\d\s()-]+$/.test(raw)) return null;
+  const digits = digitsOnly(raw);
+  if (/^09\d{9}$/.test(digits)) return digits;
+  if (/^639\d{9}$/.test(digits)) return `0${digits.slice(2)}`;
+  return null;
+}
+
+export function configuredBpiMobileAliases(
+  config: string,
+  recipientNumber: string,
+): string[] {
+  const number = normalizeMobileNumber(recipientNumber);
+  if (!number) return [];
+  try {
+    const aliases = JSON.parse(config || "{}")[number];
+    return Array.isArray(aliases)
+      ? aliases.filter((value): value is string =>
+        typeof value === "string" && value.trim().length > 0
+      )
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function compareRecipientLabel(
@@ -410,14 +458,33 @@ export function verifyBpiToGcashReceipt(
   context: BpiVerificationContext,
 ): BpiReceiptVerificationEvidence {
   const flags: string[] = [];
-  const recipientComparison = compareRecipientLabel(
+  let recipientComparison = compareRecipientLabel(
     parsed.recipient.labelNormalized,
     context.expectedRecipientLabel || context.expectedRecipientName || "",
   );
-  const recipientAccountComparison = compareRecipientAccount(
-    parsed.recipient.accountSuffix,
-    context.expectedRecipientAccount || "",
+  const fullMobileDestination = parsed.recipient.accountNumber;
+  const expectedMobile = normalizeMobileNumber(
+    context.expectedRecipientNumber || "",
   );
+  const recipientAccountComparison: BpiRecipientAccountComparison =
+    fullMobileDestination
+      ? !expectedMobile
+        ? "not_configured"
+        : fullMobileDestination === expectedMobile
+        ? "exact"
+        : "mismatch"
+      : compareRecipientAccount(
+        parsed.recipient.accountSuffix,
+        context.expectedRecipientAccount || "",
+      );
+  // Only administrator-configured aliases may supplement the merchant name,
+  // and only with an exact full mobile destination. QR suffixes do not qualify.
+  if (
+    fullMobileDestination && recipientAccountComparison === "exact" &&
+    (context.expectedRecipientNameAliases || []).some((alias) =>
+      compareRecipientLabel(parsed.recipient.labelNormalized, alias) === "exact"
+    )
+  ) recipientComparison = "exact";
   if (!parsed.indicators.providerBrand) addUnique(flags, "BPI_UNREADABLE");
   if (parsed.indicators.competingProviderBrand) {
     addUnique(flags, "METHOD_MISMATCH");
@@ -428,8 +495,13 @@ export function verifyBpiToGcashReceipt(
   if (!parsed.indicators.destinationGcash) {
     addUnique(flags, "GXI_DESTINATION_UNREADABLE");
   }
-  if (!parsed.indicators.instaPay) addUnique(flags, "INSTAPAY_QRPH_UNREADABLE");
-  if (!parsed.indicators.qrCodeRecipient) {
+  // BPI's direct-to-mobile success screen shows the complete destination
+  // number, without the QR marker or the off-screen transfer-service section.
+  // That format requires an exact full-number match instead of a QR suffix.
+  if (!fullMobileDestination && !parsed.indicators.instaPay) {
+    addUnique(flags, "INSTAPAY_QRPH_UNREADABLE");
+  }
+  if (!fullMobileDestination && !parsed.indicators.qrCodeRecipient) {
     addUnique(flags, "RECEIVER_NAME_UNREADABLE");
   }
   if (!parsed.indicators.gmtPlus8) addUnique(flags, "TIMEZONE_UNREADABLE");

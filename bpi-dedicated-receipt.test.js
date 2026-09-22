@@ -24,6 +24,17 @@ const sharedIdentityMigration = fs.readFileSync(
 );
 const admin = fs.readFileSync(path.join(root, 'admin.html'), 'utf8');
 
+test('BPI form preserves complete confirmation numbers through input normalization', () => {
+  const page = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const functions = page.slice(page.indexOf('function paymentRefMaxLength('), page.indexOf('function paymentRefHelpText('));
+  const api = new Function(`${functions}; return { normalizePaymentRef, paymentRefMaxLength, isBpiConfirmationValid };`)();
+  for (const reference of ['1626505879540', '1626518942470', '001626518942470', '12345678901234567890']) {
+    assert.equal(api.normalizePaymentRef(reference, 'bpi'), reference);
+    assert.ok(api.isBpiConfirmationValid(reference));
+    assert.ok(api.paymentRefMaxLength('bpi') >= reference.length);
+  }
+});
+
 test('BPI uses its configured receipt identity and dedicated GCash route', () => {
   assert.match(
     edge,
@@ -70,7 +81,8 @@ test('staff audit modal identifies and explains dedicated BPI verification', () 
   assert.match(admin, /bpi_to_gcash_v1:\s*'Dedicated BPI/);
   assert.match(admin, /\['BPI Confirmation'/);
   assert.match(admin, /\['BPI Transaction Ref'/);
-  assert.match(admin, /\['BPI QR Recipient'/);
+  assert.match(admin, /\['BPI Recipient'/);
+  assert.match(admin, /\['BPI Destination Number'/);
   assert.match(admin, /\['BPI Destination Suffix'/);
   assert.match(admin, /bankTransfer\.recipientAccountComparison/);
   assert.match(admin, /bankTransfer\.recipientComparison/);

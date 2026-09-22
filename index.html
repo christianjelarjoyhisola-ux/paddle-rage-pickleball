@@ -8049,8 +8049,8 @@ function pickPay(m) {
       maya: 'Pay from Maya to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       bpi: [
         'BPI to GCash/G-Xchange only.',
-        'Enter the BPI Confirmation No., not the Transaction Ref. No.',
-        'Your receipt stays pending for court-owner review.',
+        'Copy the complete BPI Confirmation No., including every digit, not the Transaction Ref. No.',
+        'Receipts that pass all checks confirm automatically; unclear or mismatched details need owner review.',
       ],
       gotyme: 'Pay from GoTyme to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       maribank: 'Pay from MariBank to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
@@ -8114,7 +8114,7 @@ function syncGcashSharedPanel(method) {
       header: 'BPI → GCash',
       title: 'Send to this GCash / G-Xchange account',
       guide: ['Open the QR in BPI.', 'Pay the exact amount.', 'Use Confirmation No.', 'Upload the BPI receipt.'],
-      help: 'BPI → GCash/G-Xchange. Enter the Confirmation No., not the Transaction Ref. No. Your receipt stays pending for court-owner review.',
+      help: 'BPI → GCash/G-Xchange. Copy the complete Confirmation No., not the Transaction Ref. No. Receipts that pass all checks confirm automatically.',
     },
     gotyme: {
       header: 'GoTyme → GCash',
@@ -8223,7 +8223,7 @@ function paymentRefHelpText(method) {
   if (method === 'gcash') return 'GCash reference must be exactly 13 digits.';
   if (method === 'bdopay') return 'Enter the BDO Pay Reference no. in BN-YYYYMMDD-######## format, not the invoice number. We verify the invoice from the receipt.';
   if (method === 'maya') return 'Enter the Maya Reference ID, e.g. B6DC F633 F08C. Do not enter the InstaPay Ref. No.';
-  if (method === 'bpi') return 'Enter the BPI Confirmation No., e.g. 1783397488347. Do not enter the Transaction Ref. No.';
+  if (method === 'bpi') return 'Copy the complete BPI Confirmation No., including every digit (e.g. 1783397488347). Do not use the shorter Transaction Ref. No.';
   if (method === 'gotyme') return 'Enter the complete GoTyme transaction reference exactly as shown on the successful receipt.';
   if (method === 'unionbank') return 'Enter the UB reference, e.g. UB678039, not the InstaPay reference. Upload the complete successful UnionBank receipt.';
   if (method === 'maribank') return 'Enter the complete MariBank transaction reference exactly as shown on the successful receipt.';
@@ -11378,7 +11378,7 @@ function opPickPay(method) {
       : method === 'maya'
         ? 'Pay from Maya to this GCash recipient. Anything unclear or mismatched stays pending for court-owner review.'
       : method === 'bpi'
-        ? 'Pay from BPI to this GCash/G-Xchange recipient. Enter the BPI Confirmation No.; the receipt stays pending for court-owner review.'
+        ? 'Pay from BPI to this GCash/G-Xchange recipient. Copy every digit of the Confirmation No. Receipts that pass all checks confirm automatically; mismatches need owner review.'
       : method === 'gcash'
         ? 'Pay from GCash to this GCash recipient. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.'
         : method === 'pnb'
