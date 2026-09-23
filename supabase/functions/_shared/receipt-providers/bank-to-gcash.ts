@@ -70,7 +70,7 @@ export type BankReceiptIndicators = {
 export type BankToGcashReceiptParse = {
   provider: BankToGcashProvider;
   destinationProvider: "gcash";
-  parserVersion: "gotyme_to_gcash_v1" | "maribank_to_gcash_v1" | "unionbank_to_gcash_v1";
+  parserVersion: "gotyme_to_gcash_v2" | "maribank_to_gcash_v1" | "unionbank_to_gcash_v1";
   reference: BankReferenceField;
   railReference: BankRailReferenceField;
   amount: ReceiptAmountExtraction;

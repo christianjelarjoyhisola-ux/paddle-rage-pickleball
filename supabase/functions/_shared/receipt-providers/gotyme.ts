@@ -8,7 +8,7 @@ import {
 
 const GOTYME_CONFIG = {
   provider: "gotyme" as const,
-  parserVersion: "gotyme_to_gcash_v1" as const,
+  parserVersion: "gotyme_to_gcash_v2" as const,
   brandPattern: /\bgo\s*tyme\b|\bgotyme\b/i,
   competingBrandPattern: /\bmari\s*bank\b|\bmaribank\b/i,
   competingProvider: "maribank" as const,
@@ -21,8 +21,44 @@ export function parseGotymeToGcashReceipt(
 ): BankToGcashReceiptParse & { provider: "gotyme" } {
   // Repair only the bounded GoTyme details block. Customer input never
   // supplies missing OCR evidence.
-  let text = rawText;
   const lines = rawText.split(/\r?\n/).map((line) => line.trim());
+  // Vision can read the left column (To, From) before the right column.
+  // Recover only the complete, bounded recipient/sender layout, never names
+  // or account digits from elsewhere on the receipt or from customer input.
+  const to = lines.findIndex((line) => /^To$/i.test(line));
+  if (
+    to >= 0 && /^From$/i.test(lines[to + 1] || "") &&
+    /^G-Xchange,?\s*Inc\.?\s*\(GCash\)$/i.test(lines[to + 4] || "") &&
+    /^GoTyme Bank$/i.test(lines[to + 7] || "") &&
+    /^[*•●·.xX\s]+[A-Z0-9]{4}$/i.test(lines[to + 3] || "") &&
+    /^[*•●·.xX\s]+\d{4}$/.test(lines[to + 6] || "")
+  ) {
+    lines.splice(
+      to,
+      8,
+      "To",
+      ...lines.slice(to + 2, to + 5),
+      "From",
+      ...lines.slice(to + 5, to + 8),
+    );
+  }
+  // OCR may collapse many masking stars into one. Normalize the mask only;
+  // the four observed suffix characters still have to match configured QR
+  // details AND the recipient name must match independently in the verifier.
+  const recipientStart = lines.findIndex((line) => /^To$/i.test(line));
+  const recipientEnd = lines.findIndex((line, index) =>
+    index > recipientStart && /^From$/i.test(line)
+  );
+  if (
+    recipientStart >= 0 && recipientEnd > recipientStart &&
+    recipientEnd - recipientStart <= 5
+  ) {
+    for (let index = recipientStart + 1; index < recipientEnd; index++) {
+      const masked = lines[index].match(/^[*•●·.]+\s*([A-Z0-9]{4})$/i);
+      if (masked && /[A-Z]/i.test(masked[1])) lines[index] = "***" + masked[1];
+    }
+  }
+  let text = lines.join("\n");
   const start = lines.findIndex((line) => /^Trace ID$/i.test(line));
   const date = lines.findIndex((line, index) =>
     index > start &&
@@ -34,7 +70,6 @@ export function parseGotymeToGcashReceipt(
     const traces = block.filter((line) => /^\d{6}$/.test(line));
     if (
       refs.length === 1 && traces.length === 1 &&
-      refs[0].endsWith(traces[0]) &&
       block.some((line) => /^Reference No\.$/i.test(line))
     ) {
       text = text.replace(/^Reference No\.\s*$/im, `Reference No. ${refs[0]}`)

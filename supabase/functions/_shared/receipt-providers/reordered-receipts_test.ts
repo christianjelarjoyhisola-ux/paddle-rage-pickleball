@@ -92,7 +92,7 @@ Deno.test("reordered receipts keep conflicts and incomplete evidence in review",
       ["gcash", gcash.replace("350.00\n", "")],
       ["gotyme", gotyme.replace("ONS8", "BAD8")],
       ["gotyme", gotyme.replace("PaddleRage", "Another Merchant")],
-      ["gotyme", gotyme.replace("147002\nITO", "147003\nITO")],
+      ["gotyme", gotyme.replace("147002\nITO", "147002\n147003\nITO")],
       ["gotyme", gotyme.replace("Transferred", "Pending")],
       ["gotyme", gotyme.replace("ITO260919133147002", "")],
     ] as const

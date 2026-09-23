@@ -1,3 +1,4 @@
+import { editedBySoftware } from "../_shared/receipt-image-metadata.ts";
 import { evaluateGcashCriticalOcrQuality } from "../_shared/gcash-ocr-quality.ts";
 import { configuredBpiMobileAliases } from "../_shared/receipt-providers/bpi.ts";
 // verify-gcash-receipt
@@ -1029,15 +1030,6 @@ function looksLikeGcashReceipt(text: string): boolean {
   return score >= 2;
 }
 
-// Best-effort JPEG "edited in image software" detector (soft signal only).
-function editedBySoftware(bytes: Uint8Array): boolean {
-  // Scan the first 64KB for editor signatures embedded in EXIF/XMP.
-  const slice = bytes.subarray(0, Math.min(bytes.length, 65536));
-  let s = "";
-  for (let i = 0; i < slice.length; i++) s += String.fromCharCode(slice[i]);
-  return /(adobe\s*photoshop|gimp|pixlr|snapseed|picsart|lightroom|inkscape)/i
-    .test(s);
-}
 
 // Google Vision is the only OCR engine used for receipt verification.
 function ocrCriticalGaps(
@@ -2872,7 +2864,7 @@ Deno.serve(async (req) => {
     ) {
       flags.push("AMOUNT_MISMATCH");
     }
-    if (editedBySoftware(bytes)) flags.push("EDITED_METADATA");
+    if (await editedBySoftware(bytes)) flags.push("EDITED_METADATA");
 
     // GCash screenshots often contain advertisements and footer copy that can
     // lower whole-page confidence even when every payment field is clear. Use
