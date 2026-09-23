@@ -22,6 +22,35 @@ export function parseGotymeToGcashReceipt(
   // Repair only the bounded GoTyme details block. Customer input never
   // supplies missing OCR evidence.
   const lines = rawText.split(/\r?\n/).map((line) => line.trim());
+  // Some screenshots place the To label above the transfer header in Vision's
+  // reading order. Recover only the recipient triple directly before GCash,
+  // with known display-only header lines between To and that triple.
+  const headerTo = lines.findIndex((line) => /^To$/i.test(line));
+  const headerFrom = lines.findIndex((line, index) =>
+    index > headerTo && /^From$/i.test(line)
+  );
+  if (headerTo >= 0 && headerFrom > headerTo && headerFrom - headerTo <= 10) {
+    const destination = headerFrom - 1;
+    const prefix = lines.slice(headerTo + 1, destination - 2);
+    if (
+      destination - 2 > headerTo && prefix.length > 0 &&
+      /^G-Xchange,?\s*Inc\.?\s*\(GCash\)$/i.test(lines[destination]) &&
+      /^[*•●·.xX\s]+[A-Z0-9]{4}$/i.test(lines[destination - 1]) &&
+      /^[A-Za-z][A-Za-z .*-]+$/.test(lines[destination - 2]) &&
+      prefix.every((line) =>
+        /^(?:Transferred[!.]?|Share|Repeat|Add to favorites|[P₱$]\s*[\d,]+\.\d{2})$/i
+          .test(line)
+      )
+    ) {
+      lines.splice(
+        headerTo,
+        headerFrom - headerTo,
+        ...prefix,
+        "To",
+        ...lines.slice(destination - 2, destination + 1),
+      );
+    }
+  }
   // Vision can read the left column (To, From) before the right column.
   // Recover only the complete, bounded recipient/sender layout, never names
   // or account digits from elsewhere on the receipt or from customer input.

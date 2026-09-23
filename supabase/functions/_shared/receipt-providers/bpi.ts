@@ -312,19 +312,28 @@ function normalizeMobileNumber(raw: string): string | null {
 export function configuredBpiMobileAliases(
   config: string,
   recipientNumber: string,
+  legalRecipient?: { number: string; name: string },
 ): string[] {
   const number = normalizeMobileNumber(recipientNumber);
   if (!number) return [];
+  let aliases: string[] = [];
   try {
-    const aliases = JSON.parse(config || "{}")[number];
-    return Array.isArray(aliases)
-      ? aliases.filter((value): value is string =>
+    const configured = JSON.parse(config || "{}")[number];
+    if (Array.isArray(configured)) {
+      aliases = configured.filter((value): value is string =>
         typeof value === "string" && value.trim().length > 0
-      )
-      : [];
+      );
+    }
   } catch {
-    return [];
+    // Invalid custom aliases cannot authorize any custom recipient name.
   }
+  // The configured legal name belongs only to its exact full mobile number.
+  // A QR token, suffix, or a different mobile number never authorizes it.
+  if (
+    legalRecipient && normalizeMobileNumber(legalRecipient.number) === number &&
+    legalRecipient.name.trim()
+  ) aliases.push(legalRecipient.name.trim());
+  return [...new Set(aliases)];
 }
 
 function compareRecipientLabel(
@@ -532,10 +541,6 @@ export function verifyBpiToGcashReceipt(
   }
 
   if (!parsed.timestamp.date) addUnique(flags, "DATE_UNREADABLE");
-  else if (
-    context.bookingStartedDate &&
-    parsed.timestamp.date !== context.bookingStartedDate
-  ) addUnique(flags, "DATE_NOT_TODAY");
   const bookingStartedAt = context.bookingStartedAt
     ? new Date(context.bookingStartedAt)
     : null;
@@ -550,6 +555,14 @@ export function verifyBpiToGcashReceipt(
   } else {
     const ageMinutes = (receiptInstant.getTime() - bookingStartedAt.getTime()) /
       60000;
+    // A valid payment window can cross Philippine midnight. Calendar dates
+    // differ only meaningfully when the precise receipt time is out of range.
+    if (
+      context.bookingStartedDate &&
+      parsed.timestamp.date !== context.bookingStartedDate &&
+      (ageMinutes < -context.earlyToleranceMinutes ||
+        ageMinutes > context.paymentWindowMinutes)
+    ) addUnique(flags, "DATE_NOT_TODAY");
     if (ageMinutes < -context.earlyToleranceMinutes) {
       addUnique(flags, "TIME_FUTURE");
     } else if (ageMinutes > context.paymentWindowMinutes) {

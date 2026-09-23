@@ -571,8 +571,6 @@ export function verifyBdoPayToGcashReceipt(
       context.amountTolerance;
   const timestampMatches = parsed.timestamp.completeness === "date_time" &&
     !!parsed.timestamp.date &&
-    (!context.bookingStartedDate ||
-      parsed.timestamp.date === context.bookingStartedDate) &&
     (!parsed.reference.receiptDate ||
       parsed.reference.receiptDate === parsed.timestamp.date) &&
     receiptAgeMinutes != null &&
@@ -641,7 +639,10 @@ export function verifyBdoPayToGcashReceipt(
   else {
     if (
       context.bookingStartedDate &&
-      parsed.timestamp.date !== context.bookingStartedDate
+      parsed.timestamp.date !== context.bookingStartedDate &&
+      (receiptAgeMinutes == null ||
+        receiptAgeMinutes < -context.earlyToleranceMinutes ||
+        receiptAgeMinutes > context.paymentWindowMinutes)
     ) addUnique(flags, "DATE_NOT_TODAY");
     if (
       parsed.reference.receiptDate &&

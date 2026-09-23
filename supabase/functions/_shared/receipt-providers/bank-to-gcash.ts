@@ -935,12 +935,7 @@ export function verifyBankToGcashReceipt(
   }
 
   if (!parsed.timestamp.date) addUnique(flags, "DATE_UNREADABLE");
-  else if (
-    context.bookingStartedDate &&
-    parsed.timestamp.date !== context.bookingStartedDate
-  ) {
-    addUnique(flags, "DATE_NOT_TODAY");
-  }
+  // The bounded instant comparison below also permits valid midnight crossings.
   const bookingStartedAt = context.bookingStartedAt
     ? new Date(context.bookingStartedAt)
     : null;
@@ -955,6 +950,10 @@ export function verifyBankToGcashReceipt(
   } else {
     const ageMinutes = (receiptInstant.getTime() - bookingStartedAt.getTime()) /
       60000;
+    if (context.bookingStartedDate && parsed.timestamp.date !== context.bookingStartedDate &&
+        (ageMinutes < -context.earlyToleranceMinutes || ageMinutes > context.paymentWindowMinutes)) {
+      addUnique(flags, "DATE_NOT_TODAY");
+    }
     if (ageMinutes < -context.earlyToleranceMinutes) {
       addUnique(flags, "TIME_FUTURE");
     } else if (ageMinutes > context.paymentWindowMinutes) {

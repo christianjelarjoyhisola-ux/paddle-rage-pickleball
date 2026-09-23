@@ -849,12 +849,6 @@ export function verifyMayaToGcashReceipt(
   }
 
   if (!parsed.timestamp.date) addUnique(flags, "DATE_UNREADABLE");
-  else if (
-    context.bookingStartedDate &&
-    parsed.timestamp.date !== context.bookingStartedDate
-  ) {
-    addUnique(flags, "DATE_NOT_TODAY");
-  }
   const bookingStartedAt = context.bookingStartedAt
     ? new Date(context.bookingStartedAt)
     : null;
@@ -869,6 +863,14 @@ export function verifyMayaToGcashReceipt(
   } else {
     const ageMinutes = (receiptInstant.getTime() - bookingStartedAt.getTime()) /
       60000;
+    // A valid payment window can cross Philippine midnight. Calendar dates
+    // differ only meaningfully when the precise receipt time is out of range.
+    if (
+      context.bookingStartedDate &&
+      parsed.timestamp.date !== context.bookingStartedDate &&
+      (ageMinutes < -context.earlyToleranceMinutes ||
+        ageMinutes > context.paymentWindowMinutes)
+    ) addUnique(flags, "DATE_NOT_TODAY");
     if (ageMinutes < -context.earlyToleranceMinutes) {
       addUnique(flags, "TIME_FUTURE");
     } else if (ageMinutes > context.paymentWindowMinutes) {

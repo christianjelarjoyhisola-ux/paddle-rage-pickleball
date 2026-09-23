@@ -2704,7 +2704,10 @@ Deno.serve(async (req) => {
               settings.payment_merchant_name,
             ].filter(Boolean)
             : provider === "bpi"
-            ? configuredBpiMobileAliases(settings.bpi_receipt_mobile_recipient_aliases || "", expectedNumber)
+            ? configuredBpiMobileAliases(settings.bpi_receipt_mobile_recipient_aliases || "", expectedNumber, {
+              number: settings.gcash_merchant_number || "",
+              name: settings.gcash_merchant_name || "",
+            })
             : [],
           expectedRecipientAccount: provider === "bdopay" || provider === "bpi" ||
               provider === "maribank" || provider === "gotyme"

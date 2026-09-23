@@ -326,55 +326,95 @@ export async function googleVisionOcr(
     : base64;
   if (!content) throw new Error("Google Vision image content is empty");
 
-  const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(),
-    options.timeoutMs ?? 25_000,
-  );
-  let response: Response;
-  try {
-    response = await (options.fetcher || fetch)(GOOGLE_VISION_ANNOTATE_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // Keep credentials out of URLs, proxy logs, and exception traces.
-        "x-goog-api-key": key,
-      },
-      body: JSON.stringify({
-        requests: [{
-          image: { content },
-          features: [{ type: "DOCUMENT_TEXT_DETECTION", maxResults: 1 }],
-          imageContext: { languageHints: ["en"] },
-        }],
-      }),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error("Google Vision request timed out");
+  // One retry shares the original 25-second total budget. Reserve the last
+  // fifth for recovery when the first request stalls; include response-body
+  // reading in each attempt's timeout as well as the initial fetch.
+  const budgetMs = options.timeoutMs ?? 25_000;
+  const deadline = Date.now() + budgetMs;
+  let result: Record<string, unknown> = {};
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error("Google Vision request timed out");
+    const controller = new AbortController();
+    const attemptMs = attempt === 0
+      ? Math.max(1, Math.floor(remaining * 0.8))
+      : remaining;
+    let retryable = false;
+    let permanentHttpFailure = false;
+    const timer = setTimeout(() => controller.abort(), attemptMs);
+    try {
+      let response: Response;
+      try {
+        response = await (options.fetcher || fetch)(
+          GOOGLE_VISION_ANNOTATE_URL,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              // Keep credentials out of URLs, proxy logs, and exception traces.
+              "x-goog-api-key": key,
+            },
+            body: JSON.stringify({
+              requests: [{
+                image: { content },
+                features: [{ type: "DOCUMENT_TEXT_DETECTION", maxResults: 1 }],
+                imageContext: { languageHints: ["en"] },
+              }],
+            }),
+            signal: controller.signal,
+          },
+        );
+      } catch (error) {
+        // Fetch network failures are TypeError; do not retry arbitrary bugs.
+        retryable = controller.signal.aborted || error instanceof TypeError ||
+          (error instanceof DOMException &&
+            ["NetworkError", "AbortError"].includes(error.name));
+        throw error;
+      }
+      permanentHttpFailure = !response.ok && response.status !== 429 &&
+        !(response.status >= 500 && response.status < 600);
+      const data = await response.json().catch((error) => {
+        if (controller.signal.aborted) throw error;
+        if (error instanceof TypeError) {
+          retryable = !permanentHttpFailure;
+          throw error;
+        }
+        return {};
+      }) as Record<string, unknown>;
+      if (!response.ok) {
+        retryable = response.status === 429 ||
+          (response.status >= 500 && response.status < 600);
+        throw new Error(
+          `Google Vision error ${response.status}: ${
+            errorMessage(data).slice(0, 500)
+          }`,
+        );
+      }
+      const responses = Array.isArray(data.responses) ? data.responses : [];
+      result = (responses[0] || {}) as Record<string, unknown>;
+      const apiError = result.error || data.error;
+      if (apiError) {
+        const code = typeof apiError === "object"
+          ? Number((apiError as Record<string, unknown>).code)
+          : NaN;
+        // google.rpc.Code: deadline exceeded, resource exhausted, internal,
+        // unavailable. Invalid image/auth/permission errors are permanent.
+        retryable = [4, 8, 13, 14].includes(code);
+        throw new Error(
+          `Google Vision: ${errorMessage(apiError).slice(0, 500)}`,
+        );
+      }
+      break;
+    } catch (error) {
+      if (controller.signal.aborted && !permanentHttpFailure) retryable = true;
+      if (attempt === 0 && retryable && Date.now() < deadline) continue;
+      if (controller.signal.aborted) {
+        throw new Error("Google Vision request timed out");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
     }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-
-  const data = await response.json().catch(() => ({})) as Record<
-    string,
-    unknown
-  >;
-  if (!response.ok) {
-    throw new Error(
-      `Google Vision error ${response.status}: ${
-        errorMessage(data).slice(0, 500)
-      }`,
-    );
-  }
-  const responses = Array.isArray(data.responses) ? data.responses : [];
-  const result = (responses[0] || {}) as Record<string, unknown>;
-  if (result.error) {
-    throw new Error(
-      `Google Vision: ${errorMessage(result.error).slice(0, 500)}`,
-    );
   }
 
   const fullText = result.fullTextAnnotation &&

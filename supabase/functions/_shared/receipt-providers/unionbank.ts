@@ -8,7 +8,10 @@ import {
 } from "./bank-to-gcash.ts";
 
 const normalize = (value: string) => value.normalize("NFKC").toUpperCase().replace(/[^A-Z0-9]/g, "");
-const LABEL = /^(Reference Number|Status|Sent Via|Instapay Reference Number|To|Amount|From)$/i;
+// The expanded status timeline shows both completion and submission times.
+// Stop the successful-status block before its explanatory text/history so the
+// submission timestamp can never replace the actual completion timestamp.
+const LABEL = /^(Reference Number|Status|Sent Via|Instapay Reference Number|To|Amount|From|Funds have been credited to the recipient\.?|Request Submitted|Transfer Details)$/i;
 
 // A dedicated UnionBank layout parser. No customer-entered values supply evidence.
 export function parseUnionbankToGcashReceipt(
@@ -107,7 +110,13 @@ export function verifyUnionbankToGcashReceipt(
   const age = (paid - started) / 60000;
   if (!Number.isFinite(age) || receipt.timestamp.completeness !== "date_time") flags.push("TIME_UNREADABLE");
   else if (age < -context.earlyToleranceMinutes || age > context.paymentWindowMinutes) flags.push("TIME_EXPIRED");
-  if (!receipt.timestamp.date || receipt.timestamp.date !== context.bookingStartedDate) flags.push("DATE_NOT_TODAY");
+  // The 15-minute window can cross midnight in Manila. The parsed absolute
+  // timestamp above, rather than calendar-date equality, determines eligibility.
+  if (!receipt.timestamp.date) flags.push("DATE_NOT_TODAY");
+  if (Number.isFinite(started) && context.bookingStartedDate &&
+      new Date(started + 8 * 60 * 60 * 1000).toISOString().slice(0, 10) !== context.bookingStartedDate) {
+    flags.push("DATE_NOT_TODAY");
+  }
   // Keep the UB reference as the primary identity. A short InstaPay trace can
   // repeat across dates/providers, so check it independently within this bank
   // and receipt date. A collision queues review through the shared replay guard.

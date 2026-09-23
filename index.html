@@ -8141,8 +8141,8 @@ function syncGcashSharedPanel(method) {
     maribank: {
       header: 'MariBank → GCash',
       title: 'Send from MariBank to this GCash account',
-      guide: ['Open the QR in MariBank.', 'Pay the exact amount.', 'Save the transaction reference.', 'Upload the MariBank receipt.'],
-      help: 'MariBank → GCash. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
+      guide: ['Open the QR in MariBank.', 'Pay the exact amount.', 'Save the transaction reference.', 'Upload the full receipt with transaction date and time visible.'],
+      help: 'Share or download the full MariBank receipt. Keep the transaction date and time visible above the app footer.',
     },
     unionbank: {
       header: 'UnionBank → GCash',
@@ -10121,7 +10121,7 @@ function hostBalancePaymentMethodNote(method) {
     maya: 'Use Maya and enter the Maya Reference ID shown on the successful receipt.',
     bpi: 'Use BPI and enter the Confirmation No., not the Transaction Ref. No.',
     gotyme: 'Pay from GoTyme to the GCash recipient and enter the complete transaction reference.',
-    maribank: 'Pay from MariBank to the GCash recipient and enter the complete transaction reference.',
+    maribank: 'Pay from MariBank to GCash. Upload the full receipt with transaction date and time visible.',
     unionbank: 'Pay from UnionBank to the GCash recipient and enter the complete transaction reference.',
     pnb: 'Use the configured PNB payment details and upload the complete successful receipt.',
   })[method] || 'Use a new transaction and upload its complete successful receipt.';
