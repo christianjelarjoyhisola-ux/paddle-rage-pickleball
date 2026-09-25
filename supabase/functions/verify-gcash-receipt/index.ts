@@ -90,7 +90,8 @@ type PaymentProvider =
   | "gotyme"
   | "unionbank"
   | "maribank"
-  | "pnb";
+  | "pnb"
+  | "rcbc";
 type OcrProvider = "google_vision" | "none";
 
 type OcrResult = {
@@ -538,6 +539,9 @@ function selectedMethodMismatch(
   provider: PaymentProvider,
   text: string,
 ): boolean {
+  // RCBC identifies the receiving bank; the sender may use any bank.
+  // This route is always owner-reviewed until receipt evidence is validated.
+  if (provider === "rcbc") return false;
   const unionbankReceipt = /\bUnionBank Online\b/i.test(text);
   if (provider === "unionbank") return isBdoPayReceipt(text) || isMayaReceipt(text) || isBpiReceipt(text) || isGotymeReceipt(text) || isMaribankReceipt(text) || isGcashToGcashReceipt(text);
   if (unionbankReceipt) return true;
@@ -646,7 +650,7 @@ function paymentMethodProvider(raw: unknown): PaymentProvider | null {
   if (
     method === "gcash" || method === "bdopay" || method === "maya" ||
     method === "bpi" || method === "gotyme" || method === "maribank" ||
-    method === "unionbank" || method === "pnb"
+    method === "unionbank" || method === "pnb" || method === "rcbc"
   ) {
     return method as PaymentProvider;
   }
@@ -703,6 +707,12 @@ function expectedMerchantForProvider(
       name: settings.gcash_merchant_name ||
         settings.gcash_qr_receipt_recipient_name ||
         settings.payment_merchant_name || "",
+    };
+  }
+  if (provider === "rcbc") {
+    return {
+      number: settings.rcbc_merchant_number || "",
+      name: settings.rcbc_merchant_name || "",
     };
   }
   if (provider === "pnb") {
@@ -3062,7 +3072,7 @@ Deno.serve(async (req) => {
       timestampValid,
       recipientMatch,
       duplicateClear,
-      destinationProvider: providerParse?.destinationProvider || null,
+      destinationProvider: providerParse?.destinationProvider || (provider === "rcbc" ? "rcbc" : null),
     };
 
     const extracted = {

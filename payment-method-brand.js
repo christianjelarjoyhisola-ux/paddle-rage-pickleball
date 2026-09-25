@@ -10,6 +10,7 @@
     maribank: 'assets/payment-methods/maribank.png',
     unionbank: 'assets/payment-methods/unionbank.svg',
     pnb: 'assets/payment-methods/pnb.png',
+    rcbc: 'assets/payment-methods/rcbc.svg',
     cash: 'assets/payment-methods/cash.svg',
   });
 

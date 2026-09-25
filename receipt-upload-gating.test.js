@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
 
-const read = path => fs.readFileSync(path, 'utf8');
+const read = path => fs.readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
 
 const page = read('index.html');
 const client = read('supabase-config.js');
@@ -341,7 +341,7 @@ test('court CTA serializes discard, replacement upload, and uncertain-result rec
   assert.doesNotMatch(policyListener, /invalidateBookingReceiptUpload/);
   assert.match(clearing, /_bookingSubmissionInFlight && !options\.force/);
   assert.match(clearing, /invalidateBookingReceiptUpload\(\{ discard: options\.discard !== false \}\)/);
-  assert.match(submit, /Object\.freeze\(\{[\s\S]*?bookingRef: _reservedRef[\s\S]*?paymentMethod: payMethod[\s\S]*?stagedReceiptPath/);
+  assert.match(submit, /Object\.freeze\(\{[\s\S]*?bookingRef: _reservedRef[\s\S]*?paymentMethod: payMethod[\s\S]*?result: Object\.freeze\(\{ \.\.\.\(_receiptUploadState\?\.result/);
   assert.match(submit, /_bookingSubmissionInFlight = true[\s\S]*?setBookingSubmissionControlsLocked\(true\)/);
   assert.match(submit, /recoverStoredBookingReceipt\(receiptSnapshot\.bookingRef/);
   assert.match(submit, /keepBookingReceiptForRetry\([\s\S]*?Retry — Verify Payment/);

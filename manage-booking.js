@@ -192,7 +192,7 @@
       gotyme: "GoTyme",
       maribank: "MariBank",
       unionbank: "UnionBank",
-      pnb: "PNB",
+      pnb: "PNB", rcbc: "RCBC",
       cash: "Cash",
     };
     return labels[key] || (key ? key.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Not available");

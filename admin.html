@@ -5147,6 +5147,8 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
           <h4>Money Received To</h4>
           <div class="pay-row"><span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--inline pm-brand-mark--gcash" data-payment-method="gcash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/gcash.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>GCash</span></span><span id="pGcash">₱0.00</span></div>
           <div class="bar bar-g"><div class="bar-fill" id="gBar" style="width:0%"></div></div>
+          <div class="pay-row"><span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--inline pm-brand-mark--rcbc" data-payment-method="rcbc" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/rcbc.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>RCBC</span></span><span id="pRcbc">₱0.00</span></div>
+          <div class="bar bar-g"><div class="bar-fill" id="rBar" style="width:0%"></div></div>
           <div class="pay-row"><span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--inline pm-brand-mark--cash" data-payment-method="cash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/cash.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>Cash</span></span><span id="pCash">₱0.00</span></div>
           <div class="bar bar-y"><div class="bar-fill" id="cBar" style="width:0%"></div></div>
         </div>
@@ -6339,6 +6341,9 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
             <label class="pm-toggle">
               <input type="checkbox" id="payMethodPnbOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--pnb" data-payment-method="pnb" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/pnb.png" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>PNB</span></span>
             </label>
+            <label class="pm-toggle">
+              <input type="checkbox" id="payMethodRcbcOn" /> <span class="pm-method-label"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--rcbc" data-payment-method="rcbc" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/rcbc.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>RCBC</span></span>
+            </label>
           </div>
         </div>
 
@@ -6424,6 +6429,34 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
               <label style="flex:1;min-width:160px;display:flex;align-items:center;gap:9px;padding:11px 13px;background:var(--card);border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;font-size:.84rem;color:var(--muted);" onmouseover="this.style.borderColor='#4a90d9'" onmouseout="this.style.borderColor='var(--border)'">
                 📷 Upload PNB QR image
                 <input type="file" accept="image/*" id="pnbQrFile" style="display:none" onchange="handleQrUpload('pnb',event)"/>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- RCBC Section -->
+        <div style="margin-top:12px;padding:14px;background:var(--input);border-radius:10px;border:1px solid var(--border);">
+          <div class="pm-brand-heading" style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#4a90d9;margin-bottom:10px;"><span class="pm-brand-mark pm-brand-mark--small pm-brand-mark--rcbc" data-payment-method="rcbc" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/rcbc.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>RCBC</span></div>
+          <div class="frow" style="gap:10px;margin-bottom:10px;">
+            <div class="fg" style="margin:0;flex:1">
+              <label class="fl">RCBC Number / Account No.</label>
+              <input type="text" class="fi" id="rcbcNumInput" placeholder="e.g. account or mobile number" />
+            </div>
+            <div class="fg" style="margin:0;flex:1">
+              <label class="fl">Account Name</label>
+              <input type="text" class="fi" id="rcbcNameInput" placeholder="e.g. Paddle Rage Pickleball" />
+            </div>
+          </div>
+          <div class="fg" style="margin:0">
+            <label class="fl">RCBC QR Code Image</label>
+            <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+              <div id="rcbcQrPreviewWrap" style="display:none">
+                <img id="rcbcQrPreview" src="" alt="RCBC QR" style="width:110px;height:110px;object-fit:contain;border-radius:8px;border:1px solid var(--border);background:#fff;padding:4px;"/>
+                <button type="button" onclick="removeQr('rcbc')" style="display:block;margin-top:6px;font-size:.7rem;color:#e53935;background:none;border:none;cursor:pointer;padding:2px 0;font-weight:600;">✕ Remove QR</button>
+              </div>
+              <label style="flex:1;min-width:160px;display:flex;align-items:center;gap:9px;padding:11px 13px;background:var(--card);border:1.5px dashed var(--border);border-radius:8px;cursor:pointer;font-size:.84rem;color:var(--muted);" onmouseover="this.style.borderColor='#4a90d9'" onmouseout="this.style.borderColor='var(--border)'">
+                📷 Upload RCBC QR image
+                <input type="file" accept="image/*" id="rcbcQrFile" style="display:none" onchange="handleQrUpload('rcbc',event)"/>
               </label>
             </div>
           </div>
@@ -7187,7 +7220,7 @@ function bookingGroupKey(b) {
 }
 function normalizedPaymentRefKey(b) {
   const method = String(b?.paymentMethod || '').toLowerCase();
-  if (!['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb'].includes(method)) return '';
+  if (!['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb', 'rcbc'].includes(method)) return '';
   const ref = String(b?.gcashRef || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   return ref ? `${method}:${ref}` : '';
 }
@@ -9154,8 +9187,11 @@ async function renderDash(){
   $('dMost').textContent=most?most[0]:'—';
   const gc=activeTxns.filter(b=>receivedAccountKey(b)==='gcash').reduce((s,b)=>s+b.total,0)+forfeitedTxns.filter(b=>receivedAccountKey(b)==='gcash').reduce((s,b)=>s+(window.BookingBalance?.paidAmount?.(b)||0),0);
   const ca=activeTxns.filter(b=>receivedAccountKey(b)==='cash').reduce((s,b)=>s+b.total,0)+forfeitedTxns.filter(b=>receivedAccountKey(b)==='cash').reduce((s,b)=>s+(window.BookingBalance?.paidAmount?.(b)||0),0);
+  const rc=activeTxns.filter(b=>receivedAccountKey(b)==='rcbc').reduce((s,b)=>s+b.total,0)+forfeitedTxns.filter(b=>receivedAccountKey(b)==='rcbc').reduce((s,b)=>s+(window.BookingBalance?.paidAmount?.(b)||0),0);
+  $('pRcbc').textContent=fmt(rc);
   $('pGcash').textContent=fmt(gc); $('pCash').textContent=fmt(ca);
-  const tot=gc+ca;
+  const tot=gc+ca+rc;
+  $('rBar').style.width=(tot>0?Math.round(rc/tot*100):0)+'%';
   $('gBar').style.width=(tot>0?Math.round(gc/tot*100):0)+'%';
   $('cBar').style.width=(tot>0?Math.round(ca/tot*100):0)+'%';
   const recent=activeTxns.slice(0,5);
@@ -10057,7 +10093,7 @@ async function restoreDeletedBooking(id, ref) {
 /* ── CALENDAR VIEW ── */
 function paymentMethodLabel(m) {
   if (String(m || '').toLowerCase() === 'voucher') return 'Complimentary voucher';
-  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', unionbank: 'UnionBank → GCash', pnb: 'PNB', cash: 'Cash' }[String(m || '').toLowerCase()] || (m || 'Cash'));
+  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', unionbank: 'UnionBank → GCash', pnb: 'PNB', rcbc: 'RCBC', cash: 'Cash' }[String(m || '').toLowerCase()] || (m || 'Cash'));
 }
 
 function paymentMethodBrandMarkHtml(method, modifier = 'pm-brand-mark--inline') {
@@ -10080,14 +10116,14 @@ function renderPaymentMethodBrandLabel(element, method, label = paymentMethodLab
 }
 
 function isDigitalPayment(m) {
-  return ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb'].includes(String(m || '').toLowerCase());
+  return ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb', 'rcbc'].includes(String(m || '').toLowerCase());
 }
 
 function receivedAccountKey(b) {
   const explicit = String(b?.receivedAccount || b?.received_account || '').toLowerCase().trim();
   if (explicit) return explicit;
   const method = String(b?.paymentMethod || b?.payment_method || '').toLowerCase();
-  return method === 'cash' ? 'cash' : 'gcash';
+  return method === 'cash' ? 'cash' : method === 'rcbc' ? 'rcbc' : 'gcash';
 }
 
 function receivedAccountLabel(b) {
@@ -14384,6 +14420,7 @@ async function renderPaymentSettings() {
   const maribankOn = settings.payment_method_maribank === '1';
   const unionbankOn = settings.payment_method_unionbank === '1';
   const pnbOn = settings.payment_method_pnb === '1';
+  const rcbcOn = settings.payment_method_rcbc === '1';
   const paymentAcceptanceMode = 'full_payment_only';
 
   if ($('paymentAcceptanceModeSelect')) $('paymentAcceptanceModeSelect').value = paymentAcceptanceMode;
@@ -14396,13 +14433,16 @@ async function renderPaymentSettings() {
   if ($('payMethodMaribankOn')) $('payMethodMaribankOn').checked = maribankOn;
   if ($('payMethodUnionbankOn')) $('payMethodUnionbankOn').checked = unionbankOn;
   $('payMethodPnbOn').checked = pnbOn;
+  $('payMethodRcbcOn').checked = rcbcOn;
 
   if ($('gcashNumInput')) $('gcashNumInput').value = settings.gcash_merchant_number || '';
   if ($('gcashNameInput')) $('gcashNameInput').value = settings.gcash_merchant_name || '';
   if ($('gcashQrReceiptNameInput')) $('gcashQrReceiptNameInput').value = settings.gcash_qr_receipt_recipient_name || settings.bdopay_receipt_recipient_name || settings.bpi_receipt_recipient_name || 'PaddleRage';
   if ($('gcashQrReceiptTokenInput')) $('gcashQrReceiptTokenInput').value = settings.gcash_qr_receipt_destination_token || settings.bdopay_receipt_destination_token || '';
   if ($('pnbNumInput')) $('pnbNumInput').value = settings.pnb_merchant_number || '';
+  if ($('rcbcNumInput')) $('rcbcNumInput').value = settings.rcbc_merchant_number || '';
   if ($('pnbNameInput')) $('pnbNameInput').value = settings.pnb_merchant_name || '';
+  if ($('rcbcNameInput')) $('rcbcNameInput').value = settings.rcbc_merchant_name || '';
   if ($('platformGcashNumInput')) $('platformGcashNumInput').value = settings.platform_gcash_number || '';
   if ($('platformGcashNameInput')) $('platformGcashNameInput').value = settings.platform_gcash_name || '';
   if ($('platformGcashQrPreview')) {
@@ -14421,8 +14461,13 @@ async function renderPaymentSettings() {
     $('pnbQrPreview').src = pnbQr;
     $('pnbQrPreviewWrap').style.display = '';
   }
+  const rcbcQr = settings.rcbc_qr_image || '';
+  if (rcbcQr && $('rcbcQrPreview')) {
+    $('rcbcQrPreview').src = rcbcQr;
+    $('rcbcQrPreviewWrap').style.display = '';
+  }
 
-  const summaryParts = [`Methods: ${(cashOn?'Cash ':'')}${(gcashOn?'GCash ':'')}${(bdopayOn?'BDO Pay ':'')}${(mayaOn?'Maya ':'')}${(bpiOn?'BPI ':'')}${(gotymeOn?'GoTyme→GCash ':'')}${(maribankOn?'MariBank→GCash ':'')}${(unionbankOn?'UnionBank→GCash ':'')}${(pnbOn?'PNB':'')}`.trim() || 'none'];
+  const summaryParts = [`Methods: ${(cashOn?'Cash ':'')}${(gcashOn?'GCash ':'')}${(bdopayOn?'BDO Pay ':'')}${(mayaOn?'Maya ':'')}${(bpiOn?'BPI ':'')}${(gotymeOn?'GoTyme→GCash ':'')}${(maribankOn?'MariBank→GCash ':'')}${(unionbankOn?'UnionBank→GCash ':'')}${(pnbOn?'PNB ':'')}${(rcbcOn?'RCBC':'')}`.trim() || 'none'];
   $('paySettingsSummary').textContent = summaryParts.join(' • ');
 
   // Platform remittance summary
@@ -15501,11 +15546,11 @@ async function removePlatformQr() {
 
 async function removeQr(type) {
   if (!Auth.can('payments', sess.role)) { toast('You do not have access to edit payment settings.', 'err'); return; }
-  if (!['gcash', 'pnb'].includes(type)) return;
-  const key = type === 'gcash' ? 'gcash_qr_image' : 'pnb_qr_image';
-  const previewId = type === 'gcash' ? 'gcashQrPreview' : 'pnbQrPreview';
-  const wrapId = type === 'gcash' ? 'gcashQrPreviewWrap' : 'pnbQrPreviewWrap';
-  const fileId = type === 'gcash' ? 'gcashQrFile' : 'pnbQrFile';
+  if (!['gcash', 'pnb', 'rcbc'].includes(type)) return;
+  const key = type + '_qr_image';
+  const previewId = type + 'QrPreview';
+  const wrapId = type + 'QrPreviewWrap';
+  const fileId = type + 'QrFile';
   try {
     await DB.saveSetting(key, '');
     $(previewId).src = '';
@@ -15519,19 +15564,19 @@ async function removeQr(type) {
 
 function handleQrUpload(type, e) {
   if (!Auth.can('payments', sess.role)) { toast('You do not have access to edit payment settings.', 'err'); e.target.value = ''; return; }
-  if (!['gcash', 'pnb'].includes(type)) { e.target.value = ''; return; }
+  if (!['gcash', 'pnb', 'rcbc'].includes(type)) { e.target.value = ''; return; }
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = async ev => {
     const data = ev.target.result;
-    const key = type === 'gcash' ? 'gcash_qr_image' : 'pnb_qr_image';
+    const key = type + '_qr_image';
     if (type === 'gcash') {
       $('gcashQrPreview').src = data;
       $('gcashQrPreviewWrap').style.display = '';
     } else {
-      $('pnbQrPreview').src = data;
-      $('pnbQrPreviewWrap').style.display = '';
+      $(type + 'QrPreview').src = data;
+      $(type + 'QrPreviewWrap').style.display = '';
     }
     // Auto-save to DB
     try {
@@ -15556,16 +15601,20 @@ async function savePaymentSettings() {
   const maribankOn = $('payMethodMaribankOn')?.checked || false;
   const unionbankOn = $('payMethodUnionbankOn')?.checked || false;
   const pnbOn = $('payMethodPnbOn').checked;
+  const rcbcOn = $('payMethodRcbcOn').checked;
   const gcashNum = $('gcashNumInput')?.value.trim() || '';
   const gcashName = $('gcashNameInput')?.value.trim() || '';
   const gcashQrReceiptName = $('gcashQrReceiptNameInput')?.value.trim() || '';
   const gcashQrReceiptToken = $('gcashQrReceiptTokenInput')?.value.trim() || '';
   const pnbNum = $('pnbNumInput')?.value.trim() || '';
+  const rcbcNum = $('rcbcNumInput')?.value.trim() || '';
   const pnbName = $('pnbNameInput')?.value.trim() || '';
+  const rcbcName = $('rcbcNameInput')?.value.trim() || '';
   const gcashQrSrc = $('gcashQrPreview')?.src || '';
   const pnbQrSrc = $('pnbQrPreview')?.src || '';
+  const rcbcQrSrc = $('rcbcQrPreview')?.src || '';
 
-  if (!cashOn && !gcashOn && !bdopayOn && !mayaOn && !bpiOn && !gotymeOn && !maribankOn && !unionbankOn && !pnbOn) {
+  if (!cashOn && !gcashOn && !bdopayOn && !mayaOn && !bpiOn && !gotymeOn && !maribankOn && !unionbankOn && !pnbOn && !rcbcOn) {
     toast('Enable at least one payment method.', 'err');
     return;
   }
@@ -15581,6 +15630,10 @@ async function savePaymentSettings() {
     toast('Add the PNB recipient name and account number or QR before enabling PNB.', 'err');
     return;
   }
+  if (rcbcOn && (!rcbcName || (!rcbcNum && !rcbcQrSrc))) {
+    toast('Add the RCBC recipient name and account number or QR before enabling RCBC.', 'err');
+    return;
+  }
 
   try {
     const paymentAcceptanceMode = 'full_payment_only';
@@ -15594,6 +15647,7 @@ async function savePaymentSettings() {
     await DB.saveSetting('payment_method_maribank', maribankOn ? '1' : '0');
     await DB.saveSetting('payment_method_unionbank', unionbankOn ? '1' : '0');
     await DB.saveSetting('payment_method_pnb', pnbOn ? '1' : '0');
+    await DB.saveSetting('payment_method_rcbc', rcbcOn ? '1' : '0');
     await DB.saveSetting('payment_acceptance_mode', paymentAcceptanceMode);
 
     await DB.saveSetting('gcash_merchant_number', gcashNum);
@@ -15606,13 +15660,16 @@ async function savePaymentSettings() {
     await DB.saveSetting('bdopay_receipt_destination_token', gcashQrReceiptToken);
     await DB.saveSetting('bpi_receipt_recipient_name', gcashQrReceiptName);
     await DB.saveSetting('pnb_merchant_number', pnbNum);
+    await DB.saveSetting('rcbc_merchant_number', rcbcNum);
     await DB.saveSetting('pnb_merchant_name', pnbName);
+    await DB.saveSetting('rcbc_merchant_name', rcbcName);
 
     // Save QR images (base64 data URLs) — save empty string if removed
     const platformQrSrc = $('platformGcashQrPreview')?.src || '';
     if (platformQrSrc.startsWith('data:')) await DB.saveSetting('platform_gcash_qr', platformQrSrc);
     if (gcashQrSrc.startsWith('data:')) await DB.saveSetting('gcash_qr_image', gcashQrSrc);
     if (pnbQrSrc.startsWith('data:')) await DB.saveSetting('pnb_qr_image', pnbQrSrc);
+    if (rcbcQrSrc.startsWith('data:')) await DB.saveSetting('rcbc_qr_image', rcbcQrSrc);
 
     await renderPaymentSettings();
     toast('✅ Payment settings saved!');

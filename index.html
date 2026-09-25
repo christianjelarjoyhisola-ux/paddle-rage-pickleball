@@ -2109,7 +2109,7 @@ footer { background:var(--card); border-top:1px solid var(--border); padding:40p
   .gc-note { margin-top:8px; }
   .qr-scan-wrap { margin:6px 0 4px; }
   .qr-img { width:160px !important; height:160px !important; }
-  #gcashQrPlaceholder,#pnbQrPlaceholder { width:160px !important; height:160px !important; margin:6px auto !important; }
+  #gcashQrPlaceholder,#pnbQrPlaceholder,#rcbcQrPlaceholder { width:160px !important; height:160px !important; margin:6px auto !important; }
   .pay-amount-toggle { margin-bottom:10px; gap:6px; }
   .qr-scan-hint { padding:5px 10px; margin-top:6px; }
   .bpay-method-block { margin-bottom:8px; }
@@ -3938,6 +3938,11 @@ try {
                 <div class="pay-lb">PNB</div>
                 <div class="pay-sub">Scan QR · enter ref #</div>
               </div>
+              <div class="pay-opt" id="payOptRcbc" data-m="rcbc" onclick="pickPay('rcbc')">
+                <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--rcbc" data-payment-method="rcbc" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/rcbc.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
+                <div class="pay-lb">RCBC</div>
+                <div class="pay-sub">Scan QR · enter ref #</div>
+              </div>
               <div class="pay-opt" id="payOptCash" data-m="cash" onclick="pickPay('cash')">
                 <div class="pay-ic pm-brand-mark pm-brand-mark--picker pm-brand-mark--cash" data-payment-method="cash" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/cash.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></div>
                 <div class="pay-lb">Cash</div>
@@ -4071,6 +4076,54 @@ try {
                   <button type="button" class="gc-copy-btn" onclick="copyPaymentNumber('pnb')">📋 Copy</button>
                 </div>
                 <div class="bpay-send-name" id="pnMerchantName">Paddle Rage Pickleball</div>
+              </div>
+            </div>
+            <div class="payment-guide">
+              <div class="payment-guide-step"><b>1</b><span><span class="payment-guide-long">Copy #/tap to zoom QR.</span><span class="payment-guide-short">Copy #/tap to zoom QR</span></span></div>
+              <div class="payment-guide-step"><b>2</b><span><span class="payment-guide-long">Paste # / upload receipt.</span><span class="payment-guide-short">Paste # / upload</span></span></div>
+              <div class="payment-guide-step"><b>3</b><span><span class="payment-guide-long">Pay exact amount.</span><span class="payment-guide-short">Pay exact</span></span></div>
+              <div class="payment-guide-step"><b>4</b><span><span class="payment-guide-long">Copy/save ref & QR.</span><span class="payment-guide-short">Save ref & QR</span></span></div>
+            </div>
+          </div>
+
+          <!-- RCBC section -->
+          <div class="gcash bpay-card" id="rcbcBox">
+            <div class="gc-header">
+              <span class="gc-header-icon pm-brand-mark pm-brand-mark--small pm-brand-mark--rcbc" data-payment-method="rcbc" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/rcbc.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span>
+              <span class="gc-header-lbl">RCBC Payment</span>
+            </div>
+            <div class="bpay-card-head">
+              <div class="gc-amount-lbl" id="rcPayLabel">Payment amount</div>
+              <div class="bpay-amount-due">
+                <span>Amount to pay</span>
+                <strong id="rcDownAmt">--</strong>
+              </div>
+              <div class="pay-amount-toggle" id="rcPayAmtToggle">
+                <div class="pat-btn on" id="rcPat50" onclick="setPayAmount('half')" style="display:none">
+                  <div>Full Payment</div>
+                  <div class="pat-amt" id="rcPat50Amt"></div>
+                </div>
+                <div class="pat-btn" id="rcPat100" onclick="setPayAmount('full')" style="display:none">
+                  <div>100%</div>
+                  <div class="pat-amt" id="rcPat100Amt"></div>
+                </div>
+              </div>
+            </div>
+            <div class="bpay-recipient">
+              <div class="bpay-qr-wrap">
+                <img id="rcbcQrImg" class="qr-img bpay-qr qr-clickable" alt="RCBC QR Code" style="display:none" onclick="openQrZoomFromImg(this,'RCBC QR')" />
+                <div id="rcbcQrPlaceholder" class="bpay-qr-placeholder">
+                  <span class="pm-brand-mark pm-brand-mark--rcbc" data-payment-method="rcbc" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/rcbc.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span>
+                  <span style="font-size:.74rem">QR not uploaded</span>
+                </div>
+              </div>
+              <div class="bpay-recipient-info">
+                <div class="bpay-send-title pm-method-label"><span class="pm-brand-mark pm-brand-mark--inline pm-brand-mark--rcbc" data-payment-method="rcbc" aria-hidden="true"><img class="pm-icon" src="assets/payment-methods/rcbc.svg" width="32" height="32" alt="" aria-hidden="true" decoding="async" /></span><span>Send RCBC Payment To</span></div>
+                <div class="gc-num-row" style="justify-content:flex-start;margin:4px 0 3px">
+                  <div class="gc-num" id="rcMerchantNumber" style="font-size:1rem;font-weight:800;margin:0">—</div>
+                  <button type="button" class="gc-copy-btn" onclick="copyPaymentNumber('rcbc')">📋 Copy</button>
+                </div>
+                <div class="bpay-send-name" id="rcMerchantName">Paddle Rage Pickleball</div>
               </div>
             </div>
             <div class="payment-guide">
@@ -4759,7 +4812,7 @@ function hostSessionPaymentHtml(session) {
     </div>
     <div class="fg">
       <label class="fl" for="hsPaymentRef">${_hostSessionPayMethod === 'bpi' ? 'BPI Confirmation No.' : `${label} Reference Number`}</label>
-      <input type="text" class="fi" id="hsPaymentRef" placeholder="${_hostSessionPayMethod === 'gcash' ? 'e.g. 1234567890123' : _hostSessionPayMethod === 'bdopay' ? 'e.g. BN-20260627-91811670' : _hostSessionPayMethod === 'maya' ? 'e.g. B6DC F633 F08C' : _hostSessionPayMethod === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" maxlength="${paymentRefMaxLength(_hostSessionPayMethod)}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'unionbank', 'pnb'].includes(_hostSessionPayMethod) ? 'text' : 'numeric'}" oninput="syncHostSessionRef()" />
+      <input type="text" class="fi" id="hsPaymentRef" placeholder="${_hostSessionPayMethod === 'gcash' ? 'e.g. 1234567890123' : _hostSessionPayMethod === 'bdopay' ? 'e.g. BN-20260627-91811670' : _hostSessionPayMethod === 'maya' ? 'e.g. B6DC F633 F08C' : _hostSessionPayMethod === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" maxlength="${paymentRefMaxLength(_hostSessionPayMethod)}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'unionbank', 'pnb', 'rcbc'].includes(_hostSessionPayMethod) ? 'text' : 'numeric'}" oninput="syncHostSessionRef()" />
       <div id="hsRefHelp" style="font-size:.7rem;color:var(--muted);margin-top:4px">${paymentRefHelpText(_hostSessionPayMethod)}</div>
     </div>
     <div class="fg">
@@ -5593,9 +5646,10 @@ let paymentReceiverSettings = {
   maribank: { number: '09XX XXX XXXX', name: 'Paddle Rage Pickleball', qrImage: '' },
   unionbank: { number: '09XX XXX XXXX', name: 'Paddle Rage Pickleball', qrImage: '' },
   pnb: { number: '', name: 'Paddle Rage Pickleball', qrImage: '' },
+  rcbc: { number: '', name: '', qrImage: '' },
 };
-let paymentMethods = { cash: true, gcash: true, bdopay: true, maya: true, bpi: true, gotyme: true, maribank: true, unionbank: true, pnb: true };
-const DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb'];
+let paymentMethods = { cash: true, gcash: true, bdopay: true, maya: true, bpi: true, gotyme: true, maribank: true, unionbank: true, pnb: true, rcbc: false };
+const DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb', 'rcbc'];
 const ALL_PAYMENT_METHODS = [...DIGITAL_PAYMENT_METHODS, 'cash'];
 
 function isDigitalPayMethod(method) {
@@ -5603,7 +5657,7 @@ function isDigitalPayMethod(method) {
 }
 
 function paymentMethodName(method) {
-  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', unionbank: 'UnionBank → GCash', pnb: 'PNB', cash: 'Cash' }[String(method || '').toLowerCase()] || 'Payment');
+  return ({ gcash: 'GCash', bdopay: 'BDO Pay', maya: 'Maya', bpi: 'BPI', gotyme: 'GoTyme → GCash', maribank: 'MariBank → GCash', unionbank: 'UnionBank → GCash', pnb: 'PNB', rcbc: 'RCBC', cash: 'Cash' }[String(method || '').toLowerCase()] || 'Payment');
 }
 
 function paymentMethodBrandMarkHtml(method, modifier = 'pm-brand-mark--inline') {
@@ -5997,6 +6051,11 @@ function applyPaymentSettings(settings) {
       name: settings.pnb_merchant_name || '',
       qrImage: settings.pnb_qr_image || '',
     },
+    rcbc: {
+      number: settings.rcbc_merchant_number || '',
+      name: settings.rcbc_merchant_name || '',
+      qrImage: settings.rcbc_qr_image || '',
+    },
   };
   gcashSettings.checkoutEnabled = settings.gcash_checkout_enabled === '1';
   gcashSettings.checkoutUrl = (settings.gcash_checkout_url || '').trim();
@@ -6030,12 +6089,15 @@ function applyPaymentSettings(settings) {
   paymentMethods.maribank = settings.payment_method_maribank === '1' && receiverReady('maribank');
   paymentMethods.unionbank = settings.payment_method_unionbank === '1' && receiverReady('unionbank');
   paymentMethods.pnb = settings.payment_method_pnb === '1' && receiverReady('pnb');
+  paymentMethods.rcbc = settings.payment_method_rcbc === '1' && receiverReady('rcbc');
   paymentAcceptanceMode = 'full_payment_only';
 
   if ($('gcMerchantNumber')) $('gcMerchantNumber').textContent = gcashSettings.merchantNumber;
   if ($('gcMerchantName')) $('gcMerchantName').textContent = maskGcashOwnerName(gcashSettings.merchantName) || 'Court owner account';
   if ($('pnMerchantNumber')) $('pnMerchantNumber').textContent = paymentReceiverSettings.pnb.number || 'Scan QR';
+  if ($('rcMerchantNumber')) $('rcMerchantNumber').textContent = paymentReceiverSettings.rcbc.number || 'Scan QR';
   if ($('pnMerchantName')) $('pnMerchantName').textContent = paymentReceiverSettings.pnb.name;
+  if ($('rcMerchantName')) $('rcMerchantName').textContent = paymentReceiverSettings.rcbc.name;
 
   // Load QR images from DB — show img and hide placeholder only when image exists
   if (settings.gcash_qr_image) {
@@ -6048,6 +6110,12 @@ function applyPaymentSettings(settings) {
     const img = $('pnbQrImg');
     if (img) { img.src = settings.pnb_qr_image; img.style.display = ''; }
     const ph = $('pnbQrPlaceholder');
+    if (ph) ph.style.display = 'none';
+  }
+  if (settings.rcbc_qr_image) {
+    const img = $('rcbcQrImg');
+    if (img) { img.src = settings.rcbc_qr_image; img.style.display = ''; }
+    const ph = $('rcbcQrPlaceholder');
     if (ph) ph.style.display = 'none';
   }
 
@@ -6065,6 +6133,7 @@ function applyPaymentMethodVisibility() {
   if ($('payOptMaribank')) $('payOptMaribank').style.display = paymentMethods.maribank ? '' : 'none';
   if ($('payOptUnionbank')) $('payOptUnionbank').style.display = paymentMethods.unionbank ? '' : 'none';
   if ($('payOptPnb')) $('payOptPnb').style.display = paymentMethods.pnb ? '' : 'none';
+  if ($('payOptRcbc')) $('payOptRcbc').style.display = paymentMethods.rcbc ? '' : 'none';
 
   const hasAny = ALL_PAYMENT_METHODS.some(m => paymentMethods[m]);
   const enabledMethods = ALL_PAYMENT_METHODS.filter(m => paymentMethods[m]);
@@ -6080,6 +6149,7 @@ function applyPaymentMethodVisibility() {
     document.querySelectorAll('.pay-opt').forEach(el => el.classList.remove('on'));
     $('gcashBox').classList.remove('show');
     $('pnbBox').classList.remove('show');
+    $('rcbcBox').classList.remove('show');
     const refWrap = $('gcashRefWrap');
     if (refWrap) refWrap.style.display = 'none';
     $('cashNote').style.display = 'none';
@@ -6102,7 +6172,7 @@ function preparePaymentStep() {
     return;
   }
 
-  ['gcashBox', 'pnbBox'].forEach(id => $(id)?.classList.remove('show'));
+  ['gcashBox', 'pnbBox', 'rcbcBox'].forEach(id => $(id)?.classList.remove('show'));
   const refWrap = $('gcashRefWrap');
   if (refWrap) refWrap.style.display = 'none';
   if ($('cashNote')) $('cashNote').style.display = 'none';
@@ -7982,11 +8052,14 @@ function updatePriceLegacy() {
   if ($('gcPat50Amt'))  $('gcPat50Amt').textContent  = fmt(dpAmt);
   if ($('gcPat100Amt')) $('gcPat100Amt').textContent = fmt(total);
   if ($('pnPat50Amt'))  $('pnPat50Amt').textContent  = fmt(dpAmt);
+  if ($('rcPat50Amt'))  $('rcPat50Amt').textContent  = fmt(dpAmt);
   if ($('pnPat100Amt')) $('pnPat100Amt').textContent = fmt(total);
+  if ($('rcPat100Amt')) $('rcPat100Amt').textContent = fmt(total);
 
   // Update payment amount display in QR boxes
   if ($('gcDownAmt'))   $('gcDownAmt').textContent   = fmt(payAmt);
   if ($('pnDownAmt'))   $('pnDownAmt').textContent   = fmt(payAmt);
+  if ($('rcDownAmt'))   $('rcDownAmt').textContent   = fmt(payAmt);
   if ($('bStepPayAmtMethod')) $('bStepPayAmtMethod').textContent = fmt(payAmt);
   if ($('bStepPayAmt')) $('bStepPayAmt').textContent = fmt(payAmt);
 
@@ -8020,10 +8093,13 @@ function updatePrice() {
   if ($('gcPat50Amt'))  $('gcPat50Amt').textContent  = fmt(dpAmt);
   if ($('gcPat100Amt')) $('gcPat100Amt').textContent = fmt(total);
   if ($('pnPat50Amt'))  $('pnPat50Amt').textContent  = fmt(dpAmt);
+  if ($('rcPat50Amt'))  $('rcPat50Amt').textContent  = fmt(dpAmt);
   if ($('pnPat100Amt')) $('pnPat100Amt').textContent = fmt(total);
+  if ($('rcPat100Amt')) $('rcPat100Amt').textContent = fmt(total);
 
   if ($('gcDownAmt'))   $('gcDownAmt').textContent   = fmt(payAmt);
   if ($('pnDownAmt'))   $('pnDownAmt').textContent   = fmt(payAmt);
+  if ($('rcDownAmt'))   $('rcDownAmt').textContent   = fmt(payAmt);
   if ($('bStepPayAmtMethod')) $('bStepPayAmtMethod').textContent = fmt(payAmt);
   if ($('bStepPayAmt')) $('bStepPayAmt').textContent = fmt(payAmt);
 
@@ -8072,6 +8148,7 @@ function pickPay(m) {
       maribank: 'Pay from MariBank to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       unionbank: 'Pay from UnionBank to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       pnb: 'Use the configured PNB payment details. Your receipt stays pending for court-owner review.',
+      rcbc: 'Use the configured RCBC payment details. Your receipt stays pending for court-owner review.',
       cash: 'Cash bookings are paid at the front desk and confirmed by staff.',
     };
     methodNote.innerHTML = Array.isArray(notes[m]) ? notes[m].map(esc).join('<br>') : esc(notes[m] || '');
@@ -8081,12 +8158,13 @@ function pickPay(m) {
 
   // Host pricing is automatic: 25% only before the five-day deadline.
   payFull = isVerifiedHostBooking() && !hostBookingDepositEligible();
-  ['gcPat50','pnPat50'].forEach(id => $(id)?.classList.toggle('on', !payFull));
-  ['gcPat100','pnPat100'].forEach(id => $(id)?.classList.toggle('on', payFull));
+  ['gcPat50','pnPat50','rcPat50'].forEach(id => $(id)?.classList.toggle('on', !payFull));
+  ['gcPat100','pnPat100','rcPat100'].forEach(id => $(id)?.classList.toggle('on', payFull));
 
   syncGcashSharedPanel(m);
   $('gcashBox').classList.toggle('show',  ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank'].includes(m));
   $('pnbBox').classList.toggle('show',    m === 'pnb');
+  $('rcbcBox').classList.toggle('show',    m === 'rcbc');
   const refWrap = $('gcashRefWrap');
   if (refWrap) refWrap.style.display = digitalPay ? '' : 'none';
   $('cashNote').style.display = m === 'cash' ? '' : 'none';
@@ -8108,6 +8186,11 @@ function pickPay(m) {
 
 function syncGcashSharedPanel(method) {
   const profiles = {
+    rcbc: {
+      header: 'RCBC Payment', title: 'Send to this RCBC account',
+      guide: ['Scan the RCBC QR.', 'Pay the exact amount.', 'Save the transaction reference.', 'Upload the complete receipt.'],
+      help: 'Pay to the RCBC account shown. Your receipt needs court-owner review.',
+    },
     gcash: {
       header: 'GCash Payment',
       title: 'Send GCash Payment To',
@@ -8172,6 +8255,7 @@ function copyPaymentNumber(method = 'gcash') {
     maribank: { id: 'gcMerchantNumber', label: 'GCash recipient for MariBank' },
     unionbank: { id: 'gcMerchantNumber', label: 'GCash recipient for UnionBank' },
     pnb: { id: 'pnMerchantNumber', label: 'PNB' },
+    rcbc: { id: 'rcMerchantNumber', label: 'RCBC' },
   };
   const meta = map[method] || map.gcash;
   const raw = ($(meta.id)?.textContent || '').trim();
@@ -8209,7 +8293,7 @@ function normalizePaymentRef(value, method) {
     return compact.match(/.{1,4}/g)?.join(' ') || '';
   }
   if (method === 'bpi') return raw.replace(/\D/g, '').slice(0, paymentRefMaxLength(method));
-  if (['gotyme', 'maribank', 'unionbank', 'pnb'].includes(method)) {
+  if (['gotyme', 'maribank', 'unionbank', 'pnb', 'rcbc'].includes(method)) {
     return raw.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, paymentRefMaxLength(method));
   }
   return raw.replace(/\D/g, '').slice(0, paymentRefMaxLength(method));
@@ -8251,7 +8335,7 @@ function syncBookingRefUi(method = $('bPay')?.value || 'gcash') {
   if (input) {
     input.maxLength = paymentRefMaxLength(method);
     input.placeholder = method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : `Enter ${method === 'gotyme' ? 'GoTyme' : method === 'unionbank' ? 'UnionBank' : method === 'maribank' ? 'MariBank' : 'payment'} reference`;
-    input.inputMode = ['bdopay', 'maya', 'gotyme', 'maribank', 'unionbank', 'pnb'].includes(method) ? 'text' : 'numeric';
+    input.inputMode = ['bdopay', 'maya', 'gotyme', 'maribank', 'unionbank', 'pnb', 'rcbc'].includes(method) ? 'text' : 'numeric';
     const clean = normalizePaymentRef(input.value, method);
     if (input.value !== clean) input.value = clean;
   }
@@ -9409,6 +9493,7 @@ function resetForm(options = {}) {
   }
   $('gcashBox').classList.remove('show');
   $('pnbBox').classList.remove('show');
+  $('rcbcBox').classList.remove('show');
   const refWrap2 = $('gcashRefWrap');
   if (refWrap2) refWrap2.style.display = 'none';
   $('cashNote').style.display = 'none';
@@ -10100,7 +10185,7 @@ function hostBalancePaymentEnabledMethods() {
 }
 
 function hostBalancePaymentMethodIcon(method) {
-  return ({ gcash: 'GC', bdopay: 'BDO', maya: 'M', bpi: 'BPI', gotyme: 'GT', maribank: 'MB', unionbank: 'UB', pnb: 'PNB' }[method] || 'Pay');
+  return ({ gcash: 'GC', bdopay: 'BDO', maya: 'M', bpi: 'BPI', gotyme: 'GT', maribank: 'MB', unionbank: 'UB', pnb: 'PNB', rcbc: 'RCBC' }[method] || 'Pay');
 }
 
 function hostBalancePaymentReferencePlaceholder(method) {
@@ -10124,6 +10209,7 @@ function hostBalancePaymentMethodNote(method) {
     maribank: 'Pay from MariBank to GCash. Upload the full receipt with transaction date and time visible.',
     unionbank: 'Pay from UnionBank to the GCash recipient and enter the complete transaction reference.',
     pnb: 'Use the configured PNB payment details and upload the complete successful receipt.',
+    rcbc: 'Use the configured RCBC payment details and upload the complete successful receipt.',
   })[method] || 'Use a new transaction and upload its complete successful receipt.';
 }
 
@@ -11282,6 +11368,7 @@ async function openPlaySignup(courtId, date, h, courtName) {
     paymentMethods.maribank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'maribank' ? 'on' : ''}" data-m="maribank" onclick="opPickPay('maribank')">${paymentMethodBrandMarkHtml('maribank', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">MB</span>'}<span class="po-lbl">MariBank → GCash</span><span class="po-sub">Pay from MariBank</span></div>` : '',
     paymentMethods.unionbank ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'unionbank' ? 'on' : ''}" data-m="unionbank" onclick="opPickPay('unionbank')">${paymentMethodBrandMarkHtml('unionbank', 'po-ico pm-brand-mark--compact') || '<span class="po-ico">UB</span>'}<span class="po-lbl">UnionBank → GCash</span><span class="po-sub">Pay from UnionBank</span></div>` : '',
     paymentMethods.pnb     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'pnb' ? 'on' : ''}" data-m="pnb"     onclick="opPickPay('pnb')">${paymentMethodBrandMarkHtml('pnb', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">PNB</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
+    paymentMethods.rcbc     ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'rcbc' ? 'on' : ''}" data-m="rcbc"     onclick="opPickPay('rcbc')">${paymentMethodBrandMarkHtml('rcbc', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">RCBC</span><span class="po-sub">Scan QR · enter ref #</span></div>` : '',
     paymentMethods.cash    ? `<div class="pay-opt op-pay-opt ${defaultPayMethod === 'cash' ? 'on' : ''}" data-m="cash"    onclick="opPickPay('cash')">${paymentMethodBrandMarkHtml('cash', 'po-ico pm-brand-mark--compact')}<span class="po-lbl">Cash</span><span class="po-sub">Pay at front desk</span></div>` : '',
   ].filter(Boolean);
   if (paymentMethods.bpi) {
@@ -11385,7 +11472,7 @@ function opPickPay(method) {
         <label>${method === 'bpi' ? 'BPI Confirmation No. *' : 'Reference # (after sending) *'}</label>
         <span id="opRefCount" style="font-size:.65rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap">${refCountText}</span>
       </div>
-      <input type="text" class="fi" id="opGcashRef" placeholder="${method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'unionbank', 'pnb'].includes(method) ? 'text' : 'numeric'}"
+      <input type="text" class="fi" id="opGcashRef" placeholder="${method === 'gcash' ? 'e.g. 1234567890123' : method === 'bdopay' ? 'e.g. BN-20260627-91811670' : method === 'maya' ? 'e.g. B6DC F633 F08C' : method === 'bpi' ? 'e.g. 1783397488347' : 'Enter the complete transaction reference'}" inputmode="${['bdopay', 'maya', 'gotyme', 'maribank', 'unionbank', 'pnb', 'rcbc'].includes(method) ? 'text' : 'numeric'}"
         maxlength="${paymentRefMaxLength(method)}"
         style="margin:0;font-family:monospace;letter-spacing:1px"
         oninput="syncOpenPlayRefInput('${method}')"
@@ -11402,6 +11489,7 @@ function opPickPay(method) {
       maribank: { icon: paymentMethodBrandMarkHtml('maribank', 'pm-brand-mark--small') || 'MB', label: 'MariBank → GCash', receiver: paymentReceiverSettings.gcash },
       unionbank: { icon: paymentMethodBrandMarkHtml('unionbank', 'pm-brand-mark--small') || 'UB', label: 'UnionBank → GCash', receiver: paymentReceiverSettings.gcash },
       pnb: { icon: paymentMethodBrandMarkHtml('pnb', 'pm-brand-mark--small'), label: 'PNB', receiver: paymentReceiverSettings.pnb },
+      rcbc: { icon: paymentMethodBrandMarkHtml('rcbc', 'pm-brand-mark--small'), label: 'RCBC', receiver: paymentReceiverSettings.rcbc },
     }[method];
     const receiver = meta.receiver;
     const methodWarning = method === 'bdopay'
@@ -11412,6 +11500,8 @@ function opPickPay(method) {
         ? 'Pay from BPI to this GCash/G-Xchange recipient. Copy every digit of the Confirmation No. Receipts that pass all checks confirm automatically; mismatches need owner review.'
       : method === 'gcash'
         ? 'Pay from GCash to this GCash recipient. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.'
+        : method === 'rcbc'
+          ? 'Pay to this RCBC account and upload the complete successful receipt. Your receipt needs court-owner review.'
         : method === 'pnb'
           ? 'Use the configured PNB recipient. Your receipt stays pending for court-owner review.'
           : `Pay using ${meta.label}. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.`;

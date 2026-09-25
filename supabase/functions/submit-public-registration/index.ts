@@ -16,6 +16,7 @@ const DIGITAL_METHODS = new Set([
   "maribank",
   "unionbank",
   "pnb",
+  "rcbc",
 ]);
 
 function json(body: unknown, status = 200): Response {

@@ -202,7 +202,7 @@ test('GoTyme and MariBank use dedicated source methods with the shared GCash des
   assert.match(admin, /saveSetting\('payment_method_maribank'/);
   assert.doesNotMatch(admin, /id="gotymeNumInput"|id="gotymeNameInput"|saveSetting\('gotyme_merchant_/);
 
-  assert.match(client, /PB_DIGITAL_PAYMENT_METHODS = \['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb'\]/);
+  assert.match(client, /PB_DIGITAL_PAYMENT_METHODS = \['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb', 'rcbc'\]/);
   assert.match(client, /payment_method_gotyme: '1'/);
   assert.match(client, /payment_method_maribank: '1'/);
 

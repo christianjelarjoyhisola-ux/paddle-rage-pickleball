@@ -40,7 +40,7 @@
   function payment() {
     if (!free()) return false;
     el('bPay').value = 'voucher';
-    for (const id of ['gcashBox','pnbBox']) el(id)?.classList.remove('show');
+    for (const id of ['gcashBox','pnbBox','rcbcBox']) el(id)?.classList.remove('show');
     for (const id of ['gcashRefWrap','cashNote']) if (el(id)) el(id).style.display = 'none';
     el('voucherFreeNotice').hidden = false;
     el('bookingPolicyText').textContent = 'I agree to the booking rules. This complimentary voucher is used when the booking is confirmed and is not restored after cancellation or a no-show.';

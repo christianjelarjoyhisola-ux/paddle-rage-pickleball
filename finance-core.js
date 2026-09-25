@@ -162,7 +162,8 @@
   function receivedAccountKey(row) {
     const explicit = String(valueOf(row, 'receivedAccount', 'received_account') || '').toLowerCase();
     if (explicit) return explicit;
-    return paymentMethodKey(row) === 'cash' ? 'cash' : 'gcash';
+    const method = paymentMethodKey(row);
+    return method === 'cash' ? 'cash' : method === 'rcbc' ? 'rcbc' : 'gcash';
   }
 
   function bookingMetrics(transaction, settings = {}) {

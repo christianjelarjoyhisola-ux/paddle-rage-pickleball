@@ -597,7 +597,7 @@ function _bookingEmailPayload(b) {
 // ROW ↔ JS OBJECT MAPPING
 // SQL uses snake_case; JS objects use camelCase
 // =============================================
-const PB_DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb'];
+const PB_DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb', 'rcbc'];
 
 function _pbNormalizeReceiptOutcome(result) {
   const source = result && typeof result === 'object' ? result : {};
@@ -623,6 +623,7 @@ function receivedAccountForBooking(b = {}) {
 
   const method = normalizePaymentKey(b.paymentMethod || b.payment_method, 'cash');
   if (method === 'cash') return 'cash';
+  if (method === 'rcbc') return 'rcbc';
   return 'gcash';
 }
 
@@ -3375,6 +3376,7 @@ window.DB = {
     payment_method_maribank: '1',
     payment_method_unionbank: '1',
     payment_method_pnb: '0',
+    payment_method_rcbc: '0',
     reschedule_cutoff_hours: '24',
     reschedule_submission_cooldown_seconds: '15',
     gcash_merchant_number: '09XXXXXXXXX',
