@@ -48,6 +48,7 @@ export type BpiReceiptParse = {
     transferSuccess: boolean;
     destinationGcash: boolean;
     instaPay: boolean;
+    conflictingTransferRail: boolean;
     qrCodeRecipient: boolean;
     gmtPlus8: boolean;
   };
@@ -455,7 +456,8 @@ export function parseBpiToGcashReceipt(
       transferSuccess: /\btransfer\s+successful!?\b/i.test(text),
       destinationGcash: /\bgcash\s*\/\s*g-?xchange\b/i.test(text),
       instaPay: /\binsta\s*pay\b/i.test(text),
-      qrCodeRecipient: /\(\s*qr\s*code\s*\)/i.test(text),
+      conflictingTransferRail: /\b(?:peso\s*net|swift)\b/i.test(text),
+      qrCodeRecipient: /\(\s*qr\s*code\s*\)/i.test(recipient.labelRaw || ""),
       gmtPlus8: /\(\s*gmt\s*\+\s*8(?::?00)?\s*\)/i.test(text),
     },
     issues,
@@ -507,7 +509,14 @@ export function verifyBpiToGcashReceipt(
   // BPI's direct-to-mobile success screen shows the complete destination
   // number, without the QR marker or the off-screen transfer-service section.
   // That format requires an exact full-number match instead of a QR suffix.
-  if (!fullMobileDestination && !parsed.indicators.instaPay) {
+  // BPI can keep the transfer-service label below the screenshot. An observed
+  // QR recipient marker plus both configured identity matches is sufficient
+  // route evidence; an explicitly different transfer rail still requires review.
+  const matchingQrDestination = parsed.indicators.qrCodeRecipient &&
+    parsed.indicators.destinationGcash && recipientComparison === "exact" &&
+    recipientAccountComparison === "exact";
+  if (parsed.indicators.conflictingTransferRail ||
+      (!fullMobileDestination && !parsed.indicators.instaPay && !matchingQrDestination)) {
     addUnique(flags, "INSTAPAY_QRPH_UNREADABLE");
   }
   if (!fullMobileDestination && !parsed.indicators.qrCodeRecipient) {
