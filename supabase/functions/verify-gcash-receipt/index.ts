@@ -3025,7 +3025,7 @@ Deno.serve(async (req) => {
         ].includes(flag)
       );
     const recipientMatch = providerVerification?.provider === "rcbc"
-      ? providerVerification.recipientComparison.name === "exact" && ["exact", "suffix_exact"].includes(providerVerification.recipientComparison.account)
+      ? (providerVerification.recipientComparison.name === "exact" || (providerParse?.provider === "rcbc" && providerParse.receipt.layout === "gotyme_bank" && providerVerification.recipientComparison.name === "masked_compatible")) && ["exact", "suffix_exact"].includes(providerVerification.recipientComparison.account)
       : providerVerification?.provider === "gcash"
       ? (providerVerification.recipientComparison.phone === "exact" &&
           providerVerification.recipientComparison.name !== "mismatch") ||
@@ -3171,7 +3171,7 @@ Deno.serve(async (req) => {
           issues: gcashParse.issues,
         }
         : null,
-      rcbc: providerParse?.provider === "rcbc" ? { layout: providerParse.receipt.layout, references: providerParse.receipt.references, canonicalReference: providerParse.receipt.canonicalReference, destinationBank: providerParse.receipt.destinationBank } : null,
+      rcbc: providerParse?.provider === "rcbc" ? { layout: providerParse.receipt.layout, references: providerParse.receipt.references, canonicalReference: providerParse.receipt.canonicalReference, destinationBank: providerParse.receipt.destinationBank, sourceParserVersion: providerParse.receipt.sourceParserVersion || null, traceReference: providerParse.receipt.traceReference || null } : null,
       bankTransfer: bankParse
         ? {
           reference: bankParse.reference,

@@ -7572,6 +7572,7 @@ function shortDateTime(v){
   return `${d.toLocaleDateString('en-PH',{month:'short',day:'numeric'})}<div style="font-size:.72rem;color:var(--muted);font-weight:600">${d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true})}</div>`;
 }
 const RECEIPT_FLAG_LABELS = {
+  GOTYME_RCBC_TRACE_UNREADABLE:'GoTyme trace ID unreadable',
   DUPLICATE_REF:'Ref already used', POSSIBLE_DUPLICATE_REF:'Typed ref may already be used', DUPLICATE_INVOICE:'Invoice already used', DUPLICATE_INSTAPAY_REF:'InstaPay ref already used', DUPLICATE_BPI_TRANSACTION_REF:'BPI transaction ref already used', WRONG_GCASH_NUMBER:'Wrong receiver number',
   AMOUNT_MISMATCH:'Amount does not match', DATE_NOT_TODAY:'Wrong payment date', TIME_EXPIRED:'Paid after 15 min',
   TIME_STALE:'Stale time', TIME_FUTURE:'Receipt before booking', RECEIVER_NAME_MISMATCH:'Receiver name mismatch',
@@ -7757,7 +7758,7 @@ function receiptDetailsHtml(b){
   const bankTransfer = ex.bankTransfer || null;
   const recipientCheck = gcash?.recipientComparison || {};
   const parserLabel = ({
-    rcbc_incoming_v1: 'Dedicated incoming RCBC v1',
+    rcbc_incoming_v1: ex.rcbc?.sourceParserVersion === 'gotyme_to_rcbc_v1' ? 'Dedicated GoTyme → RCBC v1' : 'Dedicated incoming RCBC v1',
     gcash_v1: 'Dedicated GCash v1',
     bdopay_to_gcash_v1: 'Dedicated BDO Pay to GCash v1',
     maya_to_gcash_v1: 'Dedicated Maya to GCash v1',

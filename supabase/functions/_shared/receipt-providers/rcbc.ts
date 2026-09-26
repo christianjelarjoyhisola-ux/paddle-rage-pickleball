@@ -1,4 +1,5 @@
 import { extractReceiptAmount } from "../receipt-amount.ts";
+import { parseGotymeToRcbcReceipt, verifyGotymeToRcbcReceipt } from "./gotyme-rcbc.ts";
 import {
   type BankReceiptVerificationEvidence,
   type BankToGcashReceiptParse,
@@ -12,6 +13,7 @@ export type RcbcLayout =
   | "bpi_bank"
   | "maribank_bank"
   | "instapay_details"
+  | "gotyme_bank"
   | "unsupported";
 export type RcbcReceipt =
   & Omit<
@@ -26,6 +28,8 @@ export type RcbcReceipt =
     references: string[];
     canonicalReference: string | null;
     destinationBank: string | null;
+    sourceParserVersion?: "gotyme_to_rcbc_v1";
+    traceReference?: string | null;
   };
 export type RcbcEvidence =
   & Omit<
@@ -284,6 +288,7 @@ export function parseRcbcReceipt(
   raw: string,
   options: { typedReference?: string } = {},
 ): RcbcReceipt {
+  if (/\bGoTyme Bank\b/i.test(raw)) return parseGotymeToRcbcReceipt(raw, options);
   const lines = linesOf(raw);
   const detectors = [
     /Sent via GCash/i.test(raw) && /Bank Transfer Complete/i.test(raw),
@@ -378,6 +383,7 @@ export function verifyRcbcReceipt(
   r: RcbcReceipt,
   c: ReceiptVerificationContext,
 ): RcbcEvidence {
+  if (r.layout === "gotyme_bank") return verifyGotymeToRcbcReceipt(r,c);
   const flags = [...r.issues];
   const expected = compact(c.expectedRecipientNumber || "");
   const actual = (r.recipient.accountRaw || "").replace(/\s/g, "");
