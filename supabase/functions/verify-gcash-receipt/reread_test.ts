@@ -14,18 +14,28 @@ const assert = (value: unknown, message: string) => {
 
 Deno.test("owner rereads use stored evidence, preserve terminal payments and require authorization", async (t) => {
   const fetchOriginal = globalThis.fetch;
-  const envKeys = ["SUPABASE_URL", "SERVICE_ROLE_KEY"];
+  const envKeys = ["SUPABASE_URL", "SERVICE_ROLE_KEY", "GOOGLE_VISION_API_KEY"];
   const oldEnv = envKeys.map((key) => Deno.env.get(key));
   Deno.env.set("SUPABASE_URL", "https://receipt-test.invalid");
   Deno.env.set("SERVICE_ROLE_KEY", "test-service-key");
+  Deno.env.set("GOOGLE_VISION_API_KEY", "");
   let role = "owner",
     status = "pending",
     claimed = true,
     afterLeaseResolved = false,
     reads = 0;
   const calls: string[] = [];
-  const hash = "a".repeat(64), path = `PB-TEST/${hash}.png`;
-  globalThis.fetch = ((input: RequestInfo | URL) => {
+  const bytes = Uint8Array.from(
+    atob(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aK9sAAAAASUVORK5CYII=",
+    ),
+    (c) => c.charCodeAt(0),
+  );
+  const hash = Array.from(
+      new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+    ).map((b) => b.toString(16).padStart(2, "0")).join(""),
+    path = `PB-TEST/${hash}.png`;
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     assert(
       url.hostname === "receipt-test.invalid",
@@ -44,6 +54,10 @@ Deno.test("owner rereads use stored evidence, preserve terminal payments and req
       return reply({ role, status: "active" });
     }
     if (url.pathname === "/rest/v1/bookings") {
+      assert(
+        (init?.method || "GET") === "GET",
+        "Diagnostic must never update booking rows",
+      );
       reads++;
       return reply({
         ref: "PB-TEST",
@@ -56,6 +70,7 @@ Deno.test("owner rereads use stored evidence, preserve terminal payments and req
         receipt_image_url: path,
       });
     }
+    if (url.pathname === "/rest/v1/settings") return reply([]);
     if (url.pathname.endsWith("/public_payment_method_ready")) {
       return reply(true);
     }
@@ -70,7 +85,11 @@ Deno.test("owner rereads use stored evidence, preserve terminal payments and req
         url.pathname.endsWith(path),
         "Must download the server-stored image",
       );
-      return reply({ message: "Test stops before OCR" }, 404);
+      return status === "confirmed" || afterLeaseResolved
+        ? Promise.resolve(
+          new Response(bytes, { headers: { "Content-Type": "image/png" } }),
+        )
+        : reply({ message: "Test stops before OCR" }, 404);
     }
     throw Error("Unexpected request: " + url.pathname);
   }) as typeof fetch;
@@ -123,13 +142,24 @@ Deno.test("owner rereads use stored evidence, preserve terminal payments and req
     await t.step("resolved bookings remain unchanged", async () => {
       reset();
       status = "confirmed";
+      const response = await request(), result = await response.json();
       assert(
-        (await request()).status === 409,
-        "Resolved receipt must be denied",
+        response.status === 200 && result.diagnostic === true,
+        "Resolved receipt must return fresh diagnostic evidence",
       );
       assert(
-        !calls.some((p) => p.includes("/rpc/")),
-        "No lease for a resolved receipt",
+        result.bookingStatus === "confirmed",
+        "Confirmed status must remain intact",
+      );
+      assert(
+        result.checksPassed === false,
+        "Missing OCR must be reported honestly",
+      );
+      assert(
+        !calls.some((p) =>
+          /finalize|receipt_verifications|used_gcash_refs/.test(p)
+        ),
+        "No settlement or audit writes for diagnostics",
       );
     });
     await t.step("concurrent rereads respect the existing lease", async () => {
@@ -146,13 +176,14 @@ Deno.test("owner rereads use stored evidence, preserve terminal payments and req
       async () => {
         reset();
         afterLeaseResolved = true;
+        const response = await request(), result = await response.json();
         assert(
-          (await request()).status === 409,
-          "New terminal state must be respected",
+          response.status === 200 && result.diagnostic === true,
+          "New terminal state must switch to diagnostic mode",
         );
         assert(
-          !calls.some((p) => p.includes("/storage/")),
-          "No reread after confirmation",
+          result.bookingStatus === "confirmed",
+          "Concurrent confirmation must be preserved",
         );
       },
     );

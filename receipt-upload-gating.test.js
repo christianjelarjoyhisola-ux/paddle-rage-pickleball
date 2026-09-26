@@ -13,7 +13,7 @@ function rereadHarness(options = {}) {
   const vm = require('node:vm');
   const elements = new Map();
   const element = id => {
-    if (!elements.has(id)) elements.set(id, {dataset:{ref:'PB-TEST',readonly:'0'},classList:{contains:()=>true},setAttribute(){},removeAttribute(){},textContent:'',disabled:false});
+    if (!elements.has(id)) elements.set(id, {style:{},dataset:{ref:'PB-TEST',readonly:'0'},classList:{contains:()=>true},setAttribute(){},removeAttribute(){},textContent:'',disabled:false});
     return elements.get(id);
   };
   let calls = 0;
@@ -22,7 +22,8 @@ function rereadHarness(options = {}) {
     canManuallyResolvePayment:()=>options.authorized !== false,
     getBookingGroupByRef:async()=>({ref:'PB-TEST',receiptRef:options.group?'PB-OTHER':'PB-RECEIPT',refs:['PB-OTHER','PB-RECEIPT'],receiptImageUrl:options.group?'PB-RECEIPT/hash.png':null}),
     bookingPaymentIsResolved:()=>!!options.resolved,
-    DB:{verifyGcashReceipt:async payload=>{calls++;assert.equal(payload.action,'reread');assert.equal(payload.bookingRef,'PB-RECEIPT');if(options.error)throw Error(options.error);return {status:options.status || 'manual_review'};}},
+    DB:{verifyGcashReceipt:async payload=>{calls++;assert.equal(payload.action,'reread');assert.equal(payload.bookingRef,'PB-RECEIPT');if(options.error)throw Error(options.error);return {status:options.status || 'manual_review',diagnostic:!!options.resolved,checksPassed:options.status==='auto_approved',extracted:{ref:'fresh'}};}},
+    vmPopulateReceipt:async b=>{assert.equal(b.receiptExtracted.ref,'fresh');},
     openVerifyModal:async()=>{},renderBookings:async()=>{},renderDash:async()=>{},renderPaymentReview:async()=>{},toast:()=>{},
   });
   vm.runInContext(admin.slice(admin.indexOf('async function rereadBookingReceipt()'),admin.indexOf('async function verifyAndConfirm()')), context);
@@ -36,9 +37,22 @@ test('reread displays fresh pending or approved results and restores the button'
     assert.equal(h.element('vmRereadBtn').disabled,false);
   }
 });
-test('reread blocks unauthorized, resolved and simultaneous requests', async()=>{
-  for(const options of [{authorized:false},{resolved:true}]){const h=rereadHarness(options);await h.run();assert.equal(h.calls(),0);}
+test('reread blocks unauthorized and simultaneous requests', async()=>{
+  const denied=rereadHarness({authorized:false});await denied.run();assert.equal(denied.calls(),0);
   const h=rereadHarness();await Promise.all([h.run(),h.run()]);assert.equal(h.calls(),1);
+});
+test('confirmed receipt rereads show fresh diagnostics without claiming a new confirmation', async()=>{
+  for(const status of ['manual_review','auto_approved']){
+    const h=rereadHarness({resolved:true,status});h.element('verifyModal').dataset.readonly='1';await h.run();assert.equal(h.calls(),1);
+    assert.match(h.element('vmRereadResult').textContent,/Saved payment status unchanged/);
+    assert.doesNotMatch(h.element('vmRereadResult').textContent,/still pending|payment auto-verified/);
+  }
+});
+test('diagnostic response normalization preserves paid and confirmed state even when checks need review',()=>{
+  const vm=require('node:vm'), context=vm.createContext({});
+  vm.runInContext(client.slice(client.indexOf('function _pbNormalizeReceiptOutcome('),client.indexOf('function normalizePaymentKey(')),context);
+  const result=context._pbNormalizeReceiptOutcome({diagnostic:true,status:'manual_review',paymentStatus:'paid',bookingStatus:'confirmed'});
+  assert.equal(result.paymentStatus,'paid');assert.equal(result.bookingStatus,'confirmed');
 });
 test('reread errors remain visible and allow retry', async()=>{
   const h=rereadHarness({error:'Receipt service unavailable'});await h.run();

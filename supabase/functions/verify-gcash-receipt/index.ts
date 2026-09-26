@@ -1942,6 +1942,7 @@ Deno.serve(async (req) => {
   }
   if (action !== "verify" && action !== "reread") return json({ error: "Unsupported action" }, 400);
   const reread = action === "reread";
+  let diagnosticReread = false;
 
   let receiptLeaseKey = "";
   let receiptLeaseToken = "";
@@ -2082,8 +2083,8 @@ Deno.serve(async (req) => {
         ["paid", "downpayment_paid", "deposit_retained", "rejected"].includes(
           persistedPaymentStatus,
         );
-      if (terminal) {
-        if (reread) return json({ error: "This payment is already resolved and cannot be reread." }, 409);
+      if (reread && terminal) diagnosticReread = true;
+      if (terminal && !reread) {
         const storedReceiptStatus = String(booking.receipt_status || "");
         const finalStatus = storedReceiptStatus === "rejected" ||
             persistedStatus === "cancelled" ||
@@ -2286,8 +2287,8 @@ Deno.serve(async (req) => {
         ["paid", "downpayment_paid", "deposit_retained", "rejected"].includes(
           currentPaymentStatus,
         );
-      if (reread && terminalAfterLease) return json({ error: "This payment was resolved while the receipt was loading." }, 409);
-      if (terminalAfterLease || (!reread && receiptEvidenceWasVerified(booking))) {
+      if (reread && terminalAfterLease) diagnosticReread = true;
+      if (!reread && (terminalAfterLease || receiptEvidenceWasVerified(booking))) {
         const storedReceiptStatus = String(booking.receipt_status || "");
         const finalStatus = storedReceiptStatus === "rejected" ||
             currentStatus === "cancelled" || currentPaymentStatus === "rejected"
@@ -2431,7 +2432,7 @@ Deno.serve(async (req) => {
       }, 500);
     }
 
-    if (hasPersistedBooking) {
+    if (hasPersistedBooking && !diagnosticReread) {
       let safeStateQuery = bookingUpdateQuery(
         db,
         booking,
@@ -2787,7 +2788,7 @@ Deno.serve(async (req) => {
             )
           );
         if (
-          hasPersistedBooking &&
+          hasPersistedBooking && !diagnosticReread &&
           (!groupPaymentConsistent || !autoPaymentStatus)
         ) {
           flags.push("BOOKING_GROUP_PAYMENT_MISMATCH");
@@ -3260,6 +3261,19 @@ Deno.serve(async (req) => {
         providerKey,
       })),
     };
+
+    // A resolved payment may be inspected again, but its original decision,
+    // ledger, stored audit and notifications must never be changed by a reread.
+    if (diagnosticReread) {
+      return json({
+        ok: true, diagnostic: true, checksPassed: cleanEvidence,
+        status: cleanEvidence ? "auto_approved" : "manual_review",
+        flags, extracted, confidence: ocrApprovalConfidence,
+        receiptVerifiedAt: new Date().toISOString(),
+        paymentStatus: booking.payment_status, bookingStatus: booking.status,
+        message: "Fresh receipt check only. The saved payment decision is unchanged.",
+      });
+    }
 
     // ── persist outcome on the booking ──────────────────────────────────────
     const receiptVerifiedAt = new Date().toISOString();

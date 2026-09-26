@@ -601,6 +601,7 @@ const PB_DIGITAL_PAYMENT_METHODS = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 
 
 function _pbNormalizeReceiptOutcome(result) {
   const source = result && typeof result === 'object' ? result : {};
+  if (source.diagnostic === true) return source;
   if (String(source.status || '').toLowerCase() === 'auto_approved') return source;
   return {
     ...source,

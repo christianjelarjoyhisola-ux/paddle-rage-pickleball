@@ -8549,6 +8549,7 @@ async function openBookingDetails(ref) {
       ${b.hostBooking && canViewHostPaymentHistory() ? `<button type="button" class="btn btn-g" onclick="openHostPaymentHistoryFromDetails('${jsArg(actionRef)}')">Payment History</button>` : ''}
       ${b.hostBooking && pendingBalance && canViewHostPaymentHistory() ? `<button type="button" class="btn host-balance-review-button" onclick="openHostPaymentHistoryFromDetails('${jsArg(actionRef)}')">Review & Confirm</button>` : ''}
       ${!b.hostBooking && hasReceipt ? `<button class="btn btn-g" onclick="closeBookingDetails();openVerifyModal('${jsArg(actionRef)}')">View Payment</button>` : ''}
+      ${b.receiptImageUrl && canManuallyResolvePayment() ? `<button type="button" class="btn btn-g" onclick="openReceiptReread('${jsArg(actionRef)}')">↻ Reread receipt</button>` : ''}
       ${b.hostBooking && b.email && (forfeited || (historicalBalance > 0 && balanceReviewState === 'clear')) ? `<button class="btn btn-p" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Forfeiture Notice':'Send Balance Reminder'}</button>` : ''}`;
     requestAnimationFrame(() => modal.querySelector('.booking-details-modal')?.focus());
   } catch (error) {
@@ -11134,7 +11135,7 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   if (openToken !== _vmOpenToken) return;
   const readOnly = bookingPaymentIsResolved(b);
   const canReview = canManuallyResolvePayment();
-  $('vmRereadBtn').style.display = !readOnly && canReview && b.receiptImageUrl ? '' : 'none';
+  $('vmRereadBtn').style.display = canReview && b.receiptImageUrl ? '' : 'none';
   $('vmRereadBtn').disabled = _receiptRereadBusy;
   $('vmRereadResult').textContent = '';
   const transferSource = !readOnly && canReview ? cancelledDuplicatePaymentSource(b) : null;
@@ -11144,7 +11145,7 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   if ($('vmResolvedClose')) $('vmResolvedClose').style.display = readOnly || !canReview ? '' : 'none';
   if ($('vmReviewHint')) {
     $('vmReviewHint').textContent = readOnly
-      ? 'This payment is already resolved. Receipt evidence remains available for audit.'
+      ? 'This payment is already resolved. Reread receipt runs fresh checks without changing the saved payment decision.'
       : !canReview
       ? 'Only the system owner or court owner can decide a pending payment. Receipt evidence remains available for review.'
       : transferSource
@@ -11274,10 +11275,16 @@ async function vmPopulateReceipt(b){
   }
 }
 
+async function openReceiptReread(ref) {
+  closeBookingDetails();
+  await openVerifyModal(ref);
+  if ($('verifyModal').dataset.ref === ref && $('verifyModal').classList.contains('show')) await rereadBookingReceipt();
+}
+
 async function rereadBookingReceipt() {
   if (_receiptRereadBusy || !canManuallyResolvePayment()) return;
   const ref = $('verifyModal').dataset.ref;
-  if (!ref || $('verifyModal').dataset.readonly === '1') return;
+  if (!ref) return;
   const token = _vmOpenToken;
   _receiptRereadBusy = true;
   const button = $('vmRereadBtn');
@@ -11288,16 +11295,28 @@ async function rereadBookingReceipt() {
   for (const id of ['vmConfirmBtn','vmRejectBtn','vmResolveDuplicateBtn']) $(id).disabled = true;
   try {
     const booking = await getBookingGroupByRef(ref);
-    if (!booking || bookingPaymentIsResolved(booking)) throw new Error('This payment is already resolved.');
+    if (!booking) throw new Error('Booking not found.');
     const imageOwnerRef = String(booking.receiptImageUrl || '').split('/')[0];
     const receiptRef = (booking.refs || [booking.ref]).includes(imageOwnerRef)
       ? imageOwnerRef : booking.receiptRef || booking.ref;
     const result = await DB.verifyGcashReceipt({action:'reread', bookingRef:receiptRef});
-    const message = result.status === 'auto_approved'
+    const message = result.diagnostic
+      ? (result.checksPassed ? 'Fresh reread: all checks passed. ' : 'Fresh reread: some checks need review. ') + 'Saved payment status unchanged.'
+      : result.status === 'auto_approved'
       ? 'Reread complete — payment auto-verified.'
       : 'Reread complete — still pending. See the updated checks below.';
     if (token === _vmOpenToken) {
-      await openVerifyModal(ref);
+      if (result.diagnostic) {
+        await vmPopulateReceipt({...booking,receiptExtracted:result.extracted,receiptFlags:result.flags || [],receiptConfidence:result.confidence});
+        if (token === _vmOpenToken) {
+          const statusBox = $('vmReceiptStatus');
+          statusBox.textContent = result.checksPassed
+            ? 'Fresh diagnostic: all checks passed · saved payment decision unchanged'
+            : 'Fresh diagnostic: needs review · saved payment decision unchanged';
+          statusBox.style.color = result.checksPassed ? 'var(--green)' : '#b87e00';
+          statusBox.style.background = result.checksPassed ? 'rgba(var(--green-rgb),.12)' : 'rgba(184,126,0,.12)';
+        }
+      } else await openVerifyModal(ref);
       if ($('verifyModal').dataset.ref === ref && $('verifyModal').classList.contains('show')) $('vmRereadResult').textContent = message;
     }
     toast(message, result.status === 'auto_approved' ? 'ok' : 'inf');
