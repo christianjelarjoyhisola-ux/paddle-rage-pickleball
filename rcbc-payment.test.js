@@ -38,12 +38,13 @@ test('direct RCBC has a complete checkout panel and independent settings', () =>
   vm.runInNewContext(fs.readFileSync('payment-method-brand.js','utf8'), context);
   assert.ok(context.window.PaymentMethodBrand.iconSrc('rcbc').endsWith('rcbc.svg'));
 });
-test('RCBC receipts are explicitly owner reviewed without a GCash parser fallback', () => {
+test('RCBC receipts use a dedicated destination parser behind an explicit rollout switch', () => {
   const edge = fs.readFileSync('supabase/functions/verify-gcash-receipt/index.ts', 'utf8');
   assert.match(edge, /provider === "rcbc"[\s\S]*?number: settings.rcbc_merchant_number \|\| ""/);
   assert.match(edge, /!isDedicatedReceiptProvider\(provider\)[\s\S]*?flags.push\("PROVIDER_REVIEW_REQUIRED"\)/);
   const dispatch = fs.readFileSync('supabase/functions/_shared/receipt-providers/index.ts', 'utf8');
-  assert.doesNotMatch(dispatch, /case "rcbc"/);
+  assert.match(dispatch, /case "rcbc"/);
+  assert.match(edge, /settings.rcbc_auto_verify_enabled !== "1"/);
   for (const file of ['submit-public-registration', 'host-booking-balance-payment']) {
     assert.match(fs.readFileSync('supabase/functions/' + file + '/index.ts','utf8'), /"rcbc"/);
   }

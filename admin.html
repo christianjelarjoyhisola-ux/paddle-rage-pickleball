@@ -7577,7 +7577,7 @@ const RECEIPT_FLAG_LABELS = {
   EDITED_METADATA:'Edited image metadata', SUSPECTED_FAKE:'Not a receipt', REF_FORMAT_INVALID:'Bad reference format',
   REF_UNREADABLE:'Reference unreadable', INVOICE_UNREADABLE:'Invoice unreadable', LOW_OCR_CONFIDENCE:'Required payment fields unconfirmed', OCR_UNAVAILABLE:'OCR unavailable', AMOUNT_UNREADABLE:'Amount unreadable',
   AMOUNT_REVIEW:'Amount needs owner review', AMOUNT_CONFIRMATION_UNREADABLE:'Amount confirmation incomplete',
-  REF_MISMATCH:'Reference does not match', INSTAPAY_REF_UNREADABLE:'InstaPay reference unreadable', INSTAPAY_UNREADABLE:'InstaPay unreadable', TRANSFER_STATUS_UNREADABLE:'Transfer status needs review', PROVIDER_REVIEW_REQUIRED:'Payment provider requires owner review',
+  RCBC_CRITICAL_DIGITS_UNCLEAR:'RCBC amount, reference or account digits unclear', RCBC_FORMAT_UNSUPPORTED:'RCBC receipt format needs review', RCBC_LAYOUT_UNREADABLE:'RCBC receipt layout unclear', RCBC_RECIPIENT_LAYOUT_UNREADABLE:'RCBC recipient details unclear', RCBC_DESTINATION_MISMATCH:'RCBC destination does not match', RCBC_AUTO_VERIFY_DISABLED:'RCBC automatic verification paused', RCBC_DUPLICATE_CHECK_UNAVAILABLE:'RCBC reference check unavailable', RECEIVER_ACCOUNT_UNREADABLE:'Recipient account digits insufficient or unreadable', RECEIVER_ACCOUNT_MISMATCH:'Recipient account does not match', REF_MISMATCH:'Reference does not match', INSTAPAY_REF_UNREADABLE:'InstaPay reference unreadable', INSTAPAY_UNREADABLE:'InstaPay unreadable', TRANSFER_STATUS_UNREADABLE:'Transfer status needs review', PROVIDER_REVIEW_REQUIRED:'Payment provider requires owner review',
   TRANSFER_STATUS_INVALID:'Transfer failed or reversed', TRANSFER_PENDING:'Transfer still pending',
   DATE_UNREADABLE:'Date unreadable', TIME_UNREADABLE:'Time unreadable', NUMBER_UNREADABLE:'Receiver number unreadable', REF_LABEL_UNREADABLE:'Reference label unreadable',
   BDO_PAY_UNREADABLE:'BDO Pay/InstaPay unreadable', MAYA_UNREADABLE:'Maya unreadable', BPI_UNREADABLE:'BPI success unreadable', BPI_CONFIRMATION_UNREADABLE:'BPI confirmation unreadable', BPI_TRANSACTION_UNREADABLE:'BPI transaction ref unreadable', INSTAPAY_QRPH_UNREADABLE:'InstaPay/QRPh unreadable', GXI_DESTINATION_UNREADABLE:'GXI/GCash destination unreadable', RECEIVER_NAME_UNREADABLE:'Receiver name unreadable', MERCHANT_CONFIG_MISSING:'GCash recipient number not configured', BOOKING_GROUP_PAYMENT_MISMATCH:'Booking payment details need review', AUTO_APPROVAL_FAILED:'Auto-verification could not finalize', REJECTION_FINALIZATION_FAILED:'Duplicate rejection could not finalize',
@@ -7755,6 +7755,7 @@ function receiptDetailsHtml(b){
   const bankTransfer = ex.bankTransfer || null;
   const recipientCheck = gcash?.recipientComparison || {};
   const parserLabel = ({
+    rcbc_incoming_v1: 'Dedicated incoming RCBC v1',
     gcash_v1: 'Dedicated GCash v1',
     bdopay_to_gcash_v1: 'Dedicated BDO Pay to GCash v1',
     maya_to_gcash_v1: 'Dedicated Maya to GCash v1',

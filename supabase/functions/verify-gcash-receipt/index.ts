@@ -1,3 +1,4 @@
+import { rcbcCriticalDigitsReadable } from "../_shared/receipt-providers/rcbc.ts";
 import { editedBySoftware } from "../_shared/receipt-image-metadata.ts";
 import { evaluateGcashCriticalOcrQuality } from "../_shared/gcash-ocr-quality.ts";
 import { configuredBpiMobileAliases } from "../_shared/receipt-providers/bpi.ts";
@@ -2578,6 +2579,7 @@ Deno.serve(async (req) => {
       // GCash and Maya auto-approval require a configured full mobile number.
       flags.push("MERCHANT_CONFIG_MISSING");
     }
+    if (provider === "rcbc" && settings.rcbc_auto_verify_enabled !== "1") flags.push("RCBC_AUTO_VERIFY_DISABLED");
     if (!isDedicatedReceiptProvider(provider)) {
       // Legacy providers remain owner-review-only until each has a pure,
       // provider-specific parser/verifier with the same evidence contract.
@@ -2916,6 +2918,8 @@ Deno.serve(async (req) => {
       flags.push("LOW_OCR_CONFIDENCE");
     }
 
+    if (providerParse?.provider === "rcbc" && !rcbcCriticalDigitsReadable(ocrWords, providerParse.receipt)) flags.push("RCBC_CRITICAL_DIGITS_UNCLEAR");
+
     // ── reference reuse / replay guard ──────────────────────────────────────
     // Dedicated parsers produce provider-namespaced transaction keys plus a
     // shared InstaPay rail key. This catches cross-bank replay without making
@@ -2959,12 +2963,21 @@ Deno.serve(async (req) => {
     }
 
     let duplicateClear = true;
+    // Compatibility with owner-confirmed RCBC receipts created before dedicated
+    // alias keys existed. These are read-only checks, never inferred OCR evidence.
+    if (providerParse?.provider === "rcbc") {
+      for (const ref of providerParse.receipt.references) {
+        const {data: legacy, error: legacyError} = await db.from("used_gcash_refs").select("booking_ref,claim_scope,claim_owner_id").eq("gcash_ref", `rcbc:${ref}`).maybeSingle();
+        if (legacyError || (legacy && !ledgerClaimBelongsToBooking(legacy))) { duplicateClear = false; flags.push(legacyError ? "RCBC_DUPLICATE_CHECK_UNAVAILABLE" : "DUPLICATE_REF"); }
+      }
+    }
     for (const item of dedupeKeys) {
-      const { data: existingRef } = await db
+      const { data: existingRef, error: rcbcDedupeError } = await db
         .from("used_gcash_refs")
         .select("booking_ref,claim_scope,claim_owner_id")
         .eq("gcash_ref", item.key)
         .maybeSingle();
+      if (provider === "rcbc" && rcbcDedupeError) { duplicateClear = false; flags.push("RCBC_DUPLICATE_CHECK_UNAVAILABLE"); }
       if (existingRef && !ledgerClaimBelongsToBooking(existingRef)) {
         duplicateClear = false;
         flags.push(item.duplicateFlag);
@@ -2995,7 +3008,9 @@ Deno.serve(async (req) => {
           "TIME_EXPIRED",
         ].includes(flag)
       );
-    const recipientMatch = providerVerification?.provider === "gcash"
+    const recipientMatch = providerVerification?.provider === "rcbc"
+      ? providerVerification.recipientComparison.name === "exact" && ["exact", "suffix_exact"].includes(providerVerification.recipientComparison.account)
+      : providerVerification?.provider === "gcash"
       ? (providerVerification.recipientComparison.phone === "exact" &&
           providerVerification.recipientComparison.name !== "mismatch") ||
         (providerVerification.recipientComparison.phone === "last4_only" &&
@@ -3139,6 +3154,7 @@ Deno.serve(async (req) => {
           issues: gcashParse.issues,
         }
         : null,
+      rcbc: providerParse?.provider === "rcbc" ? { layout: providerParse.receipt.layout, references: providerParse.receipt.references, canonicalReference: providerParse.receipt.canonicalReference, destinationBank: providerParse.receipt.destinationBank } : null,
       bankTransfer: bankParse
         ? {
           reference: bankParse.reference,
@@ -3165,7 +3181,7 @@ Deno.serve(async (req) => {
               providerVerification?.provider === "maya" ||
               providerVerification?.provider === "bdopay" ||
               providerVerification?.provider === "gotyme" ||
-              providerVerification?.provider === "maribank" || providerVerification?.provider === "unionbank"
+              providerVerification?.provider === "maribank" || providerVerification?.provider === "unionbank" || providerVerification?.provider === "rcbc"
             ? providerVerification.recipientComparison
             : null,
           recipientAccountComparison: providerVerification?.provider === "bpi"

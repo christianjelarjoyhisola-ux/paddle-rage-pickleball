@@ -8148,7 +8148,7 @@ function pickPay(m) {
       maribank: 'Pay from MariBank to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       unionbank: 'Pay from UnionBank to the GCash recipient shown. Clean receipts can confirm automatically; anything doubtful stays pending for owner review.',
       pnb: 'Use the configured PNB payment details. Your receipt stays pending for court-owner review.',
-      rcbc: 'Use the configured RCBC payment details. Your receipt stays pending for court-owner review.',
+      rcbc: 'Pay to the RCBC account shown. Complete matching receipts confirm automatically; unclear receipts stay pending for owner review.',
       cash: 'Cash bookings are paid at the front desk and confirmed by staff.',
     };
     methodNote.innerHTML = Array.isArray(notes[m]) ? notes[m].map(esc).join('<br>') : esc(notes[m] || '');
@@ -8189,7 +8189,7 @@ function syncGcashSharedPanel(method) {
     rcbc: {
       header: 'RCBC Payment', title: 'Send to this RCBC account',
       guide: ['Scan the RCBC QR.', 'Pay the exact amount.', 'Save the transaction reference.', 'Upload the complete receipt.'],
-      help: 'Pay to the RCBC account shown. Your receipt needs court-owner review.',
+      help: 'Upload the full successful RCBC transfer receipt, including date, reference and recipient account. Matching receipts confirm automatically.',
     },
     gcash: {
       header: 'GCash Payment',
@@ -10209,7 +10209,7 @@ function hostBalancePaymentMethodNote(method) {
     maribank: 'Pay from MariBank to GCash. Upload the full receipt with transaction date and time visible.',
     unionbank: 'Pay from UnionBank to the GCash recipient and enter the complete transaction reference.',
     pnb: 'Use the configured PNB payment details and upload the complete successful receipt.',
-    rcbc: 'Use the configured RCBC payment details and upload the complete successful receipt.',
+    rcbc: 'Pay to the RCBC account shown and upload the full successful receipt. Matching receipts confirm automatically; unclear receipts stay pending.',
   })[method] || 'Use a new transaction and upload its complete successful receipt.';
 }
 
@@ -11501,7 +11501,7 @@ function opPickPay(method) {
       : method === 'gcash'
         ? 'Pay from GCash to this GCash recipient. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.'
         : method === 'rcbc'
-          ? 'Pay to this RCBC account and upload the complete successful receipt. Your receipt needs court-owner review.'
+          ? 'Pay to this RCBC account and upload the complete successful receipt. Matching receipts confirm automatically; unclear receipts stay pending for owner review.'
         : method === 'pnb'
           ? 'Use the configured PNB recipient. Your receipt stays pending for court-owner review.'
           : `Pay using ${meta.label}. Receipts that pass every automated check confirm automatically; otherwise they stay pending for court-owner review.`;
