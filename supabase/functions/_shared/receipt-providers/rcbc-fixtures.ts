@@ -62,8 +62,6 @@ export const rcbcFixtures = [
     "typed": "100006",
     "amount": 3150,
     "started": "2026-09-26T04:44:16.458Z",
-    "flags": [
-      "RECEIVER_ACCOUNT_UNREADABLE",
-    ],
+    "flags": [],
   },
 ];

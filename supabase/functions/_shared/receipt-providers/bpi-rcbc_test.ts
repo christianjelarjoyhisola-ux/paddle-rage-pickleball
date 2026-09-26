@@ -1,7 +1,7 @@
 import { parseBpiToRcbcReceipt, verifyBpiToRcbcReceipt } from "./bpi-rcbc.ts";
 import { rcbcFixtures } from "./rcbc-fixtures.ts";
 const fixture = rcbcFixtures[6];
-const valid = fixture.text.replace("XXXXXXXXXXXXX890", "XXXXXXXXXXXX7890");
+const valid = fixture.text;
 const context = {
   typedReference: fixture.typed,
   expectedAmount: 3150,
@@ -31,14 +31,26 @@ Deno.test("BPI RCBC dedicated parser accepts both aliases with identical replay 
   eq(b.v.flags, []);
   eq(a.v.dedupeKeys, b.v.dedupeKeys);
 });
-Deno.test("BPI RCBC three visible digits retain review without blaming the correct reference", () => {
-  eq(run(fixture.text).v.flags, ["RECEIVER_ACCOUNT_UNREADABLE"]);
+Deno.test("BPI RCBC accepts three or four masked digits with all other evidence", () => {
+  eq(run().v.flags, []);
+  eq(run(valid.replace("XXXXX890", "XXXXX7890")).v.flags, []);
+  eq(run().v.recipientComparison.account, "suffix_exact");
+});
+Deno.test("BPI RCBC requires masking and at least three account digits", () => {
+  for (const account of ["XXXXXXXXXXXXX90", "890", "XXXXXXXXXXXXX"]) {
+    eq(
+      run(valid.replace("XXXXXXXXXXXXX890", account)).v.flags.includes(
+        "RECEIVER_ACCOUNT_UNREADABLE",
+      ),
+      true,
+    );
+  }
 });
 for (
   const [label, text, flag] of [
     [
       "wrong account",
-      valid.replace("7890", "7891"),
+      valid.replace("XXXXX890", "XXXXX891"),
       "RECEIVER_ACCOUNT_MISMATCH",
     ],
     [

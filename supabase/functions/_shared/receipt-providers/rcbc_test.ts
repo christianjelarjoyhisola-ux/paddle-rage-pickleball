@@ -135,8 +135,8 @@ for (const i of [0, 1, 2]) {
     ) throw Error("pricing bypass");
   });
 }
-Deno.test("BPI three digits cannot silently satisfy masked-account policy", () => {
-  eq(run(6).v.flags, ["RECEIVER_ACCOUNT_UNREADABLE"]);
+Deno.test("BPI three masked digits satisfy its dedicated account policy", () => {
+  eq(run(6).v.flags, []);
 });
 Deno.test("Incomplete screenshots cannot borrow the phone clock as payment time", () => {
   eq(run(3).p.timestamp.instant, null);

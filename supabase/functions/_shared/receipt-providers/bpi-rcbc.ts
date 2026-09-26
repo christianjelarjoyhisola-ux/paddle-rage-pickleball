@@ -148,7 +148,10 @@ export function verifyBpiToRcbcReceipt(
       ? "exact"
       : "mismatch";
   } else {
-    const m = actual.match(/^[Xx*•.●]+(\d{4,10})$/);
+    // BPI QR transfers can expose only three destination digits. This exception
+    // stays on this route; exact recipient name, bank and all payment checks
+    // below must still pass before the booking can be confirmed.
+    const m = actual.match(/^[Xx*•.●]+(\d{3,10})$/);
     if (m) account = expected.endsWith(m[1]) ? "suffix_exact" : "mismatch";
   }
   if (!/^RCBC\s*\/\s*DiskarTech$/i.test(r.destinationBank || "")) {
