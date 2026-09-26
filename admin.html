@@ -6634,8 +6634,6 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
         <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Automated receipt checks</div>
         <div id="vmReceiptStatus" style="font-size:.82rem;font-weight:700;border-radius:8px;padding:8px 10px;margin-bottom:8px"></div>
         <div id="vmReceiptFlags" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px"></div>
-        <button type="button" class="btn btn-g btn-sm" id="vmRereadBtn" style="display:none;margin-bottom:10px" onclick="rereadBookingReceipt()">↻ Reread receipt</button>
-        <p id="vmRereadResult" role="status" aria-live="polite" style="font-size:.76rem;color:var(--muted);margin:0 0 10px"></p>
         <div id="vmReceiptDetails" class="receipt-detail-grid" style="display:none"></div>
         </div>
         <div class="vm-receipt-preview">
@@ -6644,6 +6642,8 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
           <img id="vmReceiptImg" alt="Uploaded payment receipt"/>
         </a>
         <div id="vmReceiptNoImg" style="display:none;font-size:.76rem;color:var(--muted)">No receipt image was uploaded for this booking.</div>
+        <button type="button" class="btn btn-g btn-sm" id="vmRereadBtn" style="display:none;margin-top:10px" onclick="rereadBookingReceipt()">↻ Reread receipt</button>
+        <p id="vmRereadResult" role="status" aria-live="polite" style="font-size:.76rem;color:var(--muted);margin:8px 0 0"></p>
         </div>
         </div>
       </div>
@@ -8549,7 +8549,6 @@ async function openBookingDetails(ref) {
       ${b.hostBooking && canViewHostPaymentHistory() ? `<button type="button" class="btn btn-g" onclick="openHostPaymentHistoryFromDetails('${jsArg(actionRef)}')">Payment History</button>` : ''}
       ${b.hostBooking && pendingBalance && canViewHostPaymentHistory() ? `<button type="button" class="btn host-balance-review-button" onclick="openHostPaymentHistoryFromDetails('${jsArg(actionRef)}')">Review & Confirm</button>` : ''}
       ${!b.hostBooking && hasReceipt ? `<button class="btn btn-g" onclick="closeBookingDetails();openVerifyModal('${jsArg(actionRef)}')">View Payment</button>` : ''}
-      ${b.receiptImageUrl && canManuallyResolvePayment() ? `<button type="button" class="btn btn-g" onclick="openReceiptReread('${jsArg(actionRef)}')">↻ Reread receipt</button>` : ''}
       ${b.hostBooking && b.email && (forfeited || (historicalBalance > 0 && balanceReviewState === 'clear')) ? `<button class="btn btn-p" onclick="resendHostBalanceNotice('${jsArg(actionRef)}')">${forfeited?'Resend Forfeiture Notice':'Send Balance Reminder'}</button>` : ''}`;
     requestAnimationFrame(() => modal.querySelector('.booking-details-modal')?.focus());
   } catch (error) {
@@ -11273,12 +11272,6 @@ async function vmPopulateReceipt(b){
   } else if (noImg) {
     noImg.style.display = '';
   }
-}
-
-async function openReceiptReread(ref) {
-  closeBookingDetails();
-  await openVerifyModal(ref);
-  if ($('verifyModal').dataset.ref === ref && $('verifyModal').classList.contains('show')) await rereadBookingReceipt();
 }
 
 async function rereadBookingReceipt() {
