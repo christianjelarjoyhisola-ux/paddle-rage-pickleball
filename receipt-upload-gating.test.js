@@ -9,6 +9,47 @@ const client = read('supabase-config.js');
 const edge = read('supabase/functions/verify-gcash-receipt/index.ts');
 const admin = read('admin.html');
 
+function rereadHarness(options = {}) {
+  const vm = require('node:vm');
+  const elements = new Map();
+  const element = id => {
+    if (!elements.has(id)) elements.set(id, {dataset:{ref:'PB-TEST',readonly:'0'},classList:{contains:()=>true},setAttribute(){},removeAttribute(){},textContent:'',disabled:false});
+    return elements.get(id);
+  };
+  let calls = 0;
+  const context = vm.createContext({
+    $:element, _receiptRereadBusy:false, _vmOpenToken:1, _curSection:'bookings',
+    canManuallyResolvePayment:()=>options.authorized !== false,
+    getBookingGroupByRef:async()=>({ref:'PB-TEST',receiptRef:options.group?'PB-OTHER':'PB-RECEIPT',refs:['PB-OTHER','PB-RECEIPT'],receiptImageUrl:options.group?'PB-RECEIPT/hash.png':null}),
+    bookingPaymentIsResolved:()=>!!options.resolved,
+    DB:{verifyGcashReceipt:async payload=>{calls++;assert.equal(payload.action,'reread');assert.equal(payload.bookingRef,'PB-RECEIPT');if(options.error)throw Error(options.error);return {status:options.status || 'manual_review'};}},
+    openVerifyModal:async()=>{},renderBookings:async()=>{},renderDash:async()=>{},renderPaymentReview:async()=>{},toast:()=>{},
+  });
+  vm.runInContext(admin.slice(admin.indexOf('async function rereadBookingReceipt()'),admin.indexOf('async function verifyAndConfirm()')), context);
+  return {context,element,calls:()=>calls,run:()=>vm.runInContext('rereadBookingReceipt()',context)};
+}
+
+test('reread displays fresh pending or approved results and restores the button', async()=>{
+  for(const status of ['manual_review','auto_approved']){
+    const h=rereadHarness({status});await h.run();assert.equal(h.calls(),1);
+    assert.match(h.element('vmRereadResult').textContent,status==='auto_approved'?/auto-verified/:/still pending/);
+    assert.equal(h.element('vmRereadBtn').disabled,false);
+  }
+});
+test('reread blocks unauthorized, resolved and simultaneous requests', async()=>{
+  for(const options of [{authorized:false},{resolved:true}]){const h=rereadHarness(options);await h.run();assert.equal(h.calls(),0);}
+  const h=rereadHarness();await Promise.all([h.run(),h.run()]);assert.equal(h.calls(),1);
+});
+test('reread errors remain visible and allow retry', async()=>{
+  const h=rereadHarness({error:'Receipt service unavailable'});await h.run();
+  assert.match(h.element('vmRereadResult').textContent,/Receipt service unavailable/);
+  assert.equal(h.element('vmRereadBtn').disabled,false);
+  assert.equal(h.context._receiptRereadBusy,false);
+});
+test('grouped rereads use the booking that owns the stored receipt path', async()=>{
+  const h=rereadHarness({group:true});await h.run();assert.equal(h.calls(),1);
+});
+
 test('court receipt starts uploading immediately and must finish before Continue', () => {
   const picker = page.slice(
     page.indexOf('function onReceiptPicked'),

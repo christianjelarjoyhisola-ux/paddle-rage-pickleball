@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "https://deno.land/x/imagescript@1.2.17/mod.ts": "data:application/javascript,export class Image { static decode() { throw new Error('Image decoding is outside these authorization tests'); } }"
+  }
+}

@@ -1940,7 +1940,8 @@ Deno.serve(async (req) => {
     }
     return json({ ok: true, url: signed.signedUrl });
   }
-  if (action !== "verify") return json({ error: "Unsupported action" }, 400);
+  if (action !== "verify" && action !== "reread") return json({ error: "Unsupported action" }, 400);
+  const reread = action === "reread";
 
   let receiptLeaseKey = "";
   let receiptLeaseToken = "";
@@ -1957,7 +1958,7 @@ Deno.serve(async (req) => {
       }, 400);
     }
     let imageBase64 = String(body.imageBase64 || "");
-    const stagedReceiptPath = String(body.stagedReceiptPath || "").trim();
+    let stagedReceiptPath = reread ? "" : String(body.stagedReceiptPath || "").trim();
     // Optional inline data supports pre-save Open Play registration receipts.
     // A matching saved booking still takes precedence over every inline field.
     const inlineBookingData =
@@ -1968,7 +1969,7 @@ Deno.serve(async (req) => {
     if (!/^[a-z0-9][a-z0-9-]{2,79}$/i.test(bookingRef)) {
       return json({ error: "Invalid bookingRef" }, 400);
     }
-    if (!imageBase64 && !uploadedImage && !stagedReceiptPath) {
+    if (!reread && !imageBase64 && !uploadedImage && !stagedReceiptPath) {
       return json({
         error: "receipt file, staged receipt, or imageBase64 required",
       }, 400);
@@ -1976,7 +1977,7 @@ Deno.serve(async (req) => {
 
     let bytes: Uint8Array | null = null;
     let contentType: ReceiptImageContentType | null = null;
-    if (!stagedReceiptPath) {
+    if (!reread && !stagedReceiptPath) {
       try {
         bytes = uploadedImage
           ? new Uint8Array(await uploadedImage.arrayBuffer())
@@ -2021,6 +2022,12 @@ Deno.serve(async (req) => {
     }
 
     let booking: Record<string, unknown>;
+    if (reread && (!persistedRow || caller?.account?.status !== "active" ||
+      !["owner", "court_owner"].includes(String(caller?.account?.role || "")))) {
+      return json({ error: "Only an active owner or court owner can reread a saved booking receipt." }, 403);
+    }
+    // A reread always uses the server's stored image, never a replacement upload.
+    if (reread) imageBase64 = "";
     let bookingMutationScope: BookingMutationScope = {};
     let inlinePricingKind:
       | "open_play"
@@ -2076,6 +2083,7 @@ Deno.serve(async (req) => {
           persistedPaymentStatus,
         );
       if (terminal) {
+        if (reread) return json({ error: "This payment is already resolved and cannot be reread." }, 409);
         const storedReceiptStatus = String(booking.receipt_status || "");
         const finalStatus = storedReceiptStatus === "rejected" ||
             persistedStatus === "cancelled" ||
@@ -2278,7 +2286,8 @@ Deno.serve(async (req) => {
         ["paid", "downpayment_paid", "deposit_retained", "rejected"].includes(
           currentPaymentStatus,
         );
-      if (terminalAfterLease || receiptEvidenceWasVerified(booking)) {
+      if (reread && terminalAfterLease) return json({ error: "This payment was resolved while the receipt was loading." }, 409);
+      if (terminalAfterLease || (!reread && receiptEvidenceWasVerified(booking))) {
         const storedReceiptStatus = String(booking.receipt_status || "");
         const finalStatus = storedReceiptStatus === "rejected" ||
             currentStatus === "cancelled" || currentPaymentStatus === "rejected"
@@ -2309,6 +2318,10 @@ Deno.serve(async (req) => {
       const persistedAttachedPath = String(
         booking.receipt_image_url || "",
       ).trim();
+      if (reread) {
+        if (!persistedAttachedPath) return json({ error: "No uploaded receipt is available to reread." }, 409);
+        stagedReceiptPath = persistedAttachedPath;
+      }
       persistedAttachedHash = String(
         booking.receipt_image_hash || "",
       ).trim().toLowerCase();
@@ -2434,8 +2447,10 @@ Deno.serve(async (req) => {
         bookingMutationScope,
       )
         .in("status", ACTIVE_RECEIPT_BOOKING_STATUSES)
-        .in("payment_status", ACTIVE_RECEIPT_PAYMENT_STATUSES)
-        .is("receipt_verified_at", null);
+        .in("payment_status", ACTIVE_RECEIPT_PAYMENT_STATUSES);
+      safeStateQuery = reread && booking.receipt_verified_at
+        ? safeStateQuery.eq("receipt_verified_at", booking.receipt_verified_at)
+        : safeStateQuery.is("receipt_verified_at", null);
       safeStateQuery = stagedReceiptPath
         ? safeStateQuery.eq("receipt_image_url", stagedReceiptPath).eq(
           "receipt_image_hash",
@@ -3091,6 +3106,7 @@ Deno.serve(async (req) => {
     };
 
     const extracted = {
+      ...(reread ? { reread: { actorId: caller?.userId, requestedAt: new Date().toISOString() } } : {}),
       ref: extractedRef,
       invoice: extractedInvoice,
       bdopayReferenceDate: providerParse?.provider === "bdopay"
