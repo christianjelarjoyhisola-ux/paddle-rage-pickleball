@@ -1,4 +1,5 @@
 import { extractReceiptAmount } from "../receipt-amount.ts";
+import { parseBpiToRcbcReceipt, verifyBpiToRcbcReceipt } from "./bpi-rcbc.ts";
 import { parseGotymeToRcbcReceipt, verifyGotymeToRcbcReceipt } from "./gotyme-rcbc.ts";
 import {
   type BankReceiptVerificationEvidence,
@@ -28,7 +29,7 @@ export type RcbcReceipt =
     references: string[];
     canonicalReference: string | null;
     destinationBank: string | null;
-    sourceParserVersion?: "gotyme_to_rcbc_v1";
+    sourceParserVersion?: "gotyme_to_rcbc_v1" | "bpi_to_rcbc_v1";
     traceReference?: string | null;
   };
 export type RcbcEvidence =
@@ -208,26 +209,6 @@ function gcashBank(lines: string[], raw: string): Fields {
   }
   return f;
 }
-function bpiBank(lines: string[], raw: string): Fields {
-  const f = empty();
-  const to = block(lines, "Transfer to");
-  f.bank = to[0] || null;
-  f.name = to[1]?.replace(/\s*\(QR Code\)\s*$/i, "") || null;
-  f.account = to[2] || null;
-  if (to.length !== 3) f.issues.push("RCBC_RECIPIENT_LAYOUT_UNREADABLE");
-  f.amount = singleMoney(block(lines, "Transfer Amount"));
-  const confirmation = ref(block(lines, "Confirmation No."), 10);
-  const transaction = ref(block(lines, "Transaction Ref. No."));
-  f.references = [confirmation, transaction].filter((x): x is string => !!x);
-  f.rail = transaction;
-  if (!confirmation || !transaction) f.issues.push("REF_UNREADABLE");
-  f.success = /\bTransfer successful!/i.test(raw) &&
-    /\bSent via BPI\b/i.test(raw);
-  f.dateLines = lines.filter((s) =>
-    /\b20\d{2}\b/.test(s) && /GMT\s*\+8/.test(s)
-  );
-  return f;
-}
 function maribankBank(lines: string[], raw: string): Fields {
   const f = empty();
   const banks = lines.flatMap((s, i) => BANK.test(s) ? [i] : []);
@@ -306,10 +287,9 @@ export function parseRcbcReceipt(
   const layout: RcbcLayout = match.length === 1
     ? layouts[match[0]]
     : "unsupported";
+  if (layout === "bpi_bank") return parseBpiToRcbcReceipt(raw, options);
   const f = layout === "gcash_bank"
     ? gcashBank(lines, raw)
-    : layout === "bpi_bank"
-    ? bpiBank(lines, raw)
     : layout === "maribank_bank"
     ? maribankBank(lines, raw)
     : layout === "instapay_details"
@@ -383,6 +363,7 @@ export function verifyRcbcReceipt(
   r: RcbcReceipt,
   c: ReceiptVerificationContext,
 ): RcbcEvidence {
+  if (r.layout === "bpi_bank") return verifyBpiToRcbcReceipt(r, c);
   if (r.layout === "gotyme_bank") return verifyGotymeToRcbcReceipt(r,c);
   const flags = [...r.issues];
   const expected = compact(c.expectedRecipientNumber || "");
@@ -453,7 +434,6 @@ export function verifyRcbcReceipt(
     if (value.length >= 10) {
       add(`rcbc:${value}`, "rcbc");
       if (r.layout === "gcash_bank") add(value, "gcash");
-      if (r.layout === "bpi_bank") add(`bpi:${value}`, "bpi");
     } else if (r.timestamp.date) {
       add(`rcbc_${r.layout}:${r.timestamp.date}:${value}`, `rcbc_${r.layout}`);
     }

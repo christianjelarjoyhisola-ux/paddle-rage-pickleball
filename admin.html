@@ -7758,7 +7758,7 @@ function receiptDetailsHtml(b){
   const bankTransfer = ex.bankTransfer || null;
   const recipientCheck = gcash?.recipientComparison || {};
   const parserLabel = ({
-    rcbc_incoming_v1: ex.rcbc?.sourceParserVersion === 'gotyme_to_rcbc_v1' ? 'Dedicated GoTyme → RCBC v1' : 'Dedicated incoming RCBC v1',
+    rcbc_incoming_v1: ex.rcbc?.sourceParserVersion === 'bpi_to_rcbc_v1' ? 'Dedicated BPI → RCBC v1' : ex.rcbc?.sourceParserVersion === 'gotyme_to_rcbc_v1' ? 'Dedicated GoTyme → RCBC v1' : 'Dedicated incoming RCBC v1',
     gcash_v1: 'Dedicated GCash v1',
     bdopay_to_gcash_v1: 'Dedicated BDO Pay to GCash v1',
     maya_to_gcash_v1: 'Dedicated Maya to GCash v1',
