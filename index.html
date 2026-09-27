@@ -411,7 +411,7 @@ body.dark .shared-date-display {
   background:linear-gradient(135deg,var(--navy-dark),var(--navy));
   overflow:hidden; min-height:200px;
 }
-.cc-photo img { width:100%; height:100%; object-fit:cover; display:block; }
+.cc-photo img { width:100%; height:100%; object-fit:cover; object-position:center bottom; display:block; position:absolute; inset:0; }
 .cc-photo-avail {
   position:absolute; top:10px; left:10px;
   font-size:.7rem; font-weight:800; padding:4px 11px; border-radius:20px;
@@ -524,7 +524,10 @@ body.dark .shared-date-display {
 @media(max-width:900px){ .cc-slots-grid{ grid-template-columns:repeat(4,minmax(0,1fr)); } }
 @media(max-width:700px){
   .cc { flex-direction:column; display:flex; }
-  .cc-photo { display:none; }
+  /* Keep the net and playing surface in view in the portrait court uploads. */
+  .cc-photo { display:block; width:100%; min-height:0; aspect-ratio:4 / 3; }
+  /* The mobile header already contains these details; keep the photo clear. */
+  .cc-photo-avail, .cc-photo-bar { display:none; }
   .cc-times { padding:10px 12px 12px; }
   .cc-times-head { display:none; }
   .cc-times-sub { display:none; }
@@ -7693,7 +7696,7 @@ async function renderCourts() {
     const courtTimesHeading = `<span class="court-heading-icon" aria-hidden="true"></span><span>${esc(compactCourtName)}</span><span class="court-heading-sep">·</span><span class="court-heading-label">Available Times</span>`;
 
     const courtPhotoHtml = c.photo
-      ? `<img src="${esc(c.photo)}" alt="${esc(c.name)}" style="width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0"/>`
+      ? `<img src="${esc(c.photo)}" alt="${esc(c.name)}" loading="lazy" decoding="async"/>`
       : `<div style="width:100%;height:100%;background:linear-gradient(135deg,var(--navy-dark),var(--navy));display:flex;align-items:center;justify-content:center;position:absolute;inset:0"><svg width="80" height="54" viewBox="0 0 110 74" fill="none"><rect x="2" y="2" width="106" height="70" rx="3" stroke="rgba(var(--ac),.5)" stroke-width="1.8"/><line x1="55" y1="2" x2="55" y2="72" stroke="rgba(var(--ac),.4)" stroke-width="1.4"/><line x1="2" y1="37" x2="108" y2="37" stroke="rgba(var(--ac),.3)" stroke-width="1"/><circle cx="55" cy="37" r="6" stroke="rgba(var(--ac),.35)" stroke-width="1.5"/></svg></div>`;
 
     const openPlayCardHtml = (!blk && todayOpenPlaySession)
