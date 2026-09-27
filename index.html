@@ -524,8 +524,9 @@ body.dark .shared-date-display {
 @media(max-width:900px){ .cc-slots-grid{ grid-template-columns:repeat(4,minmax(0,1fr)); } }
 @media(max-width:700px){
   .cc { flex-direction:column; display:flex; }
-  /* Keep the net and playing surface in view in the portrait court uploads. */
-  .cc-photo { display:block; width:100%; min-height:0; aspect-ratio:4 / 3; }
+  /* Match the wide court crop, retaining the net and near baseline. */
+  .cc-photo { display:block; width:100%; min-height:0; aspect-ratio:3 / 2; }
+  .cc-photo img { object-position:center 85%; }
   /* The mobile header already contains these details; keep the photo clear. */
   .cc-photo-avail, .cc-photo-bar { display:none; }
   .cc-times { padding:10px 12px 12px; }
