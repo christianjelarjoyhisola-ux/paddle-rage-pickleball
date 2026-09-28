@@ -11160,6 +11160,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   initDark();
   if (!(await refreshHostBookingSession())) return;
   applyHostChrome();
+  if (new URLSearchParams(location.search).get('myBookings') === '1' && activeHostSession()) {
+    dismissSplash();
+    await openHostBookings();
+  }
   await loadOperatingHours();
   await expireStaleVerifyingBookings();
   await renderCourts();

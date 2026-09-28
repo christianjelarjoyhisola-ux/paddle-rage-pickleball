@@ -679,7 +679,8 @@ test('verified host applications enqueue one privacy-safe retryable Telegram rev
   assert.doesNotMatch(message, /password|gcash|valid_id|notes|contact_number/i);
 
   assert.match(hostPage, /await DB\.confirmOpenPlayHostVerification\(\)/);
-  assert.ok(hostPage.indexOf('await DB.confirmOpenPlayHostVerification()') < hostPage.indexOf("await _sb.auth.signOut({ scope: 'local' })"));
+  const verificationHandler = hostPage.slice(hostPage.indexOf('async function handleHostEntryState()'));
+  assert.ok(verificationHandler.indexOf('await DB.confirmOpenPlayHostVerification()') < verificationHandler.indexOf("await _sb.auth.signOut({ scope: 'local' })"));
   assert.match(config, /action: 'confirm-verification'/);
   assert.match(config, /action: 'dispatch-review-notifications'/);
   assert.match(config, /action: 'test-review-notification'/);

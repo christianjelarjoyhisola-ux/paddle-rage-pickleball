@@ -43,6 +43,8 @@ textarea.fi{min-height:82px;resize:vertical}
 .links{padding:0 24px 24px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .links a{color:var(--muted);font-size:.84rem;text-decoration:none}
 .links a:hover{color:var(--navy);text-decoration:underline;text-underline-offset:3px}
+.password-tools{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:-4px 0 16px}
+.text-button{background:none;border:0;color:var(--text);font:inherit;text-decoration:underline;cursor:pointer;padding:8px 0}
 </style>
 <link rel="stylesheet" href="brand-theme.css?v=20260903-manage-booking-v1">
 </head>
@@ -66,8 +68,37 @@ textarea.fi{min-height:82px;resize:vertical}
       <input class="fi" type="email" id="hostEmail" placeholder="you@email.com" autocomplete="username" required>
       <label class="fl" for="hostPassword">Password</label>
       <input class="fi" type="password" id="hostPassword" placeholder="Enter password" autocomplete="current-password" required>
+      <div class="password-tools">
+        <button class="text-button" type="button" onclick="toggleHostPassword(this)" aria-controls="hostPassword" aria-pressed="false">Show password</button>
+        <button class="text-button" type="button" onclick="showHostReset()">Forgot password?</button>
+      </div>
       <button class="btn btn-p" type="submit" id="hostLoginBtn">Continue to Booking</button>
     </form>
+  </section>
+
+  <section class="panel" id="resetPanel">
+    <h2>Reset your password</h2>
+    <p class="note">Enter your host account email. We’ll send a secure link to choose a new password.</p>
+    <div class="msg" id="resetMsg" role="status" aria-live="polite"></div>
+    <form onsubmit="requestHostReset(event)">
+      <label class="fl" for="resetEmail">Host email</label>
+      <input class="fi" type="email" id="resetEmail" autocomplete="email" required>
+      <button class="btn btn-p" id="resetBtn" type="submit">Send reset link</button>
+    </form>
+    <button class="text-button" type="button" onclick="showPanel('login')">Back to Host Login</button>
+  </section>
+
+  <section class="panel" id="newPasswordPanel">
+    <h2>Choose a new password</h2>
+    <div class="msg" id="newPasswordMsg" role="status" aria-live="polite"></div>
+    <form onsubmit="saveHostPassword(event)">
+      <label class="fl" for="newHostPassword">New password</label>
+      <input class="fi" id="newHostPassword" type="password" autocomplete="new-password" minlength="8" required>
+      <label class="fl" for="confirmHostPassword">Confirm new password</label>
+      <input class="fi" id="confirmHostPassword" type="password" autocomplete="new-password" minlength="8" required>
+      <button class="btn btn-p" id="savePasswordBtn" type="submit">Save new password</button>
+    </form>
+    <button class="text-button" type="button" onclick="showHostReset()">Request a new reset link</button>
   </section>
 
   <section class="panel" id="applyPanel">
@@ -110,10 +141,66 @@ document.body.classList.toggle('light', !dark);
 function $(id){ return document.getElementById(id); }
 
 function showPanel(name) {
+  $('resetPanel').classList.toggle('on', name === 'reset');
+  $('newPasswordPanel').classList.toggle('on', name === 'newPassword');
   $('loginPanel').classList.toggle('on', name === 'login');
   $('applyPanel').classList.toggle('on', name === 'apply');
   $('loginTab').classList.toggle('on', name === 'login');
   $('applyTab').classList.toggle('on', name === 'apply');
+}
+
+function toggleHostPassword(button) {
+  const visible = $('hostPassword').type === 'password';
+  $('hostPassword').type = visible ? 'text' : 'password';
+  button.textContent = visible ? 'Hide password' : 'Show password';
+  button.setAttribute('aria-pressed', String(visible));
+}
+
+function showHostReset() {
+  $('resetEmail').value = $('hostEmail').value.trim();
+  showPanel('reset');
+  $('resetEmail').focus();
+}
+
+async function requestHostReset(event) {
+  event.preventDefault();
+  const btn = $('resetBtn');
+  btn.disabled = true;
+  setMsg('resetMsg', 'Sending reset link…', '');
+  try {
+    await DB.requestHostPasswordReset($('resetEmail').value.trim().toLowerCase());
+    setMsg('resetMsg', 'If this email belongs to an active host account, a reset link will arrive shortly. Check your inbox and spam folder. Please wait five minutes before requesting another link.', 'ok');
+  } catch (error) {
+    setMsg('resetMsg', error?.message || 'Could not send a reset link. Please try again.', 'err');
+  } finally { btn.disabled = false; }
+}
+
+async function saveHostPassword(event) {
+  event.preventDefault();
+  const password = $('newHostPassword').value;
+  if (password.length < 8 || password !== $('confirmHostPassword').value) {
+    setMsg('newPasswordMsg', 'Use at least 8 characters and make sure both passwords match.', 'err');
+    return;
+  }
+  const btn = $('savePasswordBtn');
+  btn.disabled = true;
+  try {
+    const { data, error: sessionError } = await _sb.auth.getSession();
+    if (sessionError || !data?.session) throw new Error('This reset link is invalid or expired. Request a new link below.');
+    const { error } = await _sb.auth.updateUser({ password });
+    if (error) throw error;
+    await _sb.auth.signOut({ scope: 'local' });
+    localStorage.removeItem('pb_session');
+    sessionStorage.removeItem('pb_session');
+    $('newHostPassword').value = '';
+    $('confirmHostPassword').value = '';
+    $('hostPassword').value = '';
+    history.replaceState({}, '', location.pathname);
+    showPanel('login');
+    setMsg('loginMsg', 'Password updated. Sign in with your new password to open My Bookings.', 'ok');
+  } catch (error) {
+    setMsg('newPasswordMsg', error?.message || 'Could not update your password.', 'err');
+  } finally { btn.disabled = false; }
 }
 
 function setMsg(id, text, type) {
@@ -139,7 +226,7 @@ async function hostLogin(e) {
   try {
     const r = await Auth.login($('hostEmail').value.trim(), $('hostPassword').value, true);
     if (!r.ok) {
-      setMsg('loginMsg', r.msg || 'Invalid email or password.', 'err');
+      setMsg('loginMsg', /invalid.*credentials/i.test(r.msg || '') ? 'Email or password is incorrect. Check your password with Show password, or use Forgot password to reset it.' : r.msg || 'Invalid email or password.', 'err');
       return;
     }
     const sess = Auth.getSession();
@@ -150,7 +237,9 @@ async function hostLogin(e) {
       setMsg('loginMsg', 'This portal is only for approved Open Play Host accounts.', 'err');
       return;
     }
-    window.location.href = 'index.html?hostBooking=1';
+    window.location.href = 'index.html?hostBooking=1&myBookings=1';
+  } catch (error) {
+    setMsg('loginMsg', error?.message || 'Could not sign in. Check your connection and try again.', 'err');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Continue to Booking';
@@ -230,8 +319,30 @@ async function handleHostEntryState() {
   const verificationReturn = url.searchParams.get('email_verified') === '1';
   const authError = url.searchParams.get('error') || hashParams.get('error');
 
+  if (url.searchParams.get('recovery') === '1' || hashParams.get('type') === 'recovery') {
+    showPanel('newPassword');
+    const { data, error } = await _sb.auth.getSession();
+    if (authError || error || !data?.session) {
+      setMsg('newPasswordMsg', 'This reset link is invalid or expired. Request a new link below.', 'err');
+      $('savePasswordBtn').disabled = true;
+    }
+    history.replaceState({}, '', `${url.pathname}?recovery=1`);
+    return;
+  }
+
   if (url.searchParams.get('apply') === '1') showPanel('apply');
-  if (!verificationReturn && !authError) return;
+  if (!verificationReturn && !authError) {
+    if (url.searchParams.get('apply') === '1') return;
+    try {
+      const { data } = await _sb.auth.getSession();
+      if (!data?.session) return;
+      const session = await Auth.refreshSessionFromAuth();
+      if (session?.role === 'host' && (!session.status || session.status === 'active')) {
+        window.location.replace('index.html?hostBooking=1&myBookings=1');
+      }
+    } catch (_) { /* Keep login usable when session verification is unavailable. */ }
+    return;
+  }
   let verificationRecorded = !verificationReturn;
 
   if (authError) {
@@ -279,6 +390,12 @@ async function handleHostEntryState() {
   history.replaceState({}, document.title, `${url.pathname}${url.search}`);
 }
 
+_sb.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    showPanel('newPassword');
+    $('savePasswordBtn').disabled = false;
+  }
+});
 void handleHostEntryState();
 </script>
 </body>

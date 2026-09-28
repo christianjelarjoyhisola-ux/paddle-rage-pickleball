@@ -229,6 +229,24 @@
     return link;
   }
 
+  function makeHostSignInButton() {
+    const link = element("a", "owner-state-action is-primary", "Host? Sign in to My Bookings");
+    link.href = "host.html";
+    return link;
+  }
+
+  async function routeVerifiedHost() {
+    // The destination reads bookings through the authenticated, host-scoped RPC.
+    // A cached browser role alone never grants access or triggers a redirect.
+    if (typeof window.Auth?.refreshSessionFromAuth !== "function") return false;
+    try {
+      const session = await window.Auth.refreshSessionFromAuth();
+      if (session?.role !== "host" || (session.status && session.status !== "active")) return false;
+      window.location.replace("index.html?hostBooking=1&myBookings=1");
+      return true;
+    } catch (_) { return false; }
+  }
+
   function idleLookupLabel() {
     return ownerPreviewActive ? "Preview booking" : "Find my booking";
   }
@@ -1556,7 +1574,7 @@
           message: "For privacy, this booking can only be viewed in the browser and device used to complete checkout. If you changed device, changed browser, or cleared browser data, contact Paddle Rage and include your PB booking reference.",
           contact: true,
           reference,
-          actions: [makeOwnerSignInButton("System owner? Sign in to preview")],
+          actions: [makeHostSignInButton(), makeOwnerSignInButton("System owner? Sign in to preview")],
         });
         return;
       }
@@ -1626,7 +1644,7 @@
       emailInput.setAttribute("aria-invalid", "false");
       formFeedback.textContent = "";
     });
-    void configureOwnerPreview();
+    void routeVerifiedHost().then(routed => { if (!routed) return configureOwnerPreview(); });
   }
 
   if (document.readyState === "loading") {

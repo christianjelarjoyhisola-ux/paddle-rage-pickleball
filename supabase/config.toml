@@ -2,7 +2,7 @@ project_id = "paddle-rage-pickleball"
 
 [auth]
 site_url = "https://paddleragecdo.ph"
-additional_redirect_urls = ["https://paddleragecdo.ph/login.html", "https://paddle-rage-pickleball.pages.dev/login.html", "https://paddleragecdo.ph/host.html?email_verified=1"]
+additional_redirect_urls = ["https://paddleragecdo.ph/login.html", "https://paddle-rage-pickleball.pages.dev/login.html", "https://paddleragecdo.ph/host.html?email_verified=1", "https://paddleragecdo.ph/host.html?recovery=1"]
 enable_signup = false
 
 [functions.create-payment-session]

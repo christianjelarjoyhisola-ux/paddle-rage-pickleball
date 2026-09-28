@@ -2163,6 +2163,15 @@ window.DB = {
     return data;
   },
 
+  async requestHostPasswordReset(email) {
+    if (window.PB_USE_LOCAL_DATA) throw new Error('Password recovery is available on the live Host Portal.');
+    const data = await _invokeEdgeFunction('host-application', {
+      action: 'reset-password', email,
+    }, { preferDirect: true });
+    if (data?.error) throw new Error(data.error);
+    return data;
+  },
+
   async confirmOpenPlayHostVerification() {
     const data = await _invokeEdgeFunction('host-application', {
       action: 'confirm-verification',

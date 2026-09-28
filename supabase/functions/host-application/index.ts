@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any no-import-prefix
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendMailerooEmail } from "../_shared/maileroo.ts";
+import { HOST_RECOVERY_MESSAGE, requestHostPasswordRecovery } from "../_shared/host-password-recovery.ts";
 import {
   renderHostDecisionEmail,
   renderHostVerificationEmail,
@@ -30,6 +31,7 @@ const ALLOWED_ID_TYPES = new Set([
 type SignupPayload = {
   action?:
     | "signup"
+    | "reset-password"
     | "resend-verification"
     | "confirm-verification"
     | "dispatch-review-notifications"
@@ -1051,6 +1053,18 @@ Deno.serve(async (req): Promise<Response> => {
   } catch (error) {
     const status = error instanceof RequestBodyError ? error.status : 400;
     return json({ error: errMsg(error) }, status);
+  }
+
+  if (body.action === "reset-password") {
+    const email = normalizedEmail(body.email);
+    if (!validEmail(email) || email.length > 254) return json({ error: "Enter a valid host email address." }, 400);
+    try {
+      await requestHostPasswordRecovery(db, email, Deno.env.get("APP_PUBLIC_URL") || "https://paddleragecdo.ph");
+      return json({ ok: true, message: HOST_RECOVERY_MESSAGE });
+    } catch (_) {
+      console.error("Host password recovery failed");
+      return json({ error: "Password recovery is temporarily unavailable. Please try again later." }, 503);
+    }
   }
 
   if (body.action === "confirm-verification") {
