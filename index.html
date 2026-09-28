@@ -4539,7 +4539,7 @@ async function refreshHostBookingSession() {
 
   // Never grant the host rate from stale browser storage. If the database can
   // no longer verify an active host account, require a fresh portal login.
-  try { await window._sb?.auth?.signOut?.(); } catch (_) {}
+  try { await window._supabase.auth.signOut({ scope: 'local' }); } catch (_) {}
   sessionStorage.removeItem('pb_session');
   localStorage.removeItem('pb_session');
   localStorage.removeItem('pb_remember');
@@ -9972,11 +9972,22 @@ function hostNavBook() {
 }
 
 async function hostLogout() {
-  try { await window._sb?.auth?.signOut?.(); } catch (_) {}
-  sessionStorage.removeItem('pb_session');
-  localStorage.removeItem('pb_session');
-  localStorage.removeItem('pb_remember');
-  window.location.href = window.PB_USE_LOCAL_DATA ? 'host.html?localData=1' : 'host.html';
+  const button = document.querySelector('#hostBottomNav .logout');
+  if (button?.disabled) return;
+  if (button) button.disabled = true;
+  try {
+    // Clear the real Supabase session before the portal checks for auto-login.
+    const { error } = await window._supabase.auth.signOut({ scope: 'local' });
+    if (error) throw error;
+    sessionStorage.removeItem('pb_session');
+    localStorage.removeItem('pb_session');
+    localStorage.removeItem('pb_remember');
+    window.location.replace(window.PB_USE_LOCAL_DATA ? 'host.html?localData=1' : 'host.html');
+  } catch (error) {
+    console.error('Host logout failed:', error);
+    toast('Could not log out. Check your connection and try again.', 'err');
+    if (button) button.disabled = false;
+  }
 }
 
 function closeHostBookings() {
