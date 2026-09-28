@@ -35,6 +35,10 @@ function fixture(options: Record<string, any> = {}) {
     calls.push("send");
     assert(mail.to === "host@example.com", "deliver only to verified host email");
     assert(mail.html.includes("&amp;type=recovery"), "escape link HTML");
+    const links = [...mail.html.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)];
+    assert(links.length === 2, "include a real clickable button and fallback link");
+    assert(links[0][2] === "Reset Password", "label the button clearly");
+    assert(links.every(link => link[1] === "https://auth.example/verify?token=test&amp;type=recovery"), "both links must open the generated recovery URL");
     assert(mail.plain.includes("type=recovery"), "provide plain text link");
     return { id: "test-delivery" };
   };
