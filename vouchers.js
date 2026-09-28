@@ -6,6 +6,18 @@
   let state;
   let courtsInitialized = false;
   const notice = text => { $('notice').textContent = text; };
+  function formNotice(text) {
+    const node = $('formNotice');
+    node.textContent = text;
+    node.hidden = !text;
+    if (text) { node.focus({preventScroll:true}); node.scrollIntoView({block:'nearest',behavior:'smooth'}); }
+  }
+  function requireSelection(values, container, message) {
+    if (values.length) return;
+    $('campaignForm').querySelector('.advanced').open = true;
+    $(container)?.querySelector('input')?.focus();
+    throw new Error(message);
+  }
   function assignments() {
     const allowed = state.assignments.filter(x => x.user_id === $('authorityOwner').value).map(x => x.court_id);
     $('authorityCourts').innerHTML = state.courts.map(c => `<label><input type="checkbox" name="courtIds" value="${esc(c.id)}" ${allowed.includes(c.id)?'checked':''}>${esc(c.name)}</label>`).join('');
@@ -13,9 +25,13 @@
   async function load() {
     state = await DB.manageVouchers();
     $('workspace').hidden = false;
+    const canCreate = state.courts.length > 0;
+    $('voucherSetup').hidden = canCreate;
+    $('campaignForm').hidden = !canCreate;
+    if (!canCreate && state.owners.length) $('voucherSetup').textContent = 'Add a court in the dashboard before creating vouchers.';
     const selected = [...$('courtOptions').querySelectorAll('input:checked')].map(x => x.value);
     $('courtOptions').innerHTML = state.courts.map(c => `<label><input type="checkbox" name="courtIds" value="${esc(c.id)}" ${(!courtsInitialized || selected.includes(c.id))?'checked':''}>${esc(c.name)}</label>`).join('') || '<p>No courts assigned. Ask the system owner to assign voucher funding permissions.</p>';
-    courtsInitialized = true;
+    courtsInitialized = state.courts.length > 0;
     $('authority').hidden = !state.owners.length;
     $('authorityOwner').innerHTML = state.owners.map(o => `<option value="${esc(o.id)}">${esc(o.name)}</option>`).join('');
     assignments();
@@ -91,10 +107,17 @@
   fields.mode.addEventListener('change',syncCodeFields);
   fields.batchSize.addEventListener('input',syncCodeFields);
   syncCodeFields();
+  $('campaignForm').addEventListener('invalid', event => {
+    const advanced = event.target.closest('.advanced');
+    if (advanced) advanced.open = true;
+    if (event.target.closest('#customOffer')) $('customOffer').hidden = false;
+    formNotice('Please check the highlighted field before creating this voucher.');
+  }, true);
   $('campaignForm').addEventListener('submit', async event => {
-    event.preventDefault(); const form=event.currentTarget; const button=form.querySelector('button[type=submit]'); button.disabled=true;
+    event.preventDefault(); const form=event.currentTarget; const button=form.querySelector('button[type=submit]'); button.disabled=true; formNotice('');
     try {
       const fd=new FormData(form), data=Object.fromEntries(fd);
+      if (!state?.courts?.length) throw new Error('No courts are assigned for voucher funding. Ask the system owner to assign courts, then refresh.');
       data.courtIds=fd.getAll('courtIds'); data.bookingTypes=fd.getAll('bookingTypes'); data.weekdays=fd.getAll('weekdays').map(Number);
       if(!data.startsAt || !data.endsAt) throw new Error('Choose the start and expiry dates.');
       data.startsAt += 'T'+String(data.startHour).padStart(2,'0')+':00:00+08:00';
@@ -103,9 +126,15 @@
       data.acceptOwnerFees=fd.has('acceptOwnerFees'); data.singleUse=data.mode==='single';
       if (!data.singleUse) data.batchSize=1;
       if (data.kind==='percent' && Number(data.value)>100) throw new Error('Percentage discounts cannot exceed 100%.');
-      if (!data.courtIds.length || !data.bookingTypes.length || !data.weekdays.length) throw new Error('Choose courts, booking types and weekdays.');
-      const result=await DB.manageVouchers('create',data); await load(); notice(`Voucher created · ${result.codes.length} code(s).`);
-    } catch(e) { notice(e.message); } finally { button.disabled=false; }
+      requireSelection(data.courtIds, 'courtOptions', 'Select at least one court in Courts & options.');
+      requireSelection(data.bookingTypes, 'bookingTypes', 'Select Guest, Host, or both under Bookings in Courts & options.');
+      requireSelection(data.weekdays, 'weekdays', 'Select at least one day in Courts & options.');
+      const result=await DB.manageVouchers('create',data);
+      const success = `Voucher created · ${result.codes.length} code(s).`;
+      notice(success); formNotice(success);
+      try { await load(); }
+      catch (_) { formNotice(`Voucher created successfully. Your code(s): ${result.codes.join(', ')}. The list could not refresh. Use Refresh below; do not create it again.`); }
+    } catch(e) { notice(e.message); formNotice(e.message || 'Could not create the voucher. Please try again.'); } finally { button.disabled=false; }
   });
   $('campaigns').addEventListener('click',async event=>{
     const button=event.target.closest('button'); if(!button)return; button.disabled=true;
