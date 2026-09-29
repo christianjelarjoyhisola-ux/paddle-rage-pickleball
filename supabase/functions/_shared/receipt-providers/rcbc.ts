@@ -200,6 +200,35 @@ function gcashBank(lines: string[], raw: string): Fields {
     reference = ref([lines[d + 5] || ""], 13);
     f.dateLines = [lines[d + 3] || ""];
   } else f.dateLines = block(lines, "Date");
+  // Mobile GCash export: recipient labels, recipient values, amount/date
+  // labels, then amounts and reference labels. The receipt-email continuation
+  // can fall after Date. Recover only these bounded columns in their order.
+  const recipientLabels = ["Bank", "Account No.", "Account Name", "Transfer Method", "Receipt sent to"];
+  const starts = lines.flatMap((_, i) => recipientLabels.every((label, j) => key(lines[i + j] || "") === key(label)) ? [i] : []);
+  if (starts.length === 1) {
+    const start = starts[0] + recipientLabels.length;
+    const amountAt = lines.findIndex((s, i) => i >= start && key(s) === key("Transfer Amount"));
+    const invoiceAt = lines.findIndex((s, i) => i > amountAt && key(s) === key("InstaPay Invoice No."));
+    const recipient = lines.slice(start, amountAt);
+    const railAt = recipient.findIndex((s) => /^InstaPay$/i.test(s));
+    const amountLabels = ["Transfer Amount", "+Fee", "Total", "Date"];
+    if (amountAt >= start && invoiceAt > amountAt && amountLabels.every((label, i) => key(lines[amountAt + i] || "") === key(label))) {
+      const values = lines.slice(amountAt + amountLabels.length, invoiceAt);
+      const moneyValues = values.slice(-3);
+      const email = [...recipient.slice(railAt + 1), ...values.slice(0, -3)].join("");
+      const invoice = lines[invoiceAt + 3] || "", paymentRef = lines[invoiceAt + 4] || "";
+      const date = lines[invoiceAt + 2] || "";
+      if (railAt >= 3 && railAt <= 4 && recipient.length >= railAt + 2 && recipient.length <= railAt + 3 &&
+        values.length >= 3 && values.length <= 4 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
+        moneyValues.every((s) => MONEY.test(s)) && key(lines[invoiceAt + 1] || "") === key("Ref No.") &&
+        /^\d{6,20}$/.test(invoice) && /^\d{13}$/.test(paymentRef) && timestamp([date]).completeness === "date_time" &&
+        ["Account No.", "Account Name", "Transfer Amount", "+Fee", "Total", "Date", "InstaPay Invoice No.", "Ref No."].every((label) => lines.filter((s) => key(s) === key(label)).length === 1)) {
+        f.bank = recipient[0]; f.account = recipient[1]; f.name = recipient.slice(2, railAt).join(" ");
+        [f.amount, fee, total] = moneyValues;
+        f.rail = invoice; reference = paymentRef; f.dateLines = [date];
+      } else f.issues.push("RCBC_LAYOUT_UNREADABLE");
+    }
+  }
   f.references = reference ? [reference] : [];
   const num = (s: string | null) =>
     s ? Number(s.match(MONEY)?.[1].replace(/,/g, "")) : NaN;
