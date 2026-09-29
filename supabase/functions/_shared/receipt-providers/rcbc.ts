@@ -370,6 +370,15 @@ export function verifyRcbcReceipt(
   if (r.layout === "bpi_bank") return verifyBpiToRcbcReceipt(r, c);
   if (r.layout === "gotyme_bank") return verifyGotymeToRcbcReceipt(r,c);
   const flags = [...r.issues];
+  if (r.layout === "bdo_bank") {
+    const now = new Date(c.verificationNow || Date.now());
+    const today = Number.isFinite(now.getTime())
+      ? new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      : null;
+    if (!today || r.timestamp.date !== today) flags.push("DATE_NOT_TODAY");
+    if (Date.parse(r.timestamp.instant || "") > now.getTime()) flags.push("TIME_FUTURE");
+    if (!String(c.expectedRecipientNumber || "").endsWith("1901")) flags.push("MERCHANT_CONFIG_MISSING");
+  }
   const expected = compact(c.expectedRecipientNumber || "");
   const actual = (r.recipient.accountRaw || "").replace(/\s/g, "");
   const name = !c.expectedRecipientName
@@ -429,7 +438,7 @@ export function verifyRcbcReceipt(
     Date.parse(c.bookingStartedAt || "")) / 60000;
   if (!Number.isFinite(age) || r.timestamp.completeness !== "date_time") {
     flags.push("TIME_UNREADABLE");
-  } else if (age < -c.earlyToleranceMinutes || age > c.paymentWindowMinutes) {
+  } else if (age < (r.layout === "bdo_bank" ? 0 : -c.earlyToleranceMinutes) || age > c.paymentWindowMinutes) {
     flags.push("TIME_EXPIRED");
   }
   const keys: ReceiptDedupeKey[] = [];

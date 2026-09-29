@@ -4898,7 +4898,8 @@ async function verifyHostSessionReceipt(ref, method, inlineData) {
     contentType: _hostSessionReceiptFile.type || 'image/jpeg',
     bookingData: inlineData,
   });
-  const parsedVerificationId = Number(res?.receiptVerificationId ?? res?.receipt_verification_id);
+  if (isBdoRcbcRejectedReceipt(res)) throw new Error(res.publicReason || 'Duplicate payment receipt rejected.');
+    const parsedVerificationId = Number(res?.receiptVerificationId ?? res?.receipt_verification_id);
   const receiptVerificationId = Number.isSafeInteger(parsedVerificationId) && parsedVerificationId > 0
     ? parsedVerificationId
     : null;
@@ -8649,9 +8650,12 @@ async function submitBookingLegacy(e) {
           booking.paymentStatus = 'for_verification';
           DB.notifyBookingUpdate(booking, 'payment_review_needed', 'Receipt needs court-owner review.').catch(() => {});
         }
+      } else if (isBdoRcbcRejectedReceipt(booking._receiptResult)) {
+        booking.status = 'cancelled';
+        booking.paymentStatus = 'rejected';
+        toast(booking._receiptResult.message || 'Duplicate payment receipt rejected.', 'err');
       } else {
-        // Any uncertain, mismatched, duplicate, or unreadable receipt is held
-        // for owner review. Automated checks never reject or cancel a booking.
+        // Uncertain evidence and other payment routes remain in owner review.
         booking.status = 'pending';
         booking.paymentStatus = 'for_verification';
         await DB.updateBooking(booking.ref, { status: 'pending', paymentStatus: 'for_verification' }).catch(() => {});
@@ -8956,6 +8960,11 @@ async function submitBooking(e) {
           itemBookings.forEach(row => { row.status = 'pending'; row.paymentStatus = 'for_verification'; });
           DB.notifyBookingUpdate(booking, 'payment_review_needed', 'Receipt needs court-owner review.').catch(() => {});
         }
+      } else if (isBdoRcbcRejectedReceipt(booking._receiptResult)) {
+        booking.status = 'cancelled';
+        booking.paymentStatus = 'rejected';
+        itemBookings.forEach(row => { row.status = 'cancelled'; row.paymentStatus = 'rejected'; });
+        submissionToast = booking._receiptResult.message || 'Duplicate payment receipt rejected.';
       } else {
         booking.status = 'pending';
         booking.paymentStatus = 'for_verification';
@@ -9315,9 +9324,11 @@ function normalizeStoredBookingReceipt(result) {
   const storedReceiptStatus = String(result?.receiptStatus || result?.receipt_status || '').toLowerCase();
   const autoApproved = storedReceiptStatus === 'auto_approved' ||
     (bookingStatus === 'confirmed' && ['paid', 'downpayment_paid'].includes(paymentStatus));
+  const extracted = result?.extracted || result?.receiptExtracted || result?.receipt_extracted || null;
+  const rejected = isBdoRcbcRejectedReceipt({ status: storedReceiptStatus, extracted });
   return {
-    status: autoApproved ? 'auto_approved' : 'manual_review',
-    message: autoApproved
+    status: rejected ? 'rejected' : autoApproved ? 'auto_approved' : 'manual_review',
+    message: rejected ? 'Duplicate payment reference or invoice. Receipt rejected.' : autoApproved
       ? 'Receipt verified and payment confirmed.'
       : (result?.publicReason || result?.message || 'Receipt safely stored for court-owner review.'),
     flags: result?.flags || result?.receiptFlags || result?.receipt_flags || [],
@@ -9327,8 +9338,8 @@ function normalizeStoredBookingReceipt(result) {
     receiptImageHash: result?.receiptImageHash || result?.receipt_image_hash || null,
     receiptPhash: result?.receiptPhash || result?.receipt_phash || null,
     receiptVerifiedAt: result?.receiptVerifiedAt || result?.receipt_verified_at || null,
-    paymentStatus: autoApproved ? paymentStatus : 'for_verification',
-    bookingStatus: autoApproved ? bookingStatus : 'pending',
+    paymentStatus: rejected ? 'rejected' : autoApproved ? paymentStatus : 'for_verification',
+    bookingStatus: rejected ? 'cancelled' : autoApproved ? bookingStatus : 'pending',
   };
 }
 
@@ -9409,6 +9420,11 @@ function clearReceipt(options = {}) {
   return true;
 }
 
+function isBdoRcbcRejectedReceipt(res) {
+  return res?.status === 'rejected' && res?.extracted?.provider === 'rcbc' &&
+    res?.extracted?.rcbc?.sourceParserVersion === 'bdo_to_rcbc_v1';
+}
+
 async function verifyUploadedReceipt(
   bookingRef,
   method,
@@ -9439,11 +9455,11 @@ async function verifyUploadedReceipt(
     };
     if (inlineData) payload.bookingData = inlineData;
     const res = await DB.verifyGcashReceipt(payload);
-    const status = res?.status === 'auto_approved' ? 'auto_approved' : 'manual_review';
+    const status = isBdoRcbcRejectedReceipt(res) ? 'rejected' : res?.status === 'auto_approved' ? 'auto_approved' : 'manual_review';
     const msg = status === 'auto_approved'
       ? (res?.publicReason || res?.message || 'Receipt verified and payment confirmed.')
       : (res?.publicReason || res?.message || 'Receipt received. Payment is pending court-owner review.');
-    setBookingReceiptUploadMessage(status === 'auto_approved' ? 'uploaded' : 'review', msg);
+    setBookingReceiptUploadMessage(status === 'rejected' ? 'failed' : status === 'auto_approved' ? 'uploaded' : 'review', msg);
     return {
       status,
       message: msg,
@@ -9454,8 +9470,8 @@ async function verifyUploadedReceipt(
       receiptImageHash: res?.receiptImageHash || null,
       receiptPhash: res?.receiptPhash || null,
       receiptVerifiedAt: res?.receiptVerifiedAt || new Date().toISOString(),
-      paymentStatus: status === 'auto_approved' ? (res?.paymentStatus || null) : 'for_verification',
-      bookingStatus: status === 'auto_approved' ? (res?.bookingStatus || null) : 'pending',
+      paymentStatus: status === 'rejected' ? 'rejected' : status === 'auto_approved' ? (res?.paymentStatus || null) : 'for_verification',
+      bookingStatus: status === 'rejected' ? 'cancelled' : status === 'auto_approved' ? (res?.bookingStatus || null) : 'pending',
     };
   } catch (err) {
     setBookingReceiptUploadMessage('failed', 'Receipt verification failed. Your upload is still selected — please retry.');
@@ -11682,6 +11698,7 @@ async function verifyOpReceipt(ref, method, inlineData) {
       contentType: _opReceiptFile.type || 'image/jpeg',
       bookingData: inlineData,
     });
+    if (isBdoRcbcRejectedReceipt(res)) throw new Error(res.publicReason || 'Duplicate payment receipt rejected.');
     const parsedVerificationId = Number(res?.receiptVerificationId ?? res?.receipt_verification_id);
     const receiptVerificationId = Number.isSafeInteger(parsedVerificationId) && parsedVerificationId > 0
       ? parsedVerificationId

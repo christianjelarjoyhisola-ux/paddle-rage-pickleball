@@ -143,7 +143,7 @@ test('court receipt shows an accessible animated upload state', () => {
   assert.doesNotMatch(page, /Analyzing (?:your )?receipt for (?:court-)?owner review/i);
   assert.doesNotMatch(page, /Submitting for (?:court-)?owner review/i);
   assert.match(verifier, /res\?\.status === 'auto_approved' \? 'auto_approved' : 'manual_review'/);
-  assert.doesNotMatch(verifier, /status === 'rejected'/);
+  assert.match(verifier, /isBdoRcbcRejectedReceipt\(res\) \? 'rejected'/);
 });
 
 test('leaving receipt upload restores the shared Next button on earlier wizard steps', () => {

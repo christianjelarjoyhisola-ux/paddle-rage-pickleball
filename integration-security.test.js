@@ -396,21 +396,21 @@ test('receipt and confirmation delivery use recoverable single-worker leases', (
   );
   assert.match(
     receiptEdge,
-    /let result: "auto_approved" \| "manual_review" =/
+    /let result: "auto_approved" \| "manual_review" \| "rejected" = bdoDuplicate\(\) \? "rejected" :/
   );
   const decisionStart = receiptEdge.indexOf('// ── decision routing');
   const auditStart = receiptEdge.indexOf('// ── audit trail', decisionStart);
   const automaticOutcome = receiptEdge.slice(decisionStart, auditStart);
   assert.doesNotMatch(automaticOutcome, /result\s*=\s*"rejected"/);
-  assert.doesNotMatch(automaticOutcome, /statusUpdate\.status\s*=\s*"cancelled"/);
-  assert.doesNotMatch(automaticOutcome, /statusUpdate\.payment_status\s*=\s*"rejected"/);
+  assert.match(automaticOutcome, /result === "rejected"[\s\S]*?statusUpdate\.status = "cancelled"/);
+  assert.match(receiptEdge, /isBdoRcbcDuplicate\(provider,/);
   assert.match(
     automaticOutcome,
     /statusUpdate\.status = "pending";[\s\S]*?statusUpdate\.payment_status = "for_verification"/
   );
   assert.match(
     automaticOutcome,
-    /already been used for another payment[\s\S]*?flags\.push\("DUPLICATE_REF"\)[\s\S]*?result = "manual_review"/
+    /already been used for another payment[\s\S]*?flags\.push\("DUPLICATE_REF"\)[\s\S]*?result = bdoDuplicate\(\) \? "rejected" : "manual_review"/
   );
   assert.match(
     receiptEdge,
@@ -537,10 +537,10 @@ test('receipt clients preserve only a persisted canonical auto-verification resu
     savedBookingVerifier,
     /res\?\.status === 'auto_approved' \? 'auto_approved' : 'manual_review'/
   );
-  assert.doesNotMatch(savedBookingVerifier, /rejected/);
+  assert.match(savedBookingVerifier, /isBdoRcbcRejectedReceipt\(res\) \? 'rejected'/);
   assert.match(
     savedBookingVerifier,
-    /paymentStatus:\s*status === 'auto_approved' \? \(res\?\.paymentStatus \|\| null\) : 'for_verification'[\s\S]*?bookingStatus:\s*status === 'auto_approved' \? \(res\?\.bookingStatus \|\| null\) : 'pending'/
+    /paymentStatus:\s*status === 'rejected' \? 'rejected' : status === 'auto_approved' \? \(res\?\.paymentStatus \|\| null\) : 'for_verification'[\s\S]*?bookingStatus:\s*status === 'rejected' \? 'cancelled' : status === 'auto_approved' \? \(res\?\.bookingStatus \|\| null\) : 'pending'/
   );
 
   // The browser accepts auto-approval only with a canonical confirmed and paid
@@ -569,7 +569,7 @@ test('receipt clients preserve only a persisted canonical auto-verification resu
     hostVerifier,
     /res\?\.status === 'auto_approved'[\s\S]*?receiptVerificationId/
   );
-  assert.doesNotMatch(hostVerifier, /rejected/);
+  assert.match(hostVerifier, /isBdoRcbcRejectedReceipt\(res\).*throw new Error/);
   assert.match(
     hostSubmission,
     /receiptVerificationId:\s*receiptResult\?\.status === 'auto_approved'[\s\S]*?receiptResult\.receiptVerificationId/
@@ -583,7 +583,7 @@ test('receipt clients preserve only a persisted canonical auto-verification resu
     openPlayVerifier,
     /res\?\.status === 'auto_approved'[\s\S]*?receiptVerificationId/
   );
-  assert.doesNotMatch(openPlayVerifier, /rejected/);
+  assert.match(openPlayVerifier, /isBdoRcbcRejectedReceipt\(res\).*throw new Error/);
   assert.match(
     openPlaySubmission,
     /receiptVerificationId:\s*receiptResult\?\.status === 'auto_approved'[\s\S]*?receiptResult\.receiptVerificationId/

@@ -105,6 +105,7 @@ export type ReceiptVerificationContext = {
   bookingStartedDate?: string | null;
   paymentWindowMinutes: number;
   earlyToleranceMinutes: number;
+  verificationNow?: string;
 };
 
 export type ReceiptDedupeKey = {

@@ -1,3 +1,4 @@
+import { isBdoRcbcDuplicate } from "../_shared/bdo-rcbc-decision.ts";
 import { rcbcCriticalDigitsReadable } from "../_shared/receipt-providers/rcbc.ts";
 import { editedBySoftware } from "../_shared/receipt-image-metadata.ts";
 import { evaluateGcashCriticalOcrQuality } from "../_shared/gcash-ocr-quality.ts";
@@ -21,10 +22,9 @@ import { configuredBpiMobileAliases } from "../_shared/receipt-providers/bpi.ts"
 //
 // Decision lanes:
 //   auto_approved : a persisted booking passes every dedicated check
-//   manual_review : any uncertain, mismatched, duplicate, or unreadable evidence
-//
-// Automated verification never rejects or cancels a booking. An authorized
-// owner can still deliberately mark a pending receipt as not received.
+//   manual_review : uncertain, mismatched or unreadable evidence
+//   rejected : confirmed reference/invoice reuse on BDO -> RCBC only
+// Other payment routes retain their existing review policy.
 // ----------------------------------------------------------------------------
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -127,6 +127,9 @@ function publicReceiptMessage(
   }
 
   const flagSet = new Set(flags);
+  if (flagSet.has("DUPLICATE_REF") || flagSet.has("DUPLICATE_INVOICE")) {
+    return "This payment reference or invoice has already been used for another payment. This receipt was rejected.";
+  }
   if (flagSet.has("AMOUNT_MISMATCH")) {
     return "Payment amount is lower than required. Please upload the correct payment receipt.";
   }
@@ -3082,7 +3085,8 @@ Deno.serve(async (req) => {
     const inlineRegistrationCanAutoApprove = cleanEvidence &&
       (inlinePricingKind === "host_session" ||
         inlinePricingKind === "open_play");
-    let result: "auto_approved" | "manual_review" =
+    const bdoDuplicate = () => isBdoRcbcDuplicate(provider, providerParse?.provider === "rcbc" ? providerParse.receipt.sourceParserVersion : undefined, flags);
+    let result: "auto_approved" | "manual_review" | "rejected" = bdoDuplicate() ? "rejected" :
       bookingCanAutoApprove || hostBalanceCanAutoApprove ||
         inlineRegistrationCanAutoApprove
         ? "auto_approved"
@@ -3096,7 +3100,7 @@ Deno.serve(async (req) => {
       ? `${provider}_to_gcash`
       : provider;
     const verification = {
-      decision: cleanEvidence ? "valid" : "review",
+      decision: bdoDuplicate() ? "rejected" : cleanEvidence ? "valid" : "review",
       sourceProviderMatch,
       referenceMatch,
       amountMatch,
@@ -3142,7 +3146,7 @@ Deno.serve(async (req) => {
       bookingStartedDate,
       receiptAgeMinutes,
       allowedPaymentWindowMinutes: PAYMENT_WINDOW_MINUTES,
-      allowedPaymentEarlyToleranceMinutes: PAYMENT_EARLY_TOLERANCE_MINUTES,
+      allowedPaymentEarlyToleranceMinutes: providerParse?.provider === "rcbc" && providerParse.receipt.layout === "bdo_bank" ? 0 : PAYMENT_EARLY_TOLERANCE_MINUTES,
       expectedAmount,
       expectedTotal,
       autoPaymentStatus,
@@ -3267,7 +3271,7 @@ Deno.serve(async (req) => {
     if (diagnosticReread) {
       return json({
         ok: true, diagnostic: true, checksPassed: cleanEvidence,
-        status: cleanEvidence ? "auto_approved" : "manual_review",
+        status: bdoDuplicate() ? "rejected" : cleanEvidence ? "auto_approved" : "manual_review",
         flags, extracted, confidence: ocrApprovalConfidence,
         receiptVerifiedAt: new Date().toISOString(),
         paymentStatus: booking.payment_status, bookingStatus: booking.status,
@@ -3293,6 +3297,9 @@ Deno.serve(async (req) => {
         statusUpdate.status = "confirmed";
         statusUpdate.payment_status = autoPaymentStatus;
         statusUpdate.paid_at = receiptVerifiedAt;
+      } else if (result === "rejected") {
+        statusUpdate.status = "cancelled";
+        statusUpdate.payment_status = "rejected";
       } else {
         statusUpdate.status = "pending";
         statusUpdate.payment_status = "for_verification";
@@ -3334,17 +3341,32 @@ Deno.serve(async (req) => {
         if (finalizeError) {
           const finalizeMessage = errMsg(finalizeError);
           // Any failed precondition, ledger race, or database error is
-          // uncertainty. Hold the slot for an owner; never auto-reject.
+          // uncertainty, except confirmed duplicate reuse on BDO -> RCBC.
           if (/already been used for another payment/i.test(finalizeMessage)) {
             if (!flags.includes("DUPLICATE_REF")) flags.push("DUPLICATE_REF");
             duplicateClear = false;
             verification.duplicateClear = false;
           }
+          // A competing payment may claim either key after the initial read.
+          // Recheck the ledger for BDO -> RCBC before deciding to reject.
+          if (providerParse?.provider === "rcbc" && providerParse.receipt.layout === "bdo_bank") {
+            for (const item of dedupeKeys) {
+              const { data: claim, error } = await db.from("used_gcash_refs")
+                .select("booking_ref,claim_scope,claim_owner_id")
+                .eq("gcash_ref", item.key).maybeSingle();
+              if (error) flags.push("RCBC_DUPLICATE_CHECK_UNAVAILABLE");
+              if (claim && !ledgerClaimBelongsToBooking(claim)) {
+                flags.push(item.duplicateFlag);
+                duplicateClear = false;
+                verification.duplicateClear = false;
+              }
+            }
+          }
           if (!flags.includes("AUTO_APPROVAL_FAILED")) {
             flags.push("AUTO_APPROVAL_FAILED");
           }
           verification.decision = "review";
-          result = "manual_review";
+          result = bdoDuplicate() ? "rejected" : "manual_review";
           confidence = 0.5;
           refreshOutcomeUpdates();
           finalPaymentStatus = String(statusUpdate.payment_status || "");
@@ -3370,7 +3392,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (isDedicatedReceiptProvider(provider) && result === "manual_review") {
+      if (isDedicatedReceiptProvider(provider) && (result === "manual_review" || result === "rejected")) {
         const finalizeReview = async () =>
           await db.rpc("finalize_digital_receipt_review", {
             p_booking_ref: bookingRef,
@@ -3458,6 +3480,9 @@ Deno.serve(async (req) => {
           finalBookingStatus = String(
             finalized?.booking_status || statusUpdate.status || "",
           );
+          // The database rechecks ledger ownership under the booking lease.
+          result = finalPaymentStatus === "rejected" ? "rejected" : "manual_review";
+          extracted.verification.decision = result === "rejected" ? "rejected" : "review";
         }
       }
 
@@ -3548,6 +3573,11 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (finalUpdateError && result === "rejected") {
+      result = "manual_review";
+      verification.decision = "review";
+      flags.push("REJECTION_SAVE_FAILED");
+    }
     // ── audit trail (immutable) ─────────────────────────────────────────────
     let receiptVerificationId: number | null = null;
     if (!auditPersisted) {
@@ -3661,7 +3691,7 @@ Deno.serve(async (req) => {
         ? hasPersistedBooking
           ? "Payment verified. Your booking is confirmed."
           : "Payment verified. Complete the registration to save it."
-        : "Received — the owner will verify your payment shortly.",
+        : result === "rejected" ? publicReceiptMessage(result, flags) : "Received — the owner will verify your payment shortly.",
     });
   } catch (err) {
     console.error("verify-gcash-receipt error:", errMsg(err));

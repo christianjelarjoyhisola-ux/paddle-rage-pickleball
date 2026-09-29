@@ -18,7 +18,7 @@ PHP 800.00
 Send Money instaFay
 via
 To
-TEST COURT OWNER...7890
+TEST COURT OWNER...1901
 From
 SA W/ ATM W/O
 PASBK-INDIVIDUAL
@@ -32,12 +32,13 @@ Invoice no.
 BDO 52
 Years`;
 const context = {
+  verificationNow: "2026-09-29T10:14:00Z",
   typedReference: "BN-20260929-03089999",
   expectedAmount: 800,
   pricingAvailable: true,
   amountTolerance: .01,
   expectedRecipientName: "TEST COURT OWNER",
-  expectedRecipientNumber: "1234567890",
+  expectedRecipientNumber: "1234561901",
   bookingStartedAt: "2026-09-29T10:11:49.865Z",
   bookingStartedDate: "2026-09-29",
   paymentWindowMinutes: 15,
@@ -54,7 +55,7 @@ Deno.test("BDO RCBC actual OCR layout: principal, recipient, reference and PH ti
   eq(p.sourceParserVersion, "bdo_to_rcbc_v1");
   eq(p.amount.amount, 800);
   eq(p.timestamp.instant, "2026-09-29T10:13:00.000Z");
-  eq(p.recipient.accountRaw, "...7890");
+  eq(p.recipient.accountRaw, "...1901");
   eq(v.recipientComparison.name, "exact");
   eq(v.recipientComparison.account, "suffix_exact");
   eq(p.destinationBank, null); // Bank not printed: never pretend it was OCR'd.
@@ -70,8 +71,8 @@ Deno.test("BDO conventional rail label, ellipsis, brand and compact reference", 
   eq(
     run(
       observed.replace("instaFay\nvia", "via instaPay").replace(
-        "...7890",
-        "…7890",
+        "...1901",
+        "…1901",
       ).replace("BDO 52\nYears", "BDO"),
       { typedReference: "BN2026092903089999" },
     ).v.flags,
@@ -111,7 +112,7 @@ for (
     ],
     [
       "wrong receiving suffix",
-      observed.replace("...7890", "...5616"),
+      observed.replace("...1901", "...5616"),
       {},
       "RECEIVER_ACCOUNT_MISMATCH",
     ],
@@ -183,7 +184,7 @@ for (
     ],
     [
       "duplicate recipient field",
-      observed.replace("To\n", "To\nOTHER...7890\nTo\n"),
+      observed.replace("To\n", "To\nOTHER...1901\nTo\n"),
       {},
       "RCBC_FORMAT_UNSUPPORTED",
     ],
@@ -206,7 +207,7 @@ Deno.test("BDO critical digit confidence includes reference, invoice, amount and
   }));
   eq(rcbcCriticalDigitsReadable(words, p), true);
   for (
-    const target of ["BN-20260929-03089999", "488999", "800.00", "OWNER...7890"]
+    const target of ["BN-20260929-03089999", "488999", "800.00", "OWNER...1901"]
   ) {
     eq(
       rcbcCriticalDigitsReadable(
@@ -219,4 +220,15 @@ Deno.test("BDO critical digit confidence includes reference, invoice, amount and
     );
   }
   eq(rcbcCriticalDigitsReadable([], p), false);
+});
+
+Deno.test("BDO uses today's Philippine date, independently of booking start", () => {
+  eq(run(observed, { verificationNow: "2026-09-29T16:00:00Z" }).v.flags.includes("DATE_NOT_TODAY"), true);
+  eq(run(observed, { verificationNow: "2026-09-29T15:59:59Z" }).v.flags.includes("DATE_NOT_TODAY"), false);
+  eq(run(observed, { verificationNow: "2026-09-29T10:12:00Z" }).v.flags.includes("TIME_FUTURE"), true);
+});
+Deno.test("BDO requires payment at or after booking start and within 15 minutes", () => {
+  eq(run(observed, { bookingStartedAt: "2026-09-29T10:13:01Z" }).v.flags.includes("TIME_EXPIRED"), true);
+  eq(run(observed, { bookingStartedAt: "2026-09-29T09:58:00Z" }).v.flags, []);
+  eq(run(observed, { bookingStartedAt: "2026-09-29T09:57:59Z" }).v.flags.includes("TIME_EXPIRED"), true);
 });

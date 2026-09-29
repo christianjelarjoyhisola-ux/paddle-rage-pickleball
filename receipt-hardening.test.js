@@ -128,7 +128,7 @@ test('receipt verification preserves authorization, resource, and settlement bou
   );
 
   // Dedicated provider parsers keep source-bank evidence separate while all
-  // uncertain results stay advisory and automated checks never reject.
+  // uncertain results stay advisory; only confirmed BDO-RCBC reuse rejects.
   assert.match(edge, /parseProviderReceipt\(provider,\s*ocrText,\s*\{\s*typedReference:\s*typedRef/);
   assert.match(parser, /export function parseGcashReceipt\(/);
   assert.match(providerRegistry, /case "gcash"[\s\S]*?parseGcashReceipt/);
@@ -162,9 +162,9 @@ test('receipt verification preserves authorization, resource, and settlement bou
   assert.match(edge, /findOcrFieldMatches\(words, "Sent via GCash"\)[\s\S]*?findOcrFieldMatches\(words, "Total Amount Sent"\)[\s\S]*?findOcrFieldMatches\(words, "Ref No"\)/);
   assert.match(edge, /ocrConfidenceScope: gcashCriticalOcrQuality\?\.pass[\s\S]*?"critical_fields_v1"[\s\S]*?"critical_fields_amount_tokenization_fallback_v1"[\s\S]*?"whole_page"/);
   assert.match(edge, /const cleanEvidence = !!providerVerification &&[\s\S]*?duplicateClear &&\s*flags\.length === 0/);
-  assert.match(edge, /let result: "auto_approved" \| "manual_review" =/);
+  assert.match(edge, /let result: "auto_approved" \| "manual_review" \| "rejected" = bdoDuplicate\(\) \? "rejected" :/);
   assert.match(edge, /bookingCanAutoApprove \|\| hostBalanceCanAutoApprove[\s\S]*?\? "auto_approved"[\s\S]*?: "manual_review"/);
-  assert.doesNotMatch(edge, /let result: "auto_approved" \| "manual_review" \| "rejected"/);
+  assert.match(edge, /isBdoRcbcDuplicate\(provider,/);
   assert.match(
     edge,
     /result === "manual_review"[\s\S]*?statusUpdate\.status = "pending";[\s\S]*?statusUpdate\.payment_status = "for_verification"/
