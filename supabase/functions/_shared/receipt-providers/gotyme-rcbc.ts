@@ -8,7 +8,7 @@ import type { RcbcEvidence, RcbcReceipt } from "./rcbc.ts";
 const BANK = /^Rizal Commercial Banking Corp\.?\s*\(RCBC\)$/i;
 const MONEY = /^(?:₱|P|PHP|\$)?\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})$/i;
 const REFERENCE = /^ITO\d{15}$/;
-const LABELS = [
+const REQUIRED_LABELS = [
   "To",
   "From",
   "Amount",
@@ -18,10 +18,21 @@ const LABELS = [
   "Reference No.",
   "Date",
 ];
+const LABELS = [...REQUIRED_LABELS, "Note"];
 const labelKey = (s: string) => s.toLowerCase().replace(/[.:]$/, "");
 const isLabel = (s: string) => LABELS.some((l) => labelKey(l) === labelKey(s));
 const number = (s: string | undefined) =>
   s?.match(MONEY) ? Number(s.match(MONEY)![1].replace(/,/g, "")) : null;
+
+// Explicit aliases are tied to the full configured receiving account. Changing
+// that account must not silently carry an old merchant's accepted names over.
+export function configuredGotymeRcbcAliases(raw: string, account: string): string[] {
+  try {
+    const value = JSON.parse(raw);
+    if (!/^\d{10}$/.test(account) || value?.account !== account || !Array.isArray(value?.names)) return [];
+    return value.names.filter((name: unknown): name is string => typeof name === "string" && /^[A-Za-z][A-Za-z .'-]{1,99}$/.test(name));
+  } catch { return []; }
+}
 
 export function parseGotymeToRcbcReceipt(
   raw: string,
@@ -68,7 +79,9 @@ export function parseGotymeToRcbcReceipt(
     // A line containing only stars continues the preceding masked name token.
     name = to.slice(0, at).join(" ").replace(/\s+([*•●·]+)/g, "$1").trim() ||
       null;
-    bank = to.slice(at + 1).filter((s) => s !== "=").join(" ");
+    // The Instant badge belongs to the transfer rail. Vision may place it
+    // between the receiving account and bank in this two-column layout.
+    bank = to.slice(at + 1).filter((s) => s !== "=" && !/^Instant$/i.test(s)).join(" ");
   } else issues.push("RCBC_RECIPIENT_LAYOUT_UNREADABLE");
   const sender = block("From");
   const source = sender.length >= 3 &&
@@ -90,24 +103,26 @@ export function parseGotymeToRcbcReceipt(
   // Known column-first export: Total / Trace ID / Reference / Date are read
   // before their four values. Recover only the ordered, bounded value block.
   const totalAt = index("Total");
+  const hasNote = index("Note") >= 0;
+  const columnLabels = [...(hasNote ? ["Note"] : []), "Trace ID", "Reference No.", "Date"];
   if (
     totalAt >= 0 &&
-    ["Trace ID", "Reference No.", "Date"].every((l, i) =>
+    columnLabels.every((l, i) =>
       labelKey(lines[totalAt + i + 1] || "") === labelKey(l)
     )
   ) {
-    const tail = lines.slice(totalAt + 4).filter((s) =>
+    const tail = lines.slice(totalAt + 1 + columnLabels.length).filter((s) =>
       !/^Get help$|^Instant$|^[>✓]$/i.test(s)
     );
     if (
-      tail.length === 4 && number(tail[0]) !== null &&
-      /^\d{6}$/.test(tail[1]) && REFERENCE.test(tail[2]) &&
-      /^\d{1,2} [A-Za-z]+ 20\d{2} at \d{1,2}:\d{2} [AP]M$/i.test(tail[3])
+      tail.length === (hasNote ? 5 : 4) && number(tail[0]) !== null &&
+      /^\d{6}$/.test(tail[hasNote ? 2 : 1]) && REFERENCE.test(tail[hasNote ? 3 : 2]) &&
+      /^\d{1,2} [A-Za-z]+ 20\d{2} at \d{1,2}:\d{2} [AP]M$/i.test(tail[hasNote ? 4 : 3])
     ) {
       totalValue = number(tail[0]);
-      trace = tail[1];
-      reference = tail[2];
-      date = tail[3];
+      trace = tail[hasNote ? 2 : 1];
+      reference = tail[hasNote ? 3 : 2];
+      date = tail[hasNote ? 4 : 3];
     } else issues.push("RCBC_LAYOUT_UNREADABLE");
   }
   if (!REFERENCE.test(reference)) reference = "";
@@ -115,7 +130,7 @@ export function parseGotymeToRcbcReceipt(
     trace = "";
     issues.push("GOTYME_RCBC_TRACE_UNREADABLE");
   }
-  if (LABELS.some((l) => index(l) < 0)) issues.push("RCBC_LAYOUT_UNREADABLE");
+  if (REQUIRED_LABELS.some((l) => index(l) < 0) || lines.filter((s) => labelKey(s) === "note").length > 1) issues.push("RCBC_LAYOUT_UNREADABLE");
   const headers = lines.flatMap((s, i) =>
     /^Transferred[!.]?$/i.test(s) ? [number(lines[i + 1])] : []
   );
@@ -228,8 +243,13 @@ export function verifyGotymeToRcbcReceipt(
   r: RcbcReceipt,
   c: ReceiptVerificationContext,
 ): RcbcEvidence {
-  const flags = [...r.issues],
-    name = compareName(r.recipient.nameRaw, c.expectedRecipientName);
+  const flags = [...r.issues];
+  const primaryName = compareName(r.recipient.nameRaw, c.expectedRecipientName);
+  // Aliases require an exact match, never the masked/prefix comparison used
+  // for the canonical name. An alias does not relax the account/bank checks.
+  const name = primaryName === "mismatch" && (c.expectedRecipientNameAliases || []).some(
+    (alias) => compareName(r.recipient.nameRaw, alias) === "exact",
+  ) ? "exact" : primaryName;
   const expected = String(c.expectedRecipientNumber || "").replace(/\s/g, ""),
     actual = r.recipient.accountRaw || "";
   let account: RcbcEvidence["recipientComparison"]["account"] = "missing";

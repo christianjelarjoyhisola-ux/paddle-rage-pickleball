@@ -1,3 +1,4 @@
+import { configuredGotymeRcbcAliases } from "./gotyme-rcbc.ts";
 import { parseRcbcReceipt, verifyRcbcReceipt } from "./rcbc.ts";
 const eq = (a: unknown, b: unknown) => {
   if (JSON.stringify(a) !== JSON.stringify(b)) {
@@ -199,4 +200,36 @@ Deno.test("GoTyme RCBC ignores sender account even if its suffix matches merchan
   if (!flags.includes("RECEIVER_ACCOUNT_MISMATCH")) {
     throw Error("Sender account used");
   }
+});
+
+// Sanitized Vision text from the optional Note / column-first export.
+const noteLayout = "Transferred\nP2,800.00\nRepeat\nAdd to favorites\nShare\ninstaFay\nTo\nTEST OWNER\n......7890\nInstant\nRizal Commercial Banking Corp\n(RCBC)\nFrom\nTEST PAYER\n.3217\nGoTyme Bank\nAmount\nP2,800.00\nFee\nP0.00\nTotal\nNote\nTrace ID\nReference No.\nDate\nGet help\n$2,800.00\ncourt fee\n000001\nITO260928140899999\n28 Sep 2026 at 10:08 PM\n>";
+const noteContext = { expectedAmount: 2800, expectedRecipientName: 'TEST COURT OWNER', expectedRecipientNameAliases: ['TEST OWNER'], typedReference: 'ITO260928140899999', bookingStartedAt: '2026-09-28T14:06:17.516Z', bookingStartedDate: '2026-09-28' };
+Deno.test('GoTyme optional Note column layout and displaced Instant badge parse', () => {
+  const {p,v} = run(noteLayout,noteContext);
+  eq(v.flags,[]); eq(p.amount.amount,2800); eq(p.traceReference,'000001');
+  eq(p.destinationBank,'Rizal Commercial Banking Corp (RCBC)'); eq(p.timestamp.instant,'2026-09-28T14:08:00.000Z');
+});
+Deno.test('GoTyme row-order Note stays out of the total and reference', () => {
+  const raw = noteLayout.replace('Total\nNote\nTrace ID\nReference No.\nDate\nGet help\n$2,800.00\ncourt fee\n000001\nITO260928140899999\n28 Sep 2026 at 10:08 PM', 'Total\n$2,800.00\nNote\ncourt fee\nTrace ID\n000001\nReference No.\nITO260928140899999\nDate\n28 Sep 2026 at 10:08 PM\nGet help');
+  eq(run(raw,noteContext).v.flags,[]);
+});
+Deno.test('GoTyme shortened name requires an explicit exact alias',()=>{
+  eq(run(noteLayout,{...noteContext,expectedRecipientNameAliases:[]}).v.flags.includes('RECEIVER_NAME_MISMATCH'),true);
+  eq(run(noteLayout.replace('TEST OWNER','TEST OWNE*'),noteContext).v.flags.includes('RECEIVER_NAME_MISMATCH'),true);
+  eq(run(noteLayout.replace('TEST OWNER','OTHER OWNER'),noteContext).v.flags.includes('RECEIVER_NAME_MISMATCH'),true);
+});
+Deno.test('GoTyme alias never bypasses bank account or source checks',()=>{
+  eq(run(noteLayout.replace('......7890','......1234'),noteContext).v.flags.includes('RECEIVER_ACCOUNT_MISMATCH'),true);
+  eq(run(noteLayout.replace('Rizal Commercial Banking Corp','Other Banking Corp'),noteContext).v.flags.includes('RCBC_DESTINATION_MISMATCH'),true);
+  eq(run(noteLayout.replace('GoTyme Bank','Other Bank'),noteContext).v.flags.length > 0,true);
+});
+Deno.test('GoTyme ambiguous Note columns remain in review',()=>{
+  eq(run(noteLayout.replace('Note\n','Note\nNote\n'),noteContext).v.flags.includes('RCBC_LAYOUT_UNREADABLE'),true);
+  eq(run(noteLayout.replace('court fee\n000001','000001\ncourt fee'),noteContext).v.flags.length > 0,true);
+});
+Deno.test('GoTyme aliases are bound to the full configured account',()=>{
+  eq(configuredGotymeRcbcAliases(JSON.stringify({account:'1234567890',names:['TEST OWNER']}),'1234567890'),['TEST OWNER']);
+  eq(configuredGotymeRcbcAliases(JSON.stringify({account:'1234567890',names:['TEST OWNER']}),'9999997890'),[]);
+  eq(configuredGotymeRcbcAliases('not json','1234567890'),[]);
 });

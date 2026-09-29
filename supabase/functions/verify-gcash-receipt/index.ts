@@ -1,4 +1,5 @@
 import { isBdoRcbcDuplicate } from "../_shared/bdo-rcbc-decision.ts";
+import { configuredGotymeRcbcAliases } from "../_shared/receipt-providers/gotyme-rcbc.ts";
 import { rcbcCriticalDigitsReadable } from "../_shared/receipt-providers/rcbc.ts";
 import { editedBySoftware } from "../_shared/receipt-image-metadata.ts";
 import { evaluateGcashCriticalOcrQuality } from "../_shared/gcash-ocr-quality.ts";
@@ -2728,7 +2729,9 @@ Deno.serve(async (req) => {
           amountTolerance: 0.01,
           expectedRecipientNumber: expectedNumber,
           expectedRecipientName: expectedName,
-          expectedRecipientNameAliases: provider === "gotyme" ||
+          expectedRecipientNameAliases: providerParse?.provider === "rcbc" && providerParse.receipt.layout === "gotyme_bank"
+            ? configuredGotymeRcbcAliases(settings.rcbc_gotyme_recipient_name_aliases || "", expectedNumber)
+            : provider === "gotyme" ||
               provider === "maribank"
             ? [
               settings.gcash_qr_receipt_recipient_name,
