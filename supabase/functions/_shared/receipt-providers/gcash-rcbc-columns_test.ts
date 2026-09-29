@@ -19,3 +19,15 @@ Deno.test('GCash RCBC duplicated labels and incomplete columns stay in review',(
 for(const text of [raw.replace('Date\n','Date\nDate\n'),raw.replace('6996999',''),raw.replace('9@example.com\n',''),raw.replace('Ref No.\n','')])eq(run(text).v.flags.length>0,true);
 });
 Deno.test('GCash RCBC ignores advertisement money and phone status clock',()=>{const {p,v}=run(raw+'\nPHP 9999.00\n12:00 PM');eq(v.flags,[]);eq(p.amount.amount,700);eq(p.timestamp.time24,'16:38');});
+
+const identityFirst="3:381\nBank Transfer\n38\n☑\nBank Transfer Complete\nSent via GCash\nSuccessful transactions are credited instantly. You will receive\nan update about this transaction in your GCash Inbox.\nBank\nAccount No.\nAccount Name\nRCBC/DiskarTech\n..7890\nTEST COURT\nOWNER\nTransfer Method\nReceipt sent to\nTransfer Amount\n+Fee\nTotal\ntest-payer@exa\nInstaPay\nmple.com\n700.00\n10.00\nP 710.00\nDate\nInstaPay Invoice No.\nRef No.\nSep 29, 2026 03:38 PM\n6344999\n2045563406999\nMay chance kang kumita as a\nPART\nOWNER\nRegister. Top up, and Buy Stocks!\ni";
+const secondContext={typedReference:'2045563406999',bookingStartedAt:'2026-09-29T07:31:24.193Z'};
+Deno.test('GCash RCBC three identity labels followed by separate transfer columns',()=>{
+ const {p,v}=run(identityFirst,secondContext);eq(v.flags,[]);eq(p.amount.amount,700);eq(p.recipient.nameRaw,'TEST COURT OWNER');eq(p.recipient.accountRaw,'..7890');eq(p.railReference.value,'6344999');eq(p.timestamp.instant,'2026-09-29T07:38:00.000Z');
+});
+Deno.test('GCash RCBC identity-first layout keeps wrong bank account amount and fee in review',()=>{
+ for(const [text,flag] of [[identityFirst.replace('RCBC/DiskarTech','Other Bank'),'RCBC_DESTINATION_MISMATCH'],[identityFirst.replace('..7890','..1234'),'RECEIVER_ACCOUNT_MISMATCH'],[identityFirst.replace('700.00','600.00'),'AMOUNT_CONFLICT'],[identityFirst.replace('10.00\nP 710.00','20.00\nP 710.00'),'AMOUNT_CONFLICT']] as const)eq(run(text,secondContext).v.flags.includes(flag),true);
+});
+Deno.test('GCash RCBC identity-first layout refuses ambiguous or missing columns',()=>{
+ for(const text of [identityFirst.replace('Account No.\n','Account No.\nAccount No.\n'),identityFirst.replace('InstaPay\n','Unknown\n'),identityFirst.replace('test-payer@exa\n',''),identityFirst.replace('700.00\n','')])eq(run(text,secondContext).v.flags.length>0,true);
+});

@@ -229,6 +229,30 @@ function gcashBank(lines: string[], raw: string): Fields {
       } else f.issues.push("RCBC_LAYOUT_UNREADABLE");
     }
   }
+  // Another Vision reading order groups only Bank / Account No. / Account
+  // Name before their values. Transfer Method through Total then form a
+  // second column block, with InstaPay between the wrapped email fragments.
+  const identityLabels = ["Bank", "Account No.", "Account Name"];
+  const identityStarts = lines.flatMap((_, i) => identityLabels.every((label, j) => key(lines[i + j] || "") === key(label)) ? [i] : []);
+  if (identityStarts.length === 1) {
+    const start = identityStarts[0] + identityLabels.length;
+    const methodAt = lines.findIndex((s, i) => i >= start && key(s) === key("Transfer Method"));
+    const dateAt = lines.findIndex((s, i) => i > methodAt && key(s) === "date");
+    const transferLabels = ["Transfer Method", "Receipt sent to", "Transfer Amount", "+Fee", "Total"];
+    if (methodAt > start && dateAt > methodAt && transferLabels.every((label, i) => key(lines[methodAt + i] || "") === key(label))) {
+      const recipient = lines.slice(start, methodAt);
+      const values = lines.slice(methodAt + transferLabels.length, dateAt);
+      const moneyValues = values.slice(-3), routing = values.slice(0, -3);
+      const email = routing.filter((s) => !/^InstaPay$/i.test(s)).join("");
+      if (recipient.length >= 3 && recipient.length <= 4 && values.length >= 5 && values.length <= 6 &&
+        routing.filter((s) => /^InstaPay$/i.test(s)).length === 1 &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && moneyValues.every((s) => MONEY.test(s)) &&
+        ["Account No.", "Account Name", ...transferLabels, "Date", "InstaPay Invoice No.", "Ref No."].every((label) => lines.filter((s) => key(s) === key(label)).length === 1)) {
+        f.bank = recipient[0]; f.account = recipient[1]; f.name = recipient.slice(2).join(" ");
+        [f.amount, fee, total] = moneyValues;
+      } else f.issues.push("RCBC_LAYOUT_UNREADABLE");
+    }
+  }
   f.references = reference ? [reference] : [];
   const num = (s: string | null) =>
     s ? Number(s.match(MONEY)?.[1].replace(/,/g, "")) : NaN;
