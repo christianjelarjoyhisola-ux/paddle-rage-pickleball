@@ -18,7 +18,7 @@ const REQUIRED_LABELS = [
   "Reference No.",
   "Date",
 ];
-const LABELS = [...REQUIRED_LABELS, "Note"];
+const LABELS = [...REQUIRED_LABELS, "Note", "Paid with points"];
 const labelKey = (s: string) => s.toLowerCase().replace(/[.:]$/, "");
 const isLabel = (s: string) => LABELS.some((l) => labelKey(l) === labelKey(s));
 const number = (s: string | undefined) =>
@@ -89,6 +89,12 @@ export function parseGotymeToRcbcReceipt(
   const amountBlock = block("Amount"), feeBlock = block("Fee");
   const amountValue = amountBlock.length === 1 ? number(amountBlock[0]) : null;
   const feeValue = feeBlock.length === 1 ? number(feeBlock[0]) : null;
+  const pointsBlock = block("Paid with points");
+  const pointsPresent = lines.some((s) => labelKey(s) === "paid with points");
+  const pointsValue = !pointsPresent ? 0
+    : pointsBlock.length === 2 && /^[-−]/.test(pointsBlock[0]) &&
+        /^\d+(?:\.\d+)? Go Rewards points$/i.test(pointsBlock[1])
+    ? number(pointsBlock[0].replace(/^[-−]\s*/, "")) : null;
   let totalValue = block("Total").length === 1
     ? number(block("Total")[0])
     : null;
@@ -130,13 +136,14 @@ export function parseGotymeToRcbcReceipt(
     trace = "";
     issues.push("GOTYME_RCBC_TRACE_UNREADABLE");
   }
-  if (REQUIRED_LABELS.some((l) => index(l) < 0) || lines.filter((s) => labelKey(s) === "note").length > 1) issues.push("RCBC_LAYOUT_UNREADABLE");
+  if (REQUIRED_LABELS.some((l) => index(l) < 0) || ["note", "paid with points"].some((label) => lines.filter((s) => labelKey(s) === label).length > 1)) issues.push("RCBC_LAYOUT_UNREADABLE");
   const headers = lines.flatMap((s, i) =>
     /^Transferred[!.]?$/i.test(s) ? [number(lines[i + 1])] : []
   );
   if (
-    amountValue === null || feeValue === null || totalValue === null ||
-    Math.round((amountValue + feeValue) * 100) !==
+    amountValue === null || feeValue === null || totalValue === null || pointsValue === null ||
+    pointsValue > feeValue ||
+    Math.round((amountValue + feeValue - pointsValue) * 100) !==
       Math.round(totalValue * 100) ||
     headers.length !== 1 || headers[0] !== amountValue
   ) issues.push("AMOUNT_CONFLICT");
@@ -160,6 +167,7 @@ export function parseGotymeToRcbcReceipt(
     layout: "gotyme_bank",
     sourceParserVersion: "gotyme_to_rcbc_v1",
     traceReference: trace || null,
+    feeBreakdown: { fee: feeValue, paidWithPoints: pointsValue, total: totalValue },
     references: reference ? [reference] : [],
     canonicalReference: reference || null,
     destinationBank: bank,
@@ -265,7 +273,7 @@ export function verifyGotymeToRcbcReceipt(
   if (!BANK.test(r.destinationBank || "")) {
     flags.push("RCBC_DESTINATION_MISMATCH");
   }
-  if (name !== "exact") {
+  if (!["exact", "masked_compatible"].includes(name)) {
     flags.push(
       name === "not_configured"
         ? "MERCHANT_CONFIG_MISSING"

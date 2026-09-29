@@ -57,7 +57,7 @@ const run = (raw = observed, patch = {}) => {
 };
 Deno.test("GoTyme RCBC actual column ordering parses independent recipient, amount, reference and date", () => {
   const { p, v } = run();
-  eq(v.flags, ["RECEIVER_NAME_MISMATCH"]);
+  eq(v.flags, []);
   eq(p.amount.amount, 400);
   eq(p.timestamp.instant, "2026-09-26T07:23:00.000Z");
   eq(p.recipient.nameRaw, "TEST C***** O*");
@@ -255,3 +255,21 @@ Deno.test('GoTyme critical-digit confidence checks the trace ID',()=>{
   eq(rcbcCriticalDigitsReadable(words,p),true);
   eq(rcbcCriticalDigitsReadable(words.map(w=>w.text==='000001'?{...w,minDigitConfidence:.4}:w),p),false);
 });
+
+const pointsReceipt = observed.replace('TEST C*\n**** O*','TEST C****** O********').replace('Fee\n$9.00','Fee\n$9.00\nPaid with points\n-P9.00\n9.00 Go Rewards points').replace('P409.00','P400.00');
+Deno.test('GoTyme masked canonical name and fee paid with points pass',()=>{
+ const {p,v}=run(pointsReceipt); eq(v.flags,[]); eq(p.amount.amount,400);
+ eq(p.feeBreakdown,{fee:9,paidWithPoints:9,total:400});
+});
+for (const [name, raw] of [
+ ['unsigned points',pointsReceipt.replace('-P9.00','P9.00')],
+ ['excessive credit',pointsReceipt.replace('-P9.00','-P10.00').replace('P400.00\n999999','P399.00\n999999')],
+ ['wrong total',pointsReceipt.replace('P400.00\n999999','P409.00\n999999')],
+ ['missing credit',pointsReceipt.replace('-P9.00\n','')],
+ ['ambiguous rewards',pointsReceipt.replace('9.00 Go Rewards points','Unknown rewards')],
+ ['duplicate points label',pointsReceipt.replace('Paid with points','Paid with points\nPaid with points')],
+ ['wrong visible prefix',pointsReceipt.replace('TEST C******','TEST Z******')],
+ ['masked first name',pointsReceipt.replace('TEST C******','T*** C******')],
+ ['fully masked surname',pointsReceipt.replace('O********','********')],
+] as const) Deno.test('GoTyme points receipt retains review for '+name,()=>{eq(run(raw).v.flags.length>0,true)});
+Deno.test('GoTyme points receipt still matches principal only',()=>{eq(run(pointsReceipt,{expectedAmount:409}).v.flags.includes('AMOUNT_MISMATCH'),true)});

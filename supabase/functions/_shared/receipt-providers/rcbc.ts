@@ -34,6 +34,7 @@ export type RcbcReceipt =
     sourceParserVersion?: "gotyme_to_rcbc_v1" | "bpi_to_rcbc_v1" | "bdo_to_rcbc_v1";
     traceReference?: string | null;
     invoiceReference?: string | null;
+    feeBreakdown?: { fee: number | null; paidWithPoints: number | null; total: number | null };
   };
 export type RcbcEvidence =
   & Omit<
