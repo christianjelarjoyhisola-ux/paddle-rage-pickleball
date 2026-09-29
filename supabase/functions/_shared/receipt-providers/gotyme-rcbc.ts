@@ -253,7 +253,7 @@ export function verifyGotymeToRcbcReceipt(
   const expected = String(c.expectedRecipientNumber || "").replace(/\s/g, ""),
     actual = r.recipient.accountRaw || "";
   let account: RcbcEvidence["recipientComparison"]["account"] = "missing";
-  if (!/^\d{10}$/.test(expected)) account = "not_configured";
+  if (!/^\d{6}1901$/.test(expected)) account = "not_configured";
   else if (/^\d{10,16}$/.test(actual)) {
     account = actual.replace(/^0+/, "") === expected.replace(/^0+/, "")
       ? "exact"
@@ -265,7 +265,7 @@ export function verifyGotymeToRcbcReceipt(
   if (!BANK.test(r.destinationBank || "")) {
     flags.push("RCBC_DESTINATION_MISMATCH");
   }
-  if (!["exact", "masked_compatible"].includes(name)) {
+  if (name !== "exact") {
     flags.push(
       name === "not_configured"
         ? "MERCHANT_CONFIG_MISSING"
@@ -297,9 +297,15 @@ export function verifyGotymeToRcbcReceipt(
   ) flags.push("AMOUNT_MISMATCH");
   const age = (Date.parse(r.timestamp.instant || "") -
     Date.parse(c.bookingStartedAt || "")) / 60000;
+  const started = Date.parse(c.bookingStartedAt || "");
+  const bookingDatePh = Number.isFinite(started)
+    ? new Date(started + 8 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    : null;
+  if (!bookingDatePh || r.timestamp.date !== bookingDatePh) flags.push("DATE_NOT_BOOKING_DATE");
+  if (Date.parse(r.timestamp.instant || "") > new Date(c.verificationNow || Date.now()).getTime()) flags.push("TIME_FUTURE");
   if (!Number.isFinite(age) || r.timestamp.completeness !== "date_time") {
     flags.push("TIME_UNREADABLE");
-  } else if (age < -c.earlyToleranceMinutes || age > c.paymentWindowMinutes) {
+  } else if (age < 0 || age > c.paymentWindowMinutes) {
     flags.push("TIME_EXPIRED");
   }
   return {
@@ -308,7 +314,7 @@ export function verifyGotymeToRcbcReceipt(
     parserVersion: "rcbc_incoming_v1",
     flags: [...new Set(flags)],
     recipientComparison: { name, account, phone: "missing" },
-    dedupeKeys: r.references.flatMap((ref) => [
+    dedupeKeys: [...r.references.flatMap((ref) => [
       {
         key: `rcbc:${ref}`,
         providerKey: "rcbc",
@@ -319,6 +325,10 @@ export function verifyGotymeToRcbcReceipt(
         providerKey: "gotyme",
         duplicateFlag: "DUPLICATE_REF",
       },
-    ]),
+    ]), ...(r.traceReference ? [{
+      key: `gotyme_rcbc_trace:${r.traceReference}`,
+      providerKey: "gotyme_rcbc_trace",
+      duplicateFlag: "DUPLICATE_TRACE_ID",
+    }] : [])],
   };
 }

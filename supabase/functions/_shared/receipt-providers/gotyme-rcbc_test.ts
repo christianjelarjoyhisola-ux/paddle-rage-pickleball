@@ -1,5 +1,5 @@
 import { configuredGotymeRcbcAliases } from "./gotyme-rcbc.ts";
-import { parseRcbcReceipt, verifyRcbcReceipt } from "./rcbc.ts";
+import { parseRcbcReceipt, verifyRcbcReceipt, rcbcCriticalDigitsReadable } from "./rcbc.ts";
 const eq = (a: unknown, b: unknown) => {
   if (JSON.stringify(a) !== JSON.stringify(b)) {
     throw Error(JSON.stringify({ actual: a, expected: b }));
@@ -14,7 +14,7 @@ P400.00
 Share
 TEST C*
 **** O*
-*7890
+*1901
 =
 Rizal Commercial Banking Corp
 (RCBC)
@@ -43,7 +43,7 @@ const context = {
   expectedAmount: 400,
   pricingAvailable: true,
   amountTolerance: .01,
-  expectedRecipientNumber: "1234567890",
+  expectedRecipientNumber: "1234561901",
   expectedRecipientName: "TEST COURT OWNER",
   bookingStartedAt: "2026-09-26T07:22:14.137Z",
   bookingStartedDate: "2026-09-26",
@@ -57,11 +57,11 @@ const run = (raw = observed, patch = {}) => {
 };
 Deno.test("GoTyme RCBC actual column ordering parses independent recipient, amount, reference and date", () => {
   const { p, v } = run();
-  eq(v.flags, []);
+  eq(v.flags, ["RECEIVER_NAME_MISMATCH"]);
   eq(p.amount.amount, 400);
   eq(p.timestamp.instant, "2026-09-26T07:23:00.000Z");
   eq(p.recipient.nameRaw, "TEST C***** O*");
-  eq(p.recipient.accountRaw, "*7890");
+  eq(p.recipient.accountRaw, "*1901");
   eq(p.traceReference, "999999");
   eq(p.sourceParserVersion, "gotyme_to_rcbc_v1");
   eq(v.recipientComparison.name, "masked_compatible");
@@ -86,13 +86,13 @@ for (
     ],
     [
       "wrong suffix",
-      observed.replace("*7890", "*7891"),
+      observed.replace("*1901", "*7891"),
       {},
       "RECEIVER_ACCOUNT_MISMATCH",
     ],
     [
       "three digits",
-      observed.replace("*7890", "*890"),
+      observed.replace("*1901", "*890"),
       {},
       "RECEIVER_ACCOUNT_UNREADABLE",
     ],
@@ -188,13 +188,14 @@ Deno.test("GoTyme RCBC full reference is claimed in RCBC and sending-bank namesp
   eq(run().v.dedupeKeys.map((k) => k.key), [
     "rcbc:ITO260926072399999",
     "gotyme:ITO260926072399999",
+    "gotyme_rcbc_trace:999999",
   ]);
 });
 Deno.test("GoTyme RCBC ignores sender account even if its suffix matches merchant", () => {
   const flags = run(
-    observed.replace("*7890", "*1234").replace(
+    observed.replace("*1901", "*1234").replace(
       "********6243",
-      "********7890",
+      "********1901",
     ),
   ).v.flags;
   if (!flags.includes("RECEIVER_ACCOUNT_MISMATCH")) {
@@ -203,7 +204,7 @@ Deno.test("GoTyme RCBC ignores sender account even if its suffix matches merchan
 });
 
 // Sanitized Vision text from the optional Note / column-first export.
-const noteLayout = "Transferred\nP2,800.00\nRepeat\nAdd to favorites\nShare\ninstaFay\nTo\nTEST OWNER\n......7890\nInstant\nRizal Commercial Banking Corp\n(RCBC)\nFrom\nTEST PAYER\n.3217\nGoTyme Bank\nAmount\nP2,800.00\nFee\nP0.00\nTotal\nNote\nTrace ID\nReference No.\nDate\nGet help\n$2,800.00\ncourt fee\n000001\nITO260928140899999\n28 Sep 2026 at 10:08 PM\n>";
+const noteLayout = "Transferred\nP2,800.00\nRepeat\nAdd to favorites\nShare\ninstaFay\nTo\nTEST OWNER\n......1901\nInstant\nRizal Commercial Banking Corp\n(RCBC)\nFrom\nTEST PAYER\n.3217\nGoTyme Bank\nAmount\nP2,800.00\nFee\nP0.00\nTotal\nNote\nTrace ID\nReference No.\nDate\nGet help\n$2,800.00\ncourt fee\n000001\nITO260928140899999\n28 Sep 2026 at 10:08 PM\n>";
 const noteContext = { expectedAmount: 2800, expectedRecipientName: 'TEST COURT OWNER', expectedRecipientNameAliases: ['TEST OWNER'], typedReference: 'ITO260928140899999', bookingStartedAt: '2026-09-28T14:06:17.516Z', bookingStartedDate: '2026-09-28' };
 Deno.test('GoTyme optional Note column layout and displaced Instant badge parse', () => {
   const {p,v} = run(noteLayout,noteContext);
@@ -220,7 +221,7 @@ Deno.test('GoTyme shortened name requires an explicit exact alias',()=>{
   eq(run(noteLayout.replace('TEST OWNER','OTHER OWNER'),noteContext).v.flags.includes('RECEIVER_NAME_MISMATCH'),true);
 });
 Deno.test('GoTyme alias never bypasses bank account or source checks',()=>{
-  eq(run(noteLayout.replace('......7890','......1234'),noteContext).v.flags.includes('RECEIVER_ACCOUNT_MISMATCH'),true);
+  eq(run(noteLayout.replace('......1901','......1234'),noteContext).v.flags.includes('RECEIVER_ACCOUNT_MISMATCH'),true);
   eq(run(noteLayout.replace('Rizal Commercial Banking Corp','Other Banking Corp'),noteContext).v.flags.includes('RCBC_DESTINATION_MISMATCH'),true);
   eq(run(noteLayout.replace('GoTyme Bank','Other Bank'),noteContext).v.flags.length > 0,true);
 });
@@ -229,7 +230,28 @@ Deno.test('GoTyme ambiguous Note columns remain in review',()=>{
   eq(run(noteLayout.replace('court fee\n000001','000001\ncourt fee'),noteContext).v.flags.length > 0,true);
 });
 Deno.test('GoTyme aliases are bound to the full configured account',()=>{
-  eq(configuredGotymeRcbcAliases(JSON.stringify({account:'1234567890',names:['TEST OWNER']}),'1234567890'),['TEST OWNER']);
-  eq(configuredGotymeRcbcAliases(JSON.stringify({account:'1234567890',names:['TEST OWNER']}),'9999997890'),[]);
-  eq(configuredGotymeRcbcAliases('not json','1234567890'),[]);
+  eq(configuredGotymeRcbcAliases(JSON.stringify({account:'1234561901',names:['TEST OWNER']}),'1234561901'),['TEST OWNER']);
+  eq(configuredGotymeRcbcAliases(JSON.stringify({account:'1234561901',names:['TEST OWNER']}),'9999991901'),[]);
+  eq(configuredGotymeRcbcAliases('not json','1234561901'),[]);
+});
+
+Deno.test('GoTyme requires the booking-start PH date and strict payment window',()=>{
+  eq(run(noteLayout,{...noteContext,bookingStartedAt:'2026-09-28T14:08:01Z'}).v.flags.includes('TIME_EXPIRED'),true);
+  eq(run(noteLayout,{...noteContext,bookingStartedAt:'2026-09-28T13:53:00Z'}).v.flags,[]);
+  eq(run(noteLayout,{...noteContext,bookingStartedAt:'2026-09-28T13:52:59Z'}).v.flags.includes('TIME_EXPIRED'),true);
+  const acrossMidnight=noteLayout.replace('28 Sep 2026 at 10:08 PM','29 Sep 2026 at 12:01 AM');
+  eq(run(acrossMidnight,{...noteContext,bookingStartedAt:'2026-09-28T15:59:00Z'}).v.flags.includes('DATE_NOT_BOOKING_DATE'),true);
+  eq(run(noteLayout,{...noteContext,verificationNow:'2026-09-28T14:07:00Z'}).v.flags.includes('TIME_FUTURE'),true);
+});
+Deno.test('GoTyme trace reuse key stays the same when reference changes',()=>{
+  const first=run(noteLayout,noteContext);
+  const second=run(noteLayout.replace('ITO260928140899999','ITO260928140899998'),{...noteContext,typedReference:'ITO260928140899998'});
+  eq(first.v.dedupeKeys.find(k=>k.providerKey==='gotyme_rcbc_trace')?.key,'gotyme_rcbc_trace:000001');
+  eq(first.v.dedupeKeys.at(-1),second.v.dedupeKeys.at(-1));
+});
+Deno.test('GoTyme critical-digit confidence checks the trace ID',()=>{
+  const {p}=run(noteLayout,noteContext);
+  const words=noteLayout.split(/\s+/).map(text=>({text,minDigitConfidence:.99}));
+  eq(rcbcCriticalDigitsReadable(words,p),true);
+  eq(rcbcCriticalDigitsReadable(words.map(w=>w.text==='000001'?{...w,minDigitConfidence:.4}:w),p),false);
 });

@@ -484,6 +484,7 @@ export function rcbcCriticalDigitsReadable(
   const targets = [
     ...r.references,
     ...(r.layout === "bdo_bank" ? [r.invoiceReference || ""] : []),
+    ...(r.layout === "gotyme_bank" ? [r.traceReference || ""] : []),
     (r.recipient.accountRaw || "").replace(/[^0-9]/g, ""),
     r.amount.amount == null
       ? ""

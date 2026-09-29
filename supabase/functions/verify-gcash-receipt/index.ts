@@ -3025,13 +3025,14 @@ Deno.serve(async (req) => {
         [
           "DATE_UNREADABLE",
           "DATE_NOT_TODAY",
+          "DATE_NOT_BOOKING_DATE",
           "TIME_UNREADABLE",
           "TIME_FUTURE",
           "TIME_EXPIRED",
         ].includes(flag)
       );
     const recipientMatch = providerVerification?.provider === "rcbc"
-      ? (providerVerification.recipientComparison.name === "exact" || (providerParse?.provider === "rcbc" && providerParse.receipt.layout === "gotyme_bank" && providerVerification.recipientComparison.name === "masked_compatible")) && ["exact", "suffix_exact"].includes(providerVerification.recipientComparison.account)
+      ? providerVerification.recipientComparison.name === "exact" && ["exact", "suffix_exact"].includes(providerVerification.recipientComparison.account)
       : providerVerification?.provider === "gcash"
       ? (providerVerification.recipientComparison.phone === "exact" &&
           providerVerification.recipientComparison.name !== "mismatch") ||
@@ -3149,7 +3150,7 @@ Deno.serve(async (req) => {
       bookingStartedDate,
       receiptAgeMinutes,
       allowedPaymentWindowMinutes: PAYMENT_WINDOW_MINUTES,
-      allowedPaymentEarlyToleranceMinutes: providerParse?.provider === "rcbc" && providerParse.receipt.layout === "bdo_bank" ? 0 : PAYMENT_EARLY_TOLERANCE_MINUTES,
+      allowedPaymentEarlyToleranceMinutes: providerParse?.provider === "rcbc" && ["bdo_bank", "gotyme_bank"].includes(providerParse.receipt.layout) ? 0 : PAYMENT_EARLY_TOLERANCE_MINUTES,
       expectedAmount,
       expectedTotal,
       autoPaymentStatus,
