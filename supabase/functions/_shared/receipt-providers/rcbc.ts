@@ -1,4 +1,5 @@
 import { extractReceiptAmount } from "../receipt-amount.ts";
+import { parseBdoToRcbcReceipt } from "./bdo-rcbc.ts";
 import { parseBpiToRcbcReceipt, verifyBpiToRcbcReceipt } from "./bpi-rcbc.ts";
 import { parseGotymeToRcbcReceipt, verifyGotymeToRcbcReceipt } from "./gotyme-rcbc.ts";
 import {
@@ -15,6 +16,7 @@ export type RcbcLayout =
   | "maribank_bank"
   | "instapay_details"
   | "gotyme_bank"
+  | "bdo_bank"
   | "unsupported";
 export type RcbcReceipt =
   & Omit<
@@ -29,8 +31,9 @@ export type RcbcReceipt =
     references: string[];
     canonicalReference: string | null;
     destinationBank: string | null;
-    sourceParserVersion?: "gotyme_to_rcbc_v1" | "bpi_to_rcbc_v1";
+    sourceParserVersion?: "gotyme_to_rcbc_v1" | "bpi_to_rcbc_v1" | "bdo_to_rcbc_v1";
     traceReference?: string | null;
+    invoiceReference?: string | null;
   };
 export type RcbcEvidence =
   & Omit<
@@ -269,6 +272,7 @@ export function parseRcbcReceipt(
   raw: string,
   options: { typedReference?: string } = {},
 ): RcbcReceipt {
+  if (/\bBDO\b|\bBN-\d{8}-\d{8}\b/i.test(raw)) return parseBdoToRcbcReceipt(raw, options);
   if (/\bGoTyme Bank\b/i.test(raw)) return parseGotymeToRcbcReceipt(raw, options);
   const lines = linesOf(raw);
   const detectors = [
@@ -385,7 +389,9 @@ export function verifyRcbcReceipt(
     const m = actual.match(/^[Xx*•.●]+(\d{4,10})$/);
     if (m) account = expected.endsWith(m[1]) ? "suffix_exact" : "mismatch";
   }
-  if (!BANK.test(r.destinationBank || "")) {
+  // BDO omits the bank label. Its strict layout parser plus the exact configured
+  // merchant name AND account match below establish the selected RCBC route.
+  if (r.layout !== "bdo_bank" && !BANK.test(r.destinationBank || "")) {
     flags.push("RCBC_DESTINATION_MISMATCH");
   }
   if (name !== "exact") {
@@ -433,6 +439,7 @@ export function verifyRcbcReceipt(
     // Full references also share the source bank's existing identity namespace.
     if (value.length >= 10) {
       add(`rcbc:${value}`, "rcbc");
+      if (r.layout === "bdo_bank") add(`bdopay:${value}`, "bdopay");
       if (r.layout === "gcash_bank") add(value, "gcash");
     } else if (r.timestamp.date) {
       add(`rcbc_${r.layout}:${r.timestamp.date}:${value}`, `rcbc_${r.layout}`);
@@ -440,6 +447,9 @@ export function verifyRcbcReceipt(
   }
   if (r.railReference.value && r.timestamp.date) {
     add(`rcbc_rail:${r.timestamp.date}:${r.railReference.value}`, "rcbc_rail");
+  }
+  if (r.layout === "bdo_bank" && r.invoiceReference) {
+    keys.push({ key: `bdopay_invoice:${r.invoiceReference}`, providerKey: "bdopay_invoice", duplicateFlag: "DUPLICATE_INVOICE" });
   }
   return {
     provider: "rcbc",
@@ -464,6 +474,7 @@ export function rcbcCriticalDigitsReadable(
   const joined = parts.map((p) => p.value).join("");
   const targets = [
     ...r.references,
+    ...(r.layout === "bdo_bank" ? [r.invoiceReference || ""] : []),
     (r.recipient.accountRaw || "").replace(/[^0-9]/g, ""),
     r.amount.amount == null
       ? ""

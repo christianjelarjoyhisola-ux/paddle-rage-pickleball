@@ -3171,7 +3171,7 @@ Deno.serve(async (req) => {
           issues: gcashParse.issues,
         }
         : null,
-      rcbc: providerParse?.provider === "rcbc" ? { layout: providerParse.receipt.layout, references: providerParse.receipt.references, canonicalReference: providerParse.receipt.canonicalReference, destinationBank: providerParse.receipt.destinationBank, sourceParserVersion: providerParse.receipt.sourceParserVersion || null, traceReference: providerParse.receipt.traceReference || null } : null,
+      rcbc: providerParse?.provider === "rcbc" ? { layout: providerParse.receipt.layout, references: providerParse.receipt.references, canonicalReference: providerParse.receipt.canonicalReference, destinationBank: providerParse.receipt.destinationBank, sourceParserVersion: providerParse.receipt.sourceParserVersion || null, traceReference: providerParse.receipt.traceReference || null, invoiceReference: providerParse.receipt.invoiceReference || null } : null,
       bankTransfer: bankParse
         ? {
           reference: bankParse.reference,
