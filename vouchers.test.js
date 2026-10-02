@@ -41,3 +41,18 @@ test('checkout applies server values and restores original amounts after removal
   await api.sync();p=api.priceItems([{ref:'TEST',total:0,serviceFee:0}])[0];assert.equal(p.total,1200);assert.equal(p.serviceFee,30);assert.equal(api.free(),false);
   context._reservedRef='OTHER';assert.equal(api.priceItems([{ref:'OTHER',total:500}])[0].total,500);
 });
+
+test('voucher form sends single-use capacity and preserves explicit reusable limits', async () => {
+  const source=fs.readFileSync('vouchers.js','utf8');
+  const submit=source.slice(source.indexOf("  $('campaignForm').addEventListener('submit'"),source.indexOf("  $('campaigns').addEventListener('click'"));
+  for(const [mode,batchSize,maxUses,wanted] of [['single','1','50',1],['single','3','50',3],['reusable','1','1','1'],['reusable','1','7','7']]) {
+    let handler,sent;
+    const button={disabled:false};
+    const form={addEventListener:(_event,fn)=>{handler=fn},querySelector:()=>button};
+    const values={mode,batchSize,maxUses,startsAt:'2026-10-02',endsAt:'2026-10-03',startHour:'0',endHour:'23',kind:'percent',value:'20',acceptOwnerFees:'on'};
+    class Data extends Map {constructor(){super(Object.entries(values))}getAll(name){return name==='courtIds'?['court1']:name==='bookingTypes'?['guest']:[0,1,2,3,4,5,6]}}
+    vm.runInNewContext(submit,{$:()=>form,FormData:Data,state:{courts:[{}]},formNotice:()=>{},notice:()=>{},requireSelection:()=>{},load:async()=>{},DB:{manageVouchers:async(action,data)=>{sent=data;return {codes:['TEST-CODE']}}}});
+    await handler({preventDefault(){},currentTarget:form});
+    assert.equal(sent.maxUses,wanted);assert.equal(sent.singleUse,mode==='single');assert.equal(button.disabled,false);
+  }
+});

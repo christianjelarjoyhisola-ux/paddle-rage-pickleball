@@ -101,6 +101,9 @@
     const single=fields.mode.value==='single';
     const batch=single && Number(fields.batchSize.value)>1;
     $('batchSizeField').hidden=!single;
+    $('useLimitField').hidden=single;
+    $('singleUseHint').hidden=!single;
+    fields.maxUses.disabled=single;
     $('customCodeField').hidden=batch;
     fields.code.disabled=batch;
   }
@@ -125,6 +128,8 @@
       if(data.endsAt<=data.startsAt) throw new Error('End date and time must be after the start.');
       data.acceptOwnerFees=fd.has('acceptOwnerFees'); data.singleUse=data.mode==='single';
       if (!data.singleUse) data.batchSize=1;
+      else data.maxUses=Number(data.batchSize);
+      if (!Number.isInteger(Number(data.maxUses)) || Number(data.maxUses)<1 || Number(data.maxUses)>100000) throw new Error('Enter a whole number of booking uses, at least 1.');
       if (data.kind==='percent' && Number(data.value)>100) throw new Error('Percentage discounts cannot exceed 100%.');
       requireSelection(data.courtIds, 'courtOptions', 'Select at least one court in Courts & options.');
       requireSelection(data.bookingTypes, 'bookingTypes', 'Select Guest, Host, or both under Bookings in Courts & options.');
