@@ -6,16 +6,18 @@ function fixture(options: Record<string, any> = {}) {
   const calls: string[] = [];
   const filters: Record<string, string> = {};
   const account = options.missing ? null : { id: "host-a", email: "host@example.com" };
+  let table = "";
   const query: any = {
+    order() { return query; }, limit() { return query; },
     select() { return query; },
     eq(key: string, value: string) { filters[key] = value; return query; },
-    maybeSingle() { return { data: account, error: options.lookupError }; },
+    maybeSingle() { return { data: table === "accounts" ? (options.rejected ? null : account) : (options.rejected ? { host_user_id: "host-a", email: "host@example.com" } : null), error: options.lookupError }; },
   };
   const db = {
-    from(table: string) { assert(table === "accounts", "only query accounts"); return query; },
+    from(name: string) { table=name; return query; },
     rpc(name: string, params: any) {
       calls.push("claim");
-      assert(name === "claim_host_password_recovery" && params.p_account_id === "host-a", "claim authenticated account identity");
+      assert(options.rejected ? name === "claim_host_reapplication_recovery" && params.p_user === "host-a" : name === "claim_host_password_recovery" && params.p_account_id === "host-a", "claim authenticated account identity");
       return { data: options.claimed !== false, error: options.claimError };
     },
     auth: { admin: {
@@ -67,3 +69,5 @@ for (const options of [{ lookupError: true }, { claimError: true }, { linkError:
     assert(rejected && !f.calls.includes("send"), "reject without mail on identity or backend failure");
   });
 }
+
+Deno.test('Rejected hosts can recover an existing verified password without activation',async()=>{const f=fixture({rejected:true});await requestHostPasswordRecovery(f.db,'host@example.com','https://paddleragecdo.ph/',f.send);assert(f.calls.join()==='claim,link,send','rate-limited recovery delivered');});

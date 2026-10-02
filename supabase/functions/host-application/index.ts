@@ -1,3 +1,4 @@
+import { verifyHostReapplicationPassword } from "../_shared/host-reapplication.ts";
 // deno-lint-ignore-file no-explicit-any no-import-prefix
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendMailerooEmail } from "../_shared/maileroo.ts";
@@ -1090,6 +1091,8 @@ Deno.serve(async (req): Promise<Response> => {
       return json({ error: "Host verification could not be recorded" }, 503);
     }
     if (!applicationId) {
+      const rejected = await restSelect("open_play_host_applications", { host_user_id: `eq.${userId}`, email: `eq.${email}`, status: "eq.rejected", limit: "1" });
+      if (rejected.length) return json({ ok: true, reapplyRequired: true, reviewable: false });
       return json({ error: "Pending host application was not found" }, 404);
     }
 
@@ -1164,7 +1167,7 @@ Deno.serve(async (req): Promise<Response> => {
       json({
         ok: true,
         message:
-          "If a pending unverified host application uses this email, a new verification link will arrive shortly.",
+          "If a unverified host application uses this email, a new verification link will arrive shortly.",
       });
     const { data: app, error: appError } = await db
       .from("open_play_host_applications")
@@ -1172,7 +1175,9 @@ Deno.serve(async (req): Promise<Response> => {
         "id, host_user_id, full_name, email, status, verification_email_sent_at, verification_email_resend_count",
       )
       .eq("email", email)
-      .eq("status", "pending")
+      .in("status", ["pending", "rejected"])
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (appError) {
       console.error(
@@ -1218,7 +1223,7 @@ Deno.serve(async (req): Promise<Response> => {
         verification_email_resend_count: resendCount + 1,
       })
       .eq("id", app.id)
-      .eq("status", "pending")
+      .eq("status", app.status)
       .eq("verification_email_resend_count", resendCount);
     claimQuery = previousSentAt
       ? claimQuery.eq("verification_email_sent_at", previousSentAt)
@@ -1600,42 +1605,40 @@ Deno.serve(async (req): Promise<Response> => {
   }
 
   let authUserId = "";
+  let createdAuthUser = false;
+  let reapplication: Record<string, any> | null = null;
   let idPath: string | null = null;
   const applicationId = crypto.randomUUID();
   try {
-    const usernameMatch = await restSelect("accounts", {
-      username: `eq.${email}`,
-    });
-    const emailMatch = await restSelect("accounts", { email: `eq.${email}` });
-
-    if (
-      (usernameMatch && usernameMatch.length > 0) ||
-      (emailMatch && emailMatch.length > 0)
-    ) {
-      return json({
-        error: "A host account or application already uses this email",
-      }, 409);
+    const applications = await restSelect("open_play_host_applications", { email: `eq.${email}`, order: "created_at.desc" });
+    if (applications.some((app) => app.status !== "rejected")) {
+      return json({ error: "An application is already pending or approved. Check its status instead of submitting again." }, 409);
     }
-
-    const existingApp = await restSelect("open_play_host_applications", {
-      email: `eq.${email}`,
-      status: "neq.rejected",
-    });
-    if (existingApp && existingApp.length > 0) {
-      return json({
-        error: "A pending host application already uses this email",
-      }, 409);
-    }
-
     const existingAuthUsers = await authUsersByExactEmail(db, email);
-    if (existingAuthUsers.length > 0) {
-      return json({
-        error:
-          "An Auth login already uses this email. Use verification resend for a pending application or contact support.",
-      }, 409);
+    if (applications.length && existingAuthUsers.length === 1) {
+      const previous = applications[0];
+      const existing = existingAuthUsers[0] as any;
+      if (!previous.host_user_id || previous.host_user_id !== existing.id || existing.user_metadata?.role !== "host") {
+        return json({ error: "This account needs administrator review before reapplying." }, 409);
+      }
+      // Use an isolated Auth client: verify the existing password without
+      // replacing browser sessions, changing credentials, or activating access.
+      const verifier = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY") || serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
+      if (!await verifyHostReapplicationPassword(verifier.auth, email, password, String(existing.id))) {
+        return json({ error: "To reapply, enter your existing account password. Use Forgot password under Host Login if needed, or Resend Verification Email if your email is unverified." }, 401);
+      }
+      await safeExistingHostAccount(db, existing.id, email);
+      reapplication = previous;
+      authUserId = existing.id;
+    } else {
+      const usernameMatch = await restSelect("accounts", { username: `eq.${email}` });
+      const emailMatch = await restSelect("accounts", { email: `eq.${email}` });
+      if (usernameMatch.length || emailMatch.length || existingAuthUsers.length) {
+        return json({ error: "An account already uses this email. Use your existing host login or contact support." }, 409);
+      }
+      authUserId = await createAuthUser(email, password, fullName);
+      createdAuthUser = true;
     }
-
-    authUserId = await createAuthUser(email, password, fullName);
 
     if (idBytes) {
       idPath = `${authUserId}/${crypto.randomUUID()}.${
@@ -1652,7 +1655,7 @@ Deno.serve(async (req): Promise<Response> => {
       if (uploadErr) throw uploadErr;
     }
 
-    const app = await restInsert("open_play_host_applications", {
+    const applicationRecord = {
       id: applicationId,
       host_user_id: authUserId,
       full_name: fullName,
@@ -1670,12 +1673,20 @@ Deno.serve(async (req): Promise<Response> => {
       verification_email_sent_at: new Date().toISOString(),
       verification_email_resend_count: 0,
       created_at: new Date().toISOString(),
-    });
+    };
+    let app: Record<string, any>;
+    if (reapplication) {
+      const { data: saved, error: saveError } = await db.rpc("resubmit_host_application", { p_previous: reapplication.id, p_user: authUserId, p_record: applicationRecord });
+      if (saveError) throw saveError;
+      if (!saved?.id) throw new Error("Reapplication was not saved. Please try again.");
+      app = saved;
+    } else app = await restInsert("open_play_host_applications", applicationRecord);
 
     return json({
       ok: true,
+      reapplied: Boolean(reapplication),
       applicationId: typeof app.id === "string" ? app.id : "",
-      emailVerificationSent: true,
+      emailVerificationSent: !reapplication,
     });
   } catch (err) {
     if (idPath) {
@@ -1686,7 +1697,7 @@ Deno.serve(async (req): Promise<Response> => {
         console.error("host ID cleanup failed:", errMsg(removeError));
       }
     }
-    if (authUserId) {
+    if (createdAuthUser && authUserId) {
       const cleanupError = await deleteAuthUser(authUserId);
       if (cleanupError) {
         console.error("host Auth cleanup failed:", cleanupError);

@@ -111,7 +111,7 @@ textarea.fi{min-height:82px;resize:vertical}
       <input class="fi" type="tel" id="haPhone" placeholder="09XX XXX XXXX" required>
       <label class="fl" for="haEmail">Email</label>
       <input class="fi" type="email" id="haEmail" placeholder="you@email.com" autocomplete="username" required>
-      <label class="fl" for="haPassword">Password</label>
+      <label class="fl" for="haPassword">Password</label><p class="muted">Reapplying after rejection? Use the same email and your existing password. Forgot it? Use Forgot password under Host Login.</p>
       <input class="fi" type="password" id="haPassword" placeholder="Minimum 8 characters" autocomplete="new-password" minlength="8" required>
       <label class="fl" for="haGcash">GCash Number</label>
       <input class="fi" type="tel" id="haGcash" placeholder="09XX XXX XXXX" required>
@@ -274,7 +274,7 @@ async function hostApply(e) {
     $('haEmail').value = email;
     setMsg(
       'applyMsg',
-      result?.emailVerificationSent
+      result?.reapplied ? 'Reapplication submitted for court owner review. Host booking access stays disabled until approval.' : result?.emailVerificationSent
         ? 'Application submitted. Check your email to verify your address, then your host login will be ready for court owner review.'
         : 'Application submitted for court owner review.',
       'ok',
@@ -361,7 +361,7 @@ async function handleHostEntryState() {
       const ownerAlertSent = Number(verification?.notification?.sent || 0) > 0;
       setMsg(
         'loginMsg',
-        ownerAlertSent
+        verification?.reapplyRequired ? 'Email verified. Your previous application was rejected. Use Apply as Host with your existing password to submit again.' : ownerAlertSent
           ? 'Email verified successfully. The court owner has been notified and your application is awaiting review. You can sign in after approval.'
           : 'Email verified successfully. Your application is awaiting court owner review. You can sign in after approval.',
         'ok',

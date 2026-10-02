@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { sendMailerooEmail } from "./maileroo.ts";
 
-export const HOST_RECOVERY_MESSAGE = "If this email belongs to an active host account, a reset link will arrive shortly.";
+export const HOST_RECOVERY_MESSAGE = "If this email belongs to an host account, a reset link will arrive shortly.";
 
 export async function requestHostPasswordRecovery(
   db: any,
@@ -9,16 +9,25 @@ export async function requestHostPasswordRecovery(
   appUrl: string,
   send = sendMailerooEmail,
 ) {
-  const { data: account, error } = await db.from("accounts")
+  let { data: account, error } = await db.from("accounts")
     .select("id, email").eq("email", email).eq("role", "host")
     .eq("status", "active").maybeSingle();
   if (error) throw new Error("Host recovery account lookup failed");
-  if (!account) return;
+  let reapplication = false;
+  if (!account) {
+    const { data: rejected, error: rejectedError } = await db.from("open_play_host_applications")
+      .select("host_user_id,email").eq("email", email).eq("status", "rejected")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (rejectedError) throw new Error("Host recovery application lookup failed");
+    if (!rejected?.host_user_id) return;
+    account = { id: rejected.host_user_id, email: rejected.email };
+    reapplication = true;
+  }
   const { data: authData, error: authError } = await db.auth.admin.getUserById(account.id);
   if (authError) throw new Error("Host recovery identity lookup failed");
   const user = authData?.user;
   if (!user || String(user.email || "").toLowerCase() !== email || !user.email_confirmed_at || user.deleted_at || (user.banned_until && Date.parse(user.banned_until) > Date.now())) return;
-  const { data: claimed, error: claimError } = await db.rpc("claim_host_password_recovery", { p_account_id: account.id });
+  const { data: claimed, error: claimError } = await db.rpc(reapplication ? "claim_host_reapplication_recovery" : "claim_host_password_recovery", reapplication ? { p_user: account.id } : { p_account_id: account.id });
   if (claimError) throw new Error("Host recovery rate limit unavailable");
   if (!claimed) return;
   const redirectTo = `${appUrl.replace(/\/+$/, "")}/host.html?recovery=1`;
