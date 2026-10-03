@@ -2,6 +2,7 @@ import {
   type BankReceiptVerificationEvidence,
   type BankToGcashReceiptParse,
   parseBankToGcashReceipt,
+  parseTimestamp,
   type ReceiptVerificationContext,
   verifyBankToGcashReceipt,
 } from "./bank-to-gcash.ts";
@@ -20,7 +21,7 @@ export function parseMaribankToGcashReceipt(
   rawText: string,
   options: { typedReference?: string } = {},
 ): BankToGcashReceiptParse & { provider: "maribank" } {
-  const lines = rawText.split(/\r?\n/).map((line) => line.trim()).filter(
+  const lines = rawText.split(/\r?\n/).map((line) => line.trim().replace(/^instaFay$/i, "instaPay")).filter(
     Boolean,
   );
   // Transfer Result is a different screen from the downloadable Transaction
@@ -62,6 +63,11 @@ export function parseMaribankToGcashReceipt(
       `Reference Number: ${values[3]}`,
     ].join("\n");
     const parsed = parseBankToGcashReceipt(text, options, MARIBANK_CONFIG);
+    const datedValues = lines.filter((line) => /^\d{1,2} [A-Za-z]+ \d{4}, \d{1,2}:\d{2}$/.test(line));
+    if (lines.includes("Transaction Date & Time") && datedValues.length === 1) {
+      parsed.timestamp = parseTimestamp(["Date", datedValues[0]]);
+      parsed.issues = parsed.issues.filter((issue) => issue !== "TIMESTAMP_MISSING");
+    }
     parsed.amount = extractReceiptAmount(
       `Amount: ${values[0]}\nTotal: ${values[2]}`,
       { provider: "maribank" },

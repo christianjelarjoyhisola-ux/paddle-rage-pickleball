@@ -204,7 +204,8 @@ function contextExclusions(lines: string[], lineIndex: number): string[] {
     // avoids an amount following an already-complete fee line being discarded.
     if (
       previous && item.pattern.test(previous) &&
-      !lineHasMoneyAmount(previous)
+      !lineHasMoneyAmount(previous) &&
+      !(item.reason === "reference" && /^ref(?:erence)?\s*(?:no\.?)?\s*\d[\d ]{11,}\d$/i.test(previous.trim()))
     ) {
       reasons.add(item.reason);
     }
@@ -481,7 +482,7 @@ function collectCandidates(
       // Vision may emit the left-column reference before the right-column
       // amounts. Accept only the short tail ending at the receipt timestamp;
       // advertisements below that timestamp cannot become payment evidence.
-      const tail = lines.slice(boundaryIndex + 1, boundaryIndex + 9);
+      const tail = lines.slice(boundaryIndex + 1, boundaryIndex + 13);
       const timestampOffset = tail.findIndex((line) =>
         /^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4}\s+\d{1,2}:\d{2}\s*[AP]M$/i
           .test(line.trim())
@@ -490,7 +491,9 @@ function collectCandidates(
         timestampOffset >= 0 && gcashSentViaAnchors.length === 1 &&
         gcashTotalAmountAnchors.length === 1
       ) {
-        boundaryIndex += timestampOffset + 1;
+        // Stop before ad copy even when Vision moves the timestamp below it.
+        const adOffset = tail.findIndex((line) => /^(?:GCash|GStocks\b|May chance\b|PART$|OWNER$)/i.test(line.trim()));
+        boundaryIndex += (adOffset >= 0 ? Math.min(adOffset, timestampOffset) : timestampOffset) + 1;
       }
 
       const blockDisplays = new Map<

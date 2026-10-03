@@ -461,7 +461,7 @@ function parsePhoneLine(
   }
 
   const masked = line.match(MASKED_MOBILE_RE);
-  if (masked && NAME_MASK_RE.test(masked[0])) {
+  if (masked && /[•‣●◦∙·*xX#._]/.test(masked[0])) {
     const raw = masked[0].trim();
     const visibleDigits = digitsOnly(raw);
     return {
@@ -829,7 +829,9 @@ export function compareGcashMaskedName(
   const raw = String(observedRaw || "").trim();
   if (!raw) return "missing";
 
-  const rawTokens = nameTokens(raw);
+  // Vision can join the first masked initial to the next name token.
+  // Split only an initial followed by an explicit mask and another letter.
+  const rawTokens = nameTokens(raw.replace(/^([A-Za-z][.•●·*]{2,})(?=[A-Za-z])/, "$1 "));
   const observed = rawTokens.map(observedNameToken).filter(
     (token): token is ObservedNameToken => token !== null,
   );

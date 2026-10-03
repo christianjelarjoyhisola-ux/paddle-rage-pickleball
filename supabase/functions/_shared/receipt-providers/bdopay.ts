@@ -120,6 +120,19 @@ function linesOf(rawText: string): string[] {
 
 function receiptBodyLines(rawText: string): string[] {
   const lines = linesOf(rawText);
+  // BDO's left column may be emitted before the recipient's right column.
+  const to = lines.findIndex((line) => /^To$/i.test(line));
+  if (to >= 0 && /^From$/i.test(lines[to + 1] || "") &&
+      /g-xchange.*gcash/i.test(lines[to + 3] || "") &&
+      /^[A-Z0-9]{12,40}$/i.test(lines[to + 4] || "") &&
+      /^(?:SA W\/ ATM|REGULAR SA)/i.test(lines[to + 5] || "")) {
+    lines.splice(to, 5, "To", ...lines.slice(to + 2, to + 5), "From");
+  }
+  for (let i = 0; i < lines.length - 2; i++) {
+    if (/^Invoice$/i.test(lines[i]) && /^\d{4,20}$/.test(lines[i + 1]) && /^number$/i.test(lines[i + 2])) {
+      lines.splice(i, 3, "Invoice number", lines[i + 1]);
+    }
+  }
   const bodyStart = lines.findIndex((line) => /^sent\s*!?$/i.test(line));
   return bodyStart >= 0 ? lines.slice(bodyStart) : [];
 }

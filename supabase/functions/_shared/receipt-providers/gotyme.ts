@@ -22,6 +22,24 @@ export function parseGotymeToGcashReceipt(
   // Repair only the bounded GoTyme details block. Customer input never
   // supplies missing OCR evidence.
   const lines = rawText.split(/\r?\n/).map((line) => line.trim());
+  // The Instant badge and isolated mask glyphs can interrupt the recipient
+  // triple. Recover it only immediately before the explicit From boundary.
+  const fromBoundary = lines.findIndex((line) => /^From$/i.test(line));
+  const earlyTo = lines.findIndex((line) => /^To$/i.test(line));
+  if (earlyTo >= 0 && fromBoundary > earlyTo && fromBoundary - earlyTo <= 15 &&
+      /^G-Xchange,?\s*Inc\.?\s*\(GCash\)$/i.test(lines[fromBoundary - 1] || "")) {
+    let suffixIndex = fromBoundary - 2;
+    if (/^Instant$/i.test(lines[suffixIndex] || "")) suffixIndex--;
+    const suffix = lines[suffixIndex]?.match(/^[*•●·.]+([A-Z0-9]{4})$/i);
+    let nameIndex = suffixIndex - 1;
+    while (nameIndex > earlyTo && /^[*•●·.]+$/.test(lines[nameIndex])) nameIndex--;
+    const prefix = lines.slice(earlyTo + 1, nameIndex);
+    if (suffix && /^[A-Za-z][A-Za-z .*-]+$/.test(lines[nameIndex] || "") &&
+        prefix.every((line) => /^(?:Transferred[!.]?|Share|Repeat|Add to favorites|[P₱$]\s*[\d,]+\.\d{2}|[I| ]*5G\s*\d*|[✓✔])$/i.test(line))) {
+      lines.splice(earlyTo, fromBoundary - earlyTo, ...prefix, "To", lines[nameIndex],
+        "***" + suffix[1], lines[fromBoundary - 1]);
+    }
+  }
   // Some screenshots place the To label above the transfer header in Vision's
   // reading order. Recover only the recipient triple directly before GCash,
   // with known display-only header lines between To and that triple.
