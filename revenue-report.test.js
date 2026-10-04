@@ -1,6 +1,73 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const RevenueReport = require('./finance-core');
+const fs = require('node:fs');
+const vm = require('node:vm');
+
+// Run the actual Reports controller against the IDs present in its shipped markup.
+// Missing elements return null, just as they do in the browser.
+function reportPage() {
+  const html = fs.readFileSync(require.resolve('./admin.html'), 'utf8');
+  const markup = html.slice(html.indexOf('<div id="sec-reports"'), html.indexOf('<!-- COURTS -->'));
+  const elements = new Map([...markup.matchAll(/id="([^"]+)"/g)].map(([, id]) => [id, {
+    textContent: '', innerHTML: '', value: '',
+    setAttribute() {}, removeAttribute() {}, classList: { toggle() {} },
+  }]));
+  const errors = [];
+  const downloads = [];
+  const context = vm.createContext({
+    $: id => elements.get(id) || null,
+    document: {
+      querySelectorAll: () => [],
+      createElement: () => ({ click() {} }),
+    },
+    window: { RevenueReport },
+    DB: {
+      getBookings: async () => [booking()],
+      getOpenPlayRegistrations: async () => [{ id: 'op1', full_name: 'Player', date: '2026-07-24', amount: 100, payment_status: 'paid' }],
+      getSettings: async () => settings,
+    },
+    groupBookings: rows => rows,
+    isPlatformBillableBooking: b => b.status === 'confirmed',
+    isDashboardReportBooking: () => true,
+    sess: { role: 'owner' },
+    esc: value => String(value ?? ''),
+    paymentMethodLabel: value => value || 'Cash',
+    receivedAccountLabel: b => b.receivedAccount || 'Cash',
+    toast: (message, type) => { if (type === 'err') errors.push(message); },
+    console: { error: (...args) => errors.push(args) },
+    Blob,
+    URL: { createObjectURL: blob => { downloads.push(blob); return 'blob:report'; } },
+  });
+  const start = html.indexOf("let _rpPeriod='week'");
+  const end = html.indexOf('async function renderCourts()', start);
+  vm.runInContext(html.slice(start, end), context);
+  vm.runInContext("_rpPeriod='all'", context);
+  return { context, elements, errors, downloads };
+}
+
+test('Reports renders voucher totals, all breakdowns, and transactions using the current page markup', async () => {
+  const { context, elements, errors } = reportPage();
+  await context.renderReport();
+  assert.deepEqual(errors, []);
+  assert.match(elements.get('rpVoucherSummary').textContent, /Original booking value/);
+  for (const id of ['rpCourtChart', 'rpPaymentChart', 'rpReceivedSimpleChart', 'rpTrendSimpleChart']) {
+    assert.match(elements.get(id).innerHTML, /rp-court-row/, id);
+  }
+  assert.match(elements.get('rpRecentRows').innerHTML, /PR-001/);
+});
+
+test('Reports CSV labels every booking and Open Play value, including voucher fields', async () => {
+  const { context, errors, downloads } = reportPage();
+  await context.exportReportCSV();
+  assert.deepEqual(errors, []);
+  const lines = (await downloads[0].text()).split('\n');
+  const columns = lines.map(line => line.slice(1, -1).split('","'));
+  assert.equal(columns.length, 3);
+  assert.equal(columns[0].length, 25);
+  assert.ok(columns.every(row => row.length === columns[0].length));
+  assert.deepEqual(columns[0].slice(-4), ['Original Booking Value', 'Voucher Discount', 'Owner-funded Booking Fee', 'Net After Fee Obligation']);
+});
 
 const settings = { maintenance_fee: '5', fee_type: 'per_hour' };
 const range = { from: '2026-07-01', to: '2026-07-31' };

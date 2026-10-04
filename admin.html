@@ -5528,6 +5528,8 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
         </article>
       </div>
 
+      <p id="rpVoucherSummary" class="rp-subtitle" style="margin:0 0 20px" aria-live="polite"></p>
+
       <div class="panel rp-simple-panel">
         <div class="rp-simple-head">
           <div>
@@ -14098,7 +14100,6 @@ async function renderReport(){
     $('rpCourtRevenue').textContent=fmtReportMoney(Number(s.courtCollected||0)+Number(s.openPlayCollected||0));
     $('rpOutstanding').textContent=fmtReportMoney(s.outstanding);
     $('rpPlatformFees').textContent=fmtReportMoney(s.platformFeesEarned);
-    if (!$('rpVoucherSummary')) { const p=document.createElement('p'); p.id='rpVoucherSummary'; $('rpRemittancePanel').before(p); }
     $('rpVoucherSummary').textContent='Original booking value: '+fmtReportMoney(s.originalBookingValue)+' · Voucher discounts: '+fmtReportMoney(s.voucherDiscounts)+' · Owner-funded booking fees: '+fmtReportMoney(s.ownerFundedFees);
     const isOwner=sess?.role==='owner';
     $('rpPlatformLabel').textContent=isOwner?'Platform fees':'Platform fees held';
@@ -14121,7 +14122,7 @@ async function exportReportCSV(){
   if(!_rpReport)await renderReport();
   const reportRows=_rpReport?.rows||[];
   if(!reportRows.length){toast('There is no report data to export.','inf');return;}
-  const h=['Source','Report Date','Reference','Customer','Email','Contact','Court(s)','Service Date','Booked Hours','Court Rental','Platform Booking Fee','Customer Charge','Amount Collected','Outstanding','Paid Using','Received To','Payment Status','Booking Status','Created','Fee Earned At','Child Refs'];
+  const h=['Source','Report Date','Reference','Customer','Email','Contact','Court(s)','Service Date','Booked Hours','Court Rental','Platform Booking Fee','Customer Charge','Amount Collected','Outstanding','Paid Using','Received To','Payment Status','Booking Status','Created','Fee Earned At','Child Refs','Original Booking Value','Voucher Discount','Owner-funded Booking Fee','Net After Fee Obligation'];
   const rows=reportRows.map(row=>{
     if(row.registration){
       const r=row.registration;
