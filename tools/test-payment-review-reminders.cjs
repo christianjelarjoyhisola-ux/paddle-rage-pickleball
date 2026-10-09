@@ -9,13 +9,16 @@ url.password = process.env.SUPABASE_DB_PASSWORD;
 const db = new Client({ connectionString: url.href, ssl: { rejectUnauthorized: false } });
 const migration = fs.readFileSync('supabase/migrations/20261009160000_payment_review_reminders.sql', 'utf8')
   .replace(/public\.(payment_review_reminder\w*|due_payment_review_reminders|claim_payment_review_reminder|finish_payment_review_reminder)/g, 'review_reminder_test.$1');
+const nameMigration = fs.readFileSync('supabase/migrations/20261009163000_payment_reminder_booker_name.sql', 'utf8')
+  .replaceAll('public.payment_review_reminder_candidates', 'review_reminder_test.payment_review_reminder_candidates');
 (async () => {
   await db.connect();
   try {
     await db.query('begin');
     await db.query('create schema review_reminder_test');
     await db.query(migration.replace(/^begin;|commit;\s*$/g, ''));
-    let view = migration.slice(migration.indexOf('create or replace view'), migration.indexOf('revoke all on review_reminder_test.payment_review_reminder_candidates'));
+    await db.query(nameMigration.replace(/^begin;|commit;\s*$/g, ''));
+    let view = nameMigration.slice(nameMigration.indexOf('create or replace view'), nameMigration.lastIndexOf('commit;'));
     for (const table of ['bookings', 'receipt_verifications', 'host_booking_balance_payments', 'open_play_registrations', 'open_play_host_session_registrations']) {
       await db.query(`create table review_reminder_test.${table} as select * from public.${table} with no data`);
       view = view.replaceAll(`public.${table}`, `review_reminder_test.${table}`);
@@ -37,9 +40,16 @@ const migration = fs.readFileSync('supabase/migrations/20261009160000_payment_re
         values (${id},'gcash','pending','test-reference',100,now()-interval '2 hours')`);
     }
     const recipient = 'a'.repeat(64);
+    await db.query("update review_reminder_test.bookings set full_name='Court Booker'");
+    await db.query("update review_reminder_test.host_booking_balance_payments set customer_name='Host Booker'");
+    await db.query("update review_reminder_test.open_play_registrations set full_name='Open Play Booker'");
+    await db.query("update review_reminder_test.open_play_host_session_registrations set full_name='Session Booker'");
     const due = () => db.query('select * from review_reminder_test.due_payment_review_reminders($1)', [recipient]);
     const rows = (await due()).rows;
     assert.equal(rows.length, 4, 'one eligible payment per type, grouped bookings counted once');
+    assert.deepEqual(Object.fromEntries(rows.map(r => [r.kind, r.booker_name])), {
+      booking: 'Court Booker', host_balance: 'Host Booker', open_play: 'Open Play Booker', host_session: 'Session Booker',
+    });
     assert.equal(Number(rows.find(r => r.kind === 'booking').amount), 800);
     const claim = () => db.query('select review_reminder_test.claim_payment_review_reminder($1,$2,$3) as token', ['booking', 'test-group', recipient]);
     const token = (await claim()).rows[0].token;

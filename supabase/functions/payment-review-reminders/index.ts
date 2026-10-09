@@ -7,10 +7,11 @@ const labels: Record<string, string> = {
 const escape = (value: unknown) => String(value ?? "").replace(/&/g, "&amp;")
   .replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-export function reminderMessage(payment: { kind: string; reference: string; amount: number; pending_since: string }, now = Date.now()) {
+export function reminderMessage(payment: { kind: string; reference: string; amount: number; pending_since: string; booker_name?: string | null }, now = Date.now()) {
   const minutes = Math.max(60, Math.floor((now - Date.parse(payment.pending_since)) / 60000));
   return `⏰ <b>Payment still awaiting review</b>\n\n` +
     `${escape(labels[payment.kind] || payment.kind)}\n` +
+    `Booker: <b>${escape(payment.booker_name?.trim() || "Name unavailable")}</b>\n` +
     `Booking: <code>${escape(payment.reference)}</code>\n` +
     `Amount: <b>₱${Number(payment.amount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>\n` +
     `Waiting: ${Math.floor(minutes / 60)}h ${minutes % 60}m\n\n` +
