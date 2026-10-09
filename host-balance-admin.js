@@ -434,6 +434,7 @@
       .hba-proof{min-height:330px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 25%,rgba(201,207,67,.045),transparent 45%),#030805;overflow:hidden}
       .hba-proof img{display:none;width:auto;max-width:100%;max-height:470px;object-fit:contain}
       .hba-proof-status{padding:20px;color:var(--muted);font-size:.8rem;text-align:center}
+      .hba-proof [hidden]{display:none!important}
       .hba-proof-note{padding:11px 13px;border-top:1px solid var(--border);color:var(--text2);font-size:.69rem;line-height:1.45}
       .hba-proof-note strong{color:var(--pickle-lime)}
       .hba-flags{padding:11px 13px;border-top:1px solid var(--border);color:var(--muted);font-size:.69rem;line-height:1.45;overflow-wrap:anywhere}
