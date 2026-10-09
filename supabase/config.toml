@@ -29,6 +29,9 @@ verify_jwt = true
 [functions.process-host-balance-deadlines]
 verify_jwt = false
 
+[functions.payment-review-reminders]
+verify_jwt = false
+
 [functions.send-reschedule-email]
 verify_jwt = true
 
