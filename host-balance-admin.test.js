@@ -7,6 +7,69 @@ const hostBalanceAdmin = fs.readFileSync('host-balance-admin.js', 'utf8');
 const balanceEdge = fs.readFileSync('supabase/functions/host-booking-balance-payment/index.ts', 'utf8');
 const deadlineEdge = fs.readFileSync('supabase/functions/process-host-balance-deadlines/index.ts', 'utf8');
 
+function receiptRetryHarness() {
+  const nodes = new Map();
+  function node(id) {
+    return {
+      id, style: {}, events: {}, hidden: false,
+      addEventListener(name, handler) { this.events[name] = handler; },
+      setAttribute(name, value) { this[name] = value; },
+      removeAttribute(name) { delete this[name]; },
+      remove() { if (nodes.get(this.id) === this) nodes.delete(this.id); },
+      after(next) { nodes.set(next.id, next); },
+      replaceWith(next) { nodes.set(next.id, next); },
+    };
+  }
+  for (const id of ['image', 'status', 'link']) nodes.set(id, node(id));
+  const state = { loadToken: 1, expectedPaymentId: 'payment-2' };
+  const source = hostBalanceAdmin.slice(hostBalanceAdmin.indexOf('  function prepareReceiptImage('), hostBalanceAdmin.indexOf('  async function openModal('));
+  const load = new Function('state', 'byId', 'document', 'make', 'secureReceiptUrl', `${source}; return loadReceiptImage;`)(
+    state, id => nodes.get(id), { createElement: () => node('') }, () => node(''), url => new URL(url).href,
+  );
+  let ready = false;
+  const options = {
+    imageId: 'image', statusId: 'status', linkId: 'link', alt: 'Payment 2 receipt',
+    loadingText: 'Loading', failureText: 'Image unavailable', loadToken: 1, expectedId: 'payment-2',
+    onLoading() { ready = false; }, onLoad() { ready = true; }, onError() { ready = false; },
+  };
+  return { nodes, state, load: getUrl => load(options, getUrl), ready: () => ready };
+}
+
+test('failed receipt images can retry with a fresh URL and unlock only after the new image loads', async () => {
+  const h = receiptRetryHarness();
+  let requests = 0;
+  await h.load(async () => `https://example.com/receipt?attempt=${++requests}`);
+  const oldImage = h.nodes.get('image');
+  oldImage.events.error();
+  assert.equal(h.ready(), false);
+  assert.equal(h.nodes.get('imageRetry').hidden, false);
+  await h.nodes.get('imageRetry').events.click();
+  assert.equal(requests, 2);
+  assert.equal(h.nodes.get('image').src, 'https://example.com/receipt?attempt=2');
+  assert.equal(h.ready(), false);
+  oldImage.events.load();
+  assert.equal(h.ready(), false, 'obsolete images cannot unlock approval');
+  h.nodes.get('image').events.load();
+  assert.equal(h.ready(), true);
+  assert.equal(h.nodes.get('imageRetry').hidden, true);
+});
+
+test('receipt URL failures are retryable and closed reviews ignore late responses', async () => {
+  const h = receiptRetryHarness();
+  let requests = 0;
+  await h.load(async () => {
+    if (++requests === 1) throw new Error('Network unavailable');
+    return 'https://example.com/receipt';
+  });
+  assert.equal(h.nodes.get('status').textContent, 'Network unavailable');
+  assert.equal(h.nodes.get('imageRetry').hidden, false);
+  await h.nodes.get('imageRetry').events.click();
+  assert.equal(requests, 2);
+  h.state.loadToken++;
+  h.nodes.get('image').events.load();
+  assert.equal(h.ready(), false);
+});
+
 function initialPaymentHarness(booking, role = 'owner') {
   const calls = [];
   const helpers = admin.slice(admin.indexOf('function canReviewHostInitialPayment('), admin.indexOf('function hostPaymentHistoryButton('));
@@ -248,7 +311,7 @@ test('loads the accepted deposit through its existing private receipt API', () =
   assert.match(hostBalanceAdmin, /if \(ref && !refs\.includes\(ref\)\) refs\.push\(ref\)/);
   assert.match(hostBalanceAdmin, /db\.getBookingByRef\(ref\)\.catch\(\(\) => null\)/);
   assert.match(hostBalanceAdmin, /global\.DB\.getReceiptSignedUrl\(booking\.ref\)/);
-  assert.match(hostBalanceAdmin, /depositProof\.show\(url\)/);
+  assert.match(hostBalanceAdmin, /loadReceiptImage\(depositOptions, async \(\) =>/);
   assert.doesNotMatch(hostBalanceAdmin, /depositProof\.show\(booking\.receiptImageUrl\)/);
   assert.match(hostBalanceAdmin, /function secureReceiptUrl\(value\)[\s\S]*?url\.protocol !== 'https:'/);
   assert.match(hostBalanceAdmin, /onLoad\(\) \{ state\.depositReceiptLoaded = true; \}/);

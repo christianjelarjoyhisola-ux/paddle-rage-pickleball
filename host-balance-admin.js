@@ -634,7 +634,7 @@
           ? state.receiptLoadState === 'loading'
             ? 'Loading the secure Payment 2 receipt. Approval unlocks after the image is visible.'
             : state.receiptLoadState === 'error'
-              ? 'The Payment 2 receipt could not be loaded. Close and reopen this review to retry.'
+              ? 'The Payment 2 receipt could not be loaded. Use Retry receipt to request a fresh secure image.'
               : 'This decision applies only to Payment 2 — the remaining balance.'
           : view.key === 'approved'
             ? 'Read-only history. Payment 2 was approved and the booking is fully paid.'
@@ -796,9 +796,10 @@
 
   function prepareReceiptImage({
     imageId, statusId, linkId, alt, loadingText, failureText,
-    loadToken, expectedId, onLoad, onError,
+    loadToken, expectedId, onLoad, onError, onLoading, onRetry,
   }) {
-    const current = () => loadToken === state.loadToken && expectedId === state.expectedPaymentId;
+    const current = () => loadToken === state.loadToken && expectedId === state.expectedPaymentId
+      && byId(imageId) === image;
     const oldImage = byId(imageId);
     const image = document.createElement('img');
     image.id = imageId;
@@ -807,6 +808,19 @@
     image.style.display = 'none';
     const status = byId(statusId);
     const link = byId(linkId);
+    byId(`${imageId}Retry`)?.remove();
+    const retry = make('button', 'btn btn-g btn-sm', 'Retry receipt');
+    retry.id = `${imageId}Retry`;
+    retry.type = 'button';
+    retry.hidden = true;
+    retry.setAttribute('aria-label', `Retry ${alt}`);
+    retry.addEventListener('click', () => {
+      if (!current() || retry.disabled) return;
+      retry.disabled = true;
+      return onRetry?.();
+    });
+    status?.after(retry);
+    onLoading?.();
     if (status) {
       status.style.display = '';
       status.textContent = loadingText;
@@ -818,6 +832,7 @@
     image.addEventListener('load', () => {
       if (!current()) return;
       image.style.display = 'block';
+      retry.hidden = true;
       if (status) status.style.display = 'none';
       if (link) link.style.display = 'inline-flex';
       onLoad?.();
@@ -826,6 +841,7 @@
       if (!current()) return;
       image.removeAttribute('src');
       image.style.display = 'none';
+      retry.hidden = !onRetry;
       if (link) {
         link.style.display = 'none';
         link.removeAttribute('href');
@@ -848,6 +864,7 @@
         if (!current()) return;
         image.removeAttribute('src');
         image.style.display = 'none';
+        retry.hidden = !onRetry;
         if (link) {
           link.style.display = 'none';
           link.removeAttribute('href');
@@ -859,6 +876,19 @@
         onError?.();
       },
     };
+  }
+
+  async function loadReceiptImage(options, getUrl) {
+    if (options.loadToken !== state.loadToken || options.expectedId !== state.expectedPaymentId) return;
+    const proof = prepareReceiptImage({
+      ...options,
+      onRetry: () => loadReceiptImage(options, getUrl),
+    });
+    try {
+      proof.show(await getUrl());
+    } catch (error) {
+      proof.fail(error);
+    }
   }
 
   async function openModal(payment, trigger) {
@@ -951,7 +981,7 @@
     if (reject) reject.textContent = 'Not Received';
     if (approve) approve.textContent = `Confirm ${money(balanceAmount || 0)} Received`;
 
-    const balanceProof = prepareReceiptImage({
+    const balanceOptions = {
       imageId: 'hostBalanceProofImage',
       statusId: 'hostBalanceProofStatus',
       linkId: 'hostBalanceProofLink',
@@ -962,6 +992,11 @@
         : 'Payment 2 receipt could not be loaded.',
       loadToken,
       expectedId,
+      onLoading() {
+        state.receiptLoaded = false;
+        state.receiptLoadState = 'loading';
+        syncActions();
+      },
       onLoad() {
         state.receiptLoaded = true;
         state.receiptLoadState = 'ready';
@@ -972,8 +1007,8 @@
         state.receiptLoadState = 'error';
         syncActions();
       },
-    });
-    const depositProof = prepareReceiptImage({
+    };
+    const depositOptions = {
       imageId: 'hostDepositProofImage',
       statusId: 'hostDepositProofStatus',
       linkId: 'hostDepositProofLink',
@@ -982,31 +1017,24 @@
       failureText: 'Deposit accepted, but its receipt image is unavailable.',
       loadToken,
       expectedId,
+      onLoading() { state.depositReceiptLoaded = false; },
       onLoad() { state.depositReceiptLoaded = true; },
       onError() { state.depositReceiptLoaded = false; },
-    });
+    };
     overlay.hidden = false;
     document.body.style.overflow = 'hidden';
     selectPaymentReceipt(view.hasBalanceReceipt ? 'balance' : 'deposit');
     syncActions();
     overlay.querySelector('.hba-close')?.focus();
 
-    const balanceRequest = (async () => {
-      if (!view.hasBalanceReceipt) {
-        balanceProof.fail('No separate online Payment 2 receipt was submitted.');
-        return;
-      }
-      try {
+    const balanceRequest = view.hasBalanceReceipt
+      ? loadReceiptImage(balanceOptions, async () => {
         const result = await apiCall('receipt_url', { paymentId: expectedId });
-        if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
-        balanceProof.show(result?.url || result?.data?.url);
-      } catch (error) {
-        if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
-        balanceProof.fail(error?.message || 'Payment 2 receipt is unavailable.');
-      }
-    })();
+        return result?.url || result?.data?.url;
+      })
+      : prepareReceiptImage(balanceOptions).fail('No separate online Payment 2 receipt was submitted.');
 
-    const depositRequest = (async () => {
+    const depositRequest = loadReceiptImage(depositOptions, async () => {
       let depositHistoryLoaded = false;
       try {
         const booking = await loadDepositBooking(payment);
@@ -1024,15 +1052,15 @@
         if (!global.DB?.getReceiptSignedUrl) throw new Error('Deposit receipt service is unavailable.');
         const url = await global.DB.getReceiptSignedUrl(booking.ref);
         if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
-        depositProof.show(url);
+        return url;
       } catch (error) {
         if (loadToken !== state.loadToken || expectedId !== state.expectedPaymentId) return;
         if (!depositHistoryLoaded) {
           byId('hostDepositTab').querySelector('.hba-tab-meta').textContent = 'Accepted · history unavailable';
         }
-        depositProof.fail(error?.message || 'Deposit receipt is unavailable.');
+        throw error;
       }
-    })();
+    });
 
     await Promise.allSettled([balanceRequest, depositRequest]);
   }
