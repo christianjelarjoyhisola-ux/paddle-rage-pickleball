@@ -2,7 +2,18 @@
   'use strict';
   let state, registration, subscription, device, loading = false, pushError = '';
   const $ = id => document.getElementById(id);
-  const supported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  // Test the registration's pushManager, not the optional global constructor.
+  const supported = () => 'serviceWorker' in navigator && 'Notification' in window;
+  const permission = () => window.Notification?.permission || 'unavailable';
+  function bounded(promise, message) {
+    let timer;
+    return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), 15000); })]).finally(() => clearTimeout(timer));
+  }
+  function phoneError(error) {
+    if (error?.name === 'NotAllowedError' || permission() === 'denied') return 'Notifications are blocked. On iPhone, open Settings → Notifications → Paddle Rage and turn on Allow Notifications. Return to this app and tap Refresh.';
+    if (error?.name === 'InvalidStateError') return 'This device has an older notification subscription. Turn notifications off in your device settings, turn them back on, then reopen Paddle Rage and retry.';
+    return error?.message || 'Unable to enable phone notifications. Refresh and try again.';
+  }
   const iosBrowser = () => (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !window.matchMedia('(display-mode: standalone)').matches && !navigator.standalone;
   async function api(action, body = {}) {
     return _invokeEdgeFunction('review-notifications', { action, ...body }, { preferDirect: true, retryDirect: false });
@@ -22,9 +33,10 @@
     pushError = '';
     if (supported() && !iosBrowser()) {
       try {
-      registration = await navigator.serviceWorker.register('/notifications-sw.js', { scope: '/', updateViaCache: 'none' });
-      await navigator.serviceWorker.ready;
-      subscription = await registration.pushManager.getSubscription();
+      await bounded(navigator.serviceWorker.register('/notifications-sw.js', { scope: '/', updateViaCache: 'none' }), 'Phone setup timed out. Tap Refresh to retry.');
+      registration = await bounded(navigator.serviceWorker.ready, 'Phone setup timed out. Tap Refresh to retry.');
+      if (!registration.pushManager?.subscribe) throw new Error('Push notifications are not available in this browser.');
+      subscription = await bounded(registration.pushManager.getSubscription(), 'Phone setup timed out. Tap Refresh to retry.');
       if (subscription) { const key = await endpointKey(subscription.endpoint); device = state.devices.find(d => d.target_key === key); }
       } catch (_) { registration = null; pushError = 'Unable to prepare phone notifications in this browser. Refresh to retry; email alerts remain available.'; }
     }
@@ -37,13 +49,14 @@
     $('notificationEmailTest').disabled = !email?.enabled || !state.emailReady;
     $('notificationEmailDelivery').textContent = state.emailReady ? lastDelivery(email) : 'Email delivery is not configured.';
     if (!email) $('notificationEmailDetails').open = true;
-    const enabled = !!device?.enabled && Notification.permission === 'granted';
-    $('notificationPhoneState').textContent = enabled ? 'On this device' : 'Off this device';
+    const enabled = !!device?.enabled && permission() === 'granted';
+    $('notificationPhoneState').textContent = enabled ? 'On this device' : permission() === 'denied' ? 'Blocked by device' : 'Off this device';
     $('notificationPhoneState').dataset.on = String(enabled);
     $('notificationPhoneToggle').textContent = enabled ? 'Turn off this device' : 'Enable notifications';
-    $('notificationPhoneToggle').disabled = !!pushError || !supported() || iosBrowser() || !state.pushReady || Notification.permission === 'denied';
+    // Keep setup help actionable instead of leaving an unexplained disabled button.
+    $('notificationPhoneToggle').disabled = false;
     $('notificationPhoneTest').disabled = !enabled;
-    $('notificationPhoneHelp').textContent = iosBrowser() ? 'On iPhone or iPad, add Paddle Rage to your Home Screen with Open as Web App enabled. Open that app, sign in, then enable notifications here (iOS 16.4 or later).' : !supported() ? 'This browser does not support push notifications. Use a current version of Chrome, Edge, Firefox or the installed iPhone web app.' : Notification.permission === 'denied' ? 'Notifications are blocked. Allow them in your browser or device settings, then refresh this page.' : !state.pushReady ? 'Phone notification delivery is not configured yet.' : 'Choose Enable notifications, then Allow when your device asks. This setting applies only to this browser or installed app.';
+    $('notificationPhoneHelp').textContent = iosBrowser() ? 'On iPhone or iPad, add Paddle Rage to your Home Screen with Open as Web App enabled. Open that app, sign in, then enable notifications here (iOS 16.4 or later).' : !supported() ? 'This browser does not support push notifications. Use a current version of Chrome, Edge, Firefox or the installed iPhone web app.' : permission() === 'denied' ? phoneError({name:'NotAllowedError'}) : !state.pushReady ? 'Phone notification delivery is not configured yet.' : 'Choose Enable notifications, then Allow when your device asks. This setting applies only to this browser or installed app.';
     $('notificationPhoneDelivery').textContent = lastDelivery(device);
     if (pushError) $('notificationPhoneHelp').textContent = pushError;
     $('notificationUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila' });
@@ -84,14 +97,23 @@
     $('notificationEmailTest').onclick = () => run(() => api('test', { id: state.email.id }), 'Test email accepted by the email provider. Check your inbox.');
     $('notificationPhoneTest').onclick = () => run(() => api('test', { id: device.id }), 'Test alert accepted by the push provider. Check this device.');
     $('notificationPhoneToggle').onclick = () => {
-      // Request permission directly during the click; Safari requires user activation.
-      const permission = device?.enabled ? Promise.resolve('granted') : Notification.requestPermission();
-      run(async () => {
-        if (device?.enabled) { await api('toggle', { id: device.id, enabled: false }); return; }
-        if (await permission !== 'granted') throw new Error('Notification permission was not allowed. You can enable it in device settings.');
-        subscription = await registration.pushManager.getSubscription() || await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(state.publicKey) });
-        await api('subscribe', { subscription: subscription.toJSON() });
-      }, 'Device notification preference saved.');
+      if (loading) return;
+      if (device?.enabled && permission() === 'granted') { run(() => api('toggle', { id: device.id, enabled: false }), 'Notifications turned off for this device.'); return; }
+      if (iosBrowser() || !supported() || permission() === 'denied' || !state?.pushReady || pushError || !registration?.pushManager) {
+        feedback($('notificationPhoneHelp').textContent, true);
+        $('notificationPhoneHelp').scrollIntoView({block:'center',behavior:'smooth'});
+        return;
+      }
+      // Safari requires subscribe() itself to run in the tap handler. Do not
+      // precede it with requestPermission(), getSubscription(), or an API await.
+      try {
+        const pending = subscription && permission() === 'granted' ? Promise.resolve(subscription) : registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(state.publicKey) });
+        run(async () => {
+          try { subscription = await pending; }
+          catch (e) { throw new Error(phoneError(e)); }
+          await api('subscribe', { subscription: subscription.toJSON() });
+        }, 'Notifications enabled on this device. Tap Test phone to check delivery.');
+      } catch (e) { feedback(phoneError(e), true); }
     };
   }
   window.PaddleNotifications = { async render() { mount(); try { await refresh(); } catch(e) { feedback(e.message || 'Unable to load notification settings.', true); } } };
