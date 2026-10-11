@@ -5,7 +5,7 @@ const vm=require('node:vm');
 function setup(windows=[]) {
  const listeners={},notifications=[],opened=[];
  const self={location:{origin:'https://paddleragecdo.ph'},addEventListener:(name,fn)=>listeners[name]=fn,registration:{showNotification:async(...args)=>notifications.push(args)},clients:{matchAll:async()=>windows,openWindow:async(url)=>opened.push(url)}};
- vm.runInNewContext(fs.readFileSync('notifications-sw.js','utf8'),{self,URL});return {listeners,notifications,opened};
+ vm.runInNewContext(fs.readFileSync('notifications-sw.js','utf8'),{self,URL,importScripts:()=>{self.PaymentReviewLink=require('./payment-review-link.js');}});return {listeners,notifications,opened};
 }
 test('push hides arbitrary payload details and uses a fixed review destination',async()=>{
  const s=setup();let task;
@@ -32,5 +32,19 @@ test('notification click brings the installed homepage into Payment Review',asyn
 test('a stale app window falls back to opening Payment Review',async()=>{
  const s=setup([{url:'https://paddleragecdo.ph/admin',navigate:async()=>{throw Error('Window closed');}}]);
  let task;s.listeners.notificationclick({notification:{close(){}},waitUntil:p=>task=p});await task;
+ assert.equal(s.opened[0],'https://paddleragecdo.ph/admin#payreview');
+});
+test('each payment notification retains its target through push and click',async()=>{
+ const s=setup();let task;
+ const review={kind:'booking',subject_id:'PB-GROUP-123'};
+ s.listeners.push({data:{json:()=>({review})},waitUntil:p=>task=p});await task;
+ const opts=s.notifications[0][1];
+ assert.equal(opts.tag,'paddle-rage-review:booking:PB-GROUP-123');
+ s.listeners.notificationclick({notification:{data:opts.data,close(){}},waitUntil:p=>task=p});await task;
+ assert.equal(s.opened[0],'https://paddleragecdo.ph/admin?review_kind=booking&review_id=PB-GROUP-123#payreview');
+});
+test('untrusted URLs and malformed review targets cannot redirect a notification',async()=>{
+ const s=setup();let task;
+ s.listeners.notificationclick({notification:{data:{url:'https://attacker.test',review:{kind:'booking',subject_id:'../../attacker'}},close(){}},waitUntil:p=>task=p});await task;
  assert.equal(s.opened[0],'https://paddleragecdo.ph/admin#payreview');
 });

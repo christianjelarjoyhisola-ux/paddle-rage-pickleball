@@ -10,7 +10,13 @@ export function validSubscription(value: any) {
   } catch { return null; }
 }
 export const escapeHtml = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
-export const pushPayload = (test = false) => ({ title: 'Paddle Rage', body: test ? 'Phone notifications are ready on this device.' : 'A payment needs review. Sign in to view the details.', tag: test ? 'paddle-rage-test' : 'paddle-rage-payment-review' });
+import { validReviewTarget } from '../_shared/payment-review-link.ts';
+export const pushPayload = (test = false, payment: unknown = null) => {
+  const review = test ? null : validReviewTarget(payment);
+  return { title: 'Paddle Rage', body: test ? 'Phone notifications are ready on this device.' : 'A payment needs review. Sign in to view the details.',
+    tag: test ? 'paddle-rage-test' : review ? `paddle-rage-review:${review.kind}:${review.subject_id}` : 'paddle-rage-payment-review',
+    ...(review ? { review } : {}) };
+};
 export async function digest(s: string) {
   return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))), b => b.toString(16).padStart(2,'0')).join('');
 }

@@ -2069,7 +2069,7 @@ test("admin refresh and browser history restore the current permitted section", 
   );
   assert.match(
     admin,
-    /const returnTo = `admin\.html\$\{requestedSection \? `#\$\{encodeURIComponent\(requestedSection\)\}` : ''\}`/i
+    /const returnTo = adminSignInReturnTo\(\)/i
   );
   assert.match(manager, /await window\.goto\("gamemgr"\)/i);
 });

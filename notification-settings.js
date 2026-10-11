@@ -15,6 +15,9 @@
     return error?.message || 'Unable to enable phone notifications. Refresh and try again.';
   }
   const iosBrowser = () => (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) && !window.matchMedia('(display-mode: standalone)').matches && !navigator.standalone;
+  // Check for click-routing updates whenever the admin app opens, even if the
+  // owner does not visit Notifications. This does not request permission.
+  if (supported() && !iosBrowser()) navigator.serviceWorker.register('/notifications-sw.js', {scope:'/',updateViaCache:'none'}).catch(() => {});
   async function api(action, body = {}) {
     return _invokeEdgeFunction('review-notifications', { action, ...body }, { preferDirect: true, retryDirect: false });
   }

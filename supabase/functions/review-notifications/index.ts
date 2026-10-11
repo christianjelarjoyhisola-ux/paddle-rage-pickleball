@@ -2,23 +2,24 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
 import { sendMailerooEmail, isEmailAddress } from '../_shared/maileroo.ts';
 import { validSubscription, escapeHtml, pushPayload, digest } from './core.ts';
+import { paymentReviewUrl, validReviewTarget } from '../_shared/payment-review-link.ts';
 
 const roles = new Set(['owner','court_owner','staff']);
 const origins = new Set(['https://paddleragecdo.ph','https://www.paddleragecdo.ph','http://localhost:3000']);
-const reviewUrl = 'https://paddleragecdo.ph/admin#payreview';
 const env = (key: string) => Deno.env.get(key)?.trim() || '';
 function checked(result: any) { if (result.error) throw new Error('Database operation failed'); return result.data; }
 async function deliver(db: any, target: any, payment: any = null) {
   try {
+    const reviewUrl = paymentReviewUrl(payment);
     if (target.channel === 'email') {
       const detail = payment ? `Booker: ${payment.booker_name || 'Name unavailable'}\nReference: ${payment.reference}\nAmount: PHP ${Number(payment.amount).toFixed(2)}` : 'Your payment-review email alerts are ready.';
       const plain = `${payment ? 'Payment review needed' : 'Paddle Rage test notification'}\n\n${detail}\n\n${reviewUrl}\nReminders repeat hourly while a payment awaits review. Manage alerts in Admin > Notifications.`;
       await sendMailerooEmail({to:target.destination.email,subject:payment ? 'Paddle Rage — payment review needed' : 'Paddle Rage — test notification',plain,
-        html:`<h2>Paddle Rage</h2><p>${escapeHtml(plain).replace(/\n/g,'<br>')}</p><p><a href="${reviewUrl}">Review payments</a></p>`});
+        html:`<h2>Paddle Rage</h2><p>${escapeHtml(plain).replace(/\n/g,'<br>')}</p><p><a href="${escapeHtml(reviewUrl)}">Review payment</a></p>`});
     } else {
       const sub = validSubscription(target.destination);
       if (!sub) throw new Error('Invalid subscription');
-      const request = webpush.generateRequestDetails(sub, JSON.stringify(pushPayload(!payment)), {
+      const request = webpush.generateRequestDetails(sub, JSON.stringify(pushPayload(!payment, payment)), {
         TTL:60, urgency:'normal', vapidDetails:{subject:'https://paddleragecdo.ph',publicKey:env('WEB_PUSH_PUBLIC_KEY'),privateKey:env('WEB_PUSH_PRIVATE_KEY')},
       });
       const r = await fetch(request.endpoint,{method:'POST',headers:request.headers,body:request.body,redirect:'error',signal:AbortSignal.timeout(12000)});
@@ -73,6 +74,23 @@ export async function handle(req: Request) {
     const raw=await req.text();if(raw.length>10000)return json({error:'Request too large'},413);
     let body;try{body=JSON.parse(raw);}catch{return json({error:'Invalid request'},400);}
     if(!body || typeof body!=='object')return json({error:'Invalid request'},400);
+    if(body.action==='resolve_review'){
+      const target=validReviewTarget(body.review);
+      if(!target)return json({error:'Invalid payment link.'},400);
+      // A notification is a navigation hint, never authority to approve a payment.
+      const pending=checked(await db.from('payment_review_reminder_candidates').select('kind,subject_id')
+        .eq('kind',target.kind).eq('subject_id',target.subject_id).maybeSingle());
+      if(!pending)return json({ok:true,pending:false});
+      if(target.kind==='host_balance' && account.role==='staff')return json({error:'Only an owner can review host balance payments.'},403);
+      let id=target.subject_id;
+      if(target.kind==='booking'){
+        let rows=checked(await db.from('bookings').select('ref').eq('booking_group_ref',id).order('created_at').limit(1));
+        if(!rows.length)rows=checked(await db.from('bookings').select('ref').eq('ref',id).limit(1));
+        if(!rows.length)return json({ok:true,pending:false});
+        id=rows[0].ref;
+      }
+      return json({ok:true,pending:true,kind:target.kind,id});
+    }
     if(body.action==='status'){
       const rows=checked(await db.from('review_notification_targets').select('id,channel,target_key,destination,enabled,last_sent_at,last_error').eq('user_id',user.id));
       return json({ok:true,email:rows.find((r:any)=>r.channel==='email') || null,devices:rows.filter((r:any)=>r.channel==='push').map((r:any)=>({id:r.id,target_key:r.target_key,enabled:r.enabled,last_sent_at:r.last_sent_at,last_error:r.last_error})),publicKey:env('WEB_PUSH_PUBLIC_KEY'),emailReady:!!env('MAILEROO_API_KEY'),pushReady:!!env('WEB_PUSH_PUBLIC_KEY')&&!!env('WEB_PUSH_PRIVATE_KEY')});

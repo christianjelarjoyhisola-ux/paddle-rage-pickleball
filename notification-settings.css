@@ -14,6 +14,7 @@
 .notification-card summary { cursor:pointer;color:var(--green);padding:8px 0 }
 .notification-card form { display:grid;gap:10px;margin-top:12px }
 .notification-card [hidden] { display:none!important }
+#prNotificationStatus[hidden], #prNotificationRetry[hidden] { display:none!important }
 .notification-card label { font-size:13px;color:var(--text2) }
 .notification-card input { width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font:inherit }
 .notification-card button { min-height:44px }

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { paymentReviewUrl } from '../_shared/payment-review-link.ts';
 
 const labels: Record<string, string> = {
   booking: "Court booking / host deposit", host_balance: "Host balance payment",
@@ -7,7 +8,7 @@ const labels: Record<string, string> = {
 const escape = (value: unknown) => String(value ?? "").replace(/&/g, "&amp;")
   .replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-export function reminderMessage(payment: { kind: string; reference: string; amount: number; pending_since: string; booker_name?: string | null }, now = Date.now()) {
+export function reminderMessage(payment: { kind: string; subject_id?: string; reference: string; amount: number; pending_since: string; booker_name?: string | null }, now = Date.now()) {
   const minutes = Math.max(60, Math.floor((now - Date.parse(payment.pending_since)) / 60000));
   return `⏰ <b>Payment still awaiting review</b>\n\n` +
     `${escape(labels[payment.kind] || payment.kind)}\n` +
@@ -15,7 +16,7 @@ export function reminderMessage(payment: { kind: string; reference: string; amou
     `Booking: <code>${escape(payment.reference)}</code>\n` +
     `Amount: <b>₱${Number(payment.amount).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>\n` +
     `Waiting: ${Math.floor(minutes / 60)}h ${minutes % 60}m\n\n` +
-    `<a href="https://paddleragecdo.ph/admin#payreview">Review payment</a>\n` +
+    `<a href="${escape(paymentReviewUrl(payment))}">Review payment</a>\n` +
     `Reminders repeat hourly until this payment is reviewed.`;
 }
 

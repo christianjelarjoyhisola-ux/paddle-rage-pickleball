@@ -39,6 +39,7 @@ $branchName = if ($envMap["CLOUDFLARE_PAGES_BRANCH"]) { $envMap["CLOUDFLARE_PAGE
 
 $publicFiles = @(
   "_headers",
+  "payment-review-link.js",
   "notification-settings.js",
   "notification-settings.css",
   "notifications-sw.js",

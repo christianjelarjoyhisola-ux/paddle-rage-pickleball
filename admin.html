@@ -4960,6 +4960,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
 }
 </style>
 <link rel="stylesheet" href="notification-settings.css?v=20261011">
+<script defer src="payment-review-link.js?v=20261011"></script>
 <script defer src="notification-settings.js?v=20261011-iphone-fix"></script>
 </head>
 <body class="admin-booting" data-theme="dark">
@@ -5420,6 +5421,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
     <!-- PAYMENT REVIEW -->
     <div id="sec-notifications" class="adm-sec"></div>
     <div id="sec-payreview" class="adm-sec">
+      <div id="prNotificationStatus" role="status" hidden style="padding:16px;margin-bottom:16px;border:1px solid var(--border);border-radius:12px;background:var(--surface)"><span id="prNotificationMessage"></span> <button type="button" id="prNotificationRetry" class="btn btn-g btn-sm" hidden onclick="openLinkedPaymentReview()">Retry opening payment</button></div>
       <div class="toolbar pr-toolbar">
         <div class="pr-title">
           <h2>Review Queue</h2>
@@ -8652,6 +8654,10 @@ function sectionFromLocation(){
   }
 }
 function updateSectionRoute(s,mode='push'){
+  if(s!=='payreview' && new URLSearchParams(location.search).has('review_id')) {
+    const url=new URL(location.href); url.searchParams.delete('review_kind'); url.searchParams.delete('review_id');
+    history.replaceState(history.state,'',url.pathname+url.search+url.hash);
+  }
   const nextHash='#'+encodeURIComponent(s);
   const nextState={...(history.state&&typeof history.state==='object'?history.state:{}),adminSection:s};
   if(location.hash===nextHash){
@@ -8678,6 +8684,7 @@ async function goto(s,{historyMode='push',announceDenied=true}={}){
   if(historyMode!=='none') updateSectionRoute(s,historyMode);
   if (s === 'bookings') resetBookingFilters({ render: false });
   if(SECTION_LOADERS[s]) await SECTION_LOADERS[s]();
+  if(s==='payreview') await openLinkedPaymentReview();
   return true;
 }
 async function restoreSectionFromLocation({replaceInvalid=false}={}){
@@ -8703,13 +8710,53 @@ function handleAdminRouteChange(){
 window.addEventListener('popstate',handleAdminRouteChange);
 window.addEventListener('hashchange',handleAdminRouteChange);
 
+function adminSignInReturnTo() {
+  const review=window.PaymentReviewLink?.fromSearch(location.search);
+  if(review) return window.PaymentReviewLink.path(review).replace('/admin','admin.html');
+  const section=sectionFromLocation();
+  return 'admin.html'+(section ? '#'+encodeURIComponent(section) : '');
+}
+let _linkedPaymentReviewKey='', _linkedPaymentReviewBusy=false;
+async function openLinkedPaymentReview() {
+  const target=window.PaymentReviewLink?.fromSearch(location.search);
+  if(!target || _curSection!=='payreview' || !sess || !canAccessSection('payreview') || _linkedPaymentReviewBusy) return;
+  const key=target.kind+':'+target.subject_id;
+  if(_linkedPaymentReviewKey===key) return;
+  const stillCurrent=()=>_curSection==='payreview' && JSON.stringify(window.PaymentReviewLink.fromSearch(location.search))===JSON.stringify(target);
+  const notice=(message,retry=false)=>{ $('prNotificationStatus').hidden=false; $('prNotificationMessage').textContent=message; $('prNotificationRetry').hidden=!retry; };
+  _linkedPaymentReviewBusy=true;
+  notice('Opening the payment from your notification…');
+  try {
+    await window.PaymentReviewLink.open(target,{
+      resolve:review=>_invokeEdgeFunction('review-notifications',{action:'resolve_review',review},{preferDirect:true,retryDirect:false}),
+      notify:message=>{if(stillCurrent())notice(message);},
+      openers:{
+        booking:async id=>{if(stillCurrent()){await openVerifyModal(id);notice('Payment opened. Review the receipt before choosing Confirm Payment or Payment Not Received.');}},
+        open_play:async id=>{if(stillCurrent()){await openOpVerifyModal(id);notice('Payment opened for review.');}},
+        host_session:async id=>{if(stillCurrent()){await openHostSessionVerifyModal(id);notice('Payment opened for review.');}},
+        host_balance:async id=>{
+          if(!stillCurrent())return;
+          if(!window.HostBalanceAdmin)throw new Error('Balance payment review is unavailable. Refresh and try again.');
+          await window.HostBalanceAdmin.load(true);
+          if(stillCurrent()){
+            if(!await window.HostBalanceAdmin.reviewPending(id))throw new Error('This balance payment could not be opened. Refresh to check its latest status.');
+            notice('Balance payment opened for review.');
+          }
+        }
+      }
+    });
+    if(stillCurrent())_linkedPaymentReviewKey=key;
+  } catch(error) { if(stillCurrent())notice(error.message||'The payment could not be opened. Please retry.',true); }
+  finally { _linkedPaymentReviewBusy=false; }
+}
+
 let _adminSessionInvalidated=false;
 function invalidateStaleAdminSession(){
   if(_adminSessionInvalidated) return;
   _adminSessionInvalidated=true;
   showAdminBoot('Another Paddle Rage account was signed in. Returning to secure sign in…');
   document.documentElement.style.pointerEvents='none';
-  const returnTo=`admin.html${location.hash||''}`;
+  const returnTo=adminSignInReturnTo();
   setTimeout(()=>location.replace(`login.html?next=${encodeURIComponent(returnTo)}&reason=account_changed`),0);
 }
 function startAdminSessionGuard(){
@@ -18409,7 +18456,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       localStorage.removeItem('pb_session');
       sessionStorage.removeItem('pb_session');
       const requestedSection = sectionFromLocation();
-      const returnTo = `admin.html${requestedSection ? `#${encodeURIComponent(requestedSection)}` : ''}`;
+      const returnTo = adminSignInReturnTo();
       showAdminBoot('Redirecting to sign in…');
       window.location.href = `login.html?next=${encodeURIComponent(returnTo)}`;
       return;
