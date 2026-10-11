@@ -8,6 +8,7 @@ import {
 import { isEmailAddress, sendMailerooEmail } from "../_shared/maileroo.ts";
 import {
   renderGroupedRescheduleEmail,
+  renderPaidScheduleMoveEmail,
   renderRescheduleEmail,
   type GroupedReschedulePayload,
   type ReschedulePayload,
@@ -189,6 +190,35 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => null) as
       | (Partial<ReschedulePayload> & Record<string, unknown>)
       | null;
+    if (body?.moveId) {
+      if (!/^[0-9a-f-]{36}$/i.test(String(body.moveId))) throw new Error('Invalid schedule move.');
+      const {data:move,error:moveError}=await db.from('booking_schedule_moves').select('*').eq('id',body.moveId).eq('writing',false).maybeSingle();
+      if(moveError) throw moveError;
+      if(!move) return jsonResponse(req,{ok:false,error:'Schedule move not found.'},404);
+      if(move.email_sent_at) return jsonResponse(req,{ok:true,skipped:true,reason:'Already sent'});
+      const {data:rows,error:rowsError}=await db.from('bookings').select(BOOKING_COLUMNS).in('ref',move.write_refs);
+      if(rowsError)throw rowsError;
+      const anchor=rows?.find((r:BookingRow)=>r.ref===move.anchor_ref);
+      if(!anchor||!isEmailAddress(anchor.email)||rows?.length!==move.write_refs.length) return jsonResponse(req,{ok:false,error:'The saved booking recipient could not be verified.'},409);
+      for(const saved of move.after_schedule){
+        const row=rows.find((r:BookingRow)=>r.ref===saved.bookingRef);
+        if(!row||row.email!==anchor.email||row.status!=='confirmed'||row.date!==saved.date||row.court_name!==saved.courtName||normalizeTime(row.start_time)!==normalizeTime(saved.startTime)||normalizeTime(row.end_time)!==normalizeTime(saved.endTime)||Number(row.duration)!==Number(saved.duration))
+          return jsonResponse(req,{ok:false,error:'The schedule has changed again. Send the latest confirmation instead.'},409);
+      }
+      const now=new Date().toISOString(), cutoff=new Date(Date.now()-300000).toISOString();
+      const {data:lease,error:leaseError}=await db.from('booking_schedule_moves').update({email_claimed_at:now}).eq('id',move.id).is('email_sent_at',null).or(`email_claimed_at.is.null,email_claimed_at.lt.${cutoff}`).select('id');
+      if(leaseError)throw leaseError;
+      if(!lease?.length)return jsonResponse(req,{ok:true,skipped:true,reason:'Email delivery is in progress'});
+      try {
+        const content=renderPaidScheduleMoveEmail({bookingRef:anchor.booking_group_ref||anchor.ref,fullName:anchor.full_name,note:move.note||'',before:move.before_schedule,after:move.after_schedule});
+        const sent=await sendMailerooEmail({to:anchor.email,toName:anchor.full_name,subject:`Schedule updated: ${anchor.booking_group_ref||anchor.ref} | Paddle Rage Pickleball`,html:content.html,plain:content.plain,tags:{message_type:'booking-reschedule',booking_reference:anchor.ref}});
+        await db.from('booking_schedule_moves').update({email_sent_at:new Date().toISOString()}).eq('id',move.id).eq('email_claimed_at',now);
+        return jsonResponse(req,{ok:true,id:sent.id});
+      } catch(error){
+        await db.from('booking_schedule_moves').update({email_claimed_at:null}).eq('id',move.id).eq('email_claimed_at',now);
+        throw error;
+      }
+    }
     if (body && Object.prototype.hasOwnProperty.call(body, "items")) {
       const payload = await verifiedGroupedPayload(db, body);
       const content = renderGroupedRescheduleEmail(payload);

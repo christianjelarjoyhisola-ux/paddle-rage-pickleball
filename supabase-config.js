@@ -1529,6 +1529,19 @@ window.DB = {
     return data || { ok: true, request: null };
   },
 
+  async getPaidScheduleOptions(ref, date) {
+    const { data, error } = await _sb.rpc('get_paid_schedule_options', { p_ref:ref, p_date:date });
+    if (error) throw new Error(_extractFnError(error, 'Could not load court/time slots.'));
+    return data;
+  },
+
+  async movePaidBookingSlots(ref, changes, note) {
+    const { data, error } = await _sb.rpc('move_paid_booking_slots', { p_ref:ref, p_changes:changes, p_note:note });
+    if (error) throw new Error(_extractFnError(error, 'Nothing was changed. Please retry.'));
+    _pbClearFastCache(['bookings']);
+    return data;
+  },
+
   async getAdminRescheduleOptions(ref, date) {
     _pbAssertPublicBookingDate(date);
     const { data, error } = await _sb.rpc('get_admin_reschedule_options', {

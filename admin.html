@@ -4960,6 +4960,8 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
 }
 </style>
 <link rel="stylesheet" href="notification-settings.css?v=20261011">
+<link rel="stylesheet" href="paid-schedule-editor.css?v=20261012">
+<script defer src="paid-schedule-editor.js?v=20261012"></script>
 <script defer src="payment-review-link.js?v=20261011"></script>
 <script defer src="notification-settings.js?v=20261011-iphone-fix"></script>
 </head>
@@ -13473,6 +13475,25 @@ async function openRescheduleModal(ref) {
   try {
     const group = await getBookingGroupByRef(ref);
     if (sequence !== _rsOpenSequence) return;
+    const paidRows = group?.allItems || group?.items || [];
+    if (paidRows.length && paidRows.every(item => item.paymentStatus === 'paid' && item.status === 'confirmed')) {
+      await PaidScheduleEditor.open(ref, {
+        load: (bookingRef,date) => DB.getPaidScheduleOptions(bookingRef,date),
+        save: (bookingRef,changes,note) => DB.movePaidBookingSlots(bookingRef,changes,note),
+        saved: async result => {
+          if ($('bookingDetailsModal')?.classList.contains('show')) closeBookingDetails();
+          toast('Court and time slots updated. Paid hours and payment preserved.');
+          const outcomes = await Promise.allSettled([
+            DB.sendGroupedRescheduleEmail({ moveId:result.moveId }),
+            renderBookings(),
+          ]);
+          if (outcomes[0].status === 'rejected' || outcomes[0].value?.ok === false) toast('Schedule saved, but the customer email could not be sent.','err');
+          if (outcomes[1].status === 'rejected') toast('Schedule saved. Refresh bookings to see the changes.','inf');
+          void renderDash();
+        },
+      });
+      return;
+    }
     if (group?.isGroup || (group?.allItems || group?.items || []).length > 1) { await openGroupRescheduleModal(ref, group, trigger); return; }
     const b = await DB.getBookingByRef(ref);
     if (sequence !== _rsOpenSequence) return;
@@ -13604,7 +13625,7 @@ function bookingRescheduleActionButton(booking) {
   if (!rows.some(item => grsItemEligibility(item).eligible)) return '';
   const ref = booking.primaryRef || booking.ref;
   if (!ref) return '';
-  return `<button class="btn btn-sm booking-reschedule-action" type="button" onclick="openRescheduleModal('${jsArg(ref)}')">Reschedule${rows.length > 1 ? ' bookings' : ''}</button>`;
+  return `<button class="btn btn-sm booking-reschedule-action" type="button" onclick="openRescheduleModal('${jsArg(ref)}')">Change court / Reschedule${rows.length > 1 ? ' bookings' : ''}</button>`;
 }
 
 function grsValidDate(date, min, max) {

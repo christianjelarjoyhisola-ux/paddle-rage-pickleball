@@ -667,6 +667,26 @@ export function renderGroupedRescheduleEmail(
   };
 }
 
+export function renderPaidScheduleMoveEmail(payload: {
+  bookingRef:string; fullName:string; note:string;
+  before:Array<{courtName:string;date:string;startTime:string;endTime:string;duration:number;total:number}>;
+  after:Array<{courtName:string;date:string;startTime:string;endTime:string;duration:number;total:number}>;
+}): {html:string;plain:string} {
+  const list=(items:typeof payload.before)=>items.map(i=>`${i.courtName} · ${formatDate(i.date)} · ${i.startTime}–${i.endTime}`).join("\n");
+  const hours=payload.before.reduce((n,i)=>n+Number(i.duration),0);
+  const total=payload.before.reduce((n,i)=>n+Number(i.total),0);
+  const summary=`${hours} paid court-hours preserved. Total payment unchanged: ${formatPhp(total)}.`;
+  const card=(title:string,items:typeof payload.before)=>`<h3>${escapeHtml(title)}</h3><div style="white-space:pre-line;line-height:1.8;padding:16px;border:1px solid ${BRAND.border};border-radius:10px;">${escapeHtml(list(items))}</div>`;
+  return {
+    html:layout({preheader:summary,status:'SCHEDULE UPDATED',statusBackground:BRAND.neon,statusColor:BRAND.black,
+      title:'Your court and time slots have been updated.',
+      introHtml:`<p>Hi ${escapeHtml(payload.fullName)},</p><p>Booking: <strong>${escapeHtml(payload.bookingRef)}</strong></p>`,
+      bodyHtml:`${card('Previous schedule',payload.before)}${card('New schedule',payload.after)}<p>${escapeHtml(summary)}</p>${payload.note?`<p>Message from our team: ${escapeHtml(payload.note)}</p>`:''}`,
+      footerText:'Contact the Paddle Rage team if you need help with your updated schedule.'}),
+    plain:`PADDLE RAGE PICKLEBALL\nSCHEDULE UPDATED\n${payload.bookingRef}\n\nPREVIOUS SCHEDULE\n${list(payload.before)}\n\nNEW SCHEDULE\n${list(payload.after)}\n\n${summary}\n${payload.note}`,
+  };
+}
+
 export function renderBookingCancellationEmail(
   payload: BookingCancellationPayload,
 ): { html: string; plain: string } {

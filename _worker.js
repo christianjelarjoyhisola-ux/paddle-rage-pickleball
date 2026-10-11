@@ -15,6 +15,8 @@ export default {
     const releaseCoupledRuntime = new Set([
       '/payment-review-link.js',
       '/notification-settings.js',
+      '/paid-schedule-editor.js',
+      '/paid-schedule-editor.css',
       '/notification-settings.css',
       '/notifications-sw.js',
       '/voucher-checkout.js',
