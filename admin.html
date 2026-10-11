@@ -4959,6 +4959,8 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
   #rescheduleModal .m-foot .btn { flex:1; width:auto; }
 }
 </style>
+<link rel="stylesheet" href="notification-settings.css?v=20261011">
+<script defer src="notification-settings.js?v=20261011"></script>
 </head>
 <body class="admin-booting" data-theme="dark">
 <div class="admin-boot-splash" id="adminBootSplash" role="status" aria-live="polite" aria-atomic="true">
@@ -5023,6 +5025,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
       <div class="nav-grp">System Owner</div>
       <div class="nav-item" data-s="deleted" data-perm="owner_only" onclick="goto('deleted')"><span>&#128465;</span> Deleted Bookings</div>
     </div>
+    <div class="sb-section" data-perm="payment_review"><div class="nav-grp">Settings</div><div class="nav-item" data-s="notifications" data-perm="payment_review" onclick="goto('notifications')"><span>&#128276;</span> Notifications</div></div>
     <div class="sb-foot">
       <a href="index.html" class="btn btn-g btn-sm" style="flex:1">&#127968; Public Site</a>
     </div>
@@ -5415,6 +5418,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
     </div>
 
     <!-- PAYMENT REVIEW -->
+    <div id="sec-notifications" class="adm-sec"></div>
     <div id="sec-payreview" class="adm-sec">
       <div class="toolbar pr-toolbar">
         <div class="pr-title">
@@ -8625,9 +8629,9 @@ let sess;
 /* ==============================================
    NAVIGATION
    ============================================== */
-const titles={dash:'Dashboard',insights:'Insights',bookings:'Bookings',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',gamemgr:'Play Manager',accounts:'Host Accounts',remittances:'Remittances',hosts:'Host Center',maintenance:'Maintenance',payments:'Payments'};
-const SECTION_PERM={dash:'dashboard',insights:'insights',bookings:'bookings',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',gamemgr:'open_play',accounts:'host_accounts_view',remittances:'remittances',hosts:'host_open_play',maintenance:'maintenance',payments:'payments'};
-const SECTION_LOADERS={dash:renderDash,insights:()=>renderPaddleInsights({force:true}),bookings:renderBookings,deleted:renderDeletedBookings,payreview:()=>renderPaymentReview(),reports:renderReport,courts:renderCourts,gamemgr:()=>window.PlayManager?.render(),accounts:renderAccounts,remittances:renderRemittances,hosts:renderHostCenter,maintenance:renderMaintenance,payments:renderPaymentSettings};
+const titles={notifications:'Notifications',dash:'Dashboard',insights:'Insights',bookings:'Bookings',deleted:'Deleted Bookings',payreview:'Payment Review',reports:'Reports',courts:'Courts',gamemgr:'Play Manager',accounts:'Host Accounts',remittances:'Remittances',hosts:'Host Center',maintenance:'Maintenance',payments:'Payments'};
+const SECTION_PERM={notifications:'payment_review',dash:'dashboard',insights:'insights',bookings:'bookings',deleted:'owner_only',payreview:'payment_review',reports:'reports',courts:'courts',gamemgr:'open_play',accounts:'host_accounts_view',remittances:'remittances',hosts:'host_open_play',maintenance:'maintenance',payments:'payments'};
+const SECTION_LOADERS={dash:renderDash,insights:()=>renderPaddleInsights({force:true}),bookings:renderBookings,deleted:renderDeletedBookings,payreview:()=>renderPaymentReview(),reports:renderReport,courts:renderCourts,gamemgr:()=>window.PlayManager?.render(),accounts:renderAccounts,remittances:renderRemittances,hosts:renderHostCenter,maintenance:renderMaintenance,payments:renderPaymentSettings,notifications:()=>window.PaddleNotifications.render()};
 let _curSection=null;
 function canAccessSection(s,role=sess?.role){
   if(!SECTION_LOADERS[s] || !$('sec-'+s)) return false;

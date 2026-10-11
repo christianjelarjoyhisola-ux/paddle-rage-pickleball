@@ -13,6 +13,9 @@ export default {
     // canonical /host.html -> /host redirect and creates a redirect loop.
     const response = await env.ASSETS.fetch(request);
     const releaseCoupledRuntime = new Set([
+      '/notification-settings.js',
+      '/notification-settings.css',
+      '/notifications-sw.js',
       '/voucher-checkout.js',
       '/vouchers.js',
       '/finance-core.js',
