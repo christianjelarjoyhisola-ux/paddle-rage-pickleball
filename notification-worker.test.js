@@ -15,11 +15,22 @@ test('push hides arbitrary payload details and uses a fixed review destination',
 });
 test('notification click reuses an admin window and ignores foreign windows',async()=>{
  let navigated,focused=false,task;
- const s=setup([{url:'https://attacker.test/admin',navigate:()=>assert.fail('foreign client')},{url:'https://paddleragecdo.ph/admin.html',navigate:async u=>navigated=u,focus:async()=>focused=true}]);
+ const s=setup([{url:'https://attacker.test/admin',navigate:()=>assert.fail('foreign client')},{url:'https://paddleragecdo.ph/admin.html',navigate:async u=>{navigated=u;},focus:async()=>focused=true}]);
  s.listeners.notificationclick({notification:{close(){}},waitUntil:p=>task=p});await task;
  assert.equal(navigated,'https://paddleragecdo.ph/admin#payreview');assert.ok(focused);assert.equal(s.opened.length,0);
 });
 test('notification click opens the secure admin route when no window is open',async()=>{
  const s=setup();let task;s.listeners.notificationclick({notification:{close(){}},waitUntil:p=>task=p});await task;
+ assert.equal(s.opened[0],'https://paddleragecdo.ph/admin#payreview');
+});
+test('notification click brings the installed homepage into Payment Review',async()=>{
+ let navigated,focused=false,task;
+ const s=setup([{url:'https://paddleragecdo.ph/',navigate:async u=>{navigated=u;},focus:async()=>focused=true}]);
+ s.listeners.notificationclick({notification:{close(){}},waitUntil:p=>task=p});await task;
+ assert.equal(navigated,'https://paddleragecdo.ph/admin#payreview');assert.ok(focused);assert.equal(s.opened.length,0);
+});
+test('a stale app window falls back to opening Payment Review',async()=>{
+ const s=setup([{url:'https://paddleragecdo.ph/admin',navigate:async()=>{throw Error('Window closed');}}]);
+ let task;s.listeners.notificationclick({notification:{close(){}},waitUntil:p=>task=p});await task;
  assert.equal(s.opened[0],'https://paddleragecdo.ph/admin#payreview');
 });

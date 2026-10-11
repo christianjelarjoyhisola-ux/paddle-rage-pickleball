@@ -9,7 +9,7 @@ url.password = process.env.SUPABASE_DB_PASSWORD;
 const db = new Client({ connectionString: url.href, ssl: { rejectUnauthorized: false } });
 const migration = fs.readFileSync('supabase/migrations/20261009160000_payment_review_reminders.sql', 'utf8')
   .replace(/public\.(payment_review_reminder\w*|due_payment_review_reminders|claim_payment_review_reminder|finish_payment_review_reminder)/g, 'review_reminder_test.$1');
-const nameMigration = fs.readFileSync('supabase/migrations/20261009163000_payment_reminder_booker_name.sql', 'utf8')
+const nameMigration = fs.readFileSync('supabase/migrations/20261011103000_manual_review_alerts_only.sql', 'utf8')
   .replaceAll('public.payment_review_reminder_candidates', 'review_reminder_test.payment_review_reminder_candidates');
 (async () => {
   await db.connect();
@@ -39,6 +39,7 @@ const nameMigration = fs.readFileSync('supabase/migrations/20261009163000_paymen
       await db.query(`insert into review_reminder_test.${table} (id,payment_method,payment_status,gcash_ref,amount,created_at)
         values (${id},'gcash','pending','test-reference',100,now()-interval '2 hours')`);
     }
+    await db.query("insert into review_reminder_test.bookings(ref,payment_method,payment_status,status,receipt_image_url,receipt_status,created_at,total) values ('test-auto','gcash','for_verification','pending','receipt','auto_approved',now()-interval '2 hours',400)");
     const recipient = 'a'.repeat(64);
     await db.query("update review_reminder_test.bookings set full_name='Court Booker'");
     await db.query("update review_reminder_test.host_booking_balance_payments set customer_name='Host Booker'");
@@ -66,6 +67,14 @@ const nameMigration = fs.readFileSync('supabase/migrations/20261009163000_paymen
     assert.equal((await claim()).rows[0].token, null, 'approval stops reminders');
     await db.query("update review_reminder_test.host_booking_balance_payments set status='rejected'");
     assert.equal((await due()).rows.length, 2, 'rejection stops balance reminders');
+    // All channels read this same candidate view. An automatic approval must
+    // disappear just like a manual approval, including accepted host deposits.
+    await db.query("update review_reminder_test.open_play_registrations set payment_status='paid'");
+    await db.query("update review_reminder_test.open_play_host_session_registrations set payment_status='downpayment_paid'");
+    await db.query("update review_reminder_test.host_booking_balance_payments set status='approved'");
+    assert.equal((await due()).rows.length, 0, 'automatically approved payments produce no review reminders');
+    const remaining = (await db.query('select kind,subject_id from review_reminder_test.payment_review_reminder_candidates')).rows;
+    assert.deepEqual(remaining, [{kind:'booking',subject_id:'test-new'}], 'only the fresh payment still awaiting manual review remains for email and push');
     const permissions = await db.query(`select
       has_function_privilege('anon','review_reminder_test.claim_payment_review_reminder(text,text,text)','execute') as anon,
       has_function_privilege('authenticated','review_reminder_test.claim_payment_review_reminder(text,text,text)','execute') as authenticated`);
@@ -73,5 +82,3 @@ const nameMigration = fs.readFileSync('supabase/migrations/20261009163000_paymen
     console.log('Passed: four payment types, grouping, one-hour threshold, duplicate claims, hourly repeats, approval/rejection stop, restricted access.');
   } finally { await db.query('rollback'); await db.end(); }
 })().catch(error => { console.error(error.message); process.exitCode = 1; });
-
-

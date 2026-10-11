@@ -81,7 +81,7 @@
     root.dataset.mounted = 'true';
     root.innerHTML = `<div class="toolbar"><div><h2>Notifications</h2><p class="notification-intro">Stay informed, on your terms.</p></div><button class="btn btn-g" id="notificationRefresh">Refresh</button></div>
       <p id="notificationUpdated" class="notification-footnote"></p>
-      <h3>Payment review needed</h3><p class="notification-intro">Get an alert when a payment awaits review. New alerts are checked every minute; reminders repeat hourly until reviewed. Covers court bookings, host balances and Open Play payments.</p>
+      <h3>Payment review needed</h3><p class="notification-intro">Get an alert only when a payment needs manual verification. Automatically approved payments do not send review alerts. New alerts are checked every minute; reminders repeat hourly until reviewed. Covers court bookings, host balances and Open Play payments.</p>
       <div class="notification-grid">
         <article class="notification-card"><header><h3><span aria-hidden="true">✉</span> Email alerts</h3><span class="notification-state" id="notificationEmailState">Loading</span></header><p>Send payment-review alerts to the email address you choose and verify.</p>
           <div class="notification-detail"><small>Verified recipient</small><strong id="notificationEmail">Loading…</strong><small>Only this address receives your email alerts.</small></div>

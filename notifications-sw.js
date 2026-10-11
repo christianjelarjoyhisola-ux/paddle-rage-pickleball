@@ -16,8 +16,17 @@ self.addEventListener('notificationclick', event => {
   const url = new URL('/admin#payreview', self.location.origin).href;
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const admin = windows.find(client => new URL(client.url).origin === self.location.origin && /^\/admin(?:\.html)?$/.test(new URL(client.url).pathname));
-    if (admin) { await admin.navigate(url); return admin.focus(); }
+    const local = windows.filter(client => new URL(client.url).origin === self.location.origin);
+    const admin = local.find(client => /^\/admin(?:\.html)?$/.test(new URL(client.url).pathname));
+    // An installed app can be sitting on the booking homepage or sign-in page.
+    // Reuse that window so a notification opens the review screen in the app.
+    const app = admin || local.find(client => /^\/(?:index(?:\.html)?|login(?:\.html)?)?$/.test(new URL(client.url).pathname));
+    if (app) {
+      try {
+        const navigated = await app.navigate(url);
+        return await (navigated || app).focus();
+      } catch (_) { /* A closed/stale window must not swallow the notification tap. */ }
+    }
     return self.clients.openWindow(url);
   })());
 });
