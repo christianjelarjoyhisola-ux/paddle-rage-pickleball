@@ -7438,7 +7438,15 @@ async function getBookingGroupByRef(ref) {
   const first = await DB.getBookingByRef(ref);
   if (!first) return null;
   const all = await DB.getBookings();
-  return groupBookings(all).find(b => b.groupKey === bookingGroupKey(first)) || { ...first, items: [first], refs: [first.ref], primaryRef: first.ref };
+  const key = bookingGroupKey(first);
+  // Hydrate only this reservation's receipt evidence. The list intentionally
+  // carries a small badge summary rather than every historical OCR result.
+  const members = all.filter(b => bookingGroupKey(b) === key);
+  if (!members.length) return { ...first, items: [first], refs: [first.ref], primaryRef: first.ref };
+  const details = await Promise.all(members.map(b => b.ref === first.ref ? first : DB.getBookingByRef(b.ref)));
+  if (details.some(b => !b)) throw new Error('Booking changed. Refresh and try again.');
+  const byRef = new Map(details.map(b => [b.ref, b]));
+  return groupBookings(all.map(b => byRef.get(b.ref) || b)).find(b => b.groupKey === key);
 }
 async function updateBookingGroupByRef(ref, updates) {
   const group = await getBookingGroupByRef(ref);

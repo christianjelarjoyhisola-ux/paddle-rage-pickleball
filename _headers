@@ -70,3 +70,6 @@
 
 /finance-core.js
   Cache-Control: no-store, max-age=0
+
+/assets/venue/*
+  Cache-Control: public, max-age=31536000, immutable

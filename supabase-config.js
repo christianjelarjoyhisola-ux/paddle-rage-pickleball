@@ -1223,7 +1223,7 @@ window.DB = {
         return (data || []).map(rowToBooking);
       }
 
-      let query = _sb.from('bookings').select('*').order('created_at', { ascending: false });
+      let query = _sb.from('booking_list_rows').select('*').order('created_at', { ascending: false });
       if (opts.date) query = query.eq('date', opts.date);
       if (opts.courtId) query = query.eq('court_id', String(opts.courtId));
       if (opts.hostUserId) query = query.eq('host_user_id', String(opts.hostUserId));
