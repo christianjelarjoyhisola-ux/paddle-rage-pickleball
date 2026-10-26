@@ -24,6 +24,10 @@ async function fail(sql, args, pattern) {
       await db.query(sql);
       await db.query(fs.readFileSync('supabase/migrations/20260922021000_voucher_campaign_list.sql', 'utf8').replace(/^begin;\s*/, '').replace(/commit;\s*$/, ''));
       await db.query(fs.readFileSync('supabase/migrations/20260922022000_voucher_dashboard_booking_access.sql', 'utf8').replace(/^begin;\s*/, '').replace(/commit;\s*$/, ''));
+      await db.query(fs.readFileSync('supabase/migrations/20261027090000_voucher_campaign_name_alias.sql', 'utf8').replace(/^begin;\s*/, '').replace(/commit;\s*$/, ''));
+    }
+    if (process.argv.includes('--candidate')) {
+      await db.query(fs.readFileSync('supabase/migrations/20261027090000_voucher_campaign_name_alias.sql', 'utf8').replace(/^begin;\s*/, '').replace(/commit;\s*$/, ''));
     }
     await db.query("select set_config('request.jwt.claim.role','service_role',true)");
     await db.query("update public.settings set value='1' where key='vouchers_enabled'");
@@ -78,6 +82,14 @@ async function fail(sql, args, pattern) {
     q=await checkout('apply','VOUCHER-TEST-B','TEST-TEN'); assert.equal(q.total,1080);
     await fail("update public.bookings set total=1 where ref='VOUCHER-TEST-B'", [], /snapshot mismatch/);
     q=await checkout('remove','VOUCHER-TEST-B'); assert.equal(q.total,1200);
+    await campaign('TEST-CAMPAIGN-ALIAS', 'fixed', 100, { name: 'Player Friendly Voucher' });
+    await hold('VOUCHER-TEST-ALIAS', ['20']);
+    q=await checkout('apply','VOUCHER-TEST-ALIAS','player friendly voucher');
+    assert.equal(q.code,'TEST-CAMPAIGN-ALIAS');assert.equal(q.discount,100);
+    await campaign('TEST-CAMPAIGN-ALIAS-A', 'fixed', 100, { name: 'Ambiguous Player Voucher' });
+    await campaign('TEST-CAMPAIGN-ALIAS-B', 'fixed', 100, { name: 'Ambiguous Player Voucher' });
+    await hold('VOUCHER-TEST-ALIAS-AMBIGUOUS', ['21']);
+    await fail("select public.voucher_checkout('apply','VOUCHER-TEST-ALIAS-AMBIGUOUS','Ambiguous Player Voucher',$1,null,$2)", [token, contact], /Voucher is invalid or unavailable/);
     await campaign('TEST-FIXED','fixed',100.01);
     await hold('VOUCHER-TEST-C',['8'],'VOUCHER-TEST-G'); await hold('VOUCHER-TEST-D',['9'],'VOUCHER-TEST-G');
     q=await checkout('apply','VOUCHER-TEST-C','TEST-FIXED');
