@@ -199,3 +199,16 @@ test('player sees a calm notice when the typed reference differs from the receip
   assert.equal(context.receiptReferenceMismatchNotice('1111111111111', { extracted: {} }, 'gcash'), '');
   assert.match(customer, /const referenceNotice = receiptReferenceMismatchNotice\(b\.gcashRef, b\._receiptResult, b\.paymentMethod\)/);
 });
+
+test('a correction keeps the stored typed reference in step so the booking can be confirmed', () => {
+  const fix = read('supabase/migrations/20261101110000_reference_correction_updates_receipt_evidence.sql');
+  // Confirmation falls back to receipt_extracted.submittedReference; it must hold the corrected value.
+  assert.match(fix, /'submittedReference', v_corrected_display/);
+  assert.match(fix, /'submittedReferenceBeforeCorrection'/);
+  // Every receipt identifier is proven claimable before the correction is saved.
+  assert.match(fix, /cross join lateral public\.payment_review_ledger_keys\([\s\S]*?This receipt is already linked to another payment/);
+  // Bookings corrected before this fix are repaired.
+  assert.match(fix, /update public\.bookings b\s+set receipt_extracted = b\.receipt_extracted \|\| jsonb_build_object\(\s+'submittedReference', b\.gcash_ref/);
+  // The follow-up keeps the relaxed owner rules.
+  assert.doesNotMatch(fix, /Only the system owner can correct a reference/);
+});
