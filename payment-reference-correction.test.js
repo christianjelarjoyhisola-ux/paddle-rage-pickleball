@@ -8,6 +8,7 @@ const sql = read('supabase/migrations/20261101090000_owner_payment_reference_cor
 const admin = read('admin.html');
 const customer = read('index.html');
 const config = read('supabase-config.js');
+const freeFormat = read('supabase/migrations/20261101100000_owner_free_format_payment_reference.sql');
 
 const slice = (source, start, end) => {
   const from = source.indexOf(start);
@@ -37,11 +38,20 @@ test('correction never weakens duplicate protection', () => {
   assert.doesNotMatch(sql, /set[\s\S]{0,200}status\s*=\s*'confirmed'/);
 });
 
-test('the receipt scan must agree unless the system owner explicitly overrides it', () => {
+test('the receipt scan must agree unless the reviewer ticks the audited image check', () => {
   assert.match(sql, /v_matched := v_receipt_key is not null and v_receipt_key = v_corrected_key/);
   assert.match(sql, /if not v_override then[\s\S]*?raise exception/);
-  assert.match(sql, /if v_actor_role <> 'owner' then[\s\S]*?Only the system owner can correct a reference/);
-  assert.match(sql, /check \(not scan_override or actor_role = 'owner'\)/);
+  // Follow-up migration lets both owner roles acknowledge a mismatch, audited.
+  assert.match(freeFormat, /drop constraint if exists booking_payment_reference_corrections_override_check/);
+  assert.match(freeFormat, /Only the system owner can correct a reference[\s\S]*?\$old\$,\s*''/);
+});
+
+test('owners may save any 4-40 character reference; players and the verifier stay strict', () => {
+  assert.match(freeFormat, /normalize_payment_reference_key_strict/);
+  assert.match(freeFormat, /exception when sqlstate '22023' then[\s\S]*?auth\.uid\(\) is null[\s\S]*?not in \('owner', 'court_owner'\)[\s\S]*?raise;/);
+  assert.match(freeFormat, /cleaned !~ '\^\[A-Z0-9\]\{4,40\}\$'/);
+  assert.match(freeFormat, /revoke all on function public\.normalize_payment_reference_key\(text, text\)\s+from public, anon, authenticated;/);
+  assert.doesNotMatch(freeFormat, /grant execute on function public\.normalize_payment_reference_key/);
 });
 
 test('only pending, receipt-backed, unmoved payments are eligible and verification races are blocked', () => {
@@ -109,15 +119,19 @@ test('admin offers Correct reference only for mistyped, pending, receipt-backed 
   assert.equal(context.paymentRefCorrectKey('maya', 'b6dc-f633 f08c'), 'B6DCF633F08C');
 });
 
-test('admin dialog enables saving only when the typed value matches the receipt scan', () => {
+test('admin dialog saves a scan match directly and a mismatch only after the image check', () => {
   const { context, el } = adminHelpers({ role: 'court_owner' });
   context.__set({ method: 'gcash', typed: '1111111111111', scanRef: '2222 222 222222' });
   el('paymentRefCorrectReason').value = 'Player swapped two digits';
 
   el('paymentRefCorrectInput').value = '2222222222229';
   context.syncPaymentRefCorrect();
-  assert.equal(el('paymentRefCorrectSubmit').disabled, true, 'scan mismatch is blocked for court owner');
-  assert.equal(el('paymentRefCorrectOverrideWrap').hidden, true, 'court owner never sees override');
+  assert.equal(el('paymentRefCorrectSubmit').disabled, true, 'scan mismatch needs the image check');
+  assert.equal(el('paymentRefCorrectOverrideWrap').hidden, false, 'court owner can tick the image check');
+  el('paymentRefCorrectOverride').checked = true;
+  context.syncPaymentRefCorrect();
+  assert.equal(el('paymentRefCorrectSubmit').disabled, false, 'court owner may save after ticking');
+  el('paymentRefCorrectOverride').checked = false;
 
   el('paymentRefCorrectInput').value = '2222-222-222222';
   context.syncPaymentRefCorrect();
@@ -139,6 +153,18 @@ test('admin dialog refuses a receipt that shows the reused reference, even for t
   assert.equal(el('paymentRefCorrectCheck').dataset.tone, 'bad');
   assert.equal(el('paymentRefCorrectOverrideWrap').hidden, true);
   assert.equal(el('paymentRefCorrectSubmit').disabled, true);
+});
+
+test('a BDO Pay receipt with a non-BN reference can be saved after the image check', () => {
+  const { context, el } = adminHelpers({ role: 'court_owner' });
+  context.__set({ method: 'bdopay', typed: 'BN2026103100000001', scanRef: '' });
+  el('paymentRefCorrectReason').value = 'Receipt is from another app; reference checked by eye';
+  el('paymentRefCorrectInput').value = 'REF-5566-7788';
+  context.syncPaymentRefCorrect();
+  assert.equal(el('paymentRefCorrectSubmit').disabled, true);
+  el('paymentRefCorrectOverride').checked = true;
+  context.syncPaymentRefCorrect();
+  assert.equal(el('paymentRefCorrectSubmit').disabled, false);
 });
 
 test('system owner can override an unreadable scan only by ticking the audited override', () => {

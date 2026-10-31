@@ -5491,7 +5491,8 @@ window.DB = {
       if (!items.some(item => String(item.receiptImageUrl || '').trim())) throw new Error('A receipt image is required before correcting the reference.');
       const correctedKey = keyOf(method, reference);
       if (!correctedKey) throw new Error('Enter the reference exactly as it appears on the receipt.');
-      if (method === 'gcash' && !/^[0-9]{13}$/.test(correctedKey)) throw new Error('The GCash reference must contain exactly 13 digits.');
+      const bareKey = method === 'gcash' ? correctedKey : correctedKey.slice(method.length + 1);
+      if (!/^[A-Z0-9]{4,40}$/.test(bareKey)) throw new Error('Enter 4 to 40 letters or numbers.');
       const previousKey = keyOf(method, typed[0]);
       if (previousKey === correctedKey) throw new Error('The corrected reference is the same as the one already saved.');
       const scanned = [...new Set(items.map(item => String(item.receiptExtracted?.ref || '').trim()).filter(Boolean))];
@@ -5505,10 +5506,9 @@ window.DB = {
       if (!matched) {
         if (scanOverride !== true) {
           throw new Error(receiptKey
-            ? `The receipt scan read ${receiptReference}, which does not match the corrected reference. Check the receipt image again.`
-            : 'The receipt scan did not read a reference. Reread the receipt, or ask the system owner to correct it with a scan override.');
+            ? `The receipt scan read ${receiptReference}, which does not match. If the receipt image shows your reference, tick "I checked the receipt image" to save it.`
+            : 'The receipt scan did not read a reference. Check the receipt image, then tick "I checked the receipt image" to save it.');
         }
-        if (role !== 'owner') throw new Error('Only the system owner can correct a reference that the receipt scan did not confirm.');
       }
       const refSet = new Set(refs);
       if (db.bookings.some(booking => !refSet.has(String(booking.ref)) && keyOf(booking.paymentMethod ?? booking.payment_method, booking.gcashRef ?? booking.gcash_ref) === correctedKey)) {

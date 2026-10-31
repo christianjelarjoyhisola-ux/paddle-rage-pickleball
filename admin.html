@@ -6778,7 +6778,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
       </div>
       <label class="booking-ref-correct-override" id="paymentRefCorrectOverrideWrap" hidden>
         <input type="checkbox" id="paymentRefCorrectOverride" onchange="syncPaymentRefCorrect()"/>
-        <span><strong>System owner override.</strong> I checked the receipt image myself and the scan missed or misread this reference. This is recorded in the audit log.</span>
+        <span><strong>I checked the receipt image.</strong> The reference above is exactly what the receipt shows (the scan missed or misread it, or the receipt is from a different app). This is recorded in the audit log.</span>
       </label>
     </div>
     <div class="m-foot">
@@ -7675,7 +7675,7 @@ function shortDateTime(v){
   return `${d.toLocaleDateString('en-PH',{month:'short',day:'numeric'})}<div style="font-size:.72rem;color:var(--muted);font-weight:600">${d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true})}</div>`;
 }
 const RECEIPT_FLAG_LABELS = {
-  REF_CORRECTED:'Reference corrected by owner', REF_CORRECTED_SCAN_OVERRIDE:'Reference corrected · scan overridden by system owner',
+  REF_CORRECTED:'Reference corrected by owner', REF_CORRECTED_SCAN_OVERRIDE:'Reference corrected · checked against receipt image by owner',
   GOTYME_RCBC_TRACE_UNREADABLE:'GoTyme trace ID unreadable',
   DUPLICATE_REF:'Ref already used', POSSIBLE_DUPLICATE_REF:'Typed ref may already be used', DUPLICATE_INVOICE:'Invoice already used', DUPLICATE_INSTAPAY_REF:'InstaPay ref already used', DUPLICATE_BPI_TRANSACTION_REF:'BPI transaction ref already used', WRONG_GCASH_NUMBER:'Wrong receiver number',
   AMOUNT_MISMATCH:'Amount does not match', DATE_NOT_TODAY:'Wrong payment date', TIME_EXPIRED:'Paid after 15 min',
@@ -11994,7 +11994,6 @@ function syncPaymentRefCorrect(){
   const check = $('paymentRefCorrectCheck');
   const overrideWrap = $('paymentRefCorrectOverrideWrap');
   const overrideBox = $('paymentRefCorrectOverride');
-  const isOwner = String(sess?.role || '').toLowerCase() === 'owner';
   let matched = false, overrideNeeded = false, blocked = false, tone = '', message = '';
   if (ctx) {
     const key = paymentRefCorrectKey(ctx.method, $('paymentRefCorrectInput')?.value);
@@ -12005,8 +12004,8 @@ function syncPaymentRefCorrect(){
       message = 'The receipt itself shows the reference that is already in use. This is a real duplicate and cannot be corrected — use Payment Not Received instead.';
     } else if (!key) {
       message = 'Type the reference exactly as printed on the receipt.';
-    } else if (ctx.method === 'gcash' && key.length !== 13) {
-      tone = 'warn'; message = `A GCash reference has 13 digits (${key.length} entered).`; blocked = true;
+    } else if (key.length < 4 || key.length > 40) {
+      tone = 'warn'; message = 'Enter 4 to 40 letters or numbers.'; blocked = true;
     } else if (key === typedKey) {
       tone = 'bad'; message = 'This is the same reference the player typed.'; blocked = true;
     } else if (scanKey && key === scanKey) {
@@ -12014,12 +12013,11 @@ function syncPaymentRefCorrect(){
     } else {
       overrideNeeded = true; tone = 'warn';
       message = scanKey
-        ? `Does not match the receipt scan (${ctx.scanRef}). Check the receipt image again, or reread the receipt.`
-        : 'The receipt scan did not read a reference. Reread the receipt first if you can.';
-      if (!isOwner) message += ' Only the system owner can save a reference the scan did not confirm.';
+        ? `Does not match the receipt scan (${ctx.scanRef}). If the receipt image shows this reference, tick the box below.`
+        : 'The receipt scan did not read a reference. If the receipt image shows this reference, tick the box below.';
     }
   }
-  const showOverride = !!ctx && overrideNeeded && isOwner && !blocked;
+  const showOverride = !!ctx && overrideNeeded && !blocked;
   if (overrideWrap) overrideWrap.hidden = !showOverride;
   if (overrideBox && !showOverride) overrideBox.checked = false;
   if (check) { check.textContent = message; check.dataset.tone = tone; }
