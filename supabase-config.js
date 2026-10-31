@@ -1953,6 +1953,76 @@ window.DB = {
     };
   },
 
+  async correctBookingPaymentReference(ref, correctedReference, reason, scanOverride, idempotencyKey) {
+    const bookingRef = String(ref || '').trim();
+    const reference = String(correctedReference || '').trim();
+    const correctionReason = String(reason || '').trim();
+    const requestKey = String(idempotencyKey || '').trim();
+    if (!bookingRef) throw new Error('A booking reference is required.');
+    if (!reference) throw new Error('Enter the reference exactly as it appears on the receipt.');
+    if (correctionReason.length < 10 || correctionReason.length > 500) {
+      throw new Error('Enter a correction reason between 10 and 500 characters.');
+    }
+    if (!requestKey) throw new Error('A correction idempotency key is required.');
+
+    const { data, error } = await _sb.rpc('correct_booking_payment_reference', {
+      p_booking_ref: bookingRef,
+      p_corrected_reference: reference,
+      p_reason: correctionReason,
+      p_scan_override: scanOverride === true,
+      p_idempotency_key: requestKey,
+    });
+    if (error) {
+      console.error('correctBookingPaymentReference:', error);
+      throw new Error(_extractFnError(error, 'Could not correct this payment reference'));
+    }
+    const result = Array.isArray(data) ? data[0] || null : data;
+    if (!result || typeof result.transitioned !== 'boolean' || !result.correction_id) {
+      throw new Error('The reference correction service returned an invalid result.');
+    }
+    _pbClearFastCache(['bookings']);
+    return {
+      transitioned: result.transitioned,
+      correctionId: String(result.correction_id),
+      bookingRef: String(result.booking_ref || bookingRef),
+      bookingRefs: Array.isArray(result.booking_refs) ? result.booking_refs.map(String) : [bookingRef],
+      previousReference: String(result.previous_reference || ''),
+      correctedReference: String(result.corrected_reference || ''),
+      receiptReference: result.receipt_reference ? String(result.receipt_reference) : null,
+      receiptReferenceMatched: result.receipt_reference_matched === true,
+    };
+  },
+
+  async getPaymentReferenceCorrections(refs) {
+    const bookingRefs = [...new Set((Array.isArray(refs) ? refs : [refs])
+      .map(value => String(value || '').trim()).filter(Boolean))].slice(0, 50);
+    if (!bookingRefs.length) return [];
+    const { data, error } = await _sb
+      .from('booking_payment_reference_corrections')
+      .select('id,booking_key,booking_refs,payment_method,previous_reference,corrected_reference,receipt_reference,receipt_reference_matched,scan_override,reason,actor_role,created_at')
+      .overlaps('booking_refs', bookingRefs)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) {
+      console.warn('getPaymentReferenceCorrections:', error);
+      return [];
+    }
+    return (data || []).map(row => ({
+      id: row.id,
+      bookingKey: row.booking_key,
+      bookingRefs: row.booking_refs || [],
+      paymentMethod: row.payment_method,
+      previousReference: row.previous_reference,
+      correctedReference: row.corrected_reference,
+      receiptReference: row.receipt_reference,
+      receiptReferenceMatched: row.receipt_reference_matched === true,
+      scanOverride: row.scan_override === true,
+      reason: row.reason,
+      actorRole: row.actor_role,
+      createdAt: row.created_at,
+    }));
+  },
+
   async rejectBookingPaymentTransaction(ref, reason) {
     const bookingRef = String(ref || '').trim();
     const reviewReason = String(reason || '').trim();
@@ -5363,6 +5433,120 @@ window.DB = {
         status: 'confirmed',
         refs,
       };
+    },
+    async correctBookingPaymentReference(ref, correctedReference, reason, scanOverride, idempotencyKey) {
+      const bookingRef = String(ref || '').trim();
+      const reference = String(correctedReference || '').trim();
+      const correctionReason = String(reason || '').trim();
+      const requestKey = String(idempotencyKey || '').trim();
+      if (!bookingRef) throw new Error('A booking reference is required.');
+      if (!reference) throw new Error('Enter the reference exactly as it appears on the receipt.');
+      if (correctionReason.length < 10 || correctionReason.length > 500) {
+        throw new Error('Enter a correction reason between 10 and 500 characters.');
+      }
+      if (!requestKey) throw new Error('A correction idempotency key is required.');
+      const session = window.Auth?.getSession?.() || null;
+      const role = String(session?.role || '');
+      if (!session || !['owner', 'court_owner'].includes(role) || (session.status && session.status !== 'active')) {
+        throw new Error('Only an active system owner or court owner can correct a payment reference.');
+      }
+
+      const db = readDb();
+      db.paymentReferenceCorrections = Array.isArray(db.paymentReferenceCorrections) ? db.paymentReferenceCorrections : [];
+      const target = db.bookings.find(booking => String(booking.ref) === bookingRef);
+      if (!target) throw new Error('Booking not found.');
+      const groupRef = String(target.groupRef || target.bookingGroupRef || '').trim();
+      const bookingKey = groupRef || bookingRef;
+      const prior = db.paymentReferenceCorrections.find(row => row.idempotencyKey === requestKey);
+      if (prior) {
+        if (prior.bookingKey !== bookingKey) throw new Error('This correction request was already used for another booking.');
+        return { ...prior, transitioned: false, correctionId: prior.id, bookingRef };
+      }
+      const items = groupRef
+        ? db.bookings.filter(booking => String(booking.groupRef || booking.bookingGroupRef || '').trim() === groupRef)
+        : [target];
+      const refs = items.map(booking => String(booking.ref)).sort();
+      const lower = value => String(value || '').toLowerCase().trim();
+      const methods = [...new Set(items.map(item => lower(item.paymentMethod ?? item.payment_method)))];
+      if (methods.length !== 1) throw new Error('Grouped payment methods are mixed. Review the booking first.');
+      const method = methods[0];
+      const digitalMethods = ['gcash', 'bdopay', 'maya', 'bpi', 'gotyme', 'maribank', 'unionbank', 'pnb', 'rcbc'];
+      if (!digitalMethods.includes(method)) throw new Error('Only digital payments have a reference to correct.');
+      const keyOf = (provider, value) => {
+        const p = lower(provider);
+        if (!digitalMethods.includes(p)) return null;
+        if (p === 'gcash') return String(value || '').replace(/[^0-9]/g, '') || null;
+        const clean = String(value || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        return clean ? `${p}:${clean}` : null;
+      };
+      const typed = [...new Set(items.map(item => String(item.gcashRef ?? item.gcash_ref ?? '')))];
+      if (typed.length !== 1) throw new Error('Grouped payment references are inconsistent. Review the booking first.');
+      if (items.some(item => !['pending', 'verifying'].includes(lower(item.status)) || lower(item.paymentStatus ?? item.payment_status) !== 'for_verification')) {
+        throw new Error('Only a pending payment awaiting verification can have its reference corrected.');
+      }
+      if (items.some(item => lower(item.receiptStatus) === 'rejected')) throw new Error('This receipt was rejected and its reference cannot be corrected.');
+      if (items.some(item => item.paymentTransferId || item.paymentReassignedFromRef || item.paymentReassignedToRef)) {
+        throw new Error('Moved payments cannot have their reference corrected.');
+      }
+      if (!items.some(item => String(item.receiptImageUrl || '').trim())) throw new Error('A receipt image is required before correcting the reference.');
+      const correctedKey = keyOf(method, reference);
+      if (!correctedKey) throw new Error('Enter the reference exactly as it appears on the receipt.');
+      if (method === 'gcash' && !/^[0-9]{13}$/.test(correctedKey)) throw new Error('The GCash reference must contain exactly 13 digits.');
+      const previousKey = keyOf(method, typed[0]);
+      if (previousKey === correctedKey) throw new Error('The corrected reference is the same as the one already saved.');
+      const scanned = [...new Set(items.map(item => String(item.receiptExtracted?.ref || '').trim()).filter(Boolean))];
+      if (scanned.length > 1) throw new Error('Grouped receipt scans disagree. Reread the receipt before correcting.');
+      const receiptReference = scanned[0] || null;
+      const receiptKey = keyOf(method, receiptReference);
+      if (receiptKey && receiptKey === previousKey) {
+        throw new Error('The receipt itself shows the reference already in use. This is a real duplicate and cannot be corrected.');
+      }
+      const matched = !!receiptKey && receiptKey === correctedKey;
+      if (!matched) {
+        if (scanOverride !== true) {
+          throw new Error(receiptKey
+            ? `The receipt scan read ${receiptReference}, which does not match the corrected reference. Check the receipt image again.`
+            : 'The receipt scan did not read a reference. Reread the receipt, or ask the system owner to correct it with a scan override.');
+        }
+        if (role !== 'owner') throw new Error('Only the system owner can correct a reference that the receipt scan did not confirm.');
+      }
+      const refSet = new Set(refs);
+      if (db.bookings.some(booking => !refSet.has(String(booking.ref)) && keyOf(booking.paymentMethod ?? booking.payment_method, booking.gcashRef ?? booking.gcash_ref) === correctedKey)) {
+        throw new Error('The corrected reference is already attached to another booking.');
+      }
+      const display = method === 'gcash' ? correctedKey : correctedKey.slice(method.length + 1);
+      const override = !matched;
+      const clear = new Set(['DUPLICATE_REF', 'POSSIBLE_DUPLICATE_REF', 'REF_MISMATCH', 'REF_CORRECTED', 'REF_CORRECTED_SCAN_OVERRIDE']);
+      items.forEach(item => {
+        item.gcashRef = display;
+        item.receiptFlags = [...(item.receiptFlags || []).filter(flag => !clear.has(String(flag).toUpperCase())),
+          override ? 'REF_CORRECTED_SCAN_OVERRIDE' : 'REF_CORRECTED'];
+      });
+      const audit = {
+        id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`),
+        idempotencyKey: requestKey,
+        bookingKey,
+        bookingRefs: refs,
+        paymentMethod: method,
+        previousReference: typed[0],
+        correctedReference: display,
+        receiptReference,
+        receiptReferenceMatched: matched,
+        scanOverride: override,
+        reason: correctionReason,
+        actorRole: role,
+        createdAt: new Date().toISOString(),
+      };
+      db.paymentReferenceCorrections.push(audit);
+      writeDb(db);
+      return { ...audit, transitioned: true, correctionId: audit.id, bookingRef };
+    },
+    async getPaymentReferenceCorrections(refs) {
+      const wanted = new Set((Array.isArray(refs) ? refs : [refs]).map(value => String(value || '').trim()).filter(Boolean));
+      const db = readDb();
+      return (Array.isArray(db.paymentReferenceCorrections) ? db.paymentReferenceCorrections : [])
+        .filter(row => (row.bookingRefs || []).some(ref => wanted.has(String(ref))))
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
     },
     async transferCancelledBookingPayment(sourceRef, targetRef, reason, noRefundConfirmed, idempotencyKey) {
       const sourceBookingRef = String(sourceRef || '').trim();

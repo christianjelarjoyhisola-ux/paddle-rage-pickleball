@@ -1125,6 +1125,42 @@ tr:hover td { background: var(--bg2); }
   font-size: .75rem; line-height: 1.55;
 }
 .booking-payment-reject-warning strong { color: var(--red); }
+.booking-ref-correct-overlay { z-index: 565; }
+.booking-ref-correct-modal { max-width: 560px; display: flex; flex-direction: column; overflow: hidden; }
+.booking-ref-correct-modal .m-hd,
+.booking-ref-correct-modal .m-foot { flex: 0 0 auto; z-index: 2; }
+.booking-ref-correct-modal .m-body { min-height: 0; overflow-y: auto; }
+.booking-ref-correct-modal button:disabled,
+.booking-ref-correct-modal input:disabled,
+.booking-ref-correct-modal textarea:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+.booking-ref-correct-head { background: linear-gradient(135deg,rgba(200,160,96,.14),transparent); }
+.booking-ref-correct-head h2 { color: var(--yellow); }
+.booking-ref-correct-explainer { margin: 0 0 14px; color: var(--text2); font-size: .8rem; line-height: 1.6; }
+.booking-ref-correct-compare { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; margin-bottom: 16px; }
+.booking-ref-correct-compare > div { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); min-width: 0; }
+.booking-ref-correct-compare .typed { background: rgba(229,57,53,.06); border-color: rgba(229,57,53,.24); }
+.booking-ref-correct-compare .scan { background: rgba(var(--green-rgb),.06); border-color: rgba(var(--green-rgb),.24); }
+.booking-ref-correct-compare span {
+  display: block; margin-bottom: 5px; color: var(--muted); font-size: .66rem;
+  font-weight: 850; letter-spacing: .06em; text-transform: uppercase;
+}
+.booking-ref-correct-compare code { display: block; color: var(--text); font-size: 1rem; font-weight: 800; letter-spacing: 1px; overflow-wrap: anywhere; }
+.booking-ref-correct-compare small { display: block; margin-top: 5px; color: var(--muted); font-size: .68rem; line-height: 1.4; }
+.booking-ref-correct-use { margin-top: 8px; }
+.booking-ref-correct-input { font-family: monospace; font-size: 1.05rem; letter-spacing: 1.5px; }
+.booking-ref-correct-check { min-height: 1.3em; margin-top: 7px; font-size: .74rem; line-height: 1.45; color: var(--muted); }
+.booking-ref-correct-check[data-tone="ok"] { color: var(--green); font-weight: 700; }
+.booking-ref-correct-check[data-tone="warn"] { color: var(--yellow); }
+.booking-ref-correct-check[data-tone="bad"] { color: var(--red); font-weight: 700; }
+.booking-ref-correct-reason { min-height: 84px; resize: vertical; line-height: 1.55; }
+.booking-ref-correct-override {
+  display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; padding: 12px 14px;
+  border-left: 3px solid var(--yellow); border-radius: 8px; background: rgba(200,160,96,.1);
+  color: var(--text2); font-size: .75rem; line-height: 1.5; cursor: pointer;
+}
+.booking-ref-correct-override[hidden] { display: none; }
+.booking-ref-correct-override input { margin-top: 3px; flex: 0 0 auto; }
+@media (max-width: 520px) { .booking-ref-correct-compare { grid-template-columns: 1fr; } }
 .booking-payment-transfer-overlay { z-index: 570; }
 .booking-payment-transfer-modal { max-width: 780px; display: flex; flex-direction: column; overflow: hidden; }
 .booking-payment-transfer-modal .m-hd,
@@ -6635,6 +6671,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
       <div style="background:rgba(var(--green-rgb),.07);border:1.5px solid rgba(var(--green-rgb),.28);border-radius:10px;padding:16px;text-align:center;margin-bottom:14px">
         <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Payment Reference #</div>
         <div id="vmGcashRef" style="font-family:monospace;font-size:1.55rem;font-weight:800;color:var(--green);letter-spacing:2px">—</div>
+        <div id="vmRefCorrection" style="display:none;font-size:.72rem;color:var(--yellow);margin-top:6px;line-height:1.5"></div>
         <div style="font-size:.7rem;color:var(--muted);margin-top:5px">Check this reference in the matching payment app and in the receiving account</div>
       </div>
       <div style="font-size:.82rem;color:var(--muted)">
@@ -6672,6 +6709,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
     <div class="m-foot">
       <button class="btn btn-d" id="vmRejectBtn" onclick="rejectPayment()">Payment Not Received</button>
       <button class="btn booking-duplicate-transfer" id="vmResolveDuplicateBtn" style="display:none" onclick="openDuplicatePaymentTransferFromVerify()">Resolve duplicate</button>
+      <button class="btn booking-duplicate-transfer" id="vmCorrectRefBtn" style="display:none" onclick="openPaymentRefCorrectFromVerify()">Correct reference</button>
       <button class="btn btn-p" id="vmConfirmBtn" onclick="verifyAndConfirm()">Confirm Payment</button>
       <button class="btn btn-g" id="vmResolvedClose" style="display:none" onclick="closeVerifyModal()">Close</button>
     </div>
@@ -6707,6 +6745,45 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
     <div class="m-foot">
       <button class="btn btn-g" type="button" id="bookingPaymentRejectCancel" onclick="closeBookingPaymentRejectModal()">Keep booking</button>
       <button class="btn btn-d" type="button" id="bookingPaymentRejectConfirm" disabled onclick="confirmBookingPaymentRejection()">Reject payment &amp; email player</button>
+    </div>
+  </div>
+</div>
+
+<!-- MISTYPED PAYMENT REFERENCE CORRECTION -->
+<div class="overlay booking-ref-correct-overlay" id="paymentRefCorrectModal" aria-hidden="true" inert hidden>
+  <div class="modal booking-ref-correct-modal" id="paymentRefCorrectDialog" role="dialog" aria-modal="true" aria-labelledby="paymentRefCorrectTitle" aria-describedby="paymentRefCorrectExplainer" aria-busy="false" tabindex="-1" onkeydown="paymentRefCorrectModalKeydown(event)">
+    <div class="m-hd booking-ref-correct-head">
+      <div>
+        <h2 id="paymentRefCorrectTitle">CORRECT PAYMENT REFERENCE</h2>
+        <p style="margin:4px 0 0;color:var(--muted);font-size:.75rem">Booking <strong id="paymentRefCorrectBooking" style="color:var(--text)">—</strong></p>
+      </div>
+      <button class="m-x" type="button" id="paymentRefCorrectClose" aria-label="Close without correcting" onclick="closePaymentRefCorrectModal()">&#10005;</button>
+    </div>
+    <div class="m-body">
+      <p class="booking-ref-correct-explainer" id="paymentRefCorrectExplainer">Use this only when the receipt is valid and the player typed the wrong reference. The booking stays pending &mdash; confirm the payment afterwards as usual. Duplicate protection still runs on the corrected reference.</p>
+      <div class="booking-ref-correct-compare">
+        <div class="typed"><span>Player typed</span><code id="paymentRefCorrectTyped">—</code><small id="paymentRefCorrectTypedNote"></small></div>
+        <div class="scan"><span>Receipt scan read</span><code id="paymentRefCorrectScan">—</code><small>Always compare with the receipt image.</small>
+          <button class="btn btn-g btn-sm booking-ref-correct-use" type="button" id="paymentRefCorrectUseScan" onclick="usePaymentRefCorrectScan()">Use scanned reference</button></div>
+      </div>
+      <div class="fg">
+        <label class="fl" for="paymentRefCorrectInput">Reference printed on the receipt</label>
+        <input class="fi booking-ref-correct-input" id="paymentRefCorrectInput" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="40" aria-describedby="paymentRefCorrectCheck" oninput="syncPaymentRefCorrect()"/>
+        <div class="booking-ref-correct-check" id="paymentRefCorrectCheck" role="status" aria-live="polite"></div>
+      </div>
+      <div class="fg">
+        <label class="fl" for="paymentRefCorrectReason">Reason (saved in the audit log)</label>
+        <textarea class="fi booking-ref-correct-reason" id="paymentRefCorrectReason" required minlength="10" maxlength="500" aria-describedby="paymentRefCorrectCount" placeholder="Example: Player swapped two digits; the receipt shows the correct reference." oninput="syncPaymentRefCorrect()"></textarea>
+        <div class="booking-payment-reject-help"><span>Minimum 10 characters.</span><span id="paymentRefCorrectCount">0 / 500</span></div>
+      </div>
+      <label class="booking-ref-correct-override" id="paymentRefCorrectOverrideWrap" hidden>
+        <input type="checkbox" id="paymentRefCorrectOverride" onchange="syncPaymentRefCorrect()"/>
+        <span><strong>System owner override.</strong> I checked the receipt image myself and the scan missed or misread this reference. This is recorded in the audit log.</span>
+      </label>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-g" type="button" id="paymentRefCorrectCancel" onclick="closePaymentRefCorrectModal()">Cancel</button>
+      <button class="btn btn-p" type="button" id="paymentRefCorrectSubmit" disabled onclick="submitPaymentRefCorrect()">Save corrected reference</button>
     </div>
   </div>
 </div>
@@ -7598,6 +7675,7 @@ function shortDateTime(v){
   return `${d.toLocaleDateString('en-PH',{month:'short',day:'numeric'})}<div style="font-size:.72rem;color:var(--muted);font-weight:600">${d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true})}</div>`;
 }
 const RECEIPT_FLAG_LABELS = {
+  REF_CORRECTED:'Reference corrected by owner', REF_CORRECTED_SCAN_OVERRIDE:'Reference corrected · scan overridden by system owner',
   GOTYME_RCBC_TRACE_UNREADABLE:'GoTyme trace ID unreadable',
   DUPLICATE_REF:'Ref already used', POSSIBLE_DUPLICATE_REF:'Typed ref may already be used', DUPLICATE_INVOICE:'Invoice already used', DUPLICATE_INSTAPAY_REF:'InstaPay ref already used', DUPLICATE_BPI_TRANSACTION_REF:'BPI transaction ref already used', WRONG_GCASH_NUMBER:'Wrong receiver number',
   AMOUNT_MISMATCH:'Amount does not match', DATE_NOT_TODAY:'Wrong payment date', TIME_EXPIRED:'Paid after 15 min',
@@ -8350,7 +8428,7 @@ function bookingQuickConfirmIssue(b) {
   if (!items.length || ['mixed','rejected','deposit_retained'].includes(paymentState)) return 'Review this booking before confirming.';
   if (items.some(item => ['mixed','completed','cancelled','forfeited'].includes(String(item?.status || '').toLowerCase()))) return 'Review this grouped booking before confirming.';
   if (items.some(item => ['mixed','rejected','deposit_retained'].includes(String(item?.paymentStatus || '').toLowerCase()))) return 'Review this grouped payment before confirming.';
-  if (b?.duplicatePaymentRef) return 'Duplicate payment reference — review required.';
+  if (b?.duplicatePaymentRef) return 'Duplicate payment reference — open the payment to review or correct the reference.';
   if (receiptState === 'rejected' || items.some(item => String(item?.receiptStatus || '').toLowerCase() === 'rejected')) return 'Flagged receipt — review required.';
 
   const methods = [...new Set(items.map(item => String(item?.paymentMethod || '').toLowerCase()).filter(Boolean))];
@@ -11213,6 +11291,10 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   if ($('vmRejectBtn')) $('vmRejectBtn').style.display = !readOnly && canReview ? '' : 'none';
   if ($('vmConfirmBtn')) $('vmConfirmBtn').style.display = !readOnly && canReview ? '' : 'none';
   if ($('vmResolveDuplicateBtn')) $('vmResolveDuplicateBtn').style.display = transferSource ? '' : 'none';
+  const correctableRef = !readOnly && canReview && !transferSource &&
+    paymentReferenceCorrectable(b) && paymentReferenceNeedsCorrection(b);
+  if ($('vmCorrectRefBtn')) $('vmCorrectRefBtn').style.display = correctableRef ? '' : 'none';
+  renderVmRefCorrection(b, openToken);
   if ($('vmResolvedClose')) $('vmResolvedClose').style.display = readOnly || !canReview ? '' : 'none';
   if ($('vmReviewHint')) {
     $('vmReviewHint').textContent = readOnly
@@ -11221,6 +11303,8 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
       ? 'Only the system owner or court owner can decide a pending payment. Receipt evidence remains available for review.'
       : transferSource
       ? 'This reference is protected by one cancelled booking. Use Resolve duplicate to compare both bookings and move the payment safely.'
+      : correctableRef
+      ? 'The typed reference is already used or does not match the receipt. If the receipt is valid and shows a different reference, use Correct reference, then confirm the payment.'
       : 'Match the source-app reference with the receiving account, then choose Received or Not Received. This owner decision is recorded.';
   }
   $('verifyModal').dataset.ref = ref;
@@ -11357,7 +11441,7 @@ async function rereadBookingReceipt() {
   button.textContent = 'Reading receipt…';
   button.setAttribute('aria-busy', 'true');
   $('vmRereadResult').textContent = 'Running fresh checks. This may take a moment.';
-  for (const id of ['vmConfirmBtn','vmRejectBtn','vmResolveDuplicateBtn']) $(id).disabled = true;
+  for (const id of ['vmConfirmBtn','vmRejectBtn','vmResolveDuplicateBtn','vmCorrectRefBtn']) $(id).disabled = true;
   try {
     const booking = await getBookingGroupByRef(ref);
     if (!booking) throw new Error('Booking not found.');
@@ -11394,7 +11478,7 @@ async function rereadBookingReceipt() {
     button.disabled = false;
     button.textContent = '↻ Reread receipt';
     button.removeAttribute('aria-busy');
-    for (const id of ['vmConfirmBtn','vmRejectBtn','vmResolveDuplicateBtn']) $(id).disabled = false;
+    for (const id of ['vmConfirmBtn','vmRejectBtn','vmResolveDuplicateBtn','vmCorrectRefBtn']) $(id).disabled = false;
   }
 }
 
@@ -11839,6 +11923,247 @@ async function openBookingPaymentTransferModal(targetRef, trigger = null, { clos
     return false;
   } finally {
     if (trigger?.isConnected) { trigger.disabled = false; trigger.textContent = idleText; }
+  }
+}
+
+let _paymentRefCorrectContext = null;
+let _paymentRefCorrectInFlight = false;
+const PAYMENT_REF_CORRECTION_FLAGS = new Set(['DUPLICATE_REF', 'POSSIBLE_DUPLICATE_REF', 'REF_MISMATCH']);
+
+function paymentRefCorrectKey(method, value){
+  const provider = String(method || '').toLowerCase().trim();
+  return provider === 'gcash'
+    ? String(value || '').replace(/[^0-9]/g, '')
+    : String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+function paymentReferenceScanRef(b){
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  const refs = [...new Set([b, ...rows]
+    .map(row => String(row?.receiptExtracted?.ref || '').trim())
+    .filter(Boolean))];
+  return refs.length === 1 ? refs[0] : '';
+}
+function paymentReferenceCorrectable(b){
+  if (!b || !canManuallyResolvePayment() || bookingPaymentIsResolved(b)) return false;
+  if (!isDigitalPayment(b.paymentMethod) || hostBalancePendingPayment(b)) return false;
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  const list = rows.length ? rows : [b];
+  if (!list.some(row => row?.receiptImageUrl) && !b.receiptImageUrl) return false;
+  if (!list.every(row => ['pending','verifying'].includes(String(row?.status || '').toLowerCase()))) return false;
+  if (!list.every(row => String(row?.paymentStatus || '').toLowerCase() === 'for_verification')) return false;
+  return !list.some(row => row?.paymentTransferId || row?.paymentReassignedFromRef ||
+    row?.paymentReassignedToRef || String(row?.receiptStatus || '').toLowerCase() === 'rejected');
+}
+function paymentReferenceNeedsCorrection(b){
+  if (b?.duplicatePaymentRef) return true;
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  if ([b, ...rows].some(row => (row?.receiptFlags || []).some(flag => PAYMENT_REF_CORRECTION_FLAGS.has(String(flag).toUpperCase())))) return true;
+  const scan = paymentRefCorrectKey(b?.paymentMethod, paymentReferenceScanRef(b));
+  return !!scan && scan !== paymentRefCorrectKey(b?.paymentMethod, b?.gcashRef);
+}
+async function renderVmRefCorrection(b, openToken){
+  const box = $('vmRefCorrection');
+  if (!box) return;
+  box.style.display = 'none';
+  box.textContent = '';
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  const corrected = [b, ...rows].some(row => (row?.receiptFlags || []).some(flag => /^REF_CORRECTED/.test(String(flag).toUpperCase())));
+  if (!corrected || typeof DB.getPaymentReferenceCorrections !== 'function') return;
+  const history = await DB.getPaymentReferenceCorrections(b.refs || [b.ref]).catch(() => []);
+  if (openToken !== _vmOpenToken || !history.length) return;
+  const last = history[0];
+  const when = last.createdAt ? new Date(last.createdAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  const who = last.actorRole === 'owner' ? 'system owner' : 'court owner';
+  box.textContent = `Corrected from ${last.previousReference} by ${who}${when ? ` · ${when}` : ''}` +
+    `${last.scanOverride ? ' · scan overridden' : ''} — “${last.reason}”`;
+  box.style.display = '';
+}
+function setPaymentRefCorrectBusy(busy){
+  $('paymentRefCorrectDialog')?.setAttribute('aria-busy', busy ? 'true' : 'false');
+  ['paymentRefCorrectClose','paymentRefCorrectCancel','paymentRefCorrectInput','paymentRefCorrectReason','paymentRefCorrectOverride','paymentRefCorrectUseScan'].forEach(id => {
+    const control = $(id);
+    if (control) control.disabled = !!busy;
+  });
+  syncPaymentRefCorrect();
+}
+function syncPaymentRefCorrect(){
+  const ctx = _paymentRefCorrectContext;
+  const reasonField = $('paymentRefCorrectReason');
+  const reason = String(reasonField?.value || '').trim();
+  if ($('paymentRefCorrectCount')) $('paymentRefCorrectCount').textContent = `${String(reasonField?.value || '').length} / 500`;
+  const check = $('paymentRefCorrectCheck');
+  const overrideWrap = $('paymentRefCorrectOverrideWrap');
+  const overrideBox = $('paymentRefCorrectOverride');
+  const isOwner = String(sess?.role || '').toLowerCase() === 'owner';
+  let matched = false, overrideNeeded = false, blocked = false, tone = '', message = '';
+  if (ctx) {
+    const key = paymentRefCorrectKey(ctx.method, $('paymentRefCorrectInput')?.value);
+    const typedKey = paymentRefCorrectKey(ctx.method, ctx.typed);
+    const scanKey = paymentRefCorrectKey(ctx.method, ctx.scanRef);
+    if (scanKey && scanKey === typedKey) {
+      blocked = true; tone = 'bad';
+      message = 'The receipt itself shows the reference that is already in use. This is a real duplicate and cannot be corrected — use Payment Not Received instead.';
+    } else if (!key) {
+      message = 'Type the reference exactly as printed on the receipt.';
+    } else if (ctx.method === 'gcash' && key.length !== 13) {
+      tone = 'warn'; message = `A GCash reference has 13 digits (${key.length} entered).`; blocked = true;
+    } else if (key === typedKey) {
+      tone = 'bad'; message = 'This is the same reference the player typed.'; blocked = true;
+    } else if (scanKey && key === scanKey) {
+      tone = 'ok'; message = '✓ Matches the reference read from the receipt.'; matched = true;
+    } else {
+      overrideNeeded = true; tone = 'warn';
+      message = scanKey
+        ? `Does not match the receipt scan (${ctx.scanRef}). Check the receipt image again, or reread the receipt.`
+        : 'The receipt scan did not read a reference. Reread the receipt first if you can.';
+      if (!isOwner) message += ' Only the system owner can save a reference the scan did not confirm.';
+    }
+  }
+  const showOverride = !!ctx && overrideNeeded && isOwner && !blocked;
+  if (overrideWrap) overrideWrap.hidden = !showOverride;
+  if (overrideBox && !showOverride) overrideBox.checked = false;
+  if (check) { check.textContent = message; check.dataset.tone = tone; }
+  const allowed = !!ctx && !blocked && (matched || (showOverride && overrideBox?.checked));
+  const button = $('paymentRefCorrectSubmit');
+  if (button) button.disabled = _paymentRefCorrectInFlight || !allowed || reason.length < 10 || reason.length > 500;
+}
+function usePaymentRefCorrectScan(){
+  const ctx = _paymentRefCorrectContext;
+  const input = $('paymentRefCorrectInput');
+  if (!ctx?.scanRef || !input) return;
+  input.value = paymentRefCorrectKey(ctx.method, ctx.scanRef);
+  syncPaymentRefCorrect();
+  input.focus();
+}
+function paymentRefCorrectModalKeydown(event){
+  const overlay = $('paymentRefCorrectModal');
+  if (!overlay?.classList.contains('show')) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closePaymentRefCorrectModal();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const focusable = [...overlay.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+}
+function closePaymentRefCorrectModal({ restoreFocus = true, force = false } = {}){
+  if (_paymentRefCorrectInFlight && !force) return;
+  const overlay = $('paymentRefCorrectModal');
+  const context = _paymentRefCorrectContext;
+  if (overlay) {
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.inert = true;
+    overlay.hidden = true;
+  }
+  _paymentRefCorrectContext = null;
+  ['paymentRefCorrectInput','paymentRefCorrectReason'].forEach(id => { if ($(id)) $(id).value = ''; });
+  if ($('paymentRefCorrectOverride')) $('paymentRefCorrectOverride').checked = false;
+  if (context?.suspendedVerify) {
+    const verifyOverlay = $('verifyModal');
+    if (verifyOverlay?.classList.contains('show')) {
+      verifyOverlay.inert = false;
+      verifyOverlay.setAttribute('aria-hidden', 'false');
+    }
+  }
+  syncPaymentRefCorrect();
+  const previous = context?.trigger;
+  if (restoreFocus && previous?.isConnected) requestAnimationFrame(() => previous.focus());
+}
+async function openPaymentRefCorrectModal(ref, trigger = null){
+  if (!canManuallyResolvePayment()) {
+    toast('Only the system owner or court owner can correct a payment reference.', 'err');
+    return;
+  }
+  const actionRef = String(ref || '').trim();
+  if (!actionRef || _paymentRefCorrectInFlight) return;
+  const idleText = trigger?.textContent || '';
+  if (trigger) { trigger.disabled = true; trigger.textContent = 'Opening…'; }
+  try {
+    const booking = await getBookingGroupByRef(actionRef);
+    if (!booking) throw new Error('Booking not found.');
+    if (!paymentReferenceCorrectable(booking)) {
+      throw new Error('Only a pending payment with a receipt can have its reference corrected.');
+    }
+    const canonicalRef = booking.primaryRef || booking.ref || actionRef;
+    const scanRef = paymentReferenceScanRef(booking);
+    const verifyOverlay = $('verifyModal');
+    const suspendedVerify = Boolean(verifyOverlay?.classList.contains('show'));
+    _paymentRefCorrectContext = {
+      ref: canonicalRef,
+      trigger,
+      suspendedVerify,
+      method: String(booking.paymentMethod || '').toLowerCase(),
+      typed: String(booking.gcashRef || ''),
+      scanRef,
+      idempotencyKey: newBookingPaymentTransferIdempotencyKey(),
+    };
+    $('paymentRefCorrectBooking').textContent = booking.displayRef || canonicalRef;
+    $('paymentRefCorrectTyped').textContent = booking.gcashRef || '—';
+    $('paymentRefCorrectTypedNote').textContent = booking.duplicatePaymentRef ? 'Already used by another booking' : '';
+    $('paymentRefCorrectScan').textContent = scanRef || 'Not read';
+    $('paymentRefCorrectUseScan').style.display = scanRef ? '' : 'none';
+    $('paymentRefCorrectInput').value = '';
+    $('paymentRefCorrectReason').value = '';
+    $('paymentRefCorrectOverride').checked = false;
+    const overlay = $('paymentRefCorrectModal');
+    overlay.hidden = false;
+    overlay.inert = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.classList.add('show');
+    if (suspendedVerify) {
+      verifyOverlay.inert = true;
+      verifyOverlay.setAttribute('aria-hidden', 'true');
+    }
+    setPaymentRefCorrectBusy(false);
+    requestAnimationFrame(() => $('paymentRefCorrectInput')?.focus());
+  } catch (error) {
+    toast(error?.message || 'Could not open the reference correction.', 'err');
+  } finally {
+    if (trigger?.isConnected) { trigger.disabled = false; trigger.textContent = idleText; }
+  }
+}
+async function openPaymentRefCorrectFromVerify(){
+  const ref = $('verifyModal')?.dataset.ref;
+  if (!ref) return;
+  await openPaymentRefCorrectModal(ref, $('vmCorrectRefBtn'));
+}
+async function submitPaymentRefCorrect(){
+  const context = _paymentRefCorrectContext;
+  if (!context || _paymentRefCorrectInFlight) return;
+  if (typeof DB.correctBookingPaymentReference !== 'function') {
+    toast('Reference correction is unavailable. Refresh and try again.', 'err');
+    return;
+  }
+  const reference = String($('paymentRefCorrectInput')?.value || '').trim();
+  const reason = String($('paymentRefCorrectReason')?.value || '').trim();
+  const scanOverride = !$('paymentRefCorrectOverrideWrap')?.hidden && !!$('paymentRefCorrectOverride')?.checked;
+  const button = $('paymentRefCorrectSubmit');
+  const idleText = button?.textContent || 'Save corrected reference';
+  _paymentRefCorrectInFlight = true;
+  setPaymentRefCorrectBusy(true);
+  if (button) button.textContent = 'Saving…';
+  try {
+    const result = await DB.correctBookingPaymentReference(context.ref, reference, reason, scanOverride, context.idempotencyKey);
+    _paymentRefCorrectInFlight = false;
+    closePaymentRefCorrectModal({ restoreFocus: false, force: true });
+    toast(result.transitioned
+      ? `Reference corrected to ${result.correctedReference}. Check the receipt once more, then confirm the payment.`
+      : 'This correction was already saved.', 'ok');
+    await Promise.allSettled([renderBookings(), renderDash(), ...(_curSection === 'payreview' ? [renderPaymentReview()] : [])]);
+    const verifyRef = $('verifyModal')?.dataset.ref;
+    if (verifyRef && $('verifyModal').classList.contains('show')) await openVerifyModal(verifyRef);
+  } catch (error) {
+    toast(error?.message || 'Could not correct this payment reference.', 'err');
+  } finally {
+    _paymentRefCorrectInFlight = false;
+    if (button?.isConnected) button.textContent = idleText;
+    setPaymentRefCorrectBusy(false);
   }
 }
 
