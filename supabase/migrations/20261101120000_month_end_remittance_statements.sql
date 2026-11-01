@@ -41,7 +41,10 @@ comment on function public.booking_fee_next_due_on(timestamptz) is
 -- 2. Automatic month-end close
 -- --------------------------------------------------------------------------
 
-create or replace function public.booking_fee_close_month(p_at timestamptz default now())
+create or replace function public.booking_fee_close_month(
+  p_at timestamptz default now(),
+  p_cutoff timestamptz default null
+)
 returns uuid
 language plpgsql
 security definer
@@ -68,6 +71,16 @@ begin
   month_start := date_trunc('month', timezone('Asia/Manila', coalesce(p_at, now())));
   cutoff_time := (month_start at time zone 'Asia/Manila') - interval '1 microsecond';
   period_end := (month_start - interval '1 day')::date;
+
+  -- One-time catch-up: close the previous month at an exact later instant
+  -- instead of the boundary. The next month-end close sweeps the rest.
+  if p_cutoff is not null then
+    if p_cutoff < cutoff_time or p_cutoff > clock_timestamp() then
+      raise exception 'A cutoff override must fall between the month end and now.'
+        using errcode = '22023';
+    end if;
+    cutoff_time := p_cutoff;
+  end if;
 
   -- Fee earning and adjustment creation take the matching shared lock.
   perform pg_advisory_xact_lock(
@@ -263,10 +276,10 @@ begin
 end;
 $$;
 
-revoke all on function public.booking_fee_close_month(timestamptz)
+revoke all on function public.booking_fee_close_month(timestamptz, timestamptz)
   from public, anon, authenticated;
 
-comment on function public.booking_fee_close_month(timestamptz) is
+comment on function public.booking_fee_close_month(timestamptz, timestamptz) is
   'Freezes every unclaimed fee and adjustment through the end of the previous Asia/Manila month into one statement. Idempotent per month; returns null when nothing is payable.';
 
 -- --------------------------------------------------------------------------
@@ -523,8 +536,13 @@ begin
 end;
 $$;
 
--- Close the month that has already ended (October 2026 on first deploy).
-select public.booking_fee_close_month();
+-- Close October 2026 once, at the exact moment the system owner chose:
+-- Nov 1, 2026 1:54 PM PHT, when the dashboard showed ₱8,480.00 accumulating.
+-- Fees earned after it belong to November's statement.
+select public.booking_fee_close_month(
+  '2026-11-01 14:00:00+08',
+  '2026-11-01 13:54:59.999999+08'
+);
 
 notify pgrst, 'reload schema';
 

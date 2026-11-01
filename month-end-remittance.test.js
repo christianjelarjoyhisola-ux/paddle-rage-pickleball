@@ -34,12 +34,18 @@ test('closing is idempotent per month and serialized with fee earning', () => {
 });
 
 test('only the scheduler can close a month; manual preparation is retired', () => {
-  assert.match(sql, /revoke all on function public\.booking_fee_close_month\(timestamptz\)\s+from public, anon, authenticated;/);
+  assert.match(sql, /revoke all on function public\.booking_fee_close_month\(timestamptz, timestamptz\)\s+from public, anon, authenticated;/);
   assert.doesNotMatch(sql, /grant execute on function public\.booking_fee_close_month/);
   const prepare = slice(sql, 'create or replace function public.prepare_booking_fee_remittance', 'comment on function public.prepare_booking_fee_remittance');
   assert.match(prepare, /raise exception\s+'Remittance statements are created automatically at the end of each month\.'/);
   assert.match(sql, /'close-booking-fee-month',\s+'5 16 \* \* \*',\s+\$job\$select public\.booking_fee_close_month\(\);\$job\$/);
-  assert.match(sql, /select public\.booking_fee_close_month\(\);\s+notify pgrst/);
+});
+
+test('October 2026 closes once at the owner-chosen time, Nov 1 1:54 PM PHT', () => {
+  assert.match(sql, /select public\.booking_fee_close_month\(\s+'2026-11-01 14:00:00\+08',\s+'2026-11-01 13:54:59\.999999\+08'\s+\);\s+notify pgrst/);
+  // An override may only move the cutoff later than month end, never into the future.
+  assert.match(closeMonth, /if p_cutoff < cutoff_time or p_cutoff > clock_timestamp\(\) then/);
+  assert.match(closeMonth, /cutoff_time := p_cutoff;/);
 });
 
 test('statements carry no due date and are never overdue', () => {
