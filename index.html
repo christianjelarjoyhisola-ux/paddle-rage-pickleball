@@ -6235,6 +6235,19 @@ function extractErrMsg(err) {
   try { return JSON.stringify(err); } catch(_) { return 'Unknown error'; }
 }
 
+function receiptReferenceMismatchNotice(typedRef, receiptResult, method) {
+  const scanned = String(receiptResult?.extracted?.ref || '').trim();
+  if (!scanned) return '';
+  const key = value => String(method || '').toLowerCase() === 'gcash'
+    ? String(value || '').replace(/[^0-9]/g, '')
+    : String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const typedKey = key(typedRef);
+  const scannedKey = key(scanned);
+  if (!typedKey || !scannedKey || typedKey === scannedKey) return '';
+  return `Your receipt shows reference ${scanned}, but ${String(typedRef || '').trim()} was entered. ` +
+    'Please do not pay again — the court owner will check your receipt and correct the reference.';
+}
+
 function receiptReasonFromFlags(flags) {
   const labels = {
     DUPLICATE_REF: 'Duplicate reference',
@@ -8985,7 +8998,8 @@ async function submitBooking(e) {
           'payment_review_needed',
           receiptReasonFromFlags(booking._receiptResult?.flags || []) || 'Receipt received. Pending court-owner review.',
         ).catch(() => {});
-        submissionToast = 'Booking submitted. Payment is pending court-owner review.';
+        submissionToast = receiptReferenceMismatchNotice(gcashRef, booking._receiptResult, payMethod) ||
+          'Booking submitted. Payment is pending court-owner review.';
       }
       await refreshBookingItemViews(itemBookings);
     }
@@ -9884,6 +9898,9 @@ function showInvoice(b) {
       badgeClass = 'inv-status-confirmed';
       timelineSteps = [['Submitted', 'done'], ['Verified', 'done'], ['Confirmation', 'active']];
       statusSummary = 'Keep your PB booking reference while the owner completes final confirmation.';
+    } else {
+      const referenceNotice = receiptReferenceMismatchNotice(b.gcashRef, b._receiptResult, b.paymentMethod);
+      if (referenceNotice) statusSummary = referenceNotice;
     }
   }
 

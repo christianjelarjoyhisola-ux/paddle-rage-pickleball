@@ -1125,6 +1125,42 @@ tr:hover td { background: var(--bg2); }
   font-size: .75rem; line-height: 1.55;
 }
 .booking-payment-reject-warning strong { color: var(--red); }
+.booking-ref-correct-overlay { z-index: 565; }
+.booking-ref-correct-modal { max-width: 560px; display: flex; flex-direction: column; overflow: hidden; }
+.booking-ref-correct-modal .m-hd,
+.booking-ref-correct-modal .m-foot { flex: 0 0 auto; z-index: 2; }
+.booking-ref-correct-modal .m-body { min-height: 0; overflow-y: auto; }
+.booking-ref-correct-modal button:disabled,
+.booking-ref-correct-modal input:disabled,
+.booking-ref-correct-modal textarea:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+.booking-ref-correct-head { background: linear-gradient(135deg,rgba(200,160,96,.14),transparent); }
+.booking-ref-correct-head h2 { color: var(--yellow); }
+.booking-ref-correct-explainer { margin: 0 0 14px; color: var(--text2); font-size: .8rem; line-height: 1.6; }
+.booking-ref-correct-compare { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; margin-bottom: 16px; }
+.booking-ref-correct-compare > div { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border); min-width: 0; }
+.booking-ref-correct-compare .typed { background: rgba(229,57,53,.06); border-color: rgba(229,57,53,.24); }
+.booking-ref-correct-compare .scan { background: rgba(var(--green-rgb),.06); border-color: rgba(var(--green-rgb),.24); }
+.booking-ref-correct-compare span {
+  display: block; margin-bottom: 5px; color: var(--muted); font-size: .66rem;
+  font-weight: 850; letter-spacing: .06em; text-transform: uppercase;
+}
+.booking-ref-correct-compare code { display: block; color: var(--text); font-size: 1rem; font-weight: 800; letter-spacing: 1px; overflow-wrap: anywhere; }
+.booking-ref-correct-compare small { display: block; margin-top: 5px; color: var(--muted); font-size: .68rem; line-height: 1.4; }
+.booking-ref-correct-use { margin-top: 8px; }
+.booking-ref-correct-input { font-family: monospace; font-size: 1.05rem; letter-spacing: 1.5px; }
+.booking-ref-correct-check { min-height: 1.3em; margin-top: 7px; font-size: .74rem; line-height: 1.45; color: var(--muted); }
+.booking-ref-correct-check[data-tone="ok"] { color: var(--green); font-weight: 700; }
+.booking-ref-correct-check[data-tone="warn"] { color: var(--yellow); }
+.booking-ref-correct-check[data-tone="bad"] { color: var(--red); font-weight: 700; }
+.booking-ref-correct-reason { min-height: 84px; resize: vertical; line-height: 1.55; }
+.booking-ref-correct-override {
+  display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; padding: 12px 14px;
+  border-left: 3px solid var(--yellow); border-radius: 8px; background: rgba(200,160,96,.1);
+  color: var(--text2); font-size: .75rem; line-height: 1.5; cursor: pointer;
+}
+.booking-ref-correct-override[hidden] { display: none; }
+.booking-ref-correct-override input { margin-top: 3px; flex: 0 0 auto; }
+@media (max-width: 520px) { .booking-ref-correct-compare { grid-template-columns: 1fr; } }
 .booking-payment-transfer-overlay { z-index: 570; }
 .booking-payment-transfer-modal { max-width: 780px; display: flex; flex-direction: column; overflow: hidden; }
 .booking-payment-transfer-modal .m-hd,
@@ -5139,7 +5175,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
         </section>
 
         <footer class="pa-foot">
-          <div class="pa-due"><span class="pa-due-label">Remittance cycle</span><strong id="mfDueStatus">Next due &mdash;</strong></div>
+          <div class="pa-due"><span class="pa-due-label">Monthly statement</span><strong id="mfDueStatus">Next cutoff &mdash;</strong></div>
           <button class="btn btn-p pa-primary" id="mfAction" type="button" onclick="goto('remittances')">View Remittances <span aria-hidden="true">&#8594;</span></button>
         </footer>
         <div class="pa-error" id="mfError" role="status" hidden></div>
@@ -5666,25 +5702,25 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
 
       <div class="rm-cycle-banner">
         <div class="rm-cycle-main">
-          <div class="rm-cycle-icon" aria-hidden="true">14</div>
+          <div class="rm-cycle-icon" aria-hidden="true">&#128197;</div>
           <div>
-            <div class="rm-cycle-title" id="rmCycleTitle">Remittance is scheduled every 14th</div>
-            <div class="rm-cycle-copy" id="rmCycleCopy">The exact cutoff is frozen when the court owner prepares payment. New bookings after that cutoff start the next cycle.</div>
+            <div class="rm-cycle-title" id="rmCycleTitle">Statements close automatically at the end of each month</div>
+            <div class="rm-cycle-copy" id="rmCycleCopy">At 11:59 PM on the last day of the month (Asia/Manila), that month's platform allocation becomes one statement. New bookings start the next month.</div>
           </div>
         </div>
-        <span class="rm-pill" id="rmNextDuePill">Next due: &mdash;</span>
+        <span class="rm-pill" id="rmNextDuePill">Next cutoff: &mdash;</span>
       </div>
 
       <div class="rm-stat-grid" aria-label="Remittance summary">
         <div class="rm-stat">
           <div class="rm-stat-label">Accumulating</div>
           <div class="rm-stat-value money" id="rmLiveStat">&#8369;0.00</div>
-          <div class="rm-stat-note" id="rmLiveStatNote">Available for the next cutoff</div>
+          <div class="rm-stat-note" id="rmLiveStatNote">Included in the next month-end statement</div>
         </div>
         <div class="rm-stat">
           <div class="rm-stat-label">Awaiting Remittance</div>
           <div class="rm-stat-value money" id="rmPreparedStat">&#8369;0.00</div>
-          <div class="rm-stat-note" id="rmPreparedStatNote">Prepared balance awaiting payment</div>
+          <div class="rm-stat-note" id="rmPreparedStatNote">Statements to pay</div>
         </div>
         <div class="rm-stat warn">
           <div class="rm-stat-label">Under Review</div>
@@ -5722,7 +5758,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
         </div>
         <div class="rm-live-action" id="rmLiveAction">
           <button class="btn btn-p rm-action" id="rmPrepareBtn" type="button" onclick="openRemittancePrepare()" hidden>Prepare Remittance</button>
-          <div class="rm-live-hint" id="rmPrepareHint">Available to the court owner when a balance can be frozen.</div>
+          <div class="rm-live-hint" id="rmPrepareHint">Closes automatically at month end.</div>
         </div>
       </section>
 
@@ -5746,7 +5782,6 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
               <option value="awaiting-payment">Awaiting payment</option>
               <option value="under-review">Under review</option>
               <option value="settled">Settled</option>
-              <option value="overdue">Overdue</option>
               <option value="rejected">Rejected / cancelled</option>
             </select>
           </label>
@@ -6635,6 +6670,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
       <div style="background:rgba(var(--green-rgb),.07);border:1.5px solid rgba(var(--green-rgb),.28);border-radius:10px;padding:16px;text-align:center;margin-bottom:14px">
         <div style="font-size:.66rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px">Payment Reference #</div>
         <div id="vmGcashRef" style="font-family:monospace;font-size:1.55rem;font-weight:800;color:var(--green);letter-spacing:2px">—</div>
+        <div id="vmRefCorrection" style="display:none;font-size:.72rem;color:var(--yellow);margin-top:6px;line-height:1.5"></div>
         <div style="font-size:.7rem;color:var(--muted);margin-top:5px">Check this reference in the matching payment app and in the receiving account</div>
       </div>
       <div style="font-size:.82rem;color:var(--muted)">
@@ -6672,6 +6708,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
     <div class="m-foot">
       <button class="btn btn-d" id="vmRejectBtn" onclick="rejectPayment()">Payment Not Received</button>
       <button class="btn booking-duplicate-transfer" id="vmResolveDuplicateBtn" style="display:none" onclick="openDuplicatePaymentTransferFromVerify()">Resolve duplicate</button>
+      <button class="btn booking-duplicate-transfer" id="vmCorrectRefBtn" style="display:none" onclick="openPaymentRefCorrectFromVerify()">Correct reference</button>
       <button class="btn btn-p" id="vmConfirmBtn" onclick="verifyAndConfirm()">Confirm Payment</button>
       <button class="btn btn-g" id="vmResolvedClose" style="display:none" onclick="closeVerifyModal()">Close</button>
     </div>
@@ -6707,6 +6744,45 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
     <div class="m-foot">
       <button class="btn btn-g" type="button" id="bookingPaymentRejectCancel" onclick="closeBookingPaymentRejectModal()">Keep booking</button>
       <button class="btn btn-d" type="button" id="bookingPaymentRejectConfirm" disabled onclick="confirmBookingPaymentRejection()">Reject payment &amp; email player</button>
+    </div>
+  </div>
+</div>
+
+<!-- MISTYPED PAYMENT REFERENCE CORRECTION -->
+<div class="overlay booking-ref-correct-overlay" id="paymentRefCorrectModal" aria-hidden="true" inert hidden>
+  <div class="modal booking-ref-correct-modal" id="paymentRefCorrectDialog" role="dialog" aria-modal="true" aria-labelledby="paymentRefCorrectTitle" aria-describedby="paymentRefCorrectExplainer" aria-busy="false" tabindex="-1" onkeydown="paymentRefCorrectModalKeydown(event)">
+    <div class="m-hd booking-ref-correct-head">
+      <div>
+        <h2 id="paymentRefCorrectTitle">CORRECT PAYMENT REFERENCE</h2>
+        <p style="margin:4px 0 0;color:var(--muted);font-size:.75rem">Booking <strong id="paymentRefCorrectBooking" style="color:var(--text)">—</strong></p>
+      </div>
+      <button class="m-x" type="button" id="paymentRefCorrectClose" aria-label="Close without correcting" onclick="closePaymentRefCorrectModal()">&#10005;</button>
+    </div>
+    <div class="m-body">
+      <p class="booking-ref-correct-explainer" id="paymentRefCorrectExplainer">Use this only when the receipt is valid and the player typed the wrong reference. The booking stays pending &mdash; confirm the payment afterwards as usual. Duplicate protection still runs on the corrected reference.</p>
+      <div class="booking-ref-correct-compare">
+        <div class="typed"><span>Player typed</span><code id="paymentRefCorrectTyped">—</code><small id="paymentRefCorrectTypedNote"></small></div>
+        <div class="scan"><span>Receipt scan read</span><code id="paymentRefCorrectScan">—</code><small>Always compare with the receipt image.</small>
+          <button class="btn btn-g btn-sm booking-ref-correct-use" type="button" id="paymentRefCorrectUseScan" onclick="usePaymentRefCorrectScan()">Use scanned reference</button></div>
+      </div>
+      <div class="fg">
+        <label class="fl" for="paymentRefCorrectInput">Reference printed on the receipt</label>
+        <input class="fi booking-ref-correct-input" id="paymentRefCorrectInput" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="40" aria-describedby="paymentRefCorrectCheck" oninput="syncPaymentRefCorrect()"/>
+        <div class="booking-ref-correct-check" id="paymentRefCorrectCheck" role="status" aria-live="polite"></div>
+      </div>
+      <div class="fg">
+        <label class="fl" for="paymentRefCorrectReason">Reason (saved in the audit log)</label>
+        <textarea class="fi booking-ref-correct-reason" id="paymentRefCorrectReason" required minlength="10" maxlength="500" aria-describedby="paymentRefCorrectCount" placeholder="Example: Player swapped two digits; the receipt shows the correct reference." oninput="syncPaymentRefCorrect()"></textarea>
+        <div class="booking-payment-reject-help"><span>Minimum 10 characters.</span><span id="paymentRefCorrectCount">0 / 500</span></div>
+      </div>
+      <label class="booking-ref-correct-override" id="paymentRefCorrectOverrideWrap" hidden>
+        <input type="checkbox" id="paymentRefCorrectOverride" onchange="syncPaymentRefCorrect()"/>
+        <span><strong>I checked the receipt image.</strong> The reference above is exactly what the receipt shows (the scan missed or misread it, or the receipt is from a different app). This is recorded in the audit log.</span>
+      </label>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-g" type="button" id="paymentRefCorrectCancel" onclick="closePaymentRefCorrectModal()">Cancel</button>
+      <button class="btn btn-p" type="button" id="paymentRefCorrectSubmit" disabled onclick="submitPaymentRefCorrect()">Save corrected reference</button>
     </div>
   </div>
 </div>
@@ -7067,7 +7143,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
           </div>
         </div>
       </section>
-      <div class="rm-info-note"><span aria-hidden="true">&#128274;</span><span>Your frozen balance stays separate while proof is reviewed. New bookings continue accumulating for the next 14th.</span></div>
+      <div class="rm-info-note"><span aria-hidden="true">&#128274;</span><span>Your frozen balance stays separate while proof is reviewed. New bookings continue accumulating for the next month-end statement.</span></div>
     </div>
     <div class="m-foot">
       <button class="btn btn-g" type="button" onclick="closeRemittanceModal('rmPayModal')">Save for Later</button>
@@ -7598,6 +7674,7 @@ function shortDateTime(v){
   return `${d.toLocaleDateString('en-PH',{month:'short',day:'numeric'})}<div style="font-size:.72rem;color:var(--muted);font-weight:600">${d.toLocaleTimeString('en-PH',{hour:'numeric',minute:'2-digit',hour12:true})}</div>`;
 }
 const RECEIPT_FLAG_LABELS = {
+  REF_CORRECTED:'Reference corrected by owner', REF_CORRECTED_SCAN_OVERRIDE:'Reference corrected · checked against receipt image by owner',
   GOTYME_RCBC_TRACE_UNREADABLE:'GoTyme trace ID unreadable',
   DUPLICATE_REF:'Ref already used', POSSIBLE_DUPLICATE_REF:'Typed ref may already be used', DUPLICATE_INVOICE:'Invoice already used', DUPLICATE_INSTAPAY_REF:'InstaPay ref already used', DUPLICATE_BPI_TRANSACTION_REF:'BPI transaction ref already used', WRONG_GCASH_NUMBER:'Wrong receiver number',
   AMOUNT_MISMATCH:'Amount does not match', DATE_NOT_TODAY:'Wrong payment date', TIME_EXPIRED:'Paid after 15 min',
@@ -8350,7 +8427,7 @@ function bookingQuickConfirmIssue(b) {
   if (!items.length || ['mixed','rejected','deposit_retained'].includes(paymentState)) return 'Review this booking before confirming.';
   if (items.some(item => ['mixed','completed','cancelled','forfeited'].includes(String(item?.status || '').toLowerCase()))) return 'Review this grouped booking before confirming.';
   if (items.some(item => ['mixed','rejected','deposit_retained'].includes(String(item?.paymentStatus || '').toLowerCase()))) return 'Review this grouped payment before confirming.';
-  if (b?.duplicatePaymentRef) return 'Duplicate payment reference — review required.';
+  if (b?.duplicatePaymentRef) return 'Duplicate payment reference — open the payment to review or correct the reference.';
   if (receiptState === 'rejected' || items.some(item => String(item?.receiptStatus || '').toLowerCase() === 'rejected')) return 'Flagged receipt — review required.';
 
   const methods = [...new Set(items.map(item => String(item?.paymentMethod || '').toLowerCase()).filter(Boolean))];
@@ -9548,7 +9625,6 @@ async function renderMaintFee({ announce = false } = {}) {
     const liveBreakdown = rmFeeBreakdown(live);
     const serverNow = rmPick(dashboard, 'server_now', 'serverNow') || new Date().toISOString();
     const nextDue = rmPick(dashboard, 'next_due_on', 'nextDueOn', 'next_due_at', 'nextDueAt');
-    const canPrepare = rmCanPrepareInfo(dashboard);
 
     // The current policy is deployment-locked. Historical/mixed immutable
     // snapshots remain truthful in the formula immediately below.
@@ -9589,8 +9665,7 @@ async function renderMaintFee({ announce = false } = {}) {
 
     const dueKey = nextDue ? String(nextDue).slice(0, 10) : '';
     const todayKey = rmPhDateKey(serverNow);
-    const duePrefix = dueKey && dueKey < todayKey ? 'Overdue since' : dueKey === todayKey ? 'Due today' : 'Next due';
-    $('mfDueStatus').textContent = `${duePrefix} ${rmDateOnly(nextDue)}`;
+    $('mfDueStatus').textContent = dueKey === todayKey ? 'Statement closes tonight' : `Next cutoff ${rmDateOnly(nextDue)}`;
 
     const action = $('mfAction');
     if (isOwner) {
@@ -9601,8 +9676,6 @@ async function renderMaintFee({ announce = false } = {}) {
       action.innerHTML = 'View Review Status <span aria-hidden="true">&#8594;</span>';
     } else if (preparedAmount > 0) {
       action.innerHTML = 'View &amp; Remit <span aria-hidden="true">&#8594;</span>';
-    } else if (liveAmount > 0 && canPrepare.allowed) {
-      action.innerHTML = 'Prepare Remittance <span aria-hidden="true">&#8594;</span>';
     } else {
       action.innerHTML = 'View Remittances <span aria-hidden="true">&#8594;</span>';
     }
@@ -11213,6 +11286,10 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
   if ($('vmRejectBtn')) $('vmRejectBtn').style.display = !readOnly && canReview ? '' : 'none';
   if ($('vmConfirmBtn')) $('vmConfirmBtn').style.display = !readOnly && canReview ? '' : 'none';
   if ($('vmResolveDuplicateBtn')) $('vmResolveDuplicateBtn').style.display = transferSource ? '' : 'none';
+  const correctableRef = !readOnly && canReview && !transferSource &&
+    paymentReferenceCorrectable(b) && paymentReferenceNeedsCorrection(b);
+  if ($('vmCorrectRefBtn')) $('vmCorrectRefBtn').style.display = correctableRef ? '' : 'none';
+  renderVmRefCorrection(b, openToken);
   if ($('vmResolvedClose')) $('vmResolvedClose').style.display = readOnly || !canReview ? '' : 'none';
   if ($('vmReviewHint')) {
     $('vmReviewHint').textContent = readOnly
@@ -11221,6 +11298,8 @@ async function openVerifyModal(ref, { returnFocus = null } = {}) {
       ? 'Only the system owner or court owner can decide a pending payment. Receipt evidence remains available for review.'
       : transferSource
       ? 'This reference is protected by one cancelled booking. Use Resolve duplicate to compare both bookings and move the payment safely.'
+      : correctableRef
+      ? 'The typed reference is already used or does not match the receipt. If the receipt is valid and shows a different reference, use Correct reference, then confirm the payment.'
       : 'Match the source-app reference with the receiving account, then choose Received or Not Received. This owner decision is recorded.';
   }
   $('verifyModal').dataset.ref = ref;
@@ -11357,7 +11436,7 @@ async function rereadBookingReceipt() {
   button.textContent = 'Reading receipt…';
   button.setAttribute('aria-busy', 'true');
   $('vmRereadResult').textContent = 'Running fresh checks. This may take a moment.';
-  for (const id of ['vmConfirmBtn','vmRejectBtn','vmResolveDuplicateBtn']) $(id).disabled = true;
+  for (const id of ['vmConfirmBtn','vmRejectBtn','vmResolveDuplicateBtn','vmCorrectRefBtn']) $(id).disabled = true;
   try {
     const booking = await getBookingGroupByRef(ref);
     if (!booking) throw new Error('Booking not found.');
@@ -11394,7 +11473,7 @@ async function rereadBookingReceipt() {
     button.disabled = false;
     button.textContent = '↻ Reread receipt';
     button.removeAttribute('aria-busy');
-    for (const id of ['vmConfirmBtn','vmRejectBtn','vmResolveDuplicateBtn']) $(id).disabled = false;
+    for (const id of ['vmConfirmBtn','vmRejectBtn','vmResolveDuplicateBtn','vmCorrectRefBtn']) $(id).disabled = false;
   }
 }
 
@@ -11839,6 +11918,245 @@ async function openBookingPaymentTransferModal(targetRef, trigger = null, { clos
     return false;
   } finally {
     if (trigger?.isConnected) { trigger.disabled = false; trigger.textContent = idleText; }
+  }
+}
+
+let _paymentRefCorrectContext = null;
+let _paymentRefCorrectInFlight = false;
+const PAYMENT_REF_CORRECTION_FLAGS = new Set(['DUPLICATE_REF', 'POSSIBLE_DUPLICATE_REF', 'REF_MISMATCH']);
+
+function paymentRefCorrectKey(method, value){
+  const provider = String(method || '').toLowerCase().trim();
+  return provider === 'gcash'
+    ? String(value || '').replace(/[^0-9]/g, '')
+    : String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+function paymentReferenceScanRef(b){
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  const refs = [...new Set([b, ...rows]
+    .map(row => String(row?.receiptExtracted?.ref || '').trim())
+    .filter(Boolean))];
+  return refs.length === 1 ? refs[0] : '';
+}
+function paymentReferenceCorrectable(b){
+  if (!b || !canManuallyResolvePayment() || bookingPaymentIsResolved(b)) return false;
+  if (!isDigitalPayment(b.paymentMethod) || hostBalancePendingPayment(b)) return false;
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  const list = rows.length ? rows : [b];
+  if (!list.some(row => row?.receiptImageUrl) && !b.receiptImageUrl) return false;
+  if (!list.every(row => ['pending','verifying'].includes(String(row?.status || '').toLowerCase()))) return false;
+  if (!list.every(row => String(row?.paymentStatus || '').toLowerCase() === 'for_verification')) return false;
+  return !list.some(row => row?.paymentTransferId || row?.paymentReassignedFromRef ||
+    row?.paymentReassignedToRef || String(row?.receiptStatus || '').toLowerCase() === 'rejected');
+}
+function paymentReferenceNeedsCorrection(b){
+  if (b?.duplicatePaymentRef) return true;
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  if ([b, ...rows].some(row => (row?.receiptFlags || []).some(flag => PAYMENT_REF_CORRECTION_FLAGS.has(String(flag).toUpperCase())))) return true;
+  const scan = paymentRefCorrectKey(b?.paymentMethod, paymentReferenceScanRef(b));
+  return !!scan && scan !== paymentRefCorrectKey(b?.paymentMethod, b?.gcashRef);
+}
+async function renderVmRefCorrection(b, openToken){
+  const box = $('vmRefCorrection');
+  if (!box) return;
+  box.style.display = 'none';
+  box.textContent = '';
+  const rows = bookingGroupRowsForPaymentGuard(b);
+  const corrected = [b, ...rows].some(row => (row?.receiptFlags || []).some(flag => /^REF_CORRECTED/.test(String(flag).toUpperCase())));
+  if (!corrected || typeof DB.getPaymentReferenceCorrections !== 'function') return;
+  const history = await DB.getPaymentReferenceCorrections(b.refs || [b.ref]).catch(() => []);
+  if (openToken !== _vmOpenToken || !history.length) return;
+  const last = history[0];
+  const when = last.createdAt ? new Date(last.createdAt).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  const who = last.actorRole === 'owner' ? 'system owner' : 'court owner';
+  box.textContent = `Corrected from ${last.previousReference} by ${who}${when ? ` · ${when}` : ''}` +
+    `${last.scanOverride ? ' · scan overridden' : ''} — “${last.reason}”`;
+  box.style.display = '';
+}
+function setPaymentRefCorrectBusy(busy){
+  $('paymentRefCorrectDialog')?.setAttribute('aria-busy', busy ? 'true' : 'false');
+  ['paymentRefCorrectClose','paymentRefCorrectCancel','paymentRefCorrectInput','paymentRefCorrectReason','paymentRefCorrectOverride','paymentRefCorrectUseScan'].forEach(id => {
+    const control = $(id);
+    if (control) control.disabled = !!busy;
+  });
+  syncPaymentRefCorrect();
+}
+function syncPaymentRefCorrect(){
+  const ctx = _paymentRefCorrectContext;
+  const reasonField = $('paymentRefCorrectReason');
+  const reason = String(reasonField?.value || '').trim();
+  if ($('paymentRefCorrectCount')) $('paymentRefCorrectCount').textContent = `${String(reasonField?.value || '').length} / 500`;
+  const check = $('paymentRefCorrectCheck');
+  const overrideWrap = $('paymentRefCorrectOverrideWrap');
+  const overrideBox = $('paymentRefCorrectOverride');
+  let matched = false, overrideNeeded = false, blocked = false, tone = '', message = '';
+  if (ctx) {
+    const key = paymentRefCorrectKey(ctx.method, $('paymentRefCorrectInput')?.value);
+    const typedKey = paymentRefCorrectKey(ctx.method, ctx.typed);
+    const scanKey = paymentRefCorrectKey(ctx.method, ctx.scanRef);
+    if (scanKey && scanKey === typedKey) {
+      blocked = true; tone = 'bad';
+      message = 'The receipt itself shows the reference that is already in use. This is a real duplicate and cannot be corrected — use Payment Not Received instead.';
+    } else if (!key) {
+      message = 'Type the reference exactly as printed on the receipt.';
+    } else if (key.length < 4 || key.length > 40) {
+      tone = 'warn'; message = 'Enter 4 to 40 letters or numbers.'; blocked = true;
+    } else if (key === typedKey) {
+      tone = 'bad'; message = 'This is the same reference the player typed.'; blocked = true;
+    } else if (scanKey && key === scanKey) {
+      tone = 'ok'; message = '✓ Matches the reference read from the receipt.'; matched = true;
+    } else {
+      overrideNeeded = true; tone = 'warn';
+      message = scanKey
+        ? `Does not match the receipt scan (${ctx.scanRef}). If the receipt image shows this reference, tick the box below.`
+        : 'The receipt scan did not read a reference. If the receipt image shows this reference, tick the box below.';
+    }
+  }
+  const showOverride = !!ctx && overrideNeeded && !blocked;
+  if (overrideWrap) overrideWrap.hidden = !showOverride;
+  if (overrideBox && !showOverride) overrideBox.checked = false;
+  if (check) { check.textContent = message; check.dataset.tone = tone; }
+  const allowed = !!ctx && !blocked && (matched || (showOverride && overrideBox?.checked));
+  const button = $('paymentRefCorrectSubmit');
+  if (button) button.disabled = _paymentRefCorrectInFlight || !allowed || reason.length < 10 || reason.length > 500;
+}
+function usePaymentRefCorrectScan(){
+  const ctx = _paymentRefCorrectContext;
+  const input = $('paymentRefCorrectInput');
+  if (!ctx?.scanRef || !input) return;
+  input.value = paymentRefCorrectKey(ctx.method, ctx.scanRef);
+  syncPaymentRefCorrect();
+  input.focus();
+}
+function paymentRefCorrectModalKeydown(event){
+  const overlay = $('paymentRefCorrectModal');
+  if (!overlay?.classList.contains('show')) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closePaymentRefCorrectModal();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const focusable = [...overlay.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')]
+    .filter(element => element.offsetParent !== null);
+  if (!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+}
+function closePaymentRefCorrectModal({ restoreFocus = true, force = false } = {}){
+  if (_paymentRefCorrectInFlight && !force) return;
+  const overlay = $('paymentRefCorrectModal');
+  const context = _paymentRefCorrectContext;
+  if (overlay) {
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.inert = true;
+    overlay.hidden = true;
+  }
+  _paymentRefCorrectContext = null;
+  ['paymentRefCorrectInput','paymentRefCorrectReason'].forEach(id => { if ($(id)) $(id).value = ''; });
+  if ($('paymentRefCorrectOverride')) $('paymentRefCorrectOverride').checked = false;
+  if (context?.suspendedVerify) {
+    const verifyOverlay = $('verifyModal');
+    if (verifyOverlay?.classList.contains('show')) {
+      verifyOverlay.inert = false;
+      verifyOverlay.setAttribute('aria-hidden', 'false');
+    }
+  }
+  syncPaymentRefCorrect();
+  const previous = context?.trigger;
+  if (restoreFocus && previous?.isConnected) requestAnimationFrame(() => previous.focus());
+}
+async function openPaymentRefCorrectModal(ref, trigger = null){
+  if (!canManuallyResolvePayment()) {
+    toast('Only the system owner or court owner can correct a payment reference.', 'err');
+    return;
+  }
+  const actionRef = String(ref || '').trim();
+  if (!actionRef || _paymentRefCorrectInFlight) return;
+  const idleText = trigger?.textContent || '';
+  if (trigger) { trigger.disabled = true; trigger.textContent = 'Opening…'; }
+  try {
+    const booking = await getBookingGroupByRef(actionRef);
+    if (!booking) throw new Error('Booking not found.');
+    if (!paymentReferenceCorrectable(booking)) {
+      throw new Error('Only a pending payment with a receipt can have its reference corrected.');
+    }
+    const canonicalRef = booking.primaryRef || booking.ref || actionRef;
+    const scanRef = paymentReferenceScanRef(booking);
+    const verifyOverlay = $('verifyModal');
+    const suspendedVerify = Boolean(verifyOverlay?.classList.contains('show'));
+    _paymentRefCorrectContext = {
+      ref: canonicalRef,
+      trigger,
+      suspendedVerify,
+      method: String(booking.paymentMethod || '').toLowerCase(),
+      typed: String(booking.gcashRef || ''),
+      scanRef,
+      idempotencyKey: newBookingPaymentTransferIdempotencyKey(),
+    };
+    $('paymentRefCorrectBooking').textContent = booking.displayRef || canonicalRef;
+    $('paymentRefCorrectTyped').textContent = booking.gcashRef || '—';
+    $('paymentRefCorrectTypedNote').textContent = booking.duplicatePaymentRef ? 'Already used by another booking' : '';
+    $('paymentRefCorrectScan').textContent = scanRef || 'Not read';
+    $('paymentRefCorrectUseScan').style.display = scanRef ? '' : 'none';
+    $('paymentRefCorrectInput').value = '';
+    $('paymentRefCorrectReason').value = '';
+    $('paymentRefCorrectOverride').checked = false;
+    const overlay = $('paymentRefCorrectModal');
+    overlay.hidden = false;
+    overlay.inert = false;
+    overlay.setAttribute('aria-hidden', 'false');
+    overlay.classList.add('show');
+    if (suspendedVerify) {
+      verifyOverlay.inert = true;
+      verifyOverlay.setAttribute('aria-hidden', 'true');
+    }
+    setPaymentRefCorrectBusy(false);
+    requestAnimationFrame(() => $('paymentRefCorrectInput')?.focus());
+  } catch (error) {
+    toast(error?.message || 'Could not open the reference correction.', 'err');
+  } finally {
+    if (trigger?.isConnected) { trigger.disabled = false; trigger.textContent = idleText; }
+  }
+}
+async function openPaymentRefCorrectFromVerify(){
+  const ref = $('verifyModal')?.dataset.ref;
+  if (!ref) return;
+  await openPaymentRefCorrectModal(ref, $('vmCorrectRefBtn'));
+}
+async function submitPaymentRefCorrect(){
+  const context = _paymentRefCorrectContext;
+  if (!context || _paymentRefCorrectInFlight) return;
+  if (typeof DB.correctBookingPaymentReference !== 'function') {
+    toast('Reference correction is unavailable. Refresh and try again.', 'err');
+    return;
+  }
+  const reference = String($('paymentRefCorrectInput')?.value || '').trim();
+  const reason = String($('paymentRefCorrectReason')?.value || '').trim();
+  const scanOverride = !$('paymentRefCorrectOverrideWrap')?.hidden && !!$('paymentRefCorrectOverride')?.checked;
+  const button = $('paymentRefCorrectSubmit');
+  const idleText = button?.textContent || 'Save corrected reference';
+  _paymentRefCorrectInFlight = true;
+  setPaymentRefCorrectBusy(true);
+  if (button) button.textContent = 'Saving…';
+  try {
+    const result = await DB.correctBookingPaymentReference(context.ref, reference, reason, scanOverride, context.idempotencyKey);
+    _paymentRefCorrectInFlight = false;
+    closePaymentRefCorrectModal({ restoreFocus: false, force: true });
+    toast(result.transitioned
+      ? `Reference corrected to ${result.correctedReference}. Check the receipt once more, then confirm the payment.`
+      : 'This correction was already saved.', 'ok');
+    await Promise.allSettled([renderBookings(), renderDash(), ...(_curSection === 'payreview' ? [renderPaymentReview()] : [])]);
+    const verifyRef = $('verifyModal')?.dataset.ref;
+    if (verifyRef && $('verifyModal').classList.contains('show')) await openVerifyModal(verifyRef);
+  } catch (error) {
+    toast(error?.message || 'Could not correct this payment reference.', 'err');
+  } finally {
+    _paymentRefCorrectInFlight = false;
+    if (button?.isConnected) button.textContent = idleText;
+    setPaymentRefCorrectBusy(false);
   }
 }
 
@@ -15076,7 +15394,6 @@ function rmRecordCard(record) {
   ];
   if (role === 'court_owner' && ['awaiting-payment','overdue','rejected'].includes(status)) {
     actions.push(`<button class="btn btn-p btn-sm" type="button" onclick="openRemittancePayment('${jsArg(id)}')">Remit Now</button>`);
-    if (['awaiting-payment','rejected'].includes(status) && rmAmountSettled(record) === 0) actions.push(`<button class="btn btn-d btn-sm" type="button" onclick="openRemittanceCancellation('${jsArg(id)}')">Cancel</button>`);
   }
   if (role === 'owner' && status === 'under-review') {
     actions.push(`<button class="btn btn-p btn-sm" type="button" onclick="openRemittanceReview('${jsArg(id)}')">Review Proof</button>`);
@@ -15185,18 +15502,17 @@ async function renderRemittances({ announce = false } = {}) {
     const totalOutstanding = dashboardOutstanding === undefined
       ? liveAmount + openAmount
       : Math.max(0, rmNumber(dashboardOutstanding));
-    const canPrepare = rmCanPrepareInfo(dashboard);
 
     $('rmPageCopy').textContent = role === 'owner'
       ? 'Monitor platform allocations receivable, verify submitted proof, and inspect every permanent settlement record.'
-      : 'See the platform share already included in court prices, prepare an exact cutoff, submit proof, and keep every settlement record.';
+      : 'See the platform share already included in court prices, pay each month-end statement, submit proof, and keep every settlement record.';
     $('rmRolePill').textContent = role === 'owner' ? 'System Owner · Verification' : 'Court Owner · Remittance';
     $('rmLiveStat').textContent = fmt(liveAmount);
-    $('rmLiveStatNote').textContent = liveAmount > 0 ? 'Available for the next exact cutoff' : 'No allocation accumulating now';
+    $('rmLiveStatNote').textContent = liveAmount > 0 ? 'Included in the next month-end statement' : 'No allocation accumulating now';
     $('rmPreparedStat').textContent = fmt(preparedAmount);
     $('rmPreparedStatNote').textContent = preparedRecordCount
-      ? `${preparedRecordCount} prepared balance${preparedRecordCount === 1 ? '' : 's'} awaiting action`
-      : 'No frozen balance awaiting payment';
+      ? `${preparedRecordCount} statement${preparedRecordCount === 1 ? '' : 's'} to pay`
+      : 'No statement awaiting payment';
     $('rmReviewStat').textContent = fmt(reviewAmount);
     $('rmReviewStatNote').textContent = reviewRows.length
       ? `${reviewRows.length} payment proof${reviewRows.length === 1 ? '' : 's'} · included in outstanding`
@@ -15222,20 +15538,19 @@ async function renderRemittances({ announce = false } = {}) {
     const nextDueLabel = rmDateOnly(nextDue);
     const dueKey = nextDue ? String(nextDue).slice(0, 10) : '';
     const todayKey = rmPhDateKey(serverNow);
-    const duePrefix = dueKey && dueKey < todayKey ? 'Overdue since' : dueKey === todayKey ? 'Due today' : 'Next due';
-    $('rmNextDuePill').textContent = `${duePrefix}: ${nextDueLabel}`;
-    $('rmCycleTitle').textContent = dueKey === todayKey ? 'Today is remittance day' : dueKey && dueKey < todayKey ? 'The remittance date has passed' : 'Remittance is scheduled every 14th';
+    $('rmNextDuePill').textContent = dueKey === todayKey ? 'Cutoff: tonight, 11:59 PM' : `Next cutoff: ${nextDueLabel}`;
+    $('rmCycleTitle').textContent = 'Statements close automatically at the end of each month';
     $('rmCycleCopy').textContent = role === 'owner'
-      ? 'Court owners freeze the exact balance when they prepare payment. You verify the submitted proof before it becomes settled.'
-      : 'Your balance keeps accumulating until you prepare payment. The database freezes the exact cutoff at that moment.';
+      ? "At 11:59 PM on the last day of the month (Asia/Manila), that month's platform allocation becomes one statement. You verify the court owner's proof before it becomes settled."
+      : "At 11:59 PM on the last day of the month (Asia/Manila), that month's platform allocation becomes one statement. Pay the statement and submit your proof.";
 
+    // Statements are created automatically at month end; nobody prepares a cutoff.
     const prepareBtn = $('rmPrepareBtn');
     const liveAction = $('rmLiveAction');
     liveAction.hidden = role !== 'court_owner';
-    prepareBtn.hidden = role !== 'court_owner';
-    prepareBtn.disabled = !canPrepare.allowed || liveAmount <= 0;
-    prepareBtn.textContent = liveAmount > 0 ? `Prepare ${fmt(liveAmount)}` : 'Prepare Remittance';
-    $('rmPrepareHint').textContent = canPrepare.reason || (liveAmount <= 0 ? 'The button activates when an eligible fee is available.' : canPrepare.allowed ? 'The exact cutoff is created only after confirmation.' : `Next scheduled payment: ${nextDueLabel}`);
+    prepareBtn.hidden = true;
+    prepareBtn.disabled = true;
+    $('rmPrepareHint').textContent = liveAmount > 0 ? `Becomes a statement on ${nextDueLabel} at 11:59 PM.` : 'Closes automatically at month end.';
 
     renderRemittanceRecords();
     if (announce) {
@@ -15605,7 +15920,6 @@ async function openRemittanceDetails(id) {
     <section class="rm-detail-section"><div class="rm-detail-title">Included court bookings</div><div class="rm-booking-list">${bookingItems.length ? bookingItems.map(rmBookingCard).join('') : '<div class="rm-empty" style="min-height:110px"><div>Individual booking details are not available for this legacy record.</div></div>'}</div></section>`;
   const actions = [`<button class="btn btn-g" type="button" onclick="closeRemittanceModal('rmDetailModal')">Close</button>`];
   if (rmDashboardRole() === 'court_owner' && ['awaiting-payment','overdue','rejected'].includes(status)) actions.push(`<button class="btn btn-p" type="button" onclick="closeRemittanceModal('rmDetailModal',{restoreFocus:false});openRemittancePayment('${jsArg(rmRecordId(record))}')">Remit Now</button>`);
-  if (rmDashboardRole() === 'court_owner' && ['awaiting-payment','rejected'].includes(status) && rmAmountSettled(record) === 0) actions.unshift(`<button class="btn btn-d" type="button" onclick="closeRemittanceModal('rmDetailModal',{restoreFocus:false});openRemittanceCancellation('${jsArg(rmRecordId(record))}')">Cancel Prepared Record</button>`);
   if (rmDashboardRole() === 'owner' && status === 'under-review') actions.push(`<button class="btn btn-p" type="button" onclick="closeRemittanceModal('rmDetailModal',{restoreFocus:false});openRemittanceReview('${jsArg(rmRecordId(record))}')">Review Proof</button>`);
   $('rmDetailActions').innerHTML = actions.join('');
   openRemittanceModal('rmDetailModal');
@@ -18601,9 +18915,9 @@ function applyRoleVisibility(role) {
       <p id="agreeFeeIntro" style="margin:0 0 14px">In consideration of the platform access provided at no setup fee, one-time fee, monthly subscription fee, hidden fee, or other platform charge to the Court Owner, the Court Owner <strong>authorizes</strong> the Platform Provider to allocate the current System Owner-selected <strong>booking fee from within the Court Owner's configured player-facing price</strong> for each eligible transaction.<br><br>The configured court price is the complete amount shown to and paid by the customer. The booking fee allocation is <strong>not added on top at checkout</strong>. The System Owner sets the allocation amount and charging method, either per booked hour or per confirmed booking transaction, and the system privately records the allocation in the booking-period remittance statement.</p>
       <p id="agreeFeeBillable" style="margin:0 0 14px"><strong>When it applies.</strong> The configured booking fee allocation applies only to a <strong>confirmed booking transaction</strong> that successfully reserved a court slot. Bookings that are released before confirmation, expire, or never hold a slot do <strong>not</strong> create a remittance allocation.</p>
       <p id="agreeFeeCollection" style="margin:0 0 14px"><strong>Collection.</strong> The Court Owner collects the complete displayed price from the customer. From that collected amount, the configured booking fee allocation is held on behalf of the Platform Provider until remittance; the remainder is the Court Owner's net court revenue. No additional booking fee is charged to the player.</p>
-      <p id="agreeFeeWeekly" style="margin:0 0 14px"><strong>Accumulated remittance every 14th.</strong> Eligible booking fees accumulate continuously until the Court Owner prepares remittance on the <strong>14th day of the month</strong>. At that moment, the system freezes an exact server-recorded cutoff in Asia/Manila time and creates a permanent snapshot of all eligible, unsettled confirmed booking transactions available before that cutoff. Each booking is included <strong>only once</strong>. Eligible bookings at or after the cutoff begin the next accumulated balance for the following 14th.</p>
-      <p style="margin:0 0 14px"><strong>Due date &amp; method.</strong> The accumulated balance is scheduled for remittance on the <strong>14th of each month</strong>. The Court Owner prepares the exact cutoff, remits the frozen amount via <strong>GCash</strong> to the booking fee remittance account shown in the dashboard, and submits the transaction reference and receipt screenshot. The remittance becomes <strong>Settled</strong> only after the System Owner verifies the proof; its permanent record remains available in Remittance History.</p>
-      <p style="margin:0 0 14px"><strong>Non-remittance.</strong> Statements not remitted past the due date are marked <strong>overdue</strong>. The Platform Provider may suspend or restrict the Court Owner's access to the booking system until all outstanding statements are settled. Suspension does not waive any amounts already due.</p>
+      <p id="agreeFeeWeekly" style="margin:0 0 14px"><strong>Monthly statement.</strong> Eligible booking fees accumulate during each calendar month. At <strong>11:59 PM on the last day of the month</strong> (Asia/Manila), the system automatically closes the month and creates a permanent statement of all eligible, unsettled confirmed booking transactions through that cutoff. Each booking is included <strong>only once</strong>. Eligible bookings after the cutoff begin the next month's statement.</p>
+      <p style="margin:0 0 14px"><strong>Payment &amp; method.</strong> The Court Owner remits each statement amount via <strong>GCash</strong> to the booking fee remittance account shown in the dashboard, and submits the transaction reference and receipt screenshot. The statement becomes <strong>Settled</strong> only after the System Owner verifies the proof; its permanent record remains available in Remittance History.</p>
+      <p style="margin:0 0 14px"><strong>Non-remittance.</strong> The Platform Provider may suspend or restrict the Court Owner's access to the booking system until all outstanding statements are settled. Suspension does not waive any amounts already owed.</p>
 
       <h4 style="margin:0 0 8px;color:var(--green);font-size:.85rem;letter-spacing:.6px;text-transform:uppercase">4. Court Owner's Revenue</h4>
       <p id="agreeFeeRevenue" style="margin:0 0 14px">The Court Owner controls the complete player-facing court price. For each eligible confirmed booking, the configured booking fee allocation is deducted from that collected price for the Platform Provider; the balance belongs <strong>exclusively to the Court Owner</strong> as net court revenue. The player never pays the allocation as an additional checkout charge.</p>
@@ -18648,7 +18962,7 @@ function applyRoleVisibility(role) {
         <li>You have read and fully understood all terms of this Agreement.</li>
         <li>You are the authorized Court Owner or duly authorized representative.</li>
         <li id="agreeFeeConfirmCollect">You authorize the platform to allocate the System Owner-selected booking fee from within the complete player-facing price on confirmed booking transactions.</li>
-        <li id="agreeFeeConfirmRemit">You agree to remit the continuously accumulated booking fees to the Platform Provider on the <strong>14th of each month</strong>, using the exact cutoff recorded when remittance is prepared.</li>
+        <li id="agreeFeeConfirmRemit">You agree to remit each <strong>month-end statement</strong> of accumulated booking fees to the Platform Provider. Statements close automatically at 11:59 PM on the last day of each month (Asia/Manila).</li>
         <li>You agree to honor all platform bookings and not circumvent the booking fee.</li>
         <li>You understand the Platform Provider is the software provider only and does not operate the court.</li>
         <li>This electronic signature has the same legal force as a handwritten signature under RA 8792.</li>
@@ -18718,11 +19032,11 @@ async function updateAgreementFeeCopy() {
   setHtml('agreeFeeIntro', `In consideration of the platform access provided at no setup fee, one-time fee, monthly subscription fee, hidden fee, or other platform charge to the Court Owner, the Court Owner <strong>authorizes</strong> the Platform Provider to allocate the current System Owner-selected <strong>${fee} booking fee from within the Court Owner's configured player-facing price</strong> for each eligible transaction.<br><br>The configured court price is the complete amount shown to and paid by the customer. The allocation is <strong>not added on top at checkout</strong>. It is currently configured as a <strong>${feeMethod}</strong> at <strong>${fmt(cfg.amount)}</strong> and is privately recorded in the running remittance ledger when the booking becomes eligible.`);
   setHtml('agreeFeeBillable', `<strong>When it applies.</strong> The configured ${configuredFeeText} allocation applies only to a <strong>confirmed booking transaction</strong> that successfully reserved a court slot. Bookings that are released before confirmation, expire, or never hold a slot do <strong>not</strong> create a remittance allocation.`);
   setHtml('agreeFeeCollection', `<strong>Collection.</strong> The Court Owner collects the complete displayed price from the customer. From that collected amount, the configured ${configuredFeeText} allocation is held on behalf of the Platform Provider until remittance; the remainder is the Court Owner's net court revenue. No additional booking fee is charged to the player.`);
-  setHtml('agreeFeeWeekly', `<strong>Accumulated remittance every 14th.</strong> Eligible booking fees accumulate continuously until the Court Owner prepares remittance on the <strong>14th day of the month</strong>. The system then freezes the exact Asia/Manila server time and snapshots all eligible, unsettled confirmed booking transactions before that cutoff. At the current configuration, the fee calculation is <strong>${formula}</strong>. Each booking is included <strong>only once</strong>; eligible bookings at or after the cutoff start the next balance for the following 14th.`);
+  setHtml('agreeFeeWeekly', `<strong>Monthly statement.</strong> Eligible booking fees accumulate during each calendar month. At <strong>11:59 PM on the last day of the month</strong> (Asia/Manila), the system automatically closes the month and snapshots all eligible, unsettled confirmed booking transactions through that cutoff into one statement. At the current configuration, the fee calculation is <strong>${formula}</strong>. Each booking is included <strong>only once</strong>; eligible bookings after the cutoff start the next month's statement.`);
   setHtml('agreeFeeRevenue', `The Court Owner controls the complete player-facing court price. For each eligible confirmed booking, the configured booking fee allocation of <strong>${fee}</strong> is deducted from that collected price for the Platform Provider; the balance belongs <strong>exclusively to the Court Owner</strong> as net court revenue. The player never pays the allocation as an additional checkout charge.`);
   setHtml('agreeFeeCircumvention', `The Court Owner agrees <strong>not to direct, encourage, or assist customers to bypass the platform</strong> in order to avoid the configured booking fee allocation of <strong>${fee}</strong>. This includes but is not limited to: advertising a direct booking channel at a lower price for platform-visible slots, accepting bookings verbally or via personal chat for slots available on the platform, or instructing customers to "book directly" to avoid the allocation.<br><br>Circumvention of the booking fee allocation is a material breach of this Agreement and may result in immediate suspension or termination of platform access.`);
   setHtml('agreeFeeConfirmCollect', `You authorize the platform to allocate the System Owner-selected booking fee of <strong>${fee}</strong> from within the complete player-facing price on confirmed booking transactions.`);
-  setHtml('agreeFeeConfirmRemit', `You agree to remit the continuously accumulated booking fees to the Platform Provider on the <strong>14th of each month</strong>, using the exact cutoff recorded when remittance is prepared.`);
+  setHtml('agreeFeeConfirmRemit', `You agree to remit each <strong>month-end statement</strong> of accumulated booking fees to the Platform Provider. Statements close automatically at 11:59 PM on the last day of each month (Asia/Manila).`);
   setHtml('agreeFeeCheckboxText', `I have read and fully understood the Platform Access &amp; Booking Fee Authorization Agreement above. I authorize the platform to allocate the System Owner-selected <strong>${fee}</strong> booking fee from within the complete player-facing price on confirmed booking transactions. I agree to honor all platform bookings and not direct customers to book directly to circumvent this allocation. I understand that the Platform Provider is the software provider only and does not operate the court. This electronic signature is legally binding under RA 8792.`);
 }
 
