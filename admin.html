@@ -7122,7 +7122,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
         <div class="rm-hero-amount" id="rmPayHeroAmount">&#8369;0.00</div>
       </div>
       <div class="rm-fee-breakdown" id="rmPayFeeBreakdown" aria-label="Frozen fee calculation"></div>
-      <section class="rm-step">
+      <section class="rm-step" id="rmPaySendStep">
         <div class="rm-step-title"><span class="rm-step-num">1</span> Send payment to the system owner</div>
         <div class="rm-account-row"><div class="rm-account-label">GCash number</div><code class="rm-account-value" id="rmPayAccountNumber">&mdash;</code><button class="btn btn-g btn-sm rm-copy" type="button" onclick="copyRemittanceValue('rmPayAccountNumber')">Copy</button></div>
         <div class="rm-account-row"><div class="rm-account-label">Account name</div><code class="rm-account-value" id="rmPayAccountName">&mdash;</code><button class="btn btn-g btn-sm rm-copy" type="button" onclick="copyRemittanceValue('rmPayAccountName')">Copy</button></div>
@@ -7130,10 +7130,11 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
         <div class="rm-qr" id="rmPayQrWrap" hidden><div class="rm-account-label" style="margin-bottom:7px">Scan to remit</div><img id="rmPayQr" src="" alt="System owner remittance GCash QR code" /></div>
       </section>
       <section class="rm-step">
-        <div class="rm-step-title"><span class="rm-step-num">2</span> Submit proof of remittance</div>
+        <div class="rm-step-title" id="rmPayProofTitle"><span class="rm-step-num">2</span> Submit proof of remittance</div>
         <div class="rm-form-grid">
-          <div class="fg" style="margin:0"><label class="fl" for="rmPayAmount">Amount Remitted <span style="color:var(--red)">*</span></label><input class="fi" id="rmPayAmount" type="number" inputmode="decimal" min="0.01" step="0.01" required /></div>
-          <div class="fg" style="margin:0"><label class="fl" for="rmPaymentRef">GCash Transaction ID <span style="color:var(--red)">*</span></label><input class="fi" id="rmPaymentRef" type="text" autocomplete="off" maxlength="100" placeholder="Enter transaction reference" required /></div>
+          <div class="fg full" id="rmPayMethodField" style="margin:0" hidden><label class="fl" for="rmPayMethod">Paid Via <span style="color:var(--red)">*</span></label><select class="fi" id="rmPayMethod" onchange="syncRemittancePayMethod()"><option value="gcash">GCash</option><option value="maya">Maya</option><option value="bank_transfer">Bank transfer</option><option value="cash">Cash</option><option value="other">Other</option></select></div>
+          <div class="fg" style="margin:0"><label class="fl" for="rmPayAmount" id="rmPayAmountLabel">Amount Remitted <span style="color:var(--red)">*</span></label><input class="fi" id="rmPayAmount" type="number" inputmode="decimal" min="0.01" step="0.01" required /></div>
+          <div class="fg" style="margin:0"><label class="fl" for="rmPaymentRef" id="rmPaymentRefLabel">GCash Transaction ID <span style="color:var(--red)">*</span></label><input class="fi" id="rmPaymentRef" type="text" autocomplete="off" maxlength="100" placeholder="Enter transaction reference" required /></div>
           <div class="fg full" style="margin:0"><label class="fl" for="rmPaymentNote">Note <span style="color:var(--text3);font-weight:500;text-transform:none">(optional)</span></label><textarea class="fi" id="rmPaymentNote" rows="2" maxlength="500" placeholder="Add a short note for the system owner" style="resize:vertical"></textarea></div>
           <div class="fg full" style="margin:0">
             <label class="fl" for="rmPaymentProof">Proof of Remittance <span style="color:var(--red)">*</span></label>
@@ -7143,10 +7144,10 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
           </div>
         </div>
       </section>
-      <div class="rm-info-note"><span aria-hidden="true">&#128274;</span><span>Your frozen balance stays separate while proof is reviewed. New bookings continue accumulating for the next month-end statement.</span></div>
+      <div class="rm-info-note"><span aria-hidden="true">&#128274;</span><span id="rmPayInfoNote">Your frozen balance stays separate while proof is reviewed. New bookings continue accumulating for the next month-end statement.</span></div>
     </div>
     <div class="m-foot">
-      <button class="btn btn-g" type="button" onclick="closeRemittanceModal('rmPayModal')">Save for Later</button>
+      <button class="btn btn-g" type="button" id="rmPayLaterBtn" onclick="closeRemittanceModal('rmPayModal')">Save for Later</button>
       <button class="btn btn-p" id="rmPaymentSubmitBtn" type="submit">Submit Proof</button>
     </div>
   </form>
@@ -15398,6 +15399,9 @@ function rmRecordCard(record) {
   if (role === 'owner' && status === 'under-review') {
     actions.push(`<button class="btn btn-p btn-sm" type="button" onclick="openRemittanceReview('${jsArg(id)}')">Review Proof</button>`);
   }
+  if (role === 'owner' && ['awaiting-payment','overdue','rejected'].includes(status)) {
+    actions.push(`<button class="btn btn-p btn-sm" type="button" onclick="openRemittancePayment('${jsArg(id)}',{record:true})">Record Payment</button>`);
+  }
   return `<article class="rm-record ${status}">
     <div class="rm-record-head">
       <div><div class="rm-ref">${esc(ref)}</div><div class="rm-period">${esc(rmCoverageLabel(record))}</div><div class="rm-record-sub">${esc(ownerMeta)}</div></div>
@@ -15653,15 +15657,41 @@ async function prepareRemittanceNow() {
   }
 }
 
-async function openRemittancePayment(id) {
-  if (rmDashboardRole() !== 'court_owner') { toast('Only a court owner can submit remittance.', 'err'); return; }
+function syncRemittancePayMethod() {
+  const method = $('rmPayMethod').value;
+  const labels = { gcash:'GCash Transaction ID', maya:'Maya Reference No.', bank_transfer:'Bank Reference No.', cash:'Receipt / Reference', other:'Reference' };
+  $('rmPaymentRefLabel').innerHTML = `${esc(labels[method] || 'Reference')} <span style="color:var(--red)">*</span>`;
+  $('rmPaymentRef').placeholder = method === 'cash' ? 'e.g. CASH-OCT-2026' : 'Enter transaction reference';
+}
+
+async function openRemittancePayment(id, { record:recordMode = false } = {}) {
+  const role = rmDashboardRole();
+  // The system owner records a payment the court owner made directly.
+  const ownerRecord = recordMode && role === 'owner';
+  if (!ownerRecord && role !== 'court_owner') { toast('Only a court owner can submit remittance.', 'err'); return; }
   const record = rmRecordById(id);
   if (!record) { toast('Remittance record not found. Please refresh.', 'err'); return; }
   try {
     const settings = await DB.getSettings();
     const accountNumber = String(settings.platform_gcash_number || '');
     const accountName = String(settings.platform_gcash_name || '');
-    if (!accountNumber) { toast('The system owner has not configured a remittance GCash account yet.', 'err'); return; }
+    if (!ownerRecord && !accountNumber) { toast('The system owner has not configured a remittance GCash account yet.', 'err'); return; }
+    _rmState.payRecordMode = ownerRecord;
+    $('rmPayTitle').textContent = ownerRecord ? 'RECORD PAYMENT' : 'REMIT BOOKING FEES';
+    $('rmPaySendStep').hidden = ownerRecord;
+    $('rmPayMethodField').hidden = !ownerRecord;
+    $('rmPayMethod').value = 'gcash';
+    syncRemittancePayMethod();
+    $('rmPayProofTitle').innerHTML = ownerRecord
+      ? '<span class="rm-step-num">1</span> Record the payment you received'
+      : '<span class="rm-step-num">2</span> Submit proof of remittance';
+    $('rmPayAmountLabel').innerHTML = `${ownerRecord ? 'Amount Received' : 'Amount Remitted'} <span style="color:var(--red)">*</span>`;
+    $('rmPaymentNote').placeholder = ownerRecord ? 'Add a short note for the record' : 'Add a short note for the system owner';
+    $('rmPayInfoNote').textContent = ownerRecord
+      ? 'Recording accepts the payment immediately. A full payment settles the statement; anything less leaves the remainder open.'
+      : 'Your frozen balance stays separate while proof is reviewed. New bookings continue accumulating for the next month-end statement.';
+    $('rmPayLaterBtn').textContent = ownerRecord ? 'Cancel' : 'Save for Later';
+    $('rmPaymentSubmitBtn').textContent = ownerRecord ? 'Record & Confirm Payment' : 'Submit Proof';
     const reference = rmRecordRef(record);
     const amount = rmAmountRemaining(record);
     $('rmPayId').value = rmRecordId(record);
@@ -15731,15 +15761,28 @@ async function submitRemittancePayment(event) {
   const amount = rmNumber($('rmPayAmount').value);
   if (!id) { toast('Remittance record is missing. Please refresh.', 'err'); return; }
   if (amount <= 0) { toast('Enter the amount remitted.', 'err'); $('rmPayAmount').focus(); return; }
-  if (!paymentRef) { toast('Enter the GCash transaction ID.', 'err'); $('rmPaymentRef').focus(); return; }
+  const recordMode = !!_rmState.payRecordMode;
+  if (!paymentRef) { toast(recordMode ? 'Enter the payment reference.' : 'Enter the GCash transaction ID.', 'err'); $('rmPaymentRef').focus(); return; }
   if (!_rmState.proofData) { toast('Upload the remittance receipt screenshot.', 'err'); $('rmPaymentProof').focus(); return; }
   const button = $('rmPaymentSubmitBtn');
-  rmSetBusy(button, true, 'Submitting proof...');
+  rmSetBusy(button, true, recordMode ? 'Recording payment...' : 'Submitting proof...');
   try {
     if (typeof DB.submitBookingFeeRemittance !== 'function') throw new Error('The payment-submission service is unavailable.');
-    await DB.submitBookingFeeRemittance(id, { paymentRef, note, proofUrl:_rmState.proofData, amount });
+    const result = await DB.submitBookingFeeRemittance(id, {
+      paymentRef,
+      note,
+      proofUrl:_rmState.proofData,
+      amount,
+      paymentMethod: recordMode ? $('rmPayMethod').value : 'gcash',
+      recordAsReceived: recordMode,
+    });
     closeRemittanceModal('rmPayModal');
-    toast('Remittance proof submitted. It is now waiting for system-owner verification.');
+    const recorded = result?.remittance || result?.data?.remittance || result?.data || result;
+    toast(!recordMode
+      ? 'Remittance proof submitted. It is now waiting for system-owner verification.'
+      : String(recorded?.status || '').toLowerCase() === 'settled'
+        ? 'Payment recorded. The statement is settled and moved to History.'
+        : 'Payment recorded. The unpaid remainder stays open on the statement.');
     await renderRemittances();
   } catch (error) {
     console.error('[submitRemittancePayment]', error);
@@ -15920,6 +15963,7 @@ async function openRemittanceDetails(id) {
     <section class="rm-detail-section"><div class="rm-detail-title">Included court bookings</div><div class="rm-booking-list">${bookingItems.length ? bookingItems.map(rmBookingCard).join('') : '<div class="rm-empty" style="min-height:110px"><div>Individual booking details are not available for this legacy record.</div></div>'}</div></section>`;
   const actions = [`<button class="btn btn-g" type="button" onclick="closeRemittanceModal('rmDetailModal')">Close</button>`];
   if (rmDashboardRole() === 'court_owner' && ['awaiting-payment','overdue','rejected'].includes(status)) actions.push(`<button class="btn btn-p" type="button" onclick="closeRemittanceModal('rmDetailModal',{restoreFocus:false});openRemittancePayment('${jsArg(rmRecordId(record))}')">Remit Now</button>`);
+  if (rmDashboardRole() === 'owner' && ['awaiting-payment','overdue','rejected'].includes(status)) actions.push(`<button class="btn btn-p" type="button" onclick="closeRemittanceModal('rmDetailModal',{restoreFocus:false});openRemittancePayment('${jsArg(rmRecordId(record))}',{record:true})">Record Payment</button>`);
   if (rmDashboardRole() === 'owner' && status === 'under-review') actions.push(`<button class="btn btn-p" type="button" onclick="closeRemittanceModal('rmDetailModal',{restoreFocus:false});openRemittanceReview('${jsArg(rmRecordId(record))}')">Review Proof</button>`);
   $('rmDetailActions').innerHTML = actions.join('');
   openRemittanceModal('rmDetailModal');

@@ -3195,6 +3195,8 @@ window.DB = {
     proofUrl = '',
     proofData = '',
     note = '',
+    // System owner only: record a payment received directly and accept it.
+    recordAsReceived = false,
   } = {}) {
     const image = _remittanceProofUpload(proofData || proofUrl);
     const { data: authData, error: authError } = await _sb.auth.getUser();
@@ -3209,17 +3211,18 @@ window.DB = {
       .upload(proofPath, image.bytes, { contentType: image.mimeType, upsert: false });
     if (uploadError) throw new Error(_extractFnError(uploadError, 'Could not upload remittance receipt'));
 
-    const { data, error } = await _sb.rpc('submit_booking_fee_remittance', {
+    const rpcName = recordAsReceived ? 'record_booking_fee_remittance_payment' : 'submit_booking_fee_remittance';
+    const { data, error } = await _sb.rpc(rpcName, {
       p_remittance_id: remittanceId,
       p_amount: amount == null ? null : Number(amount),
       p_payment_method: String(paymentMethod || 'gcash').toLowerCase(),
       p_payment_reference: String(paymentRef || '').trim(),
       p_proof_path: proofPath,
       p_note: String(note || '').trim() || null,
-      p_idempotency_key: _remittanceIdempotencyKey('submit'),
+      p_idempotency_key: _remittanceIdempotencyKey(recordAsReceived ? 'record' : 'submit'),
     });
     if (error) {
-      throw new Error(_extractFnError(error, 'Could not submit remittance proof'));
+      throw new Error(_extractFnError(error, recordAsReceived ? 'Could not record remittance payment' : 'Could not submit remittance proof'));
     }
     return data || null;
   },
