@@ -34,6 +34,8 @@
 <meta name="twitter:image:alt" content="Paddle Rage Pickleball — Feel the Rage, Live the Game" />
 <link rel="stylesheet" href="payment-method-brand.css?v=20260901-payment-icons-v2" />
 <script src="payment-method-brand.js?v=20260901-payment-icons-v2"></script>
+<link rel="stylesheet" href="seasonal-theme.css?v=20261102-christmas" />
+<script src="seasonal-theme.js?v=20261102-christmas"></script>
 <script src="booking-balance.js?v=20260831-payment-state-v7"></script>
 <script src="host-balance-payment.js?v=20260831-payment-state-v7"></script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&family=Road+Rage&display=swap" rel="stylesheet" />
@@ -6000,6 +6002,8 @@ let _settingsTiers = null; // backup of global tiers from settings
 
 async function loadOperatingHours() {
   const settings = await DB.getSettings();
+  // Seasonal decorations; idempotent, so repeat loads are harmless.
+  window.SeasonalTheme?.apply(settings.seasonal_theme);
   openHour  = parseInt(settings.open_hour  || '6');
   closeHour = parseInt(settings.close_hour || '22');
   if (settings.pricing_tiers) {

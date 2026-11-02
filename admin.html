@@ -5640,6 +5640,24 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
         <div id="ohSummary" style="margin-top:12px;padding:10px 14px;background:var(--input);border:1px solid var(--border);border-radius:8px;font-size:.84rem;color:var(--muted);display:none"></div>
       </div>
 
+      <!-- SEASONAL DECORATIONS PANEL -->
+      <div class="panel" style="margin-bottom:20px;border:1px solid var(--border);">
+        <h4>🎄 Seasonal Decorations</h4>
+        <p style="color:var(--muted);font-size:.84rem;margin:8px 0 16px">Light decorations on the public booking page only. Automatic shows Halloween from Oct 15–31 and Christmas from Nov 1–Jan 6 (Manila time).</p>
+        <div style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <label class="fl" for="seasonalThemeMode">Decorations</label>
+            <select class="fi" id="seasonalThemeMode" style="width:auto;min-width:200px">
+              <option value="auto">Automatic (by date)</option>
+              <option value="christmas">Christmas — always on</option>
+              <option value="halloween">Halloween — always on</option>
+              <option value="off">Off</option>
+            </select>
+          </div>
+          <button class="btn btn-p btn-sm" onclick="saveSeasonalTheme()" style="margin-bottom:1px">💾 Save Decorations</button>
+        </div>
+      </div>
+
 
 
       <!-- PRICING TIERS PANEL -->
@@ -14730,6 +14748,21 @@ async function renderHours() {
   }
 
   updateHoursSummary(openHr, closeHr);
+
+  const seasonSel = $('seasonalThemeMode');
+  const seasonMode = String(settings.seasonal_theme || 'auto');
+  if (seasonSel) seasonSel.value = [...seasonSel.options].some(o => o.value === seasonMode) ? seasonMode : 'auto';
+}
+
+async function saveSeasonalTheme() {
+  const mode = $('seasonalThemeMode').value;
+  const labels = { auto:'Automatic by date', christmas:'Christmas always on', halloween:'Halloween always on', off:'Off' };
+  try {
+    await DB.saveSetting('seasonal_theme', mode);
+    toast(`Seasonal decorations: ${labels[mode] || mode}.`);
+  } catch (e) {
+    toast('Failed to save seasonal decorations.', 'err');
+  }
 }
 
 function updateHoursSummary(openHr, closeHr) {

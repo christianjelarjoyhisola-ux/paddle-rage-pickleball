@@ -60,6 +60,8 @@ $publicFiles = @(
   "brand-theme.css",
   "payment-method-brand.css",
   "payment-method-brand.js",
+  "seasonal-theme.css",
+  "seasonal-theme.js",
   "assets/payment-methods/gcash.png",
   "assets/payment-methods/bdo-pay.png",
   "assets/payment-methods/maya.png",

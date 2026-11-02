@@ -1,0 +1,76 @@
+/* Seasonal decorations. Everything here is inert: no pointer events, and it
+   sits below the sticky nav and every dialog (nav 200, overlays 1100+). */
+
+.season-logo { position:relative; display:inline-flex; flex:0 0 auto; }
+.season-logo-badge { position:absolute; pointer-events:none; line-height:0; }
+.season-logo-badge svg { display:block; width:100%; height:100%; }
+.season-santa-hat { width:30px; height:26px; top:-13px; left:-7px; transform:rotate(-18deg); filter:drop-shadow(0 2px 2px rgba(0,0,0,.25)); }
+.season-pumpkin { width:20px; height:20px; right:-6px; bottom:-4px; filter:drop-shadow(0 2px 2px rgba(0,0,0,.3)); }
+
+.season-layer { position:fixed; inset:0; z-index:150; overflow:hidden; pointer-events:none; }
+/* Inside the fixed splash screen, above its artwork (2) and content (3). */
+.season-layer.in-splash { position:absolute; z-index:4; }
+.season-splash-badge { position:absolute; z-index:1; pointer-events:none; line-height:0; animation:season-badge-in .6s ease-out 1.4s both; }
+@keyframes season-badge-in { from { opacity:0; translate:0 -10px; } to { opacity:1; translate:0 0; } }
+.season-splash-badge svg { display:block; width:100%; height:100%; }
+.season-splash-badge.season-santa-hat { width:38%; height:auto; aspect-ratio:40/34; top:-2%; left:2%; transform:rotate(-22deg); }
+.season-splash-badge.season-pumpkin { width:24%; height:auto; aspect-ratio:1; right:2%; bottom:6%; }
+
+.season-snow {
+  position:absolute; top:-12px;
+  width:var(--size); height:var(--size); border-radius:50%;
+  background:#fff; box-shadow:0 0 6px rgba(255,255,255,.75);
+  animation:season-snowfall linear infinite;
+}
+body:not(.dark) .season-snow { background:#cfdbe6; box-shadow:0 0 4px rgba(20,61,99,.25); }
+@keyframes season-snowfall {
+  from { transform:translate3d(0,0,0); }
+  to   { transform:translate3d(var(--drift),105vh,0); }
+}
+
+.season-bat {
+  position:absolute; left:-60px;
+  width:var(--size); color:#2b1838;
+  animation:season-batflight linear infinite;
+}
+body.dark .season-bat { color:#0b0612; filter:drop-shadow(0 0 4px rgba(242,140,40,.45)); }
+.season-bat svg { display:block; width:100%; height:auto; animation:season-flap .35s ease-in-out infinite alternate; transform-origin:center; }
+@keyframes season-batflight {
+  0%   { transform:translate3d(0,0,0); }
+  25%  { transform:translate3d(28vw,-3vh,0); }
+  50%  { transform:translate3d(55vw,2vh,0); }
+  75%  { transform:translate3d(82vw,-2vh,0); }
+  100% { transform:translate3d(calc(100vw + 120px),1vh,0); }
+}
+@keyframes season-flap { from { transform:scaleY(1); } to { transform:scaleY(.55); } }
+
+.season-banner {
+  position:relative; z-index:160;
+  display:flex; align-items:center; justify-content:center; gap:12px;
+  padding:8px 44px 8px 16px;
+  font-family:'Outfit',sans-serif; font-size:.86rem; font-weight:700; text-align:center;
+}
+.season-banner-close {
+  position:absolute; right:10px; top:50%; transform:translateY(-50%);
+  width:28px; height:28px; border:0; border-radius:50%;
+  background:rgba(255,255,255,.16); color:inherit; font-size:.8rem; cursor:pointer;
+}
+.season-banner-close:hover { background:rgba(255,255,255,.28); }
+.season-banner-close:focus-visible { outline:2px solid currentColor; outline-offset:2px; }
+
+body[data-season="christmas"] .season-banner { background:linear-gradient(90deg,#8f1d22,#c4302b 50%,#8f1d22); color:#fff7e0; border-bottom:2px solid #e2b54a; }
+body[data-season="halloween"] .season-banner { background:linear-gradient(90deg,#2a1240,#d9671b 50%,#2a1240); color:#fff4e6; border-bottom:2px solid #f28c28; }
+
+body[data-season="christmas"] .btn-p { box-shadow:0 4px 14px rgba(196,48,43,.3), 0 0 0 1px rgba(226,181,74,.45); }
+body[data-season="christmas"] .btn-p:hover { box-shadow:0 8px 22px rgba(196,48,43,.36), 0 0 14px rgba(226,181,74,.45); }
+body[data-season="halloween"] .btn-p { box-shadow:0 4px 14px rgba(217,103,27,.32), 0 0 0 1px rgba(122,62,160,.5); }
+body[data-season="halloween"] .btn-p:hover { box-shadow:0 8px 22px rgba(217,103,27,.38), 0 0 14px rgba(122,62,160,.5); }
+
+@media (max-width:640px) {
+  .season-banner { font-size:.78rem; padding:7px 40px 7px 12px; }
+  .season-santa-hat { width:26px; height:22px; top:-11px; left:-6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .season-layer { display:none; }
+}
