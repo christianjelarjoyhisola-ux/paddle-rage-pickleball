@@ -34,3 +34,20 @@ test('a missing grouped record fails instead of showing incomplete payment evide
   vm.createContext(context);vm.runInContext(source,context);
   await assert.rejects(context.getBookingGroupByRef('A'),/Booking changed/);
 });
+
+test('live board polling backs off while idle, slows when paused, and stops when final', () => {
+  const live = fs.readFileSync('player-live.js', 'utf8');
+  const consts = live.slice(live.indexOf('const POLL_MS'), live.indexOf('const state = {'));
+  const fnStart = live.indexOf('function schedulePoll()');
+  const fn = live.slice(fnStart, live.indexOf('\n  }\n', fnStart) + 4);
+  const delays = [];
+  const context = { state: { failures: 0, unchangedPolls: 0, terminal: false, snapshot: { session: { status: 'active' } } },
+    document: { hidden: false }, clearTimeout() {}, setTimeout: (_fn, ms) => { delays.push(ms); return 1; }, fetchSnapshot() {} };
+  vm.createContext(context);
+  vm.runInContext(`${consts}\n${fn}\nthis.schedulePoll = schedulePoll;`, context);
+  context.schedulePoll();
+  context.state.unchangedPolls = 10; context.schedulePoll();
+  context.state.snapshot.session.status = 'paused'; context.schedulePoll();
+  context.state.snapshot.session.status = 'completed'; context.schedulePoll();
+  assert.deepEqual(delays, [3000, 15000, 30000]);
+});

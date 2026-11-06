@@ -2,6 +2,10 @@
   "use strict";
 
   const POLL_MS = 3000;
+  // Egress guard: every poll downloads the full board. Back off while nothing
+  // changes, slow right down while paused, and stop once the session is final.
+  const IDLE_POLL_MAX_MS = 15000;
+  const PAUSED_POLL_MS = 30000;
   const PLAYER_NAME_KEY = "paddle_rage_player_live_name_v1";
   const state = {
     token: String(location.hash || "").slice(1).trim(),
@@ -17,6 +21,7 @@
     pendingMatchupReveals: [],
     matchupRevealTimer: null,
     pollTimer: null,
+    unchangedPolls: 0,
     clockTimer: null,
     shareFeedbackTimer: null,
     navObserver: null,
@@ -1044,7 +1049,7 @@
       ${statusMessage ? `<div class="plb-session-banner is-${escapeHtml(sessionStatus)}">${escapeHtml(statusMessage)}</div>` : ""}
 
       <div class="plb-connection-note ${state.failures ? "is-error" : ""}" id="plbConnectionNote" role="status" aria-live="polite">
-        ${state.failures ? "Connection interrupted. Showing the last update while reconnecting." : "Live connection active. This page refreshes automatically."}
+        ${state.failures ? "Connection interrupted. Showing the last update while reconnecting." : liveNoteText()}
       </div>
 
       <div class="plb-live-layout" id="plbLiveBoard">
@@ -1328,12 +1333,23 @@
     updateHeader();
   }
 
+  function liveNoteText() {
+    return String(state.snapshot?.session?.status || "") === "completed"
+      ? "Final results. Tap Refresh to check for late corrections."
+      : "Live connection active. This page refreshes automatically.";
+  }
+
   function schedulePoll() {
     clearTimeout(state.pollTimer);
     if (state.terminal || document.hidden) return;
+    const status = String(state.snapshot?.session?.status || "active");
+    // A completed board no longer changes; the Refresh button still works.
+    if (status === "completed") return;
     const delay = state.failures
       ? Math.min(60000, POLL_MS * (2 ** Math.min(state.failures, 3)))
-      : POLL_MS;
+      : status === "paused"
+        ? PAUSED_POLL_MS
+        : Math.min(IDLE_POLL_MAX_MS, Math.round(POLL_MS * (1.5 ** state.unchangedPolls)));
     state.pollTimer = setTimeout(fetchSnapshot, delay);
   }
 
@@ -1410,6 +1426,7 @@
       state.failures = 0;
       if (signature !== state.signature) {
         state.signature = signature;
+        state.unchangedPolls = 0;
         if (winnerReveal || matchupReveals.length) {
           clearTimeout(state.winnerRevealTimer);
           clearTimeout(state.matchupRevealTimer);
@@ -1422,10 +1439,11 @@
         if (winnerReveal) scheduleWinnerRevealEnd(matchupReveals);
         else if (matchupReveals.length) scheduleMatchupRevealEnd();
       } else {
+        state.unchangedPolls = Math.min(state.unchangedPolls + 1, 10);
         const note = document.getElementById("plbConnectionNote");
         if (note) {
           note.classList.remove("is-error");
-          note.textContent = "Live connection active. This page refreshes automatically.";
+          note.textContent = liveNoteText();
         }
         updateHeader();
       }
@@ -1456,6 +1474,7 @@
     if (!button) return;
     if (button.dataset.plbAction === "refresh") {
       clearTimeout(state.pollTimer);
+      state.unchangedPolls = 0;
       fetchSnapshot({ showBusy: true });
       return;
     }
@@ -1487,6 +1506,7 @@
       if (document.hidden) {
         clearTimeout(state.pollTimer);
       } else {
+        state.unchangedPolls = 0;
         fetchSnapshot();
       }
     });
