@@ -2439,6 +2439,16 @@ body.gm-display-open { overflow:hidden; }
 .nb-slot-cell.open-play { border-color: rgba(var(--yellow-rgb), .55); background: rgba(var(--yellow-rgb), .12); }
 .nb-slot-cell.maintenance { border-color: rgba(255,152,0,.5); background: rgba(255,152,0,.1); }
 .nb-slot-cell.past, .nb-slot-cell.now { opacity: .42; }
+.nb-slot-cell.booked.busy:not([disabled]) { cursor: help; }
+.nb-slot-cell.reserving { border-color: rgba(90,154,212,.55); background: rgba(90,154,212,.1); border-style: dashed; }
+.nb-slot-cell.now-open { border-color: var(--green); box-shadow: inset 0 0 0 1px rgba(var(--green-rgb), .35); }
+.nb-slot-cell.now-open span { color: var(--green); }
+.nb-date-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.nb-date-row .fi { flex: 1 1 150px; min-width: 0; }
+.nb-quick-dates { display: inline-flex; gap: 6px; }
+.nb-quick-date { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font: inherit; font-size: .78rem; font-weight: 800; cursor: pointer; }
+.nb-quick-date.active { background: var(--green); border-color: var(--green); color: #fff; }
+.nb-quick-date:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .nb-slot-cell:disabled { pointer-events: auto; }
 .nb-sum-list { display: grid; gap: 6px; }
 .nb-sum-row strong { text-align: right; }
@@ -6917,23 +6927,25 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
       <button class="m-x" onclick="closeModal('newBookingModal')">✕</button>
     </div>
     <div class="m-body">
-      <!-- Customer Info -->
-      <div class="nb-section-label" style="margin-top:0">Customer Details</div>
-      <div class="frow">
-        <div class="fg" style="margin:0"><label class="fl">Full Name *</label><input type="text" class="fi" id="nbName" placeholder="e.g. Juan Dela Cruz"/></div>
-        <div class="fg" style="margin:0"><label class="fl">Contact Number *</label><input type="text" class="fi" id="nbPhone" placeholder="09XX XXX XXXX" inputmode="tel"/></div>
-      </div>
-      <div class="fg" style="margin-top:12px"><label class="fl">Email <span style="color:var(--muted);font-weight:400;text-transform:none">(optional)</span></label><input type="text" class="fi" id="nbEmail" placeholder="customer@email.com" inputmode="email"/></div>
-
-      <!-- Booking Details -->
-      <div class="nb-section-label">Booking Details</div>
+      <!-- Time first: a walk-in asks "what's free now?" before giving details -->
+      <div class="nb-section-label" style="margin-top:0">1 · Pick Court &amp; Time</div>
       <div class="frow" style="grid-template-columns:1fr">
         <div class="fg" style="margin:0;display:none"><label class="fl">Court *</label>
           <select class="fi" id="nbCourt" onchange="nbRenderSlots()">
             <option value="">— Select Court —</option>
           </select>
         </div>
-        <div class="fg" style="margin:0"><label class="fl">Date *</label><input type="date" class="fi" id="nbDate" onchange="nbRenderSlots()"/></div>
+        <div class="fg" style="margin:0">
+          <label class="fl" for="nbDate">Date *</label>
+          <div class="nb-date-row">
+            <div class="nb-quick-dates" id="nbQuickDates" role="group" aria-label="Quick date">
+              <button type="button" class="nb-quick-date" data-nb-offset="0" aria-pressed="true" onclick="nbPickDate(0)">Today</button>
+              <button type="button" class="nb-quick-date" data-nb-offset="1" aria-pressed="false" onclick="nbPickDate(1)">Tomorrow</button>
+            </div>
+            <input type="date" class="fi" id="nbDate" onchange="nbRenderSlots()"/>
+            <button type="button" class="btn btn-g btn-sm" onclick="nbRefreshSlots(this)" title="Reload who has booked">↻ Refresh</button>
+          </div>
+        </div>
       </div>
       <div class="fg" style="margin-top:12px">
         <label class="fl">Courts *</label>
@@ -6944,8 +6956,16 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
         <div id="nbSlotGrid"></div>
       </div>
 
+      <!-- Customer Info -->
+      <div class="nb-section-label">2 · Customer Details</div>
+      <div class="frow">
+        <div class="fg" style="margin:0"><label class="fl">Full Name *</label><input type="text" class="fi" id="nbName" placeholder="e.g. Juan Dela Cruz" autocomplete="off"/></div>
+        <div class="fg" style="margin:0"><label class="fl">Contact Number *</label><input type="text" class="fi" id="nbPhone" placeholder="09XX XXX XXXX" inputmode="tel" autocomplete="off"/></div>
+      </div>
+      <div class="fg" style="margin-top:12px"><label class="fl">Email <span style="color:var(--muted);font-weight:400;text-transform:none">(optional)</span></label><input type="text" class="fi" id="nbEmail" placeholder="customer@email.com" inputmode="email" autocomplete="off"/></div>
+
       <!-- Payment -->
-      <div class="nb-section-label">Payment</div>
+      <div class="nb-section-label">3 · Payment</div>
       <div class="fg" style="margin:0"><label class="fl">Method *</label>
         <select class="fi" id="nbMethod" onchange="nbToggleRef()">
           <option value="cash">Cash</option>
@@ -12384,6 +12404,7 @@ let _nbBookedSlots = new Set();
 let _nbSelectedCourtIds = new Set();
 let _nbSelectedCells = new Set();
 let _nbBookedSlotMap = new Map();
+let _nbScrolledDate = '';
 
 async function openNewBookingModal() {
   // Load courts
@@ -12816,25 +12837,86 @@ function nbMaintenanceLabel(rule) {
   }[rule?.label] || 'Maintenance';
 }
 
+// The venue runs on Manila time regardless of the device's clock settings.
+function nbManilaNow(offsetDays = 0) {
+  const shifted = new Date(Date.now() + offsetDays * 86400000);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23',
+  }).formatToParts(shifted);
+  const get = type => parts.find(p => p.type === type)?.value || '';
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, hour: Number(get('hour')) };
+}
+
+function nbHoldExpiryLabel(b) {
+  const createdMs = new Date(b?.createdAt || b?.created_at || 0).getTime();
+  if (!Number.isFinite(createdMs) || createdMs <= 0) return '';
+  return new Date(createdMs + 15 * 60 * 1000).toLocaleTimeString('en-PH', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' });
+}
+
 function nbSlotState(court, dateStr, hour) {
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const isToday = dateStr === todayStr;
-  const curHour = now.getHours();
-  const bookedSet = _nbBookedSlotMap.get(String(court.id)) || new Set();
-  const isPast = isToday && hour < curHour;
-  const isNow = isToday && hour === curHour;
-  const isBooked = bookedSet.has(hour);
+  const now = nbManilaNow();
+  const isToday = dateStr === now.date;
+  const bookedHours = _nbBookedSlotMap.get(String(court.id)) || new Map();
+  const isPast = isToday && hour < now.hour;
+  // The hour in progress stays bookable so a walk-in can start playing now.
+  const isNow = isToday && hour === now.hour;
+  const booking = bookedHours.get(hour) || null;
   const mtRule = nbMaintenanceRuleForHour(dateStr, hour, court.id);
   const isOpenPlay = _nbIsOpenPlayHour(dateStr, hour, court.id);
   const rate = _nbGetRateForHour(court, hour);
 
   if (isPast) return { unavailable: true, cls: 'past busy', label: 'Past', detail: fmt(rate) };
-  if (isNow) return { unavailable: true, cls: 'now busy', label: 'Now', detail: fmt(rate) };
-  if (isBooked) return { unavailable: true, cls: 'booked busy', label: 'Taken', detail: fmt(rate) };
+  if (booking && isPlaceholderHold(booking)) {
+    // A customer is mid-checkout online; the hold frees itself after 15 minutes.
+    const until = nbHoldExpiryLabel(booking);
+    return { unavailable: true, booking, cls: 'booked reserving busy', label: 'Reserving online', detail: until ? `Until ${until}` : fmt(rate) };
+  }
+  if (booking) {
+    const pending = String(booking.status || '').toLowerCase() !== 'confirmed' && String(booking.status || '').toLowerCase() !== 'completed';
+    const firstName = String(booking.fullName || '').trim().split(/\s+/)[0] || 'Booked';
+    return { unavailable: true, booking, cls: 'booked busy', label: pending ? 'Payment pending' : 'Taken', detail: firstName };
+  }
   if (mtRule) return { unavailable: true, cls: 'maintenance busy', label: nbMaintenanceLabel(mtRule), detail: fmt(rate) };
   if (isOpenPlay) return { unavailable: true, cls: 'open-play busy', label: 'Open Play', detail: fmt(rate) };
+  if (isNow) return { unavailable: false, cls: 'free now-open', label: 'Now · walk-in', detail: fmt(rate) };
   return { unavailable: false, cls: 'free', label: 'Available', detail: fmt(rate) };
+}
+
+function nbPickDate(offsetDays) {
+  $('nbDate').value = nbManilaNow(offsetDays).date;
+  nbRenderSlots();
+}
+
+function nbRenderQuickDates() {
+  const wrap = $('nbQuickDates');
+  if (!wrap) return;
+  const current = $('nbDate')?.value;
+  wrap.querySelectorAll('[data-nb-offset]').forEach(btn => {
+    const active = nbManilaNow(Number(btn.dataset.nbOffset)).date === current;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+}
+
+async function nbRefreshSlots(button) {
+  DB.clearCache?.(['bookings']);
+  if (button) button.disabled = true;
+  try { await nbRenderSlots(); toast('Availability refreshed.', 'inf'); }
+  finally { if (button) button.disabled = false; }
+}
+
+function nbExplainTakenSlot(court, hour, state) {
+  const b = state.booking;
+  if (!b) { toast(`This slot is ${state.label.toLowerCase()}.`, 'inf'); return; }
+  const when = `${court.name} ${fmtHour(hour)}`;
+  if (isPlaceholderHold(b)) {
+    const until = nbHoldExpiryLabel(b);
+    toast(`${when}: a customer is checking out online right now. If they don't finish, it frees up${until ? ` at ${until}` : ' within 15 minutes'}.`, 'inf');
+    return;
+  }
+  const status = String(b.status || '').toLowerCase();
+  const statusText = status === 'confirmed' || status === 'completed' ? 'confirmed' : 'waiting for payment review';
+  toast(`${when} is booked by ${b.fullName || 'a customer'} (${b.ref || 'no ref'}), ${statusText}.`, 'inf');
 }
 
 function nbRenderCourtPicker() {
@@ -12923,6 +13005,7 @@ async function openNewBookingModal() {
   _nbSelectedCourtIds = new Set(_nbCourts.map(c => String(c.id)));
   _nbSelectedCells = new Set();
   _nbBookedSlotMap = new Map();
+  _nbScrolledDate = '';
   _nbSelSlots = [];
 
   const legacySelect = $('nbCourt');
@@ -12939,8 +13022,7 @@ async function openNewBookingModal() {
   _nbPricingTiers = parsePricingTiers(settings.pricing_tiers);
   _nbPlatformFeeCfg = getPlatformFeeConfig(settings);
 
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const todayStr = nbManilaNow().date;
   $('nbDate').min = todayStr;
   $('nbDate').value = todayStr;
   $('nbName').value = '';
@@ -12982,11 +13064,14 @@ async function nbRenderSlots() {
   }
 
   msg.style.display = 'none';
-  const allBookings = await DB.getBookings();
-  _nbBookedSlotMap = new Map(courts.map(c => [String(c.id), new Set()]));
-  allBookings
+  // Only this date's rows: the full history grows without bound.
+  const dayBookings = await DB.getBookings({ date, activeOnly: true });
+  if ($('nbDate')?.value !== date) return; // a newer date was picked meanwhile
+  _nbBookedSlotMap = new Map(courts.map(c => [String(c.id), new Map()]));
+  dayBookings
     .filter(b => b.date === date && bookingHoldsAdminSlot(b) && _nbBookedSlotMap.has(String(b.courtId)))
-    .forEach(b => (b.slots || []).forEach(slot => _nbBookedSlotMap.get(String(b.courtId)).add(Number(slot))));
+    .forEach(b => (b.slots || []).forEach(slot => _nbBookedSlotMap.get(String(b.courtId)).set(Number(slot), b)));
+  nbRenderQuickDates();
 
   for (const key of [..._nbSelectedCells]) {
     const item = nbParseCellKey(key);
@@ -13015,9 +13100,12 @@ async function nbRenderSlots() {
       if (state.cls.includes('open-play')) hasOpenPlay = true;
       if (state.cls.includes('maintenance')) hasMaint = true;
       const cls = selected ? 'sel' : state.cls;
-      const disabled = state.unavailable ? 'disabled' : '';
+      // Taken cells stay clickable so the owner can see who holds them.
+      const disabled = state.unavailable && !state.booking ? 'disabled' : '';
+      const ariaDisabled = state.unavailable ? 'aria-disabled="true"' : '';
       const label = selected ? 'Selected' : state.label;
-      rows += `<button type="button" class="nb-slot-cell ${esc(cls)}" ${disabled} onclick="nbToggleSlot('${jsArg(court.id)}', ${hour})" title="${esc(court.name)} ${fmtHour(hour)}">
+      const holder = state.booking ? ` · ${isPlaceholderHold(state.booking) ? 'online checkout in progress' : (state.booking.fullName || 'booked')}` : '';
+      rows += `<button type="button" class="nb-slot-cell ${esc(cls)}" ${disabled} ${ariaDisabled} onclick="nbToggleSlot('${jsArg(court.id)}', ${hour})" title="${esc(court.name)} ${fmtHour(hour)}${esc(holder)}">
         <strong>${esc(state.detail)}</strong>
         <span>${esc(label)}</span>
       </button>`;
@@ -13032,14 +13120,28 @@ async function nbRenderSlots() {
   const legend = `<div class="nb-slots-legend">
     <span>Available</span>
     <span style="color:var(--green)">Selected</span>
-    <span style="color:var(--red)">Taken</span>
+    <span style="color:var(--red)">Taken (tap to see who)</span>
+    <span style="color:#5a9ad4">Reserving online (frees in 15 min)</span>
     ${hasOpenPlay ? '<span style="color:var(--yellow)">Open Play</span>' : ''}
     ${hasMaint ? '<span style="color:#ff9800">Maintenance</span>' : ''}
   </div>`;
 
+  // Re-rendering on every tap must not throw the owner back to the top.
+  const previousScroll = grid.querySelector('.nb-slot-matrix-wrap')?.scrollTop || 0;
   grid.innerHTML = liveNote + legend +
     `<div class="nb-slot-matrix-wrap"><div class="nb-slot-matrix" style="--nb-court-count:${courts.length}">${header}${rows}</div></div>` +
     '<div id="nbSlotSummary"></div>';
+  const wrap = grid.querySelector('.nb-slot-matrix-wrap');
+  if (wrap && _nbScrolledDate !== date) {
+    // First view of a day: today starts at the current hour, other days at opening.
+    _nbScrolledDate = date;
+    const nowRow = date === nbManilaNow().date ? grid.querySelector('.nb-slot-cell.now-open, .nb-slot-cell.free, .nb-slot-cell.booked') : null;
+    const headerHeight = grid.querySelector('.nb-slot-row')?.offsetHeight || 0;
+    const rowTop = nowRow ? nowRow.closest('.nb-slot-row').getBoundingClientRect().top - wrap.getBoundingClientRect().top + wrap.scrollTop : 0;
+    wrap.scrollTop = Math.max(0, rowTop - headerHeight - 4);
+  } else if (wrap) {
+    wrap.scrollTop = previousScroll;
+  }
   nbUpdateTotal();
 }
 
@@ -13049,7 +13151,7 @@ function nbToggleSlot(courtId, hour) {
   if (!date || !court) return;
   const state = nbSlotState(court, date, Number(hour));
   if (state.unavailable) {
-    toast(`This slot is ${state.label.toLowerCase()}.`, 'inf');
+    nbExplainTakenSlot(court, Number(hour), state);
     return;
   }
   const key = nbCellKey(court.id, hour);
@@ -13172,7 +13274,14 @@ async function saveNewBooking() {
     notifyBookingUpdateSafe(aggregate, status === 'confirmed' ? 'admin_booking_created' : 'new_booking', 'Created from admin panel.');
     if (status === 'confirmed' && email) sendBookingConfirmationNotice(aggregate).catch(() => {});
   } catch (e) {
-    toast(e.message || 'Failed to create booking.', 'err');
+    if (/already booked/i.test(String(e?.message || ''))) {
+      // Someone took the slot while this form was open: show the current grid.
+      DB.clearCache?.(['bookings']);
+      await nbRenderSlots();
+      toast('That time was just taken by another booking. The grid is refreshed — please pick again.', 'err');
+    } else {
+      toast(e.message || 'Failed to create booking.', 'err');
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = '+ Create Booking';
