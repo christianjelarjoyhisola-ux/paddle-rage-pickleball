@@ -13,7 +13,7 @@ function adminBlockContext(extra = {}) {
   assert.ok(start > 0 && end > start, 'court block helpers are present');
   const context = { esc: v => String(v), jsArg: v => String(v), MT_LABELS: [], _mtCourts: [], ...extra };
   vm.createContext(context);
-  vm.runInContext(`${admin.slice(start, end)}\nthis.cbNextDate = cbNextDate; this.cbIsPast = cbIsPast; this.cbPaymentState = cbPaymentState; this.cbCourtsLabel = cbCourtsLabel; this.setDetails = d => { _cbDetails = d; };`, context);
+  vm.runInContext(`${admin.slice(start, end)}\nthis.cbNextDate = cbNextDate; this.cbIsPast = cbIsPast; this.cbHasName = cbHasName; this.cbCourtsLabel = cbCourtsLabel; this.setDetails = d => { _cbDetails = d; };`, context);
   return context;
 }
 
@@ -62,13 +62,20 @@ test('next block date handles one-time, weekly and monthly blocks', () => {
   assert.equal(ctx.cbNextDate({ mode: 'monthly', recurring: { day: 5 } }, today), '2026-12-05');
 });
 
-test('maintenance and closed blocks never show as unpaid', () => {
+test('blocks without a name are flagged so owners remember to fill them in', () => {
   const ctx = adminBlockContext();
-  ctx.setDetails({ a: { paymentStatus: 'paid' } });
-  assert.equal(ctx.cbPaymentState({ id: 'a', label: 'private' }), 'paid');
-  assert.equal(ctx.cbPaymentState({ id: 'b', label: 'private' }), 'not_paid');
-  assert.equal(ctx.cbPaymentState({ id: 'b', label: 'maintenance' }), 'not_needed');
-  assert.equal(ctx.cbPaymentState({ id: 'b', label: 'closed' }), 'not_needed');
+  ctx.setDetails({ a: { forName: 'Santos family' }, b: { forName: '   ' } });
+  assert.equal(ctx.cbHasName({ id: 'a' }), true);
+  assert.equal(ctx.cbHasName({ id: 'b' }), false);
+  assert.equal(ctx.cbHasName({ id: 'missing' }), false);
+});
+
+test('the block form asks only who it is for and notes, with no payment field', () => {
+  const modal = admin.slice(admin.indexOf('<div class="overlay" id="cbModal"'), admin.indexOf('<!-- COURT MODAL -->'));
+  assert.match(modal, /id="cbFor"/);
+  assert.match(modal, /id="cbNotes"/);
+  assert.doesNotMatch(modal, /cbPay|Not paid|Paid/);
+  assert.doesNotMatch(admin, /cbMarkPaid|Mark paid/);
 });
 
 test('court labels treat no selection or every court as all courts', () => {

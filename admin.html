@@ -4254,20 +4254,17 @@ body[data-theme="light"] .cb-new { box-shadow: 0 8px 20px rgba(20, 61, 99, .18);
   transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
 .cb-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--cb-accent); opacity: .65; }
-.cb-card.cb-not_paid::before { background: var(--cb-unpaid); opacity: 1; }
-.cb-card.cb-paid::before { background: var(--cb-paid); opacity: 1; }
+.cb-card.is-missing::before { background: var(--cb-unpaid); opacity: 1; }
 .cb-card:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(0, 0, 0, .18); }
 .cb-card.is-paused { opacity: .62; }
 .cb-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cb-type { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cb-badges { display: flex; gap: 6px; flex-shrink: 0; }
 .cb-pay { font-size: .72rem; font-weight: 800; border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
-.cb-pay.is-unpaid { background: var(--cb-unpaid-bg); color: var(--cb-unpaid); }
-.cb-pay.is-paid { background: var(--cb-paid-bg); color: var(--cb-paid); }
 .cb-pay.is-paused { background: var(--cb-accent-soft); color: var(--muted); }
 .cb-for { font-size: 1.12rem; font-weight: 800; color: var(--text); line-height: 1.25; overflow-wrap: anywhere; }
 button.cb-for.is-missing {
-  all: unset; cursor: pointer; font-size: .9rem; font-weight: 700; color: var(--muted);
+  all: unset; cursor: pointer; font-size: .9rem; font-weight: 700; color: var(--cb-unpaid);
   border-bottom: 1px dashed currentColor; align-self: flex-start;
 }
 .cb-meta { display: flex; flex-direction: column; gap: 4px; font-size: .84rem; color: var(--text2, var(--text)); }
@@ -4282,8 +4279,6 @@ button.cb-for.is-missing {
 }
 .cb-actions { display: flex; gap: 8px; margin-top: 2px; }
 .cb-actions .btn { flex: 1; justify-content: center; }
-.cb-markpaid { background: var(--cb-paid-bg) !important; color: var(--cb-paid) !important; border: 1px solid color-mix(in srgb, var(--cb-paid) 40%, transparent) !important; font-weight: 800; }
-.cb-markpaid:hover { background: var(--cb-paid) !important; color: #fff !important; }
 
 /* Editor */
 #cbModal .modal { max-width: 560px; }
@@ -4302,8 +4297,6 @@ button.cb-for.is-missing {
 .cb-segs { display: flex; background: var(--input, var(--surface)); border: 1px solid var(--border); border-radius: 12px; padding: 3px; gap: 3px; }
 .cb-segs .cb-seg { flex: 1; border: 0; background: transparent; border-radius: 9px; }
 .cb-segs .cb-seg.is-on { background: var(--cb-accent); color: var(--cb-accent-ink); }
-.cb-segs .cb-seg-not_paid.is-on { background: var(--cb-unpaid); color: #fff; }
-.cb-segs .cb-seg-paid.is-on { background: var(--cb-paid); color: #fff; }
 .cb-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .cb-adddate { display: flex; gap: 8px; margin-top: 10px; }
 .cb-adddate .fi { flex: 1; }
@@ -6723,7 +6716,7 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
           <h2>⛔ COURT BLOCKS</h2>
           <button type="button" class="btn btn-p cb-new" onclick="cbOpenEditor()">+ Block Courts</button>
         </div>
-        <p class="cb-sub">Block courts for private events, open play or maintenance. Customers only see the block type. Who it's for, payment and notes stay private to owners.</p>
+        <p class="cb-sub">Block courts for private events, open play or maintenance. Customers only see the block type. Who it's for and notes stay private to owners.</p>
         <div class="cb-summary" id="cbSummary"></div>
         <div class="cb-warning" id="cbWarning" role="status" hidden></div>
         <div class="cb-filters" id="cbFilters" role="group" aria-label="Filter blocks"></div>
@@ -6772,13 +6765,9 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
         <span class="cb-label">Courts</span>
         <div class="cb-chips" id="cbCourts"></div>
       </div>
-      <div class="cb-field" id="cbPayWrap">
-        <span class="cb-label">Payment</span>
-        <div class="cb-segs" id="cbPay"></div>
-      </div>
       <div class="cb-field">
-        <label class="cb-label" for="cbNotes">Notes <small>(private)</small></label>
-        <textarea class="fi" id="cbNotes" maxlength="4000" placeholder="e.g. Contact 0917 123 4567 · ₱3,000 agreed · will pay on the day"></textarea>
+        <label class="cb-label" for="cbNotes">Notes / remarks <small>(private)</small></label>
+        <textarea class="fi" id="cbNotes" maxlength="4000" placeholder="e.g. Contact 0917 123 4567 · arriving 3:30 PM · bringing own balls"></textarea>
       </div>
       <div class="cb-field" id="cbEnabledRow" hidden>
         <label class="cb-enabled"><span class="sw"><input type="checkbox" id="cbEnabled"><span class="sw-tr"></span></span> Active (customers can't book these hours)</label>
@@ -18934,7 +18923,6 @@ const CB_TYPES = [
   { value:'closed',      icon:'🚫', label:'Closed' },
   { value:'blocked',     icon:'⛔', label:'Blocked' },
 ];
-const CB_NO_PAYMENT_TYPES = ['maintenance', 'closed'];
 const CB_WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 let _cbDetails = {};
 let _cbDetailsError = '';
@@ -18954,16 +18942,11 @@ function cbIsoAddDays(iso, days) {
   d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
-function cbNeedsPayment(rule) {
-  return !CB_NO_PAYMENT_TYPES.includes(String(rule?.label || 'maintenance').toLowerCase());
-}
 function cbDetailFor(rule) {
-  return _cbDetails[rule?.id] || { forName:'', paymentStatus:'not_paid', notes:'' };
+  return _cbDetails[rule?.id] || { forName:'', notes:'' };
 }
-function cbPaymentState(rule) {
-  if (!cbNeedsPayment(rule)) return 'not_needed';
-  const state = cbDetailFor(rule).paymentStatus;
-  return state === 'paid' ? 'paid' : 'not_paid';
+function cbHasName(rule) {
+  return String(cbDetailFor(rule).forName || '').trim().length > 0;
 }
 
 // Next date (today or later) this block applies on, or null when it is over.
@@ -19051,7 +19034,7 @@ function cbParseRules(rawConfig) {
 }
 
 function cbSetFilter(filter) {
-  _cbFilter = ['upcoming', 'not_paid', 'past'].includes(filter) ? filter : 'upcoming';
+  _cbFilter = ['upcoming', 'no_name', 'past'].includes(filter) ? filter : 'upcoming';
   cbRender();
 }
 
@@ -19059,7 +19042,7 @@ function cbRender() {
   const today = cbTodayIso();
   const upcoming = _mtRules.filter(r => !cbIsPast(r, today));
   const past = _mtRules.filter(r => cbIsPast(r, today));
-  const notPaid = upcoming.filter(r => r.enabled !== false && cbPaymentState(r) === 'not_paid');
+  const noName = upcoming.filter(r => !cbHasName(r));
   const next = upcoming.filter(r => r.enabled !== false)
     .map(r => cbNextDate(r, today)).filter(Boolean).sort()[0];
 
@@ -19067,26 +19050,26 @@ function cbRender() {
   if (summary) {
     summary.innerHTML = `
       <div class="cb-stat"><span class="cb-stat-n">${upcoming.length}</span><span class="cb-stat-l">Upcoming blocks</span></div>
-      <div class="cb-stat ${notPaid.length ? 'is-alert' : ''}"><span class="cb-stat-n">${notPaid.length}</span><span class="cb-stat-l">Not paid yet</span></div>
+      <div class="cb-stat ${noName.length ? 'is-alert' : ''}"><span class="cb-stat-n">${noName.length}</span><span class="cb-stat-l">No name yet</span></div>
       <div class="cb-stat"><span class="cb-stat-n cb-stat-date">${next ? esc(cbDateLabel(next, false)) : '—'}</span><span class="cb-stat-l">Next block</span></div>`;
   }
   const filters = $('cbFilters');
   if (filters) {
     const tab = (key, label, count) => `<button type="button" class="cb-tab${_cbFilter === key ? ' is-on' : ''}" onclick="cbSetFilter('${key}')" aria-pressed="${_cbFilter === key}">${label}<span>${count}</span></button>`;
-    filters.innerHTML = tab('upcoming', 'Upcoming', upcoming.length) + tab('not_paid', 'Not paid', notPaid.length) + tab('past', 'Past', past.length);
+    filters.innerHTML = tab('upcoming', 'Upcoming', upcoming.length) + tab('no_name', 'No name yet', noName.length) + tab('past', 'Past', past.length);
   }
   const warn = $('cbWarning');
   if (warn) { warn.hidden = !_cbDetailsError; warn.textContent = _cbDetailsError; }
 
   const list = $('cbList');
   if (!list) return;
-  let rows = _cbFilter === 'past' ? past : _cbFilter === 'not_paid' ? notPaid : upcoming;
+  let rows = _cbFilter === 'past' ? past : _cbFilter === 'no_name' ? noName : upcoming;
   rows = rows.slice().sort((a, b) => _cbFilter === 'past'
     ? cbLastDate(b).localeCompare(cbLastDate(a))
     : String(cbNextDate(a, today) || '9999').localeCompare(String(cbNextDate(b, today) || '9999')));
   if (!rows.length) {
-    const empty = _cbFilter === 'not_paid'
-      ? '🎉 Every upcoming block is paid.'
+    const empty = _cbFilter === 'no_name'
+      ? '🎉 Every upcoming block says who it is for.'
       : _cbFilter === 'past' ? 'No past blocks.' : 'No upcoming blocks. Tap <b>+ Block Courts</b> to add one.';
     list.innerHTML = `<div class="cb-empty">${empty}</div>`;
     return;
@@ -19097,21 +19080,18 @@ function cbRender() {
 function cbCardHtml(rule, today) {
   const type = cbType(rule.label || 'maintenance');
   const detail = cbDetailFor(rule);
-  const pay = cbPaymentState(rule);
+  const missing = !cbHasName(rule);
   const paused = rule.enabled === false;
   const id = jsArg(rule.id);
-  const payBadge = pay === 'paid'
-    ? '<span class="cb-pay is-paid">✓ Paid</span>'
-    : pay === 'not_paid' ? '<span class="cb-pay is-unpaid">● Not paid</span>' : '';
   const notes = detail.notes
     ? `<div class="cb-notes"><span aria-hidden="true">📝</span><p>${esc(detail.notes)}</p></div>` : '';
   const forName = detail.forName
     ? `<div class="cb-for">${esc(detail.forName)}</div>`
     : `<button type="button" class="cb-for is-missing" onclick="cbOpenEditor('${id}')">+ Add who this is for</button>`;
-  return `<article class="cb-card cb-${pay}${paused ? ' is-paused' : ''}">
+  return `<article class="cb-card${missing ? ' is-missing' : ''}${paused ? ' is-paused' : ''}">
     <div class="cb-card-top">
       <span class="cb-type">${type.icon} ${esc(type.label)}</span>
-      <span class="cb-badges">${paused ? '<span class="cb-pay is-paused">Paused</span>' : ''}${payBadge}</span>
+      <span class="cb-badges">${paused ? '<span class="cb-pay is-paused">Paused</span>' : ''}</span>
     </div>
     ${forName}
     <div class="cb-meta">
@@ -19122,7 +19102,6 @@ function cbCardHtml(rule, today) {
     ${notes}
     <div class="cb-actions">
       <button type="button" class="btn btn-g btn-sm" onclick="cbOpenEditor('${id}')">Edit</button>
-      ${pay === 'not_paid' ? `<button type="button" class="btn btn-sm cb-markpaid" onclick="cbMarkPaid('${id}')">Mark paid</button>` : ''}
     </div>
   </article>`;
 }
@@ -19130,12 +19109,12 @@ function cbCardHtml(rule, today) {
 /* ---------- Editor ---------- */
 function cbOpenEditor(ruleId) {
   const existing = ruleId ? _mtRules.find(r => r.id === ruleId) : null;
-  const detail = existing ? cbDetailFor(existing) : { forName:'', paymentStatus:'not_paid', notes:'' };
+  const detail = existing ? cbDetailFor(existing) : { forName:'', notes:'' };
   _cbDraft = existing
     ? { ...existing, dates:[...(existing.dates || [])], courtIds:[...(existing.courtIds || []).map(String)], recurring: existing.recurring ? { ...existing.recurring } : null, isNew:false,
-        forName: detail.forName, paymentStatus: detail.paymentStatus === 'paid' ? 'paid' : 'not_paid', notes: detail.notes }
+        forName: detail.forName, notes: detail.notes }
     : { id: mtGenId(), enabled:true, label:'private', start:16, end:20, mode:'specific', dates:[], recurring:null, courtIds:[], isNew:true,
-        forName:'', paymentStatus:'not_paid', notes:'' };
+        forName:'', notes:'' };
   if (!_cbDraft.label) _cbDraft.label = 'maintenance';
   $('cbTitle').textContent = existing ? 'EDIT BLOCK' : 'BLOCK COURTS';
   $('cbFor').value = _cbDraft.forName || '';
@@ -19174,10 +19153,6 @@ function cbRenderEditor() {
       const on = !allCourts && d.courtIds.includes(String(c.id));
       return `<button type="button" class="cb-chip${on ? ' is-on' : ''}" aria-pressed="${on}" onclick="cbToggleCourt('${jsArg(c.id)}')">${esc(c.name)}</button>`;
     }).join('');
-  const needsPay = cbNeedsPayment(d);
-  $('cbPayWrap').hidden = !needsPay;
-  $('cbPay').innerHTML = [['not_paid', '● Not paid'], ['paid', '✓ Paid']]
-    .map(([v, l]) => `<button type="button" class="cb-seg cb-seg-${v}${d.paymentStatus === v ? ' is-on' : ''}" aria-pressed="${d.paymentStatus === v}" onclick="cbSetDraft('paymentStatus','${v}')">${l}</button>`).join('');
 }
 
 function cbReadInputs() {
@@ -19270,7 +19245,7 @@ async function cbSave() {
   };
   const detail = {
     forName: String(d.forName || '').trim(),
-    paymentStatus: cbNeedsPayment(rule) ? d.paymentStatus : 'not_needed',
+    paymentStatus: 'not_needed',
     notes: String(d.notes || '').trim(),
   };
   _cbSaving = true;
@@ -19312,20 +19287,6 @@ async function cbDeleteFromEditor() {
     await renderMaintenance();
   } catch (error) {
     toast(error?.message || 'Could not remove this block.', 'err');
-  }
-}
-
-async function cbMarkPaid(ruleId) {
-  const rule = _mtRules.find(r => r.id === ruleId);
-  if (!rule) return;
-  const detail = { ...cbDetailFor(rule), paymentStatus:'paid' };
-  try {
-    await DB.saveCourtBlockDetail(rule.id, detail);
-    _cbDetails[rule.id] = detail;
-    cbRender();
-    toast(`✅ Marked as paid${detail.forName ? `: ${detail.forName}` : ''}.`);
-  } catch (error) {
-    toast(error?.message || 'Could not update payment.', 'err');
   }
 }
 
