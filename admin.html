@@ -4176,6 +4176,171 @@ body.admin-booting .admin-boot-splash {
   .adm-sec:not(#sec-dash) > .toolbar:first-child { border: 0 !important; box-shadow: none !important; }
 }
 </style>
+<style id="court-blocks-ui">
+/* Court Blocks (Maintenance) — quick blocking with who/payment/notes. */
+#sec-maintenance {
+  --cb-accent: #b6f000;
+  --cb-accent-ink: #0b1205;
+  --cb-accent-soft: rgba(182, 240, 0, .12);
+  --cb-paid: #3ccf7a;
+  --cb-paid-bg: rgba(60, 207, 122, .13);
+  --cb-unpaid: #ff7a6b;
+  --cb-unpaid-bg: rgba(255, 122, 107, .13);
+  --cb-line: var(--border);
+}
+body[data-theme="light"] #sec-maintenance,
+body[data-theme="light"] #cbModal {
+  --cb-accent: var(--green);
+  --cb-accent-ink: #fff;
+  --cb-accent-soft: rgba(20, 61, 99, .09);
+  --cb-paid: #15803d;
+  --cb-paid-bg: #e7f6ec;
+  --cb-unpaid: #c2410c;
+  --cb-unpaid-bg: #fdeee6;
+}
+#cbModal {
+  --cb-accent: #b6f000;
+  --cb-accent-ink: #0b1205;
+  --cb-accent-soft: rgba(182, 240, 0, .12);
+  --cb-paid: #3ccf7a;
+  --cb-paid-bg: rgba(60, 207, 122, .13);
+  --cb-unpaid: #ff7a6b;
+  --cb-unpaid-bg: rgba(255, 122, 107, .13);
+}
+#sec-maintenance [hidden], #cbModal [hidden] { display: none !important; }
+.cb-wrap { max-width: 920px; }
+.cb-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cb-sub { color: var(--muted); font-size: .86rem; margin: -4px 0 18px; max-width: 60ch; }
+.cb-new {
+  background: var(--cb-accent) !important; color: var(--cb-accent-ink) !important;
+  border: 0 !important; font-weight: 800; letter-spacing: .02em;
+  padding: 11px 18px !important; border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(182, 240, 0, .18);
+}
+body[data-theme="light"] .cb-new { box-shadow: 0 8px 20px rgba(20, 61, 99, .18); }
+.cb-new:hover { transform: translateY(-1px); filter: brightness(1.05); }
+.cb-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.cb-stat {
+  background: var(--surface); border: 1px solid var(--cb-line); border-radius: 14px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; min-width: 0;
+}
+.cb-stat-n { font-size: 1.6rem; font-weight: 800; line-height: 1; color: var(--text); font-variant-numeric: tabular-nums; }
+.cb-stat-date { font-size: 1.15rem; padding-top: 4px; }
+.cb-stat-l { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 700; }
+.cb-stat.is-alert { border-color: color-mix(in srgb, var(--cb-unpaid) 45%, transparent); background: var(--cb-unpaid-bg); }
+.cb-stat.is-alert .cb-stat-n { color: var(--cb-unpaid); }
+.cb-filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.cb-tab {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  background: transparent; border: 1px solid var(--cb-line); color: var(--text2, var(--text));
+  border-radius: 999px; padding: 7px 14px; font: inherit; font-size: .82rem; font-weight: 700;
+}
+.cb-tab span { background: var(--cb-accent-soft); color: var(--text); border-radius: 999px; padding: 1px 8px; font-size: .72rem; }
+.cb-tab.is-on { background: var(--cb-accent); border-color: var(--cb-accent); color: var(--cb-accent-ink); }
+.cb-tab.is-on span { background: rgba(0, 0, 0, .14); color: inherit; }
+.cb-warning {
+  border: 1px solid var(--yellow); background: var(--yellow-bg); color: var(--text);
+  border-radius: 12px; padding: 10px 14px; font-size: .84rem; margin-bottom: 14px;
+}
+.cb-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.cb-empty {
+  grid-column: 1 / -1; text-align: center; color: var(--muted); font-size: .9rem;
+  border: 1.5px dashed var(--cb-line); border-radius: 16px; padding: 34px 16px;
+}
+.cb-card {
+  position: relative; overflow: hidden; background: var(--surface);
+  border: 1px solid var(--cb-line); border-radius: 16px; padding: 16px 16px 14px 20px;
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.cb-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--cb-accent); opacity: .65; }
+.cb-card.cb-not_paid::before { background: var(--cb-unpaid); opacity: 1; }
+.cb-card.cb-paid::before { background: var(--cb-paid); opacity: 1; }
+.cb-card:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(0, 0, 0, .18); }
+.cb-card.is-paused { opacity: .62; }
+.cb-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cb-type { font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cb-badges { display: flex; gap: 6px; flex-shrink: 0; }
+.cb-pay { font-size: .72rem; font-weight: 800; border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+.cb-pay.is-unpaid { background: var(--cb-unpaid-bg); color: var(--cb-unpaid); }
+.cb-pay.is-paid { background: var(--cb-paid-bg); color: var(--cb-paid); }
+.cb-pay.is-paused { background: var(--cb-accent-soft); color: var(--muted); }
+.cb-for { font-size: 1.12rem; font-weight: 800; color: var(--text); line-height: 1.25; overflow-wrap: anywhere; }
+button.cb-for.is-missing {
+  all: unset; cursor: pointer; font-size: .9rem; font-weight: 700; color: var(--muted);
+  border-bottom: 1px dashed currentColor; align-self: flex-start;
+}
+.cb-meta { display: flex; flex-direction: column; gap: 4px; font-size: .84rem; color: var(--text2, var(--text)); }
+.cb-more { color: var(--muted); font-weight: 700; font-size: .78rem; margin-left: 4px; }
+.cb-notes {
+  display: flex; gap: 8px; background: var(--cb-accent-soft); border-radius: 10px;
+  padding: 9px 11px; font-size: .82rem; color: var(--text);
+}
+.cb-notes p {
+  margin: 0; white-space: pre-line; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.cb-actions { display: flex; gap: 8px; margin-top: 2px; }
+.cb-actions .btn { flex: 1; justify-content: center; }
+.cb-markpaid { background: var(--cb-paid-bg) !important; color: var(--cb-paid) !important; border: 1px solid color-mix(in srgb, var(--cb-paid) 40%, transparent) !important; font-weight: 800; }
+.cb-markpaid:hover { background: var(--cb-paid) !important; color: #fff !important; }
+
+/* Editor */
+#cbModal .modal { max-width: 560px; }
+.cb-field { margin-bottom: 18px; }
+.cb-label { display: block; font-size: .72rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 8px; }
+.cb-label small { text-transform: none; letter-spacing: 0; font-weight: 600; }
+.cb-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.cb-chip, .cb-seg {
+  font: inherit; cursor: pointer; border: 1px solid var(--border); background: var(--input, var(--surface));
+  color: var(--text); border-radius: 999px; padding: 8px 13px; font-size: .84rem; font-weight: 700;
+  transition: background .12s ease, border-color .12s ease;
+}
+.cb-chip:hover, .cb-seg:hover { border-color: var(--cb-accent); }
+.cb-chip.is-on { background: var(--cb-accent); border-color: var(--cb-accent); color: var(--cb-accent-ink); }
+.cb-day { min-width: 52px; text-align: center; }
+.cb-segs { display: flex; background: var(--input, var(--surface)); border: 1px solid var(--border); border-radius: 12px; padding: 3px; gap: 3px; }
+.cb-segs .cb-seg { flex: 1; border: 0; background: transparent; border-radius: 9px; }
+.cb-segs .cb-seg.is-on { background: var(--cb-accent); color: var(--cb-accent-ink); }
+.cb-segs .cb-seg-not_paid.is-on { background: var(--cb-unpaid); color: #fff; }
+.cb-segs .cb-seg-paid.is-on { background: var(--cb-paid); color: #fff; }
+.cb-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cb-adddate { display: flex; gap: 8px; margin-top: 10px; }
+.cb-adddate .fi { flex: 1; }
+.cb-datechips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.cb-datechip {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--cb-accent-soft);
+  border: 1px solid color-mix(in srgb, var(--cb-accent) 35%, transparent);
+  border-radius: 999px; padding: 5px 6px 5px 12px; font-size: .82rem; font-weight: 700;
+}
+.cb-datechip button { all: unset; cursor: pointer; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: .7rem; }
+.cb-datechip button:hover { background: var(--red-bg); color: var(--red); }
+.cb-hint { font-size: .8rem; color: var(--muted); font-style: italic; }
+#cbNotes { min-height: 92px; resize: vertical; line-height: 1.45; }
+.cb-enabled { display: flex; align-items: center; gap: 10px; font-size: .86rem; }
+.cb-foot { display: flex; gap: 10px; align-items: center; padding: 14px 24px 20px; border-top: 1px solid var(--border); position: sticky; bottom: 0; background: var(--surface); }
+.cb-foot .cb-spacer { flex: 1; }
+.cb-foot .btn { white-space: nowrap; }
+#cbDelete { background: var(--red-bg) !important; color: var(--red) !important; border: 1px solid color-mix(in srgb, var(--red) 45%, transparent) !important; }
+#cbDelete:hover { background: var(--red) !important; color: #fff !important; }
+#cbSaveBtn { min-width: 132px; }
+
+@media (max-width: 640px) {
+  .cb-summary { gap: 8px; }
+  .cb-stat { padding: 11px 12px; }
+  .cb-stat-n { font-size: 1.3rem; }
+  .cb-stat-date { font-size: .95rem; }
+  .cb-stat-l { font-size: .62rem; }
+  .cb-list { grid-template-columns: 1fr; }
+  .cb-new { width: 100%; justify-content: center; }
+  .cb-foot { padding: 12px 16px calc(14px + env(safe-area-inset-bottom)); flex-wrap: wrap; }
+  .cb-foot .cb-spacer { display: none; }
+  .cb-foot .btn-g { flex: 1; justify-content: center; }
+  .cb-foot #cbSaveBtn { flex: 2; justify-content: center; min-width: 0; }
+  .cb-foot #cbDelete { order: 3; flex-basis: 100%; justify-content: center; }
+  #cbModal .m-body { padding: 16px; }
+}
+</style>
 <style id="admin-premium-light-theme">
 /* Premium day mode. Every override is deliberately scoped so the established
    night theme remains byte-for-byte and visually unchanged. */
@@ -6553,21 +6718,80 @@ body[data-theme="light"] .admin-boot-spinner { border-color: rgba(55, 79, 45, .1
 
     <!-- MAINTENANCE -->
     <div id="sec-maintenance" class="adm-sec">
-      <div class="toolbar"><h2>🔧 MAINTENANCE</h2></div>
-      <div class="panel" style="max-width:600px;margin-bottom:20px">
-        <h4>🔧 Maintenance Rules</h4>
-        <p style="color:var(--muted);font-size:.84rem;margin:8px 0 18px">Each rule has its own time window, court selection, and date list — so you can block different hours on different dates independently.</p>
-        <div id="mtRulesList"></div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px">
-          <button class="btn btn-g btn-sm" onclick="mtAddRule()">+ Add Rule</button>
-          <button class="btn btn-p" onclick="saveMaintenance()">💾 Save All Rules</button>
+      <div class="cb-wrap">
+        <div class="toolbar cb-toolbar">
+          <h2>⛔ COURT BLOCKS</h2>
+          <button type="button" class="btn btn-p cb-new" onclick="cbOpenEditor()">+ Block Courts</button>
         </div>
+        <p class="cb-sub">Block courts for private events, open play or maintenance. Customers only see the block type. Who it's for, payment and notes stay private to owners.</p>
+        <div class="cb-summary" id="cbSummary"></div>
+        <div class="cb-warning" id="cbWarning" role="status" hidden></div>
+        <div class="cb-filters" id="cbFilters" role="group" aria-label="Filter blocks"></div>
+        <div class="cb-list" id="cbList"></div>
       </div>
     </div>
 
   </div><!-- /content -->
   </div><!-- /main -->
 </div><!-- /admin-layout -->
+
+<!-- COURT BLOCK MODAL -->
+<div class="overlay" id="cbModal" role="dialog" aria-modal="true" aria-labelledby="cbTitle">
+  <div class="modal">
+    <div class="m-hd"><h2 id="cbTitle">BLOCK COURTS</h2><button type="button" class="m-x" onclick="closeModal('cbModal')" aria-label="Close">✕</button></div>
+    <div class="m-body">
+      <div class="cb-field">
+        <label class="cb-label" for="cbFor">Who is it for?</label>
+        <input type="text" class="fi" id="cbFor" maxlength="160" placeholder="e.g. Santos family – birthday" autocomplete="off"/>
+      </div>
+      <div class="cb-field">
+        <span class="cb-label">Type <small>(customers see this)</small></span>
+        <div class="cb-chips" id="cbTypes"></div>
+      </div>
+      <div class="cb-field">
+        <span class="cb-label">When</span>
+        <div class="cb-segs" id="cbModes"></div>
+        <div id="cbDatesWrap">
+          <div class="cb-adddate">
+            <input type="date" class="fi" id="cbNewDate" aria-label="Date to block" onchange="if(this.value)cbAddDate()" onkeydown="if(event.key==='Enter'){event.preventDefault();cbAddDate();}"/>
+            <button type="button" class="btn btn-g" onclick="cbAddDate()">+ Add</button>
+          </div>
+          <div class="cb-datechips" id="cbDateChips"></div>
+        </div>
+        <div id="cbWeeklyWrap" hidden><div class="cb-chips" id="cbWeekdays" style="margin-top:10px"></div></div>
+        <div id="cbMonthlyWrap" hidden>
+          <label class="cb-hint" for="cbMonthDay" style="display:block;margin:10px 0 6px;font-style:normal">Day of the month</label>
+          <select class="fi" id="cbMonthDay"></select>
+        </div>
+      </div>
+      <div class="cb-field cb-row">
+        <div><label class="cb-label" for="cbStart">From</label><select class="fi" id="cbStart"></select></div>
+        <div><label class="cb-label" for="cbEnd">Until</label><select class="fi" id="cbEnd"></select></div>
+      </div>
+      <div class="cb-field">
+        <span class="cb-label">Courts</span>
+        <div class="cb-chips" id="cbCourts"></div>
+      </div>
+      <div class="cb-field" id="cbPayWrap">
+        <span class="cb-label">Payment</span>
+        <div class="cb-segs" id="cbPay"></div>
+      </div>
+      <div class="cb-field">
+        <label class="cb-label" for="cbNotes">Notes <small>(private)</small></label>
+        <textarea class="fi" id="cbNotes" maxlength="4000" placeholder="e.g. Contact 0917 123 4567 · ₱3,000 agreed · will pay on the day"></textarea>
+      </div>
+      <div class="cb-field" id="cbEnabledRow" hidden>
+        <label class="cb-enabled"><span class="sw"><input type="checkbox" id="cbEnabled"><span class="sw-tr"></span></span> Active (customers can't book these hours)</label>
+      </div>
+    </div>
+    <div class="cb-foot">
+      <button type="button" class="btn btn-d btn-sm" id="cbDelete" onclick="cbDeleteFromEditor()" hidden>Remove block</button>
+      <span class="cb-spacer"></span>
+      <button type="button" class="btn btn-g" onclick="closeModal('cbModal')">Cancel</button>
+      <button type="button" class="btn btn-p cb-new" id="cbSaveBtn" onclick="cbSave()">Save Block</button>
+    </div>
+  </div>
+</div>
 
 <!-- COURT MODAL -->
 <div class="overlay" id="courtModal">
@@ -18695,176 +18919,418 @@ function mtGenId() {
   return 'r' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 }
 
-async function renderMaintenance() {
-  const [settings, courts] = await Promise.all([DB.getSettings(), DB.getCourts()]);
-  _mtCourts = courts;
-  const raw = settings.maintenance_config ? JSON.parse(settings.maintenance_config) : null;
+/* ==============================================
+   COURT BLOCKS (Maintenance)
+   The schedule lives in settings.maintenance_config (public, so the booking
+   site can hide blocked hours). Who it's for, payment and notes live in the
+   private court_block_details table.
+   ============================================== */
+const CB_TYPES = [
+  { value:'private',     icon:'👥', label:'Private Event' },
+  { value:'reserved',    icon:'🔒', label:'Reserved' },
+  { value:'openplay',    icon:'🏓', label:'Open Play' },
+  { value:'group',       icon:'🎯', label:'Group Session' },
+  { value:'maintenance', icon:'🔧', label:'Maintenance' },
+  { value:'closed',      icon:'🚫', label:'Closed' },
+  { value:'blocked',     icon:'⛔', label:'Blocked' },
+];
+const CB_NO_PAYMENT_TYPES = ['maintenance', 'closed'];
+const CB_WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+let _cbDetails = {};
+let _cbDetailsError = '';
+let _cbFilter = 'upcoming';
+let _cbDraft = null;
+let _cbSaving = false;
 
-  if (raw && Array.isArray(raw.rules)) {
-    _mtRules = raw.rules;
-  } else if (raw && (raw.mode || raw.dates)) {
-    // Migrate old single-rule format into the new array format
-    _mtRules = [{ id: mtGenId(), enabled: raw.enabled ?? false, start: raw.start ?? 5, end: raw.end ?? 9, mode: raw.mode || 'specific', dates: raw.dates || [], recurring: raw.recurring || null, courtIds: raw.courtIds || [] }];
-  } else {
-    _mtRules = [];
-  }
-  mtRenderRules();
+function cbType(value) {
+  return CB_TYPES.find(t => t.value === String(value || '').toLowerCase()) || CB_TYPES[4];
+}
+function cbTodayIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function cbIsoAddDays(iso, days) {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function cbNeedsPayment(rule) {
+  return !CB_NO_PAYMENT_TYPES.includes(String(rule?.label || 'maintenance').toLowerCase());
+}
+function cbDetailFor(rule) {
+  return _cbDetails[rule?.id] || { forName:'', paymentStatus:'not_paid', notes:'' };
+}
+function cbPaymentState(rule) {
+  if (!cbNeedsPayment(rule)) return 'not_needed';
+  const state = cbDetailFor(rule).paymentStatus;
+  return state === 'paid' ? 'paid' : 'not_paid';
 }
 
-function mtRenderRules() {
-  const list = $('mtRulesList');
+// Next date (today or later) this block applies on, or null when it is over.
+function cbNextDate(rule, today = cbTodayIso()) {
+  if (rule.mode === 'weekly') {
+    const days = rule.recurring?.days || [];
+    if (!days.length) return null;
+    for (let i = 0; i < 7; i++) {
+      const iso = cbIsoAddDays(today, i);
+      if (days.includes(new Date(`${iso}T00:00:00`).getDay())) return iso;
+    }
+    return null;
+  }
+  if (rule.mode === 'monthly') {
+    const day = Number(rule.recurring?.day || 1);
+    for (let i = 0; i < 62; i++) {
+      const iso = cbIsoAddDays(today, i);
+      if (Number(iso.slice(8)) === day) return iso;
+    }
+    return null;
+  }
+  return [...(rule.dates || [])].sort().find(d => d >= today) || null;
+}
+function cbLastDate(rule) {
+  const dates = [...(rule.dates || [])].sort();
+  return dates[dates.length - 1] || '';
+}
+function cbIsPast(rule, today = cbTodayIso()) {
+  return rule.mode === 'specific' && !cbNextDate(rule, today);
+}
+
+function cbDateLabel(iso, withWeekday = true) {
+  if (!iso) return '—';
+  return new Date(`${iso}T00:00:00`).toLocaleDateString('en-PH', withWeekday
+    ? { weekday:'short', month:'short', day:'numeric', year:'numeric' }
+    : { month:'short', day:'numeric' });
+}
+function cbWhenLabel(rule, today = cbTodayIso()) {
+  if (rule.mode === 'weekly') {
+    const days = (rule.recurring?.days || []).slice().sort((a, b) => a - b).map(d => CB_WEEKDAYS[d]);
+    return days.length === 7 ? 'Every day' : `Every ${days.join(', ') || '—'}`;
+  }
+  if (rule.mode === 'monthly') return `Monthly · day ${Number(rule.recurring?.day || 1)}`;
+  const dates = [...(rule.dates || [])].sort();
+  const upcoming = dates.filter(d => d >= today);
+  const shown = upcoming.length ? upcoming : dates;
+  if (!shown.length) return 'No dates';
+  const more = shown.length - 1;
+  return `${cbDateLabel(shown[0])}${more > 0 ? ` <span class="cb-more">+${more} more</span>` : ''}`;
+}
+function cbCourtsLabel(rule) {
+  const ids = (rule.courtIds || []).map(String);
+  if (!ids.length) return 'All courts';
+  const names = ids.map(id => _mtCourts.find(c => String(c.id) === id)?.name).filter(Boolean);
+  if (names.length && names.length === _mtCourts.length) return 'All courts';
+  return names.length ? names.join(', ') : `${ids.length} court${ids.length === 1 ? '' : 's'}`;
+}
+
+async function renderMaintenance() {
+  const list = $('cbList');
+  if (list && !_mtRules.length) list.innerHTML = '<div class="cb-empty">Loading blocks…</div>';
+  DB.clearCache?.(['settings', 'courts']);
+  const [settings, courts] = await Promise.all([DB.getSettings(), DB.getCourts()]);
+  _mtCourts = courts || [];
+  _mtRules = cbParseRules(settings.maintenance_config);
+  try {
+    _cbDetails = typeof DB.getCourtBlockDetails === 'function' ? await DB.getCourtBlockDetails() : {};
+    _cbDetailsError = '';
+  } catch (error) {
+    _cbDetails = {};
+    _cbDetailsError = 'Names, payment and notes could not be loaded. The block schedule below is still correct.';
+  }
+  cbRender();
+}
+
+function cbParseRules(rawConfig) {
+  let raw = null;
+  try { raw = rawConfig ? (typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig) : null; } catch (_) { raw = null; }
+  if (raw && Array.isArray(raw.rules)) return raw.rules.map(rule => ({ ...rule }));
+  if (raw && (raw.mode || raw.dates)) {
+    // Migrate the old single-rule format into the rules array.
+    return [{ id: mtGenId(), enabled: raw.enabled ?? false, start: raw.start ?? 5, end: raw.end ?? 9, mode: raw.mode || 'specific', dates: raw.dates || [], recurring: raw.recurring || null, courtIds: raw.courtIds || [] }];
+  }
+  return [];
+}
+
+function cbSetFilter(filter) {
+  _cbFilter = ['upcoming', 'not_paid', 'past'].includes(filter) ? filter : 'upcoming';
+  cbRender();
+}
+
+function cbRender() {
+  const today = cbTodayIso();
+  const upcoming = _mtRules.filter(r => !cbIsPast(r, today));
+  const past = _mtRules.filter(r => cbIsPast(r, today));
+  const notPaid = upcoming.filter(r => r.enabled !== false && cbPaymentState(r) === 'not_paid');
+  const next = upcoming.filter(r => r.enabled !== false)
+    .map(r => cbNextDate(r, today)).filter(Boolean).sort()[0];
+
+  const summary = $('cbSummary');
+  if (summary) {
+    summary.innerHTML = `
+      <div class="cb-stat"><span class="cb-stat-n">${upcoming.length}</span><span class="cb-stat-l">Upcoming blocks</span></div>
+      <div class="cb-stat ${notPaid.length ? 'is-alert' : ''}"><span class="cb-stat-n">${notPaid.length}</span><span class="cb-stat-l">Not paid yet</span></div>
+      <div class="cb-stat"><span class="cb-stat-n cb-stat-date">${next ? esc(cbDateLabel(next, false)) : '—'}</span><span class="cb-stat-l">Next block</span></div>`;
+  }
+  const filters = $('cbFilters');
+  if (filters) {
+    const tab = (key, label, count) => `<button type="button" class="cb-tab${_cbFilter === key ? ' is-on' : ''}" onclick="cbSetFilter('${key}')" aria-pressed="${_cbFilter === key}">${label}<span>${count}</span></button>`;
+    filters.innerHTML = tab('upcoming', 'Upcoming', upcoming.length) + tab('not_paid', 'Not paid', notPaid.length) + tab('past', 'Past', past.length);
+  }
+  const warn = $('cbWarning');
+  if (warn) { warn.hidden = !_cbDetailsError; warn.textContent = _cbDetailsError; }
+
+  const list = $('cbList');
   if (!list) return;
-  if (_mtRules.length === 0) {
-    list.innerHTML = '<p style="color:var(--muted);font-style:italic;font-size:.84rem;margin:0 0 14px">No rules yet. Click "+ Add Rule" to create one.</p>';
+  let rows = _cbFilter === 'past' ? past : _cbFilter === 'not_paid' ? notPaid : upcoming;
+  rows = rows.slice().sort((a, b) => _cbFilter === 'past'
+    ? cbLastDate(b).localeCompare(cbLastDate(a))
+    : String(cbNextDate(a, today) || '9999').localeCompare(String(cbNextDate(b, today) || '9999')));
+  if (!rows.length) {
+    const empty = _cbFilter === 'not_paid'
+      ? '🎉 Every upcoming block is paid.'
+      : _cbFilter === 'past' ? 'No past blocks.' : 'No upcoming blocks. Tap <b>+ Block Courts</b> to add one.';
+    list.innerHTML = `<div class="cb-empty">${empty}</div>`;
     return;
   }
-  list.innerHTML = _mtRules.map((rule, i) => mtRuleHtml(rule, i + 1)).join('');
+  list.innerHTML = rows.map(rule => cbCardHtml(rule, today)).join('');
 }
 
-function mtRuleHtml(rule, n) {
-  const id = rule.id;
-  const savedIds = (rule.courtIds || []).map(String);
-  const courtCbs = _mtCourts.length === 0
-    ? '<span style="font-size:.82rem;color:var(--muted)">No courts found.</span>'
-    : _mtCourts.map(c => `<label style="display:flex;align-items:center;gap:6px;font-size:.84rem;cursor:pointer"><input type="checkbox" class="mt-cc-${esc(id)}" value="${esc(c.id)}"${savedIds.includes(String(c.id)) ? ' checked' : ''}> ${esc(c.name)}</label>`).join('');
-
-  const dateListHtml = (rule.dates || []).length === 0
-    ? '<p style="color:var(--muted);font-style:italic;font-size:.82rem;margin:4px 0">No dates added.</p>'
-    : rule.dates.map(d => `<div class="blk-item"><span>🔧 ${fmtD(d)}</span><button class="btn btn-d btn-sm" onclick="mtRemoveDateFromRule('${jsArg(id)}','${jsArg(d)}')">Remove</button></div>`).join('');
-
-  const monthOpts = Array.from({length: 31}, (_, i) => `<option value="${i+1}"${(rule.recurring?.day ?? 1) === i+1 ? ' selected' : ''}>${i+1}</option>`).join('');
-  const weekDays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const weekCbs = weekDays.map((d, i) => `<label class="op-day"><input type="checkbox" value="${i}"${(rule.recurring?.days || []).includes(i) ? ' checked' : ''}> ${d}</label>`).join('');
-
-  return `<div style="border:1.5px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;background:var(--card)">
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
-    <label class="sw"><input type="checkbox" id="mtEn_${id}"${rule.enabled ? ' checked' : ''}><span class="sw-tr"></span></label>
-    <div style="flex:1;font-weight:700;font-size:.92rem">Rule ${n}</div>
-    <button class="btn btn-d btn-sm" onclick="mtDeleteRule('${id}')">🗑️ Delete</button>
-  </div>
-  <div style="margin-bottom:14px">
-    <label class="fl" style="margin-bottom:8px">Apply To</label>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">${courtCbs}</div>
-    <div style="font-size:.7rem;color:var(--muted);margin-top:6px">Leave all unchecked = applies to all courts.</div>
-  </div>
-  <div style="margin-bottom:14px">
-    <label class="fl" style="margin-bottom:8px">Block Type</label>
-    <select class="fi" id="mtLabel_${id}">
-      <option value="closed"${rule.label==='closed'?' selected':''}>🚫 Closed</option>
-      <option value="maintenance"${(rule.label||'maintenance')==='maintenance'?' selected':''}>🔧 Maintenance</option>
-      <option value="reserved"${rule.label==='reserved'?' selected':''}>🔒 Reserved</option>
-      <option value="blocked"${rule.label==='blocked'?' selected':''}>⛔ Blocked</option>
-      <option value="private"${rule.label==='private'?' selected':''}>👥 Private Event</option>
-      <option value="group"${rule.label==='group'?' selected':''}>🏓 Group Session</option>
-      <option value="openplay"${rule.label==='openplay'?' selected':''}>🏓 Open Play Session</option>
-    </select>
-  </div>
-  <div class="frow" style="margin-bottom:14px">
-    <div><label class="fl">Start Time</label><select class="fi" id="mtS_${id}">${mtTimeOpts(rule.start ?? 5, false)}</select></div>
-    <div><label class="fl">End Time</label><select class="fi" id="mtE_${id}">${mtTimeOpts(rule.end ?? 9, true)}</select></div>
-  </div>
-  <div style="margin-bottom:14px">
-    <label class="fl" style="margin-bottom:8px">Schedule Type</label>
-    <select class="fi" id="mtMode_${id}" onchange="mtRuleModeChanged('${id}')">
-      <option value="specific"${rule.mode === 'specific' ? ' selected' : ''}>Specific Dates</option>
-      <option value="monthly"${rule.mode === 'monthly' ? ' selected' : ''}>Monthly (same day each month)</option>
-      <option value="weekly"${rule.mode === 'weekly' ? ' selected' : ''}>Weekly (rest of year)</option>
-    </select>
-  </div>
-  <div id="mtSpec_${id}"${rule.mode !== 'specific' ? ' style="display:none"' : ''}>
-    <label class="fl" style="margin-bottom:8px">Maintenance Dates</label>
-    <div style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-end">
-      <div style="flex:1"><input type="date" class="fi" id="mtNewDate_${id}"/></div>
-      <button class="btn btn-p btn-sm" onclick="mtAddDateToRule('${id}')">+ Add Date</button>
+function cbCardHtml(rule, today) {
+  const type = cbType(rule.label || 'maintenance');
+  const detail = cbDetailFor(rule);
+  const pay = cbPaymentState(rule);
+  const paused = rule.enabled === false;
+  const id = jsArg(rule.id);
+  const payBadge = pay === 'paid'
+    ? '<span class="cb-pay is-paid">✓ Paid</span>'
+    : pay === 'not_paid' ? '<span class="cb-pay is-unpaid">● Not paid</span>' : '';
+  const notes = detail.notes
+    ? `<div class="cb-notes"><span aria-hidden="true">📝</span><p>${esc(detail.notes)}</p></div>` : '';
+  const forName = detail.forName
+    ? `<div class="cb-for">${esc(detail.forName)}</div>`
+    : `<button type="button" class="cb-for is-missing" onclick="cbOpenEditor('${id}')">+ Add who this is for</button>`;
+  return `<article class="cb-card cb-${pay}${paused ? ' is-paused' : ''}">
+    <div class="cb-card-top">
+      <span class="cb-type">${type.icon} ${esc(type.label)}</span>
+      <span class="cb-badges">${paused ? '<span class="cb-pay is-paused">Paused</span>' : ''}${payBadge}</span>
     </div>
-    <div id="mtDateList_${id}">${dateListHtml}</div>
-  </div>
-  <div id="mtMonthly_${id}"${rule.mode !== 'monthly' ? ' style="display:none"' : ''}>
-    <label class="fl" style="margin-bottom:8px">Day of Month</label>
-    <select class="fi" id="mtMonthDay_${id}">${monthOpts}</select>
-    <div style="font-size:.72rem;color:var(--muted);margin-top:6px">Applies on this day every month.</div>
-  </div>
-  <div id="mtWeekly_${id}"${rule.mode !== 'weekly' ? ' style="display:none"' : ''}>
-    <label class="fl" style="margin-bottom:8px">Active Days</label>
-    <div style="display:flex;gap:8px;flex-wrap:wrap" id="mtDays_${id}">${weekCbs}</div>
-  </div>
-</div>`;
+    ${forName}
+    <div class="cb-meta">
+      <span>📅 ${cbWhenLabel(rule, today)}</span>
+      <span>🕓 ${esc(MT_LABELS[rule.start ?? 0] || '')} – ${esc(MT_LABELS[rule.end ?? 0] || '')}</span>
+      <span>🏟️ ${esc(cbCourtsLabel(rule))}</span>
+    </div>
+    ${notes}
+    <div class="cb-actions">
+      <button type="button" class="btn btn-g btn-sm" onclick="cbOpenEditor('${id}')">Edit</button>
+      ${pay === 'not_paid' ? `<button type="button" class="btn btn-sm cb-markpaid" onclick="cbMarkPaid('${id}')">Mark paid</button>` : ''}
+    </div>
+  </article>`;
 }
 
-function mtRuleModeChanged(id) {
-  const mode = $(`mtMode_${id}`)?.value;
-  if (!mode) return;
-  $(`mtSpec_${id}`).style.display    = mode === 'specific' ? '' : 'none';
-  $(`mtMonthly_${id}`).style.display = mode === 'monthly'  ? '' : 'none';
-  $(`mtWeekly_${id}`).style.display  = mode === 'weekly'   ? '' : 'none';
+/* ---------- Editor ---------- */
+function cbOpenEditor(ruleId) {
+  const existing = ruleId ? _mtRules.find(r => r.id === ruleId) : null;
+  const detail = existing ? cbDetailFor(existing) : { forName:'', paymentStatus:'not_paid', notes:'' };
+  _cbDraft = existing
+    ? { ...existing, dates:[...(existing.dates || [])], courtIds:[...(existing.courtIds || []).map(String)], recurring: existing.recurring ? { ...existing.recurring } : null, isNew:false,
+        forName: detail.forName, paymentStatus: detail.paymentStatus === 'paid' ? 'paid' : 'not_paid', notes: detail.notes }
+    : { id: mtGenId(), enabled:true, label:'private', start:16, end:20, mode:'specific', dates:[], recurring:null, courtIds:[], isNew:true,
+        forName:'', paymentStatus:'not_paid', notes:'' };
+  if (!_cbDraft.label) _cbDraft.label = 'maintenance';
+  $('cbTitle').textContent = existing ? 'EDIT BLOCK' : 'BLOCK COURTS';
+  $('cbFor').value = _cbDraft.forName || '';
+  $('cbNotes').value = _cbDraft.notes || '';
+  $('cbStart').innerHTML = mtTimeOpts(Number(_cbDraft.start ?? 16), false);
+  $('cbEnd').innerHTML = mtTimeOpts(Number(_cbDraft.end ?? 20), true);
+  $('cbMonthDay').innerHTML = Array.from({ length:31 }, (_, i) => `<option value="${i + 1}"${Number(_cbDraft.recurring?.day || 1) === i + 1 ? ' selected' : ''}>${i + 1}</option>`).join('');
+  $('cbNewDate').value = '';
+  $('cbNewDate').min = cbTodayIso();
+  $('cbEnabled').checked = _cbDraft.enabled !== false;
+  $('cbEnabledRow').hidden = !!_cbDraft.isNew;
+  $('cbDelete').hidden = !!_cbDraft.isNew;
+  cbRenderEditor();
+  $('cbModal').classList.add('show');
+  setTimeout(() => (_cbDraft.isNew ? $('cbFor') : null)?.focus(), 60);
 }
 
-function mtCollectFromDom() {
-  _mtRules = _mtRules.map(rule => {
-    const id = rule.id;
-    const enEl = $(`mtEn_${id}`), sEl = $(`mtS_${id}`), eEl = $(`mtE_${id}`), mEl = $(`mtMode_${id}`);
-    if (!enEl) return rule;
-    const mode = mEl ? mEl.value : rule.mode;
-    let recurring = rule.recurring;
-    if (mode === 'monthly') {
-      const mdEl = $(`mtMonthDay_${id}`);
-      recurring = { type: 'monthly', day: mdEl ? parseInt(mdEl.value) : 1 };
-    } else if (mode === 'weekly') {
-      const days = [...document.querySelectorAll(`#mtDays_${id} input:checked`)].map(cb => Number(cb.value));
-      recurring = { type: 'weekly', days };
-    } else {
-      recurring = null;
-    }
-    const courtIds = [...document.querySelectorAll(`.mt-cc-${id}:checked`)].map(cb => cb.value);
-    const labelEl = $(`mtLabel_${id}`);
-    const label = labelEl ? labelEl.value : (rule.label || 'maintenance');
-    return { ...rule, enabled: enEl.checked, start: sEl ? parseInt(sEl.value) : rule.start, end: eEl ? parseInt(eEl.value) : rule.end, mode, recurring, courtIds, label };
-  });
+function cbRenderEditor() {
+  const d = _cbDraft;
+  if (!d) return;
+  $('cbTypes').innerHTML = CB_TYPES.map(t => `<button type="button" class="cb-chip${d.label === t.value ? ' is-on' : ''}" aria-pressed="${d.label === t.value}" onclick="cbSetDraft('label','${t.value}')">${t.icon} ${esc(t.label)}</button>`).join('');
+  $('cbModes').innerHTML = [['specific', 'Pick dates'], ['weekly', 'Every week'], ['monthly', 'Every month']]
+    .map(([v, l]) => `<button type="button" class="cb-seg${d.mode === v ? ' is-on' : ''}" aria-pressed="${d.mode === v}" onclick="cbSetDraft('mode','${v}')">${l}</button>`).join('');
+  $('cbDatesWrap').hidden = d.mode !== 'specific';
+  $('cbWeeklyWrap').hidden = d.mode !== 'weekly';
+  $('cbMonthlyWrap').hidden = d.mode !== 'monthly';
+  const dates = [...(d.dates || [])].sort();
+  $('cbDateChips').innerHTML = dates.length
+    ? dates.map(x => `<span class="cb-datechip">${esc(cbDateLabel(x))}<button type="button" aria-label="Remove ${esc(cbDateLabel(x))}" onclick="cbRemoveDate('${jsArg(x)}')">✕</button></span>`).join('')
+    : '<span class="cb-hint">No dates yet — pick a date above. Pick more to block several days.</span>';
+  const days = d.recurring?.days || [];
+  $('cbWeekdays').innerHTML = CB_WEEKDAYS.map((w, i) => `<button type="button" class="cb-chip cb-day${days.includes(i) ? ' is-on' : ''}" aria-pressed="${days.includes(i)}" onclick="cbToggleWeekday(${i})">${w}</button>`).join('');
+  const allCourts = !(d.courtIds || []).length;
+  $('cbCourts').innerHTML = `<button type="button" class="cb-chip${allCourts ? ' is-on' : ''}" aria-pressed="${allCourts}" onclick="cbAllCourts()">All courts</button>`
+    + _mtCourts.map(c => {
+      const on = !allCourts && d.courtIds.includes(String(c.id));
+      return `<button type="button" class="cb-chip${on ? ' is-on' : ''}" aria-pressed="${on}" onclick="cbToggleCourt('${jsArg(c.id)}')">${esc(c.name)}</button>`;
+    }).join('');
+  const needsPay = cbNeedsPayment(d);
+  $('cbPayWrap').hidden = !needsPay;
+  $('cbPay').innerHTML = [['not_paid', '● Not paid'], ['paid', '✓ Paid']]
+    .map(([v, l]) => `<button type="button" class="cb-seg cb-seg-${v}${d.paymentStatus === v ? ' is-on' : ''}" aria-pressed="${d.paymentStatus === v}" onclick="cbSetDraft('paymentStatus','${v}')">${l}</button>`).join('');
 }
 
-function mtAddRule() {
-  mtCollectFromDom();
-  _mtRules.push({ id: mtGenId(), enabled: true, start: 5, end: 9, mode: 'specific', dates: [], recurring: null, courtIds: [] });
-  mtRenderRules();
+function cbReadInputs() {
+  if (!_cbDraft) return;
+  _cbDraft.forName = $('cbFor').value;
+  _cbDraft.notes = $('cbNotes').value;
+  _cbDraft.start = parseInt($('cbStart').value, 10);
+  _cbDraft.end = parseInt($('cbEnd').value, 10);
+  _cbDraft.enabled = $('cbEnabled').checked;
+  if (_cbDraft.mode === 'monthly') _cbDraft.recurring = { type:'monthly', day: parseInt($('cbMonthDay').value, 10) || 1 };
 }
-
-function mtDeleteRule(id) {
-  mtCollectFromDom();
-  _mtRules = _mtRules.filter(r => r.id !== id);
-  mtRenderRules();
-}
-
-function mtAddDateToRule(id) {
-  const input = $(`mtNewDate_${id}`);
-  const v = input?.value;
-  if (!v) { toast('Pick a date.', 'err'); return; }
-  mtCollectFromDom();
-  const rule = _mtRules.find(r => r.id === id);
-  if (!rule) return;
-  if (rule.dates.includes(v)) { toast('Already added.', 'inf'); return; }
-  rule.dates.push(v);
-  rule.dates.sort();
-  mtRenderRules();
-}
-
-function mtRemoveDateFromRule(id, d) {
-  mtCollectFromDom();
-  const rule = _mtRules.find(r => r.id === id);
-  if (rule) rule.dates = rule.dates.filter(x => x !== d);
-  mtRenderRules();
-}
-
-async function saveMaintenance() {
-  mtCollectFromDom();
-  for (const rule of _mtRules) {
-    if (!rule.enabled) continue;
-    if (rule.start === rule.end) { toast(`Rule ${_mtRules.indexOf(rule) + 1}: Start and end time cannot be the same.`, 'err'); return; }
-    if (rule.mode === 'specific' && rule.dates.length === 0) { toast(`Rule ${_mtRules.indexOf(rule) + 1}: Add at least one date.`, 'err'); return; }
-    if (rule.mode === 'weekly' && (rule.recurring?.days || []).length === 0) { toast(`Rule ${_mtRules.indexOf(rule) + 1}: Select at least one day.`, 'err'); return; }
+function cbSetDraft(key, value) {
+  cbReadInputs();
+  _cbDraft[key] = value;
+  if (key === 'mode') {
+    if (value === 'weekly') _cbDraft.recurring = { type:'weekly', days: _cbDraft.recurring?.type === 'weekly' ? _cbDraft.recurring.days || [] : [] };
+    else if (value === 'monthly') _cbDraft.recurring = { type:'monthly', day: _cbDraft.recurring?.type === 'monthly' ? _cbDraft.recurring.day || 1 : 1 };
+    else _cbDraft.recurring = null;
   }
-  await DB.saveSetting('maintenance_config', JSON.stringify({ rules: _mtRules }));
-  toast('✅ Maintenance rules saved!');
+  cbRenderEditor();
 }
+function cbAddDate() {
+  const v = $('cbNewDate').value;
+  if (!v) { toast('Pick a date first.', 'err'); return; }
+  cbReadInputs();
+  if (!_cbDraft.dates.includes(v)) _cbDraft.dates.push(v);
+  _cbDraft.dates.sort();
+  $('cbNewDate').value = '';
+  cbRenderEditor();
+}
+function cbRemoveDate(v) {
+  cbReadInputs();
+  _cbDraft.dates = _cbDraft.dates.filter(x => x !== v);
+  cbRenderEditor();
+}
+function cbToggleWeekday(i) {
+  cbReadInputs();
+  const days = new Set(_cbDraft.recurring?.days || []);
+  days.has(i) ? days.delete(i) : days.add(i);
+  _cbDraft.recurring = { type:'weekly', days:[...days].sort((a, b) => a - b) };
+  cbRenderEditor();
+}
+function cbAllCourts() {
+  cbReadInputs();
+  _cbDraft.courtIds = [];
+  cbRenderEditor();
+}
+function cbToggleCourt(id) {
+  cbReadInputs();
+  const set = new Set((_cbDraft.courtIds || []).map(String));
+  set.has(String(id)) ? set.delete(String(id)) : set.add(String(id));
+  // Selecting every court is the same as "All courts".
+  _cbDraft.courtIds = set.size === _mtCourts.length ? [] : [...set];
+  cbRenderEditor();
+}
+
+function cbValidate(d) {
+  if (!Number.isInteger(d.start) || !Number.isInteger(d.end) || d.start === d.end) return 'Start and end time cannot be the same.';
+  if (d.mode === 'specific' && !d.dates.length) {
+    return $('cbNewDate').value ? 'Tap "Add" to add the date you picked.' : 'Add at least one date.';
+  }
+  if (d.mode === 'weekly' && !(d.recurring?.days || []).length) return 'Choose at least one day of the week.';
+  if (String(d.forName || '').trim().length > 160) return '"Who is it for" is too long.';
+  if (String(d.notes || '').trim().length > 4000) return 'Notes are too long.';
+  return '';
+}
+
+// Re-read the latest saved schedule before writing so two people editing
+// blocks at the same time never erase each other's changes.
+async function cbWriteRules(mutate) {
+  DB.clearCache?.(['settings']);
+  const settings = await DB.getSettings();
+  const rules = cbParseRules(settings.maintenance_config);
+  const next = mutate(rules);
+  await DB.saveSetting('maintenance_config', JSON.stringify({ rules: next }));
+  _mtRules = next;
+}
+
+async function cbSave() {
+  if (_cbSaving || !_cbDraft) return;
+  cbReadInputs();
+  const d = _cbDraft;
+  const problem = cbValidate(d);
+  if (problem) { toast(problem, 'err'); return; }
+  const rule = {
+    id: d.id, enabled: d.enabled !== false, label: d.label, start: d.start, end: d.end, mode: d.mode,
+    dates: d.mode === 'specific' ? [...d.dates].sort() : [],
+    recurring: d.mode === 'specific' ? null : d.recurring,
+    courtIds: [...(d.courtIds || [])],
+  };
+  const detail = {
+    forName: String(d.forName || '').trim(),
+    paymentStatus: cbNeedsPayment(rule) ? d.paymentStatus : 'not_needed',
+    notes: String(d.notes || '').trim(),
+  };
+  _cbSaving = true;
+  const btn = $('cbSaveBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    // Private details first: if they fail, nothing is blocked half-labelled.
+    if (typeof DB.saveCourtBlockDetail === 'function') await DB.saveCourtBlockDetail(rule.id, detail);
+    _cbDetails[rule.id] = { ...detail };
+    await cbWriteRules(rules => {
+      const idx = rules.findIndex(r => r.id === rule.id);
+      if (idx >= 0) { rules[idx] = { ...rules[idx], ...rule }; return rules; }
+      return [...rules, rule];
+    });
+    closeModal('cbModal');
+    _cbDraft = null;
+    toast(d.isNew ? '✅ Courts blocked.' : '✅ Block updated.');
+    await renderMaintenance();
+  } catch (error) {
+    toast(error?.message || 'Could not save this block. Please try again.', 'err');
+  } finally {
+    _cbSaving = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Block'; }
+  }
+}
+
+async function cbDeleteFromEditor() {
+  if (!_cbDraft || _cbDraft.isNew) return;
+  const d = _cbDraft;
+  const name = String(d.forName || '').trim() || cbType(d.label).label;
+  if (!confirm(`Remove the block "${name}"?\n\nThese hours will open for customer bookings again.`)) return;
+  try {
+    await cbWriteRules(rules => rules.filter(r => r.id !== d.id));
+    if (typeof DB.deleteCourtBlockDetail === 'function') await DB.deleteCourtBlockDetail(d.id).catch(() => {});
+    delete _cbDetails[d.id];
+    closeModal('cbModal');
+    _cbDraft = null;
+    toast('Block removed. Those hours are open again.', 'inf');
+    await renderMaintenance();
+  } catch (error) {
+    toast(error?.message || 'Could not remove this block.', 'err');
+  }
+}
+
+async function cbMarkPaid(ruleId) {
+  const rule = _mtRules.find(r => r.id === ruleId);
+  if (!rule) return;
+  const detail = { ...cbDetailFor(rule), paymentStatus:'paid' };
+  try {
+    await DB.saveCourtBlockDetail(rule.id, detail);
+    _cbDetails[rule.id] = detail;
+    cbRender();
+    toast(`✅ Marked as paid${detail.forName ? `: ${detail.forName}` : ''}.`);
+  } catch (error) {
+    toast(error?.message || 'Could not update payment.', 'err');
+  }
+}
+
+// Kept for older callers: saving now happens per block.
+async function saveMaintenance() { await renderMaintenance(); }
 
 async function addBlocked(){
   const v=$('newBlk').value;

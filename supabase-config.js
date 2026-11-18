@@ -943,6 +943,28 @@ function isMissingOptionalBookingColumnError(error) {
   return /host_booking|host_user_id|host_name|host_email|created_via|created_by_user_id|created_by_role|created_by_name|created_by_email/i.test(error?.message || '');
 }
 
+const PB_COURT_BLOCK_PAYMENT = ['not_paid', 'paid', 'not_needed'];
+function _pbCourtBlockDetailFromRow(r = {}) {
+  const payment = String(r.payment_status || '').toLowerCase();
+  return {
+    forName: String(r.for_name || ''),
+    paymentStatus: PB_COURT_BLOCK_PAYMENT.includes(payment) ? payment : 'not_paid',
+    notes: String(r.notes || ''),
+    updatedAt: r.updated_at || null,
+  };
+}
+function _pbCourtBlockDetailToRow(ruleId, detail = {}) {
+  const id = String(ruleId || '').trim();
+  if (!id || id.length > 80) throw new Error('This block is missing its id. Refresh and try again.');
+  const payment = String(detail.paymentStatus || 'not_paid').toLowerCase();
+  if (!PB_COURT_BLOCK_PAYMENT.includes(payment)) throw new Error('Choose a valid payment status.');
+  const forName = String(detail.forName || '').trim();
+  const notes = String(detail.notes || '').trim();
+  if (forName.length > 160) throw new Error('"For" is too long (160 characters max).');
+  if (notes.length > 4000) throw new Error('Notes are too long (4000 characters max).');
+  return { rule_id: id, for_name: forName, payment_status: payment, notes };
+}
+
 function rowToCourt(r) {
   return {
     id:           r.id,
@@ -2683,6 +2705,27 @@ window.DB = {
     _pbClearFastCache(['blockedDates']);
   },
 
+  // ---- COURT BLOCK DETAILS (private: who it's for, payment, notes) ----
+  async getCourtBlockDetails() {
+    const { data, error } = await _sb.from('court_block_details')
+      .select('rule_id,for_name,payment_status,notes,updated_at');
+    if (error) { console.error('getCourtBlockDetails:', error); throw error; }
+    const out = {};
+    (data || []).forEach(row => { out[row.rule_id] = _pbCourtBlockDetailFromRow(row); });
+    return out;
+  },
+
+  async saveCourtBlockDetail(ruleId, detail = {}) {
+    const row = _pbCourtBlockDetailToRow(ruleId, detail);
+    const { error } = await _sb.from('court_block_details').upsert(row, { onConflict: 'rule_id' });
+    if (error) { console.error('saveCourtBlockDetail:', error); throw error; }
+  },
+
+  async deleteCourtBlockDetail(ruleId) {
+    const { error } = await _sb.from('court_block_details').delete().eq('rule_id', String(ruleId || ''));
+    if (error) { console.error('deleteCourtBlockDetail:', error); throw error; }
+  },
+
   // ---- ACCOUNTS ----
   async getAccounts() {
     const { data, error } = await _sb.from('accounts').select('*').order('created_at');
@@ -3610,6 +3653,7 @@ window.DB = {
       openPlayGameRounds: [],
       openPlayGameShares: [],
       blockedDates: [],
+      courtBlockDetails: {},
       deletedBookingArchive: [],
       accounts: defaultAccounts(),
       settings: defaultSettings(),
@@ -3677,6 +3721,7 @@ window.DB = {
       openPlayGameRounds: Array.isArray(parsed.openPlayGameRounds) ? parsed.openPlayGameRounds : [],
       openPlayGameShares: Array.isArray(parsed.openPlayGameShares) ? parsed.openPlayGameShares : [],
       blockedDates: Array.isArray(parsed.blockedDates) ? parsed.blockedDates : [],
+      courtBlockDetails: parsed.courtBlockDetails && typeof parsed.courtBlockDetails === 'object' && !Array.isArray(parsed.courtBlockDetails) ? parsed.courtBlockDetails : {},
       deletedBookingArchive: Array.isArray(parsed.deletedBookingArchive) ? parsed.deletedBookingArchive : [],
       accounts,
       agreements: Array.isArray(parsed.agreements) ? parsed.agreements : [],
@@ -6995,6 +7040,25 @@ window.DB = {
     async removeBlockedDate(date) {
       const db = readDb();
       db.blockedDates = db.blockedDates.filter(d => d !== date);
+      writeDb(db);
+    },
+
+    async getCourtBlockDetails() {
+      const out = {};
+      Object.entries(readDb().courtBlockDetails || {}).forEach(([id, row]) => { out[id] = _pbCourtBlockDetailFromRow(row); });
+      return out;
+    },
+    async saveCourtBlockDetail(ruleId, detail = {}) {
+      const db = readDb();
+      const row = _pbCourtBlockDetailToRow(ruleId, detail);
+      db.courtBlockDetails = { ...(db.courtBlockDetails || {}), [row.rule_id]: { ...row, updated_at: new Date().toISOString() } };
+      writeDb(db);
+    },
+    async deleteCourtBlockDetail(ruleId) {
+      const db = readDb();
+      const next = { ...(db.courtBlockDetails || {}) };
+      delete next[String(ruleId || '')];
+      db.courtBlockDetails = next;
       writeDb(db);
     },
 
