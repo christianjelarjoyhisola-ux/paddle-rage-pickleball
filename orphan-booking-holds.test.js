@@ -131,6 +131,13 @@ test('Book Now shows a five-second timer guide before revealing details', () => 
   assert.match(introMarkup, /Complete your booking within 15 minutes/i);
   assert.match(introMarkup, /Keep an eye on the timer at the top of the booking form/i);
   assert.doesNotMatch(introMarkup, /\bheld\b|\breserved\b|Continue/i);
+  assert.ok(
+    introMarkup.indexOf('assets/promo/corkage-fees.webp') >= 0
+      && introMarkup.indexOf('assets/promo/corkage-fees.webp') < introMarkup.indexOf('booking-intro-card'),
+    'the corkage fees poster sits above the 15-minute checkout card',
+  );
+  assert.match(introMarkup, /alt="[^"]*corkage fees[^"]*food trays ₱750[^"]*"/i);
+  assert.match(fs.readFileSync('deploy-cloudflare-pages.ps1', 'utf8'), /"assets\/promo\/corkage-fees\.webp"/);
 
   assert.match(publicPage, /const RESERVATION_INTRO_MS = 5000;/);
   assert.match(publicPage, /const RESERVATION_INTRO_EXIT_MS = 1000;/);

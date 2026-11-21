@@ -77,6 +77,7 @@ $publicFiles = @(
   "assets/venue/c1785214882952-ec3275c47d4a396d.jpg",
   "assets/venue/c1785214893717-d956635532581817.jpg",
   "assets/venue/gcash_qr_image-e06acdcd2236c3cb.jpg",
+  "assets/promo/corkage-fees.webp",
   "booking-balance.js",
   "host-balance-payment.js",
   "host-balance-admin.js",

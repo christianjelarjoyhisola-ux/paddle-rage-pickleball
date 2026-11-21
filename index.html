@@ -923,6 +923,27 @@ body.dark .shared-date-display {
   transition:background .42s ease,backdrop-filter .42s ease,opacity .18s ease;
 }
 .booking-intro[aria-hidden="false"] { opacity:1; visibility:visible; pointer-events:auto; }
+.booking-intro-stack {
+  width:min(100%,520px); height:100%; min-height:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+}
+.booking-intro-stack .booking-intro-card { flex:0 0 auto; }
+#bookModal.booking-intro-active .bk-modal { min-height:min(700px,92vh); }
+.booking-intro-promo {
+  margin:0; max-width:100%; min-height:120px; flex:0 1 auto; display:flex;
+  border-radius:16px; overflow:hidden;
+  border:1px solid rgba(var(--lime-rgb),.42);
+  box-shadow:0 24px 70px rgba(0,0,0,.5),0 0 36px rgba(var(--lime-rgb),.09);
+  background:#fff;
+}
+.booking-intro-promo img { display:block; max-width:100%; max-height:100%; width:auto; height:auto; min-height:0; object-fit:contain; }
+@media (max-width:520px) {
+  .booking-intro { padding:14px; }
+  .booking-intro-stack { gap:10px; }
+  .booking-intro-card { padding:18px 16px 16px; }
+  .booking-intro-title { font-size:1.2rem; }
+  #bookModal.booking-intro-active .bk-modal { min-height:min(700px,calc(100dvh - 24px)); }
+}
 .booking-intro.is-ending { background:transparent; backdrop-filter:blur(0); -webkit-backdrop-filter:blur(0); pointer-events:none; }
 .booking-intro-card {
   width:min(100%,390px); padding:26px 22px 24px; text-align:center;
@@ -3849,11 +3870,16 @@ try {
     </div>
 
     <div class="booking-intro" id="bookingIntro" aria-hidden="true">
+      <div class="booking-intro-stack">
+      <figure class="booking-intro-promo" id="bookingIntroPromo">
+        <img src="assets/promo/corkage-fees.webp" width="1080" height="720" decoding="async" alt="Paddle Rage corkage fees: food trays ₱750, buffet with lechon ₱1,500, drinks ₱200, inflatables ₱1,000 each."/>
+      </figure>
       <div class="booking-intro-card" id="bookingIntroCard" tabindex="-1" role="group" aria-labelledby="bookingIntroTitle" aria-describedby="bookingIntroCopy">
         <div class="booking-intro-kicker">15-minute checkout</div>
         <div class="booking-intro-title" id="bookingIntroTitle">Complete your booking within 15 minutes</div>
         <div class="booking-intro-timer" id="bookingIntroTimer">15:00</div>
         <p class="booking-intro-copy" id="bookingIntroCopy">Keep an eye on the timer at the top of the booking form.</p>
+      </div>
       </div>
     </div>
     <div class="booking-countdown-announcer" id="bookingCountdownAnnouncement" aria-live="polite" aria-atomic="true"></div>
@@ -6873,6 +6899,7 @@ function hideBookingIntro({ focusDetails = false } = {}) {
     element.getAnimations?.().forEach(animation => animation.cancel());
   });
   timer?.getAnimations?.().forEach(animation => animation.cancel());
+  $('bookingIntroPromo')?.getAnimations?.().forEach(animation => animation.cancel());
   modal?.classList.remove('booking-intro-active', 'booking-intro-exiting');
   intro?.classList.remove('is-ending');
   intro?.setAttribute('aria-hidden', 'true');
@@ -6898,7 +6925,12 @@ function finishBookingIntro(token) {
   modal.classList.add('booking-intro-exiting');
   intro.classList.add('is-ending');
   const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  const promo = $('bookingIntroPromo');
   if (!reducedMotion && typeof timer.animate === 'function') {
+    promo?.animate?.([
+      { opacity:1, transform:'translateY(0)' },
+      { opacity:0, transform:'translateY(-12px)' },
+    ], { duration:600, easing:'ease', fill:'forwards' });
     const from = timer.getBoundingClientRect();
     const to = target.getBoundingClientRect();
     const moveX = (to.left + to.width / 2) - (from.left + from.width / 2);
